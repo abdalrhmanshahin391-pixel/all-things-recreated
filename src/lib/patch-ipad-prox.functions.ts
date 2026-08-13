@@ -108,12 +108,27 @@ export const pollCutBatchProX = createServerFn({ method: "POST" })
 
     const states: string[] = [];
     let allDone = true;
+    let terminalFailure = false;
+    const errors: string[] = [];
     for (const b of batches) {
       let bj: any;
-      try { bj = await fetchBatch(apiKey, b); } catch { states.push("pending"); allDone = false; continue; }
+      try { bj = await fetchBatch(apiKey, b); } catch (e: any) {
+        states.push("check_failed");
+        errors.push(String(e?.message || e).slice(0, 240));
+        allDone = false;
+        continue;
+      }
       const st = mapBatchStatus(getBatchState(bj));
       states.push(st);
-      if (st !== "succeeded") { if (st === "failed" || st === "cancelled" || st === "expired") continue; allDone = false; continue; }
+      if (st !== "succeeded") {
+        if (st === "failed" || st === "cancelled" || st === "expired") {
+          terminalFailure = true;
+          errors.push(`Border batch ${st}`);
+        } else {
+          allDone = false;
+        }
+        continue;
+      }
 
       const items = await downloadResponses(apiKey, bj);
       for (let i = 0; i < items.length; i++) {
@@ -143,12 +158,26 @@ export const pollCutBatchProX = createServerFn({ method: "POST" })
     }
 
     // pages that were submitted but got no answer back stay pending -> mark failed
+    if (terminalFailure) {
+      const message = errors.join("; ").slice(0, 500) || "The Gemini border batch failed";
+      await supabase.from(PROX_PAGES).update({ status: "cut_failed", error: message })
+        .eq("job_id", data.jobId).eq("status", "cut_submitted");
+      await supabase.from(PROX_JOBS).update({ phase: "cut_failed", error: message, updated_at: new Date().toISOString() }).eq("id", data.jobId);
+      return { done: false, terminal: true, states, error: message };
+    }
     if (allDone) {
       await supabase.from(PROX_PAGES).update({ status: "cut_failed", error: "Gemini returned no borders for this page" })
         .eq("job_id", data.jobId).eq("status", "cut_submitted");
-      await supabase.from(PROX_JOBS).update({ phase: "cut_ready", updated_at: new Date().toISOString() }).eq("id", data.jobId);
+      const { data: unresolved } = await supabase.from(PROX_PAGES).select("page_number")
+        .eq("job_id", data.jobId).eq("status", "cut_failed");
+      const phase = (unresolved ?? []).length ? "cut_failed" : "cut_ready";
+      const message = (unresolved ?? []).length
+        ? `No usable border response for page(s): ${(unresolved ?? []).map((p: any) => p.page_number).join(", ")}`
+        : null;
+      await supabase.from(PROX_JOBS).update({ phase, error: message, updated_at: new Date().toISOString() }).eq("id", data.jobId);
+      if (message) return { done: false, terminal: true, states, error: message };
     }
-    return { done: allDone, states };
+    return { done: allDone, terminal: false, states, error: errors[0] ?? null };
   });
 
 // ---------------- 4. phase 1 — save the uploaded crops ----------------
@@ -246,12 +275,27 @@ export const pollSolveBatchProX = createServerFn({ method: "POST" })
 
     const states: string[] = [];
     let allDone = true;
+    let terminalFailure = false;
+    const errors: string[] = [];
     for (const b of batches) {
       let bj: any;
-      try { bj = await fetchBatch(apiKey, b); } catch { states.push("pending"); allDone = false; continue; }
+      try { bj = await fetchBatch(apiKey, b); } catch (e: any) {
+        states.push("check_failed");
+        errors.push(String(e?.message || e).slice(0, 240));
+        allDone = false;
+        continue;
+      }
       const st = mapBatchStatus(getBatchState(bj));
       states.push(st);
-      if (st !== "succeeded") { if (st === "failed" || st === "cancelled" || st === "expired") continue; allDone = false; continue; }
+      if (st !== "succeeded") {
+        if (st === "failed" || st === "cancelled" || st === "expired") {
+          terminalFailure = true;
+          errors.push(`Answer batch ${st}`);
+        } else {
+          allDone = false;
+        }
+        continue;
+      }
 
       const items = await downloadResponses(apiKey, bj);
       for (let i = 0; i < items.length; i++) {
@@ -286,12 +330,24 @@ export const pollSolveBatchProX = createServerFn({ method: "POST" })
       }
     }
 
+    if (terminalFailure) {
+      const message = errors.join("; ").slice(0, 500) || "The Gemini answer batch failed";
+      await supabase.from(PROX_ITEMS).update({ status: "failed", error: message })
+        .eq("job_id", data.jobId).eq("status", "submitted");
+      await supabase.from(PROX_JOBS).update({ phase: "solve_failed", error: message, updated_at: new Date().toISOString() }).eq("id", data.jobId);
+      return { done: false, terminal: true, states, error: message };
+    }
     if (allDone) {
       await supabase.from(PROX_ITEMS).update({ status: "failed", error: "no answer returned for this picture" })
         .eq("job_id", data.jobId).eq("status", "submitted");
-      await supabase.from(PROX_JOBS).update({ phase: "solve_ready", updated_at: new Date().toISOString() }).eq("id", data.jobId);
+      const { data: failed } = await supabase.from(PROX_ITEMS).select("page_number, item_index")
+        .eq("job_id", data.jobId).eq("status", "failed");
+      const phase = (failed ?? []).length ? "solve_failed" : "solve_ready";
+      const message = (failed ?? []).length ? `${(failed ?? []).length} question(s) received no usable Gemini answer` : null;
+      await supabase.from(PROX_JOBS).update({ phase, error: message, updated_at: new Date().toISOString() }).eq("id", data.jobId);
+      if (message) return { done: false, terminal: true, states, error: message };
     }
-    return { done: allDone, states };
+    return { done: allDone, terminal: false, states, error: errors[0] ?? null };
   });
 
 // ---------------- 7. import ----------------
