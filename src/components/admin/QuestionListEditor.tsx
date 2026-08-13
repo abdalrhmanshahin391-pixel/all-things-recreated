@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -74,7 +74,7 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
   }, [load]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter(
       (r) =>
@@ -82,7 +82,15 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
         (r.explanation ?? "").toLowerCase().includes(q) ||
         r.options.some((o) => o.text.toLowerCase().includes(q)),
     );
-  }, [rows, query]);
+  }, [rows, deferredQuery]);
+
+  // Position lookup: doing rows.findIndex() inside the render loop made the
+  // list quadratic, which is what made typing feel laggy on big subjects.
+  const indexById = useMemo(() => {
+    const m = new Map<string, number>();
+    rows.forEach((r, i) => m.set(r.id, i));
+    return m;
+  }, [rows]);
 
   async function deleteQuestions(ids: string[]) {
     if (ids.length === 0) return;
