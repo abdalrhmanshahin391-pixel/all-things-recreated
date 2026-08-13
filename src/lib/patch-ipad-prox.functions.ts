@@ -206,6 +206,13 @@ export const saveCropsProX = createServerFn({ method: "POST" })
       const { error } = await supabase.from(PROX_ITEMS).insert(rows);
       if (error) throw error;
     }
+    const { data: remaining } = await supabase.from(PROX_PAGES).select("id")
+      .eq("job_id", data.jobId).not("status", "in", "(cropped,empty)").limit(1);
+    if (!(remaining ?? []).length) {
+      await supabase.from(PROX_JOBS).update({
+        phase: "cut_complete", error: null, updated_at: new Date().toISOString(),
+      }).eq("id", data.jobId);
+    }
     return { saved: data.crops.length };
   });
 

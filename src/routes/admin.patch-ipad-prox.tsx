@@ -348,18 +348,6 @@ function PatchIpadProX() {
     toast.success("Phase 1 done");
   }
 
-  async function resumePhase1() {
-    if (!jobId) return;
-    setBusy(true);
-    try {
-      const r: any = await pollCutFn({ data: { jobId } });
-      if (!r?.done) { setProgress("Still waiting on the border batch…"); await loadJob(jobId); return; }
-      await cropAndUpload(jobId);
-    } catch (e: any) {
-      toast.error(e?.message || "Could not resume");
-    } finally { setBusy(false); }
-  }
-
   // ---------- PHASE 2 ----------
   async function runPhase2() {
     if (!jobId) return;
@@ -405,17 +393,6 @@ function PatchIpadProX() {
       setBusy(false);
       if (jobId) await loadJob(jobId).catch(() => {});
     }
-  }
-
-  async function checkPhase2() {
-    if (!jobId) return;
-    setBusy(true);
-    try {
-      const r: any = await pollSolveFn({ data: { jobId } });
-      await loadJob(jobId);
-      setProgress(r?.done ? "Phase 2 finished. You can import now." : "Still waiting on Gemini answers…");
-    } catch (e: any) { toast.error(e?.message || "Check failed"); }
-    finally { setBusy(false); }
   }
 
   const primaryControl = (() => {
