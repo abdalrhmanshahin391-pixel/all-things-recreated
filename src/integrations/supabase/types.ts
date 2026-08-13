@@ -2741,6 +2741,157 @@ export type Database = {
         }
         Relationships: []
       }
+      patch_prox_items: {
+        Row: {
+          correct_letter: string | null
+          created_at: string
+          error: string | null
+          explanation: string | null
+          id: string
+          image_path: string
+          item_index: number
+          job_id: string
+          letters: Json
+          page_number: number
+          status: string
+          stem: string | null
+          subject_index: number | null
+        }
+        Insert: {
+          correct_letter?: string | null
+          created_at?: string
+          error?: string | null
+          explanation?: string | null
+          id?: string
+          image_path: string
+          item_index: number
+          job_id: string
+          letters?: Json
+          page_number: number
+          status?: string
+          stem?: string | null
+          subject_index?: number | null
+        }
+        Update: {
+          correct_letter?: string | null
+          created_at?: string
+          error?: string | null
+          explanation?: string | null
+          id?: string
+          image_path?: string
+          item_index?: number
+          job_id?: string
+          letters?: Json
+          page_number?: number
+          status?: string
+          stem?: string | null
+          subject_index?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patch_prox_items_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "patch_prox_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      patch_prox_jobs: {
+        Row: {
+          course_id: string | null
+          created_at: string
+          cut_batch_ids: Json
+          error: string | null
+          group_id: string | null
+          id: string
+          imported_count: number
+          pdf_name: string
+          phase: string
+          solve_batch_ids: Json
+          subject_candidates: Json
+          subject_id: string | null
+          total_pages: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          course_id?: string | null
+          created_at?: string
+          cut_batch_ids?: Json
+          error?: string | null
+          group_id?: string | null
+          id?: string
+          imported_count?: number
+          pdf_name: string
+          phase?: string
+          solve_batch_ids?: Json
+          subject_candidates?: Json
+          subject_id?: string | null
+          total_pages?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          course_id?: string | null
+          created_at?: string
+          cut_batch_ids?: Json
+          error?: string | null
+          group_id?: string | null
+          id?: string
+          imported_count?: number
+          pdf_name?: string
+          phase?: string
+          solve_batch_ids?: Json
+          subject_candidates?: Json
+          subject_id?: string | null
+          total_pages?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      patch_prox_pages: {
+        Row: {
+          created_at: string
+          crops: Json
+          error: string | null
+          id: string
+          job_id: string
+          page_number: number
+          regions: Json
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          crops?: Json
+          error?: string | null
+          id?: string
+          job_id: string
+          page_number: number
+          regions?: Json
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          crops?: Json
+          error?: string | null
+          id?: string
+          job_id?: string
+          page_number?: number
+          regions?: Json
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patch_prox_pages_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "patch_prox_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_events: {
         Row: {
           amount_cents: number | null

@@ -4,27 +4,31 @@ A brand new admin page. Jarvis Batch v2 iPad (image mode) stays exactly as it is
 
 ## What is different from Jarvis v2 iPad
 
-| Step | Jarvis v2 iPad (today) | Patch iPad ProX (new) |
-| --- | --- | --- |
-| Finding question borders on a page | live Gemini call per page (full price) | one Gemini **batch** job for all pages (50% off) |
-| Solving each question picture | batch (50% off) | batch (50% off) |
-| Buttons | run everything in one go | Phase 1 → Phase 2 → Import, each locked until the one before is 100% done |
-| Correct answer | letter Gemini reports in `correct_letter` | letter taken from the explanation line ("Option **A** (arthralgia) is correct.") |
+
+| Step                               | Jarvis v2 iPad (today)                    | Patch iPad ProX (new)                                                            |
+| ---------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------- |
+| Finding question borders on a page | live Gemini call per page (full price)    | one Gemini **batch** job for all pages (50% off)                                 |
+| Solving each question picture      | batch (50% off)                           | batch (50% off)                                                                  |
+| Buttons                            | run everything in one go                  | Phase 1 → Phase 2 → Import, each locked until the one before is 100% done        |
+| Correct answer                     | letter Gemini reports in `correct_letter` | letter taken from the explanation line ("Option **A** (arthralgia) is correct.") |
+
 
 Everything else — key rotation, page rendering, cropping, uploading crops to storage, subject picking, dedupe, retry and delete — keeps the same logic as Jarvis v2 iPad.
+
+Note make sure that a small or A like small letter or big letter and other things that can cause confuse to be fixed 
 
 ## The flow on the page
 
 1. **Set up** — pick course, group, subject, upload the PDF. Pages are rendered in the browser, exactly like now.
 2. **Phase 1 — Read the pages (batch, 50%)**
-   - Every page image is sent as one request inside a single Gemini batch job that returns the question borders.
-   - The page polls until the batch finishes, then crops each question out of the page and uploads the pictures to storage.
-   - Phase 1 shows: pages sent, batch state, pages cut, question pictures uploaded.
-   - Phase 2 stays disabled until every page is cut and every picture is uploaded.
+  - Every page image is sent as one request inside a single Gemini batch job that returns the question borders.
+  - The page polls until the batch finishes, then crops each question out of the page and uploads the pictures to storage.
+  - Phase 1 shows: pages sent, batch state, pages cut, question pictures uploaded.
+  - Phase 2 stays disabled until every page is cut and every picture is uploaded.
 3. **Phase 2 — Solve the questions (batch, 50%)**
-   - All uploaded question pictures go into a second Gemini batch job (answer + concept + why right + why wrong).
-   - Polls until finished; any picture that comes back unusable is retried once.
-   - Import stays disabled until every picture has a usable answer.
+  - All uploaded question pictures go into a second Gemini batch job (answer + concept + why right + why wrong).
+  - Polls until finished; any picture that comes back unusable is retried once.
+  - Import stays disabled until every picture has a usable answer.
 4. **Import** — writes the questions, the picture as the stem, the options and the explanation into the chosen subject.
 
 A job survives a refresh: reopening the page shows the job at the phase it stopped at.

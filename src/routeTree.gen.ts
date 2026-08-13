@@ -57,6 +57,7 @@ import { Route as AdminLegalRouteImport } from './routes/admin.legal'
 import { Route as AdminMarketingRouteImport } from './routes/admin.marketing'
 import { Route as AdminNavigationRouteImport } from './routes/admin.navigation'
 import { Route as AdminPackagesRouteImport } from './routes/admin.packages'
+import { Route as AdminPatchIpadProxRouteImport } from './routes/admin.patch-ipad-prox'
 import { Route as AdminPdfSlicerRouteImport } from './routes/admin.pdf-slicer'
 import { Route as AdminPeopleRouteImport } from './routes/admin.people'
 import { Route as AdminQuestionBankRouteImport } from './routes/admin.question-bank'
@@ -369,6 +370,11 @@ const AdminNavigationRoute = AdminNavigationRouteImport.update({
 const AdminPackagesRoute = AdminPackagesRouteImport.update({
   id: '/admin/packages',
   path: '/admin/packages',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPatchIpadProxRoute = AdminPatchIpadProxRouteImport.update({
+  id: '/admin/patch-ipad-prox',
+  path: '/admin/patch-ipad-prox',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminPdfSlicerRoute = AdminPdfSlicerRouteImport.update({
@@ -775,6 +781,7 @@ export interface FileRoutesByFullPath {
   '/admin/marketing': typeof AdminMarketingRoute
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/packages': typeof AdminPackagesRoute
+  '/admin/patch-ipad-prox': typeof AdminPatchIpadProxRoute
   '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
   '/admin/people': typeof AdminPeopleRoute
   '/admin/question-bank': typeof AdminQuestionBankRoute
@@ -890,6 +897,7 @@ export interface FileRoutesByTo {
   '/admin/marketing': typeof AdminMarketingRoute
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/packages': typeof AdminPackagesRoute
+  '/admin/patch-ipad-prox': typeof AdminPatchIpadProxRoute
   '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
   '/admin/people': typeof AdminPeopleRoute
   '/admin/question-bank': typeof AdminQuestionBankRoute
@@ -1007,6 +1015,7 @@ export interface FileRoutesById {
   '/admin/marketing': typeof AdminMarketingRoute
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/packages': typeof AdminPackagesRoute
+  '/admin/patch-ipad-prox': typeof AdminPatchIpadProxRoute
   '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
   '/admin/people': typeof AdminPeopleRoute
   '/admin/question-bank': typeof AdminQuestionBankRoute
@@ -1129,6 +1138,7 @@ export interface FileRouteTypes {
     | '/admin/marketing'
     | '/admin/navigation'
     | '/admin/packages'
+    | '/admin/patch-ipad-prox'
     | '/admin/pdf-slicer'
     | '/admin/people'
     | '/admin/question-bank'
@@ -1244,6 +1254,7 @@ export interface FileRouteTypes {
     | '/admin/marketing'
     | '/admin/navigation'
     | '/admin/packages'
+    | '/admin/patch-ipad-prox'
     | '/admin/pdf-slicer'
     | '/admin/people'
     | '/admin/question-bank'
@@ -1360,6 +1371,7 @@ export interface FileRouteTypes {
     | '/admin/marketing'
     | '/admin/navigation'
     | '/admin/packages'
+    | '/admin/patch-ipad-prox'
     | '/admin/pdf-slicer'
     | '/admin/people'
     | '/admin/question-bank'
@@ -1481,6 +1493,7 @@ export interface RootRouteChildren {
   AdminMarketingRoute: typeof AdminMarketingRoute
   AdminNavigationRoute: typeof AdminNavigationRoute
   AdminPackagesRoute: typeof AdminPackagesRoute
+  AdminPatchIpadProxRoute: typeof AdminPatchIpadProxRoute
   AdminPdfSlicerRoute: typeof AdminPdfSlicerRoute
   AdminPeopleRoute: typeof AdminPeopleRoute
   AdminQuestionBankRoute: typeof AdminQuestionBankRoute
@@ -1867,6 +1880,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/packages'
       fullPath: '/admin/packages'
       preLoaderRoute: typeof AdminPackagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/patch-ipad-prox': {
+      id: '/admin/patch-ipad-prox'
+      path: '/admin/patch-ipad-prox'
+      fullPath: '/admin/patch-ipad-prox'
+      preLoaderRoute: typeof AdminPatchIpadProxRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/pdf-slicer': {
@@ -2553,6 +2573,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminMarketingRoute: AdminMarketingRoute,
   AdminNavigationRoute: AdminNavigationRoute,
   AdminPackagesRoute: AdminPackagesRoute,
+  AdminPatchIpadProxRoute: AdminPatchIpadProxRoute,
   AdminPdfSlicerRoute: AdminPdfSlicerRoute,
   AdminPeopleRoute: AdminPeopleRoute,
   AdminQuestionBankRoute: AdminQuestionBankRoute,
