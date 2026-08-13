@@ -11,6 +11,7 @@ import {
   lockChip,
   pickText,
   tileIcon,
+  tileWash,
   type TileKind,
   type UniversityTile,
 } from "@/lib/university-tiles";
