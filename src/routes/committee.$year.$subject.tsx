@@ -79,24 +79,40 @@ function SubjectPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["committee-subject", subject],
     queryFn: async () => {
-      const [{ data: subj }, { data: cats }, { data: res }] = await Promise.all([
+      const [{ data: subj }, { data: cats }] = await Promise.all([
         supabase.from("committee_subjects").select("*").eq("id", subject).maybeSingle(),
         supabase.from("committee_categories").select("*").eq("subject_id", subject).order("sort_order"),
-        supabase.from("committee_resources").select("*").order("sort_order"),
       ]);
+      const catIds = (cats ?? []).map((c: { id: string }) => c.id);
+      const { data: res } = catIds.length
+        ? await supabase.from("committee_resources").select("*").in("category_id", catIds).order("sort_order")
+        : { data: [] as Resource[] };
       return {
         subject: subj,
         categories: (cats ?? []) as Category[],
         resources: (res ?? []) as Resource[],
       };
     },
-    staleTime: 15_000,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: false,
   });
 
   const categories = data?.categories ?? [];
 
   /** file_path -> how many library rows use it (across the whole committee). */
-  const linkCounts = useMemo(() => refCounts(data?.resources ?? []), [data]);
+  const { data: fileRefs } = useQuery({
+    queryKey: ["committee-file-refs"],
+    queryFn: async () => {
+      const { data: rows } = await supabase.from("committee_resources").select("file_path, drive_file_id");
+      return (rows ?? []) as { file_path: string | null; drive_file_id: string | null }[];
+    },
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+  const linkCounts = useMemo(() => refCounts((fileRefs ?? []) as never[]), [fileRefs]);
 
   useEffect(() => {
     if (categories.length === 0) {
@@ -205,7 +221,7 @@ function SubjectPage() {
 
   function askDeleteResource(r: Resource) {
     const driveUses = r.drive_file_id
-      ? (data?.resources ?? []).filter((x) => x.drive_file_id === r.drive_file_id).length
+      ? (fileRefs ?? []).filter((x) => x.drive_file_id === r.drive_file_id).length
       : 0;
     const shared = r.drive_file_id
       ? driveUses > 1
