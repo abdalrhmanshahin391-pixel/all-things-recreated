@@ -205,13 +205,13 @@ function PatchIpadProX() {
       solved,
       failedItems,
       phase1Done: pages.length > 0 && cutDone === pages.length,
-      phase2Done: items.length > 0 && solved + failedItems === items.length,
+      phase2Done: items.length > 0 && solved === items.length,
     };
   }, [pages, items]);
 
   const canStartPhase1 = Boolean(courseId && groupId && file && !busy);
   const canStartPhase2 = Boolean(jobId && stats.phase1Done && items.length > 0 && !busy
-    && items.every((i) => i.status === "pending"));
+    && items.every((i) => i.status === "pending" || i.status === "failed"));
   const canImport = Boolean(jobId && stats.phase2Done && stats.solved > 0 && !busy);
   const cutReadyPages = pages.filter((p) => p.status === "cut_ready");
   const failedPages = pages.filter((p) => p.status.includes("failed"));
@@ -365,7 +365,7 @@ function PatchIpadProX() {
     if (!jobId) return;
     setBusy(true);
     try {
-      const pending = items.filter((i) => i.status === "pending");
+      const pending = items.filter((i) => i.status === "pending" || i.status === "failed");
       setProgress(`Phase 2: sending ${pending.length} question picture(s) to the 50%-off solve batch…`);
       let slice: { pageNumber: number; itemIndex: number; base64: string }[] = [];
       for (const it of pending) {
@@ -401,7 +401,10 @@ function PatchIpadProX() {
     } catch (e: any) {
       toast.error(e?.message || "Phase 2 failed");
       addLog(`✗ ${e?.message || e}`);
-    } finally { setBusy(false); await loadJob(jobId!).catch(() => {}); }
+    } finally {
+      setBusy(false);
+      if (jobId) await loadJob(jobId).catch(() => {});
+    }
   }
 
   async function checkPhase2() {

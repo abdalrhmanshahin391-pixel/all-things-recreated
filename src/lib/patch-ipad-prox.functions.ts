@@ -367,8 +367,8 @@ export const importProxJob = createServerFn({ method: "POST" })
     if (iErr) throw iErr;
     const all = items ?? [];
     if (!all.length) throw new Error("Nothing to import yet.");
-    const pending = all.filter((i: any) => i.status === "pending" || i.status === "submitted");
-    if (pending.length) throw new Error(`Phase 2 is not finished — ${pending.length} question(s) still waiting on Gemini.`);
+    const incomplete = all.filter((i: any) => i.status !== "solved" && i.status !== "imported");
+    if (incomplete.length) throw new Error(`Phase 2 is not complete — ${incomplete.length} question(s) still need a usable Gemini answer.`);
 
     const candidates: string[] = Array.isArray(job.subject_candidates) ? job.subject_candidates : [];
     let idToUse: (string | null)[] = [];
