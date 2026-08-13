@@ -75,7 +75,7 @@ function start() {
     const changed = uid !== (snapshot.user?.id ?? null);
     if (!uid) {
       extrasFor = null;
-      emit({ session: null, user: null, profile: null, isRealAdmin: false, loading: false });
+      emit({ session: null, user: null, profile: null, isRealAdmin: false, isCommittee: false, loading: false });
       return;
     }
     emit({ session: s, user: s?.user ?? null, loading: extrasFor !== uid });
