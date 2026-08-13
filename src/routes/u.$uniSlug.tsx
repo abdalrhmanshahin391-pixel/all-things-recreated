@@ -380,7 +380,7 @@ function LockedCorner() {
 
 function AdminLockHint() {
   return (
-    <span className="relative z-20 mt-2 inline-block rounded bg-background/85 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+    <span className="absolute bottom-3 left-3 z-20 rounded bg-background/85 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
       Locked for users
     </span>
   );
@@ -410,13 +410,11 @@ function HubTile({
   }, [highlighted]);
 
   const blocked = !!locked && !adminBypass;
-  const cls = `group relative flex min-h-[290px] flex-col rounded-3xl border-2 p-6 shadow-[0_10px_30px_-12px_rgba(0,0,0,0.55)] transition-all ${
+  const cls = `group relative block rounded-xl border bg-card p-7 transition-all ${
     highlighted
-      ? "border-primary ring-2 ring-primary/30"
-      : tileWash(lockColor)
-  } ${locked ? "opacity-95" : "hover:-translate-y-1 hover:shadow-[0_18px_38px_-14px_rgba(0,0,0,0.6)]"} ${
-    blocked ? "cursor-not-allowed select-none" : ""
-  }`;
+      ? "border-primary ring-2 ring-primary/30 shadow-md"
+      : "border-border hover:border-primary/40 hover:shadow-sm"
+  } ${locked ? "opacity-70" : ""} ${blocked ? "cursor-not-allowed select-none" : ""}`;
 
   const body = (
     <>
@@ -426,28 +424,22 @@ function HubTile({
         </span>
       )}
       {locked && <LockBadge note={lockNote ?? "Coming soon"} color={lockColor} />}
+      {locked && adminBypass && <AdminLockHint />}
       <div className="flex items-start justify-between">
-        <div className="grid place-items-center h-14 w-14 rounded-2xl bg-foreground/10 text-foreground shadow-inner">
-          {icon}
-        </div>
+        <div className="grid place-items-center h-14 w-14 rounded-xl bg-muted text-primary">{icon}</div>
         {locked ? (
           <LockedCorner />
         ) : (
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-foreground/10 text-foreground/80 transition-all group-hover:bg-foreground/20 group-hover:translate-x-0.5">
-            <ArrowRight size={18} />
-          </span>
+          <ArrowRight size={20} className="text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all mt-2" />
         )}
       </div>
-      <div className="mt-auto pt-8">
-        <h2 className="text-2xl font-black tracking-tight text-foreground">{title}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-        {(badge || countLabel) && (
-          <div className="mt-4 inline-flex items-center rounded-full border border-foreground/15 bg-foreground/5 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-            {badge ?? `${count} ${countLabel}`}
-          </div>
-        )}
-        {locked && adminBypass && <AdminLockHint />}
-      </div>
+      <h2 className="mt-6 text-2xl font-semibold tracking-tight text-foreground">{title}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+      {(badge || countLabel) && (
+        <div className="mt-5 inline-flex items-center text-[11px] font-semibold uppercase tracking-widest text-muted-foreground border border-border rounded-full px-2.5 py-1">
+          {badge ?? `${count} ${countLabel}`}
+        </div>
+      )}
     </>
   );
 
