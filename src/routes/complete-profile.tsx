@@ -3,7 +3,6 @@ import { useEffect, useState, type FormEvent } from "react";
 import { UserCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, refreshAuthProfile } from "@/hooks/useAuth";
-import { needsProfileCompletion } from "@/lib/profile-completion";
 import { AuthShell, FormField, inputClass, buttonClass, ErrorBox } from "@/components/AuthShell";
 
 export const Route = createFileRoute("/complete-profile")({
