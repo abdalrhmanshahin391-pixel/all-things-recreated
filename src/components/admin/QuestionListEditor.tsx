@@ -30,6 +30,9 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
   const [rows, setRows] = useState<Question[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
+  // Keep typing responsive: filtering the (possibly large) list happens at a
+  // lower priority than the keystroke itself.
+  const deferredQuery = useDeferredValue(query);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<Question | null>(null);
   const [busy, setBusy] = useState(false);
