@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Key, Check, Loader2, Trash2, ArrowLeft, Zap, ExternalLink, AlertTriangle, PlugZap } from "lucide-react";
@@ -48,7 +49,7 @@ function GeminiKeysPage() {
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
-    else if (!loading && user && !isAdmin) navigate({ to: "/" });
+    else if (!loading && user && !isAdmin) guardRedirect(navigate);
   }, [loading, user, isAdmin, navigate]);
 
   async function refresh() {

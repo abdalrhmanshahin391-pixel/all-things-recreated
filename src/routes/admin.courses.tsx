@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
@@ -100,7 +101,7 @@ function AdminCoursesPage() {
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
-    else if (!loading && user && !isAdmin) navigate({ to: "/" });
+    else if (!loading && user && !isAdmin) guardRedirect(navigate);
   }, [loading, user, isAdmin, navigate]);
 
   async function refresh() {

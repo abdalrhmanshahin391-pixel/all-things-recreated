@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -29,7 +30,7 @@ function NewSummary() {
   const navigate = useNavigate();
   const search = Route.useSearch();
   useEffect(() => {
-    if (!loading && (!user || !isAdmin)) navigate({ to: "/" });
+    if (!loading && (!user || !isAdmin)) guardRedirect(navigate);
   }, [loading, user, isAdmin, navigate]);
   const [step, setStep] = useState<1 | 2>(1);
   const [source, setSource] = useState<Source>(search.source ?? "subject");

@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Plus, Trash2, Loader2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
@@ -29,7 +30,7 @@ function AdminPages() {
   const [title, setTitle] = useState("");
 
   useEffect(() => {
-    if (!loading && !isAdmin) navigate({ to: "/" });
+    if (!loading && !isAdmin) guardRedirect(navigate);
   }, [loading, isAdmin, navigate]);
 
   async function reload() {

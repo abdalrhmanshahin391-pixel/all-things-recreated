@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useRef, useState } from "react";
 import { PDFDocument } from "pdf-lib";
 import JSZip from "jszip";
@@ -25,7 +26,7 @@ function PdfSlicerPage() {
   const { user, isAdmin, loading } = useAuth();
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
-    else if (!loading && user && !isAdmin) navigate({ to: "/" });
+    else if (!loading && user && !isAdmin) guardRedirect(navigate);
   }, [loading, user, isAdmin, navigate]);
 
   const [file, setFile] = useState<File | null>(null);

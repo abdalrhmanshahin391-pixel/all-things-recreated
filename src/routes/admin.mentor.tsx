@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -89,7 +90,7 @@ function MentorPage() {
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
-    else if (!loading && user && !isAdmin) navigate({ to: "/" });
+    else if (!loading && user && !isAdmin) guardRedirect(navigate);
   }, [loading, user, isAdmin, navigate]);
 
   if (loading || !user || !isAdmin) return <div className="min-h-screen bg-background" />;

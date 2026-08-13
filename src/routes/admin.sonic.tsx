@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -70,7 +71,7 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 2, baseMs = 1500): Pro
 function SonicPage() {
   const { user, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
-  useEffect(() => { if (!loading && (!user || !isAdmin)) navigate({ to: "/" }); }, [loading, user, isAdmin, navigate]);
+  useEffect(() => { if (!loading && (!user || !isAdmin)) guardRedirect(navigate); }, [loading, user, isAdmin, navigate]);
 
   const [courses, setCourses] = useState<Course[]>([]);
   const groupsCacheRef = useRef<Record<string, Group[]>>({});

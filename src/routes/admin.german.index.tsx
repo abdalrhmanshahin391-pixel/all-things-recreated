@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useState } from "react";
 import { Plus, Loader2, Trash2, Upload, Eye, EyeOff, Languages, BookOpen, Type, MessageSquareText, Shuffle, ListChecks } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -55,7 +56,7 @@ function AdminGermanPage() {
   }
 
   useEffect(() => {
-    if (!loading && (!user || !isAdmin)) navigate({ to: "/" });
+    if (!loading && (!user || !isAdmin)) guardRedirect(navigate);
   }, [user, isAdmin, loading, navigate]);
 
   useEffect(() => {

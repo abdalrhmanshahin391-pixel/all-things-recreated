@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -44,7 +45,7 @@ function AdminStudyHubPage() {
   });
 
   useEffect(() => {
-    if (!loading && !isAdmin) navigate({ to: "/" });
+    if (!loading && !isAdmin) guardRedirect(navigate);
   }, [loading, isAdmin, navigate]);
 
   useEffect(() => {

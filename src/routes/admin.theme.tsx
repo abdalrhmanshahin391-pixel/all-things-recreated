@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
@@ -104,7 +105,7 @@ function AdminTheme() {
 
 
   useEffect(() => {
-    if (!loading && !isAdmin) navigate({ to: "/" });
+    if (!loading && !isAdmin) guardRedirect(navigate);
   }, [loading, isAdmin, navigate]);
 
   async function pick(theme: SiteTheme) {

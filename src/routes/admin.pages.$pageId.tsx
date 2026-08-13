@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
@@ -71,7 +72,7 @@ function PageBuilder() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!loading && !isAdmin) navigate({ to: "/" });
+    if (!loading && !isAdmin) guardRedirect(navigate);
   }, [loading, isAdmin, navigate]);
 
   async function reload() {

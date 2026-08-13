@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, ArrowLeft, Upload, ArrowUp, ArrowDown, Eye, EyeOff, Save, ImageIcon, MapPin, Sparkles } from "lucide-react";
@@ -48,7 +49,7 @@ function AdminUniversities() {
   const [settings, setSettings] = useState<Settings>({ background_color: "#0B3B3C", scroll_speed_seconds: 30, is_enabled: true });
 
   useEffect(() => {
-    if (!loading && !isAdmin) navigate({ to: "/" });
+    if (!loading && !isAdmin) guardRedirect(navigate);
   }, [isAdmin, loading, navigate]);
 
   const { data: universities = [] } = useQuery({

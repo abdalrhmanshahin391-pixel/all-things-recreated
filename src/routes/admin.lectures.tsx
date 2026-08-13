@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
@@ -85,7 +86,7 @@ function AdminLecturesPage() {
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
-    else if (!loading && user && !isAdmin) navigate({ to: "/" });
+    else if (!loading && user && !isAdmin) guardRedirect(navigate);
   }, [loading, user, isAdmin, navigate]);
 
   async function loadCourses() {

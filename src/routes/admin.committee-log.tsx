@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, History, Search, Plus, Pencil, Trash2 } from "lucide-react";
@@ -56,7 +57,7 @@ function CommitteeLogPage() {
   const [page, setPage] = useState(0);
 
   useEffect(() => {
-    if (!loading && !isAdmin) navigate({ to: "/" });
+    if (!loading && !isAdmin) guardRedirect(navigate);
   }, [loading, isAdmin, navigate]);
 
   useEffect(() => setPage(0), [action, q]);

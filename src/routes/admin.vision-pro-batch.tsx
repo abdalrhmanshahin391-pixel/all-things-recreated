@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Sparkles, Upload, RefreshCw, Trash2, Loader2, KeyRound, RotateCw, Download, ScanEye } from "lucide-react";
@@ -109,7 +110,7 @@ function VisionProBatch() {
   const { user, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
   useEffect(() => {
-    if (!loading && (!user || !isAdmin)) navigate({ to: "/" });
+    if (!loading && (!user || !isAdmin)) guardRedirect(navigate);
   }, [loading, user, isAdmin, navigate]);
 
   const [courses, setCourses] = useState<Course[]>([]);

@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Save, RotateCcw, Search, ChevronDown, Loader2 } from "lucide-react";
@@ -36,7 +37,7 @@ function AdminContent() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!loading && !isAdmin) navigate({ to: "/" });
+    if (!loading && !isAdmin) guardRedirect(navigate);
   }, [loading, isAdmin, navigate]);
 
   useEffect(() => {

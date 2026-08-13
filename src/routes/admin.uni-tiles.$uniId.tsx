@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowUp, ArrowDown, Plus, Trash2, Eye, EyeOff, Loader2, Star, Lock } from "lucide-react";
 import { toast } from "sonner";
@@ -39,7 +40,7 @@ function AdminUniTiles() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!loading && !isAdmin) navigate({ to: "/" });
+    if (!loading && !isAdmin) guardRedirect(navigate);
   }, [loading, isAdmin, navigate]);
 
   async function reload() {

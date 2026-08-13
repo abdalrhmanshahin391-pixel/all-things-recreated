@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
@@ -53,7 +54,7 @@ function AdminGermanCoursePage() {
   const [newSubjectType, setNewSubjectType] = useState<ContentType>("words");
 
   useEffect(() => {
-    if (!loading && (!user || !isAdmin)) navigate({ to: "/" });
+    if (!loading && (!user || !isAdmin)) guardRedirect(navigate);
   }, [user, isAdmin, loading, navigate]);
 
   async function load() {

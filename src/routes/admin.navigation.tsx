@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowUp, ArrowDown, Plus, Trash2, Eye, EyeOff, Loader2 } from "lucide-react";
@@ -44,7 +45,7 @@ function AdminNavigation() {
   const saver = useRef(createDebouncedSaver(500));
 
   useEffect(() => {
-    if (!loading && !isAdmin) navigate({ to: "/" });
+    if (!loading && !isAdmin) guardRedirect(navigate);
   }, [loading, isAdmin, navigate]);
 
   /** Make the live header/hero/footer pick the change up immediately. */
