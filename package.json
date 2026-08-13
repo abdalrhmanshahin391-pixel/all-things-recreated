@@ -16,7 +16,6 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^5.2.2",
-    "@lovable.dev/cloud-auth-js": "^1.0.0",
     "@lovable.dev/email-js": "0.1.0",
     "@lovable.dev/mcp-js": "^0.24.0",
     "@lovable.dev/webhooks-js": "^0.0.1",

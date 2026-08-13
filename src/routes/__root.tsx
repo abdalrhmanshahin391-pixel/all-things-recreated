@@ -5,7 +5,6 @@ import {
   createRootRouteWithContext,
   useRouter,
   useRouterState,
-  useNavigate,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -24,8 +23,6 @@ import { SeasonalTheme } from "@/components/SeasonalTheme";
 import { ThemeDecor } from "@/components/ThemeDecor";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { SiteFooter } from "@/components/SiteFooter";
-import { useAuth } from "@/hooks/useAuth";
-import { needsProfileCompletion } from "@/lib/profile-completion";
 import "@/i18n";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -261,7 +258,6 @@ function RootComponent() {
           <ThemeDecor />
           <PresenceTracker />
           <DeviceTracker />
-          <ProfileCompletionGate />
           <PaymentTestModeBanner />
           <AnnouncementBar />
           {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
@@ -276,41 +272,6 @@ function RootComponent() {
 
 function PresenceTracker() {
   usePresence();
-  return null;
-}
-
-/**
- * Google / Apple sign-ups arrive without a username or phone number, so they
- * get sent to one short completion screen before they can use the app.
- */
-const COMPLETION_EXEMPT = [
-  "/complete-profile",
-  "/login",
-  "/register",
-  "/forgot-password",
-  "/reset-password",
-  "/locked",
-  "/.lovable",
-];
-
-function ProfileCompletionGate() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { profile, loading } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (loading || !profile) return;
-    if (COMPLETION_EXEMPT.some((p) => pathname === p || pathname.startsWith(p + "/"))) return;
-    if (!needsProfileCompletion(profile)) return;
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem(
-        "aqua-post-auth-next",
-        window.location.pathname + window.location.search,
-      );
-    }
-    navigate({ to: "/complete-profile", replace: true });
-  }, [loading, profile, pathname, navigate]);
-
   return null;
 }
 
