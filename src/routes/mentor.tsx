@@ -16,12 +16,10 @@ import {
   RefreshCw,
   Pin,
   Star,
-  Sunrise,
   Moon,
   MoonStar,
   X,
   Copy,
-  BookHeart,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -78,14 +76,6 @@ type Treasure = {
   tags: string[];
   is_pinned_today: boolean;
   pinned_on: string | null;
-};
-type Journal = {
-  id?: string;
-  entry_date: string;
-  intention: string | null;
-  did_well: string | null;
-  fell_short: string | null;
-  tomorrow: string | null;
 };
 
 function todayUtcDate(): string {
