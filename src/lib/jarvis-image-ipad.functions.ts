@@ -10,7 +10,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import { submitGeminiBatch } from "@/lib/gemini-pool";
 
 const CUT_MODEL = "gemini-2.5-flash";
 const SOLVE_MODEL = "gemini-2.5-flash";
@@ -424,17 +423,19 @@ export const submitImageChunkIpad = createServerFn({ method: "POST" })
       metadata: { key: `img-${i}` },
     }));
 
-    const submitted = await submitGeminiBatch({ apiKey, model: SOLVE_MODEL, body: {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${SOLVE_MODEL}:batchGenerateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify({
         batch: {
           display_name: `jbimg-${chunk.job_id.slice(0, 8)}-p${chunk.chunk_index + 1}-${Date.now()}`,
           input_config: { requests: { requests } },
         },
-      } });
-    const json: any = submitted.ok ? submitted.json : {};
-    const res = { ok: submitted.ok, status: submitted.ok ? 200 : submitted.status };
-    const submitError = submitted.ok ? "" : submitted.message;
+      }),
+    });
+    const json = await res.json().catch(() => ({} as any));
     if (!res.ok) {
-      const msg = submitError;
+      const msg = `Batch submit failed (${res.status}): ${JSON.stringify(json).slice(0, 300)}`;
       await supabase.from(CHUNKS_TABLE).update({ status: "failed", error: msg }).eq("id", data.chunkId);
       throw new Error(msg);
     }
