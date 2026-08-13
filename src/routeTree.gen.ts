@@ -18,6 +18,7 @@ import { Route as LecturesRouteImport } from './routes/lectures'
 import { Route as LockedRouteImport } from './routes/locked'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as McpRouteImport } from './routes/mcp'
+import { Route as MentorRouteImport } from './routes/mentor'
 import { Route as NotesRouteImport } from './routes/notes'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ProfileRouteImport } from './routes/profile'
@@ -53,7 +54,6 @@ import { Route as AdminJarvisBatchV2IpadRouteImport } from './routes/admin.jarvi
 import { Route as AdminLecturesRouteImport } from './routes/admin.lectures'
 import { Route as AdminLegalRouteImport } from './routes/admin.legal'
 import { Route as AdminMarketingRouteImport } from './routes/admin.marketing'
-import { Route as AdminMentorRouteImport } from './routes/admin.mentor'
 import { Route as AdminNavigationRouteImport } from './routes/admin.navigation'
 import { Route as AdminPackagesRouteImport } from './routes/admin.packages'
 import { Route as AdminPdfSlicerRouteImport } from './routes/admin.pdf-slicer'
@@ -170,6 +170,11 @@ const LoginRoute = LoginRouteImport.update({
 const McpRoute = McpRouteImport.update({
   id: '/mcp',
   path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MentorRoute = MentorRouteImport.update({
+  id: '/mentor',
+  path: '/mentor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NotesRoute = NotesRouteImport.update({
@@ -348,11 +353,6 @@ const AdminLegalRoute = AdminLegalRouteImport.update({
 const AdminMarketingRoute = AdminMarketingRouteImport.update({
   id: '/admin/marketing',
   path: '/admin/marketing',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminMentorRoute = AdminMentorRouteImport.update({
-  id: '/admin/mentor',
-  path: '/admin/mentor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminNavigationRoute = AdminNavigationRouteImport.update({
@@ -731,6 +731,7 @@ export interface FileRoutesByFullPath {
   '/locked': typeof LockedRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
+  '/mentor': typeof MentorRoute
   '/notes': typeof NotesRoute
   '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
@@ -765,7 +766,6 @@ export interface FileRoutesByFullPath {
   '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
-  '/admin/mentor': typeof AdminMentorRoute
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/packages': typeof AdminPackagesRoute
   '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
@@ -847,6 +847,7 @@ export interface FileRoutesByTo {
   '/locked': typeof LockedRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
+  '/mentor': typeof MentorRoute
   '/notes': typeof NotesRoute
   '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
@@ -879,7 +880,6 @@ export interface FileRoutesByTo {
   '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
-  '/admin/mentor': typeof AdminMentorRoute
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/packages': typeof AdminPackagesRoute
   '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
@@ -961,6 +961,7 @@ export interface FileRoutesById {
   '/locked': typeof LockedRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
+  '/mentor': typeof MentorRoute
   '/notes': typeof NotesRoute
   '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
@@ -995,7 +996,6 @@ export interface FileRoutesById {
   '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
-  '/admin/mentor': typeof AdminMentorRoute
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/packages': typeof AdminPackagesRoute
   '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
@@ -1082,6 +1082,7 @@ export interface FileRouteTypes {
     | '/locked'
     | '/login'
     | '/mcp'
+    | '/mentor'
     | '/notes'
     | '/privacy'
     | '/profile'
@@ -1116,7 +1117,6 @@ export interface FileRouteTypes {
     | '/admin/lectures'
     | '/admin/legal'
     | '/admin/marketing'
-    | '/admin/mentor'
     | '/admin/navigation'
     | '/admin/packages'
     | '/admin/pdf-slicer'
@@ -1198,6 +1198,7 @@ export interface FileRouteTypes {
     | '/locked'
     | '/login'
     | '/mcp'
+    | '/mentor'
     | '/notes'
     | '/privacy'
     | '/profile'
@@ -1230,7 +1231,6 @@ export interface FileRouteTypes {
     | '/admin/lectures'
     | '/admin/legal'
     | '/admin/marketing'
-    | '/admin/mentor'
     | '/admin/navigation'
     | '/admin/packages'
     | '/admin/pdf-slicer'
@@ -1311,6 +1311,7 @@ export interface FileRouteTypes {
     | '/locked'
     | '/login'
     | '/mcp'
+    | '/mentor'
     | '/notes'
     | '/privacy'
     | '/profile'
@@ -1345,7 +1346,6 @@ export interface FileRouteTypes {
     | '/admin/lectures'
     | '/admin/legal'
     | '/admin/marketing'
-    | '/admin/mentor'
     | '/admin/navigation'
     | '/admin/packages'
     | '/admin/pdf-slicer'
@@ -1431,6 +1431,7 @@ export interface RootRouteChildren {
   LockedRoute: typeof LockedRoute
   LoginRoute: typeof LoginRoute
   McpRoute: typeof McpRoute
+  MentorRoute: typeof MentorRoute
   NotesRoute: typeof NotesRoute
   PrivacyRoute: typeof PrivacyRoute
   ProfileRoute: typeof ProfileRoute
@@ -1465,7 +1466,6 @@ export interface RootRouteChildren {
   AdminLecturesRoute: typeof AdminLecturesRoute
   AdminLegalRoute: typeof AdminLegalRoute
   AdminMarketingRoute: typeof AdminMarketingRoute
-  AdminMentorRoute: typeof AdminMentorRoute
   AdminNavigationRoute: typeof AdminNavigationRoute
   AdminPackagesRoute: typeof AdminPackagesRoute
   AdminPdfSlicerRoute: typeof AdminPdfSlicerRoute
@@ -1581,6 +1581,13 @@ declare module '@tanstack/react-router' {
       path: '/mcp'
       fullPath: '/mcp'
       preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mentor': {
+      id: '/mentor'
+      path: '/mentor'
+      fullPath: '/mentor'
+      preLoaderRoute: typeof MentorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/notes': {
@@ -1826,13 +1833,6 @@ declare module '@tanstack/react-router' {
       path: '/admin/marketing'
       fullPath: '/admin/marketing'
       preLoaderRoute: typeof AdminMarketingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/mentor': {
-      id: '/admin/mentor'
-      path: '/admin/mentor'
-      fullPath: '/admin/mentor'
-      preLoaderRoute: typeof AdminMentorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/navigation': {
@@ -2494,6 +2494,7 @@ const rootRouteChildren: RootRouteChildren = {
   LockedRoute: LockedRoute,
   LoginRoute: LoginRoute,
   McpRoute: McpRoute,
+  MentorRoute: MentorRoute,
   NotesRoute: NotesRoute,
   PrivacyRoute: PrivacyRoute,
   ProfileRoute: ProfileRoute,
@@ -2529,7 +2530,6 @@ const rootRouteChildren: RootRouteChildren = {
   AdminLecturesRoute: AdminLecturesRoute,
   AdminLegalRoute: AdminLegalRoute,
   AdminMarketingRoute: AdminMarketingRoute,
-  AdminMentorRoute: AdminMentorRoute,
   AdminNavigationRoute: AdminNavigationRoute,
   AdminPackagesRoute: AdminPackagesRoute,
   AdminPdfSlicerRoute: AdminPdfSlicerRoute,
