@@ -1,0 +1,1 @@
+update public.site_settings set theme = 'academy' where id = true;

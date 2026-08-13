@@ -1,0 +1,1 @@
+CREATE POLICY "Admins manage question images" ON storage.objects FOR ALL TO authenticated USING (bucket_id = 'question-images' AND public.has_role(auth.uid(), 'admin')) WITH CHECK (bucket_id = 'question-images' AND public.has_role(auth.uid(), 'admin'));

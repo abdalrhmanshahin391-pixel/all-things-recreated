@@ -1,0 +1,100 @@
+{
+  "nav": {
+    "comingSoon": "Coming soon",
+    "courses": "COURSES",
+
+    "lectures": "LECTURES",
+    "packages": "PACKAGES",
+    "committee": "Medicine & Surgery Committee",
+    "myNotes": "MY NOTES",
+    "login": "LOGIN",
+    "register": "REGISTER",
+    "profileSettings": "Profile Settings",
+    "usersInfo": "Users Info",
+    "devicesUsers": "Devices & Users",
+    "coursesControl": "Courses Control",
+    "lecturesSyllabus": "Lectures Syllabus",
+    "packagesTable": "Packages Table",
+    "qAddChoice": "Q add choice",
+    "marketing": "Marketing",
+    "committeeHub": "Committee Hub",
+    "germanLearning": "German Learning",
+    "darkMode": "Dark mode",
+    "logout": "Logout",
+    "admin": "admin",
+    "user": "user",
+    "switchLight": "Switch to light mode",
+    "switchDark": "Switch to dark mode"
+  },
+  "hero": {
+    "eyebrow": "A multi-university study companion",
+    "title1": "Medicine,",
+    "title2": "made human."
+  },
+  "home": {
+    "eyebrow": "A multi-university study companion",
+    "title1": "Medicine,",
+    "title2": "made human.",
+    "subtitle": "Curated question banks, video lectures, and committee notes — built around the university you actually study at.",
+    "ctaPrimary": "Pick your university",
+    "ctaSecondary": "See plans",
+    "trust": {
+      "unis": "{{count}} universities live",
+      "unisSoon": "More universities arriving",
+      "questions": "2,500+ practice questions",
+      "byStudents": "Built by students who passed"
+    },
+    "grid": {
+      "eyebrow": "Universities",
+      "title": "Pick where you study. We'll handle the rest.",
+      "sub": "Each university gets its own carefully built library — questions, lectures, and committee notes from students who actually sat the exams."
+    },
+    "how": {
+      "eyebrow": "Three steps. That's the whole thing.",
+      "pick": "Pick your university",
+      "practice": "Practice every day",
+      "pass": "Walk in ready"
+    }
+  },
+  "how": {
+    "eyebrow": "How It Works",
+    "title": "Three steps from signup to exam day",
+    "s1t": "Create Your Profile",
+    "s1d": "Sign up in seconds, pick your year and subjects, and let Vault personalize your study plan.",
+    "s2t": "Practice Daily",
+    "s2d": "Answer questions, review explanations, and bookmark tricky topics for spaced repetition.",
+    "s3t": "Ace Your Exams",
+    "s3d": "Track improvement over time, take mock exams, and walk into the real test fully prepared."
+  },
+  "features": {
+    "eyebrow": "Features",
+    "title": "Everything you need, nothing you don't",
+    "f1t": "Curated Question Banks",
+    "f1d": "Thousands of clinically relevant questions organized by subject, organ system, and difficulty — written and reviewed by faculty.",
+    "f2t": "Realistic Mock Exams",
+    "f2d": "Timed, full-length practice tests that mirror the structure and rigor of your university exams, with detailed explanations.",
+    "f3t": "Make Your Own Quizzes",
+    "f3d": "Build custom quizzes from the question bank to target weak areas, review topics, and share study sets with classmates."
+  },
+  "promos": {
+    "featuredEyebrow": "Featured Courses",
+    "featuredTitle": "Built for every year of medical school",
+    "browseAll": "Browse all courses",
+    "year": "Year",
+    "subjects": "subjects",
+    "fullYear": "Full year access",
+    "enroll": "Enroll",
+    "packagesEyebrow": "Save with Packages",
+    "packagesTitle": "Bundle multiple courses, pay once, study together",
+    "packagesSub": "Group packages let you and your classmates unlock entire years at a better rate.",
+    "mostPopular": "Most Popular",
+    "groupOf": "Group of",
+    "personal": "Personal",
+    "perPerson": "/ person",
+    "feat1": "All bundled courses unlocked",
+    "feat2": "Mid & final mock exams",
+    "feat3Group": "One payment, whole group enrolled",
+    "feat3Personal": "Lifetime access for the year",
+    "getPackage": "Get this package"
+  }
+}
