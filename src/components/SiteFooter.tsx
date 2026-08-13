@@ -1,90 +1,174 @@
 import { Link } from "@tanstack/react-router";
+import { Mail, Instagram, Send } from "lucide-react";
 import { useLang } from "@/components/LanguageProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useNavItems, canSee, navLabel, targetHref, isExternal } from "@/lib/site-structure";
 import { MadeByLaith } from "@/components/MadeByLaith";
 
+type Col = { heading: string; links: { label: string; to: string }[] };
+
 /**
- * Site-wide footer. Links come from the "Footer links" placement in
- * Admin → Navigation & Buttons, so admins control exactly what shows here.
+ * Site-wide footer: a multi-column directory (Khan-Academy style) with a
+ * brand/mission block. Admin-controlled links from the "Footer links"
+ * placement slot into the "Site" column.
  */
 export function SiteFooter() {
   const { lang } = useLang();
+  const ar = lang === "ar";
   const { user, isAdmin } = useAuth();
   const settings = useSiteSettings();
   const items = useNavItems("footer").filter((i) => canSee(i, { signedIn: !!user, isAdmin }));
 
+  const columns: Col[] = [
+    {
+      heading: ar ? "الدراسة" : "Study",
+      links: [
+        { label: ar ? "الجامعات" : "Universities", to: "/universities" },
+        { label: ar ? "الدورات" : "Courses", to: "/courses" },
+        { label: ar ? "المحاضرات" : "Lectures", to: "/lectures" },
+        { label: ar ? "الباقات" : "Packages", to: "/packages" },
+        { label: ar ? "أدلة الدراسة" : "Study Guides", to: "/guides" },
+      ],
+    },
+    {
+      heading: ar ? "الأدوات" : "Tools",
+      links: [
+        { label: ar ? "مركز الدراسة" : "Study Hub", to: "/study-hub" },
+        { label: ar ? "الملخّصات" : "Summaries", to: "/summaries" },
+        { label: ar ? "ملاحظاتي" : "My Notes", to: "/notes" },
+        { label: ar ? "اللجنة" : "Committee", to: "/committee" },
+        { label: "My Mentor", to: "/mentor" },
+      ],
+    },
+    {
+      heading: ar ? "الموقع" : "Site",
+      links: [
+        { label: ar ? "من نحن" : "About us", to: "/about" },
+        { label: ar ? "الدعم" : "Support", to: "/support" },
+        { label: ar ? "حسابي" : "My profile", to: "/profile" },
+      ],
+    },
+    {
+      heading: ar ? "قانوني" : "Legal",
+      links: [
+        { label: ar ? "شروط الاستخدام" : "Terms of Service", to: "/terms" },
+        { label: ar ? "سياسة الخصوصية" : "Privacy Policy", to: "/privacy" },
+        { label: ar ? "سياسة الاسترداد" : "Refund Policy", to: "/refund-policy" },
+      ],
+    },
+  ];
+
   return (
-    <footer className="mt-auto border-t-2 border-border bg-card">
-      <div className="mx-auto max-w-6xl px-5 py-10">
-        <div className="flex flex-wrap items-start justify-between gap-8">
-          <div className="min-w-[200px]">
-            <div className="font-display text-lg font-black lowercase text-foreground">{settings.site_name}</div>
-            <p className="mt-1 max-w-xs text-sm text-muted-foreground">{settings.tagline}</p>
+    <footer className="mt-auto border-t-2 border-border bg-card text-card-foreground">
+      <div className="mx-auto max-w-6xl px-5 py-14">
+        <div className="grid gap-10 md:grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)]">
+          {/* Brand + mission */}
+          <div className="min-w-0">
+            <div className="font-display text-2xl font-black lowercase">{settings.site_name}</div>
+            <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
+              {settings.tagline}
+            </p>
+            <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted-foreground">
+              {ar
+                ? "مهمّتنا: أن يتدرّب كل طالب طب بالأسئلة والحالات، لا بالحفظ وحده."
+                : "Our mission: let every medical student learn by answering questions and meeting real cases — not by memorising slides."}
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <a
+                href="mailto:aquaqbank@gmail.com"
+                aria-label="Email"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+              >
+                <Mail size={17} />
+              </a>
+              <a
+                href="https://instagram.com"
+                target="_blank"
+                rel="noreferrer noopener"
+                aria-label="Instagram"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+              >
+                <Instagram size={17} />
+              </a>
+              <a
+                href="https://t.me"
+                target="_blank"
+                rel="noreferrer noopener"
+                aria-label="Telegram"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+              >
+                <Send size={17} />
+              </a>
+            </div>
           </div>
 
-          {items.length > 0 && (
-            <nav className="flex flex-wrap gap-x-6 gap-y-2">
-              {items.map((item) => {
-                const href = targetHref(item.target_kind, item.target_value);
-                const label = navLabel(item, lang);
-                if (item.coming_soon) {
-                  return (
-                    <span
-                      key={item.id}
-                      aria-disabled="true"
-                      className="text-sm font-bold text-muted-foreground opacity-60 cursor-not-allowed select-none"
-                    >
-                      {label}
-                      <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
-                        {lang === "ar" ? "قريباً" : "Coming soon"}
-                      </span>
-                    </span>
-                  );
-                }
-                return isExternal(item.target_kind, item.target_value) ? (
-
-                  <a
-                    key={item.id}
-                    href={href}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="text-sm font-bold text-muted-foreground hover:text-foreground"
-                  >
-                    {label}
-                  </a>
-                ) : (
-                  <Link
-                    key={item.id}
-                    to={href as any}
-                    className="text-sm font-bold text-muted-foreground hover:text-foreground"
-                  >
-                    {label}
-                  </Link>
-                );
-              })}
-            </nav>
-          )}
+          {/* Link columns */}
+          <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+            {columns.map((col) => (
+              <nav key={col.heading} className="min-w-0">
+                <h3 className="text-xs font-black uppercase tracking-[0.16em] text-foreground">
+                  {col.heading}
+                </h3>
+                <ul className="mt-3 space-y-2.5">
+                  {col.links.map((l) => (
+                    <li key={l.to + l.label}>
+                      <Link
+                        to={l.to as any}
+                        className="text-sm text-muted-foreground transition-colors hover:text-primary"
+                      >
+                        {l.label}
+                      </Link>
+                    </li>
+                  ))}
+                  {col.heading === (ar ? "الموقع" : "Site") &&
+                    items.map((item) => {
+                      const href = targetHref(item.target_kind, item.target_value);
+                      const label = navLabel(item, lang);
+                      if (item.coming_soon) {
+                        return (
+                          <li key={item.id}>
+                            <span
+                              aria-disabled="true"
+                              className="cursor-not-allowed select-none text-sm text-muted-foreground opacity-60"
+                            >
+                              {label}
+                              <span className="ms-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider">
+                                {ar ? "قريباً" : "Coming soon"}
+                              </span>
+                            </span>
+                          </li>
+                        );
+                      }
+                      return (
+                        <li key={item.id}>
+                          {isExternal(item.target_kind, item.target_value) ? (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="text-sm text-muted-foreground transition-colors hover:text-primary"
+                            >
+                              {label}
+                            </a>
+                          ) : (
+                            <Link
+                              to={href as any}
+                              className="text-sm text-muted-foreground transition-colors hover:text-primary"
+                            >
+                              {label}
+                            </Link>
+                          )}
+                        </li>
+                      );
+                    })}
+                </ul>
+              </nav>
+            ))}
+          </div>
         </div>
 
-        <nav className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-6">
-          <Link to="/guides" className="text-xs font-bold text-muted-foreground hover:text-foreground">
-            {lang === "ar" ? "أدلة الدراسة" : "Study Guides"}
-          </Link>
-          <Link to="/terms" className="text-xs font-bold text-muted-foreground hover:text-foreground">
-            {lang === "ar" ? "شروط الاستخدام" : "Terms of Service"}
-          </Link>
-
-          <Link to="/privacy" className="text-xs font-bold text-muted-foreground hover:text-foreground">
-            {lang === "ar" ? "سياسة الخصوصية" : "Privacy Policy"}
-          </Link>
-          <Link to="/refund-policy" className="text-xs font-bold text-muted-foreground hover:text-foreground">
-            {lang === "ar" ? "سياسة الاسترداد" : "Refund Policy"}
-          </Link>
-        </nav>
-
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6">
+        <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6">
           <span className="text-xs text-muted-foreground">
             © {new Date().getFullYear()} {settings.site_name}
           </span>
