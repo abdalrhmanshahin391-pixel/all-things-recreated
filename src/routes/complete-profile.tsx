@@ -101,12 +101,6 @@ function CompleteProfilePage() {
     }
   }
 
-  useEffect(() => {
-    if (!loading && profile && !needsProfileCompletion(profile) && !saving && seeded) {
-      // Nothing left to fill in.
-    }
-  }, [loading, profile, saving, seeded]);
-
   return (
     <AuthShell
       eyebrow="almost there"
