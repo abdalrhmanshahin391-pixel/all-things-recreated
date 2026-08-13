@@ -293,6 +293,16 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
             {navLinks.map((l) => (
               <NavEntry key={l.id} item={l} mobile />
             ))}
+            {user && (
+              <Link
+                to="/mentor"
+                onClick={() => setMobileOpen(false)}
+                className={`${skin.navMobile} w-fit inline-flex items-center gap-2 text-foreground`}
+              >
+                <MoonStar size={16} className="text-primary" />
+                My Mentor · مرشدي
+              </Link>
+            )}
             {!user && !authLoading && (
               <div className="pt-3 mt-2 border-t border-border flex gap-2">
                 <Link
