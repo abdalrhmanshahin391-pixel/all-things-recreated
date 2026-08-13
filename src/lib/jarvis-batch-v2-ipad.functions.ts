@@ -6,9 +6,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import { submitGeminiBatch } from "@/lib/gemini-pool";
 
-const MODEL = "gemini-flash-lite-latest";
+const MODEL = "gemini-2.5-flash-lite";
 const CHUNK_PAGES = 2;
 const JOBS_TABLE = "jarvis_batch_v2_ipad_jobs";
 const CHUNKS_TABLE = "jarvis_batch_v2_ipad_chunks";
@@ -311,24 +310,17 @@ export const extractBookendsV2Ipad = createServerFn({ method: "POST" })
       contents: [{ role: "user", parts: [{ text: `--- CHUNK ---\n${data.chunkText}\n--- END ---` }] }],
       generationConfig: { temperature: 0.1, maxOutputTokens: 32768, responseMimeType: "application/json" },
     };
-    const call = (m: string) =>
-      fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify(body),
-      });
-    let res = await call(MODEL);
-    let json = await res.json().catch(() => ({} as any));
-    if (!res.ok && /no longer available|not found|is not supported/i.test(JSON.stringify(json))) {
-      res = await call("gemini-flash-lite-latest");
-      json = await res.json().catch(() => ({} as any));
-    }
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json().catch(() => ({} as any));
     if (!res.ok) {
       const msg = `Bookend call failed (${res.status}): ${JSON.stringify(json).slice(0, 300)}`;
       await supabase.from(CHUNKS_TABLE).update({ status: "failed", error: msg }).eq("id", data.chunkId);
       throw new Error(msg);
     }
-
     const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const bookends = normalizeBookends(parseBookendArray(text));
     return { bookends };
@@ -396,12 +388,14 @@ export const submitChunkV2Ipad = createServerFn({ method: "POST" })
         input_config: { requests: { requests } },
       },
     };
-    const submitted = await submitGeminiBatch({ apiKey, model: MODEL, body: body });
-    const json: any = submitted.ok ? submitted.json : {};
-    const res = { ok: submitted.ok, status: submitted.ok ? 200 : submitted.status };
-    const submitError = submitted.ok ? "" : submitted.message;
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:batchGenerateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json().catch(() => ({} as any));
     if (!res.ok) {
-      const msg = submitError;
+      const msg = `Batch submit failed (${res.status}): ${JSON.stringify(json).slice(0, 300)}`;
       await supabase.from(CHUNKS_TABLE).update({ status: "failed", error: msg }).eq("id", data.chunkId);
       throw new Error(msg);
     }

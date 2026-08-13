@@ -38,6 +38,10 @@ const serverSnapshot: AuthSnapshot = EMPTY;
 const listeners = new Set<() => void>();
 let started = false;
 let extrasFor: string | null = null;
+// Users whose profile/roles have actually finished loading. `extrasFor` only
+// says a fetch has *started*, so it must never be used to clear `loading` —
+// doing so let admin pages read isRealAdmin=false and redirect home.
+const extrasLoaded = new Set<string>();
 
 function emit(next: Partial<AuthSnapshot>) {
   snapshot = { ...snapshot, ...next };
@@ -53,6 +57,7 @@ async function loadExtras(uid: string) {
   ]);
   // A newer auth event may have landed while we were fetching.
   if (snapshot.user?.id !== uid) return;
+  extrasLoaded.add(uid);
   emit({
     profile: (prof as Profile | null) ?? null,
     isRealAdmin: (roles ?? []).some((r: { role: string }) => r.role === "admin"),
@@ -75,12 +80,16 @@ function start() {
     const changed = uid !== (snapshot.user?.id ?? null);
     if (!uid) {
       extrasFor = null;
+      extrasLoaded.clear();
       emit({ session: null, user: null, profile: null, isRealAdmin: false, isCommittee: false, loading: false });
       return;
     }
-    emit({ session: s, user: s?.user ?? null, loading: extrasFor !== uid });
+    emit({ session: s, user: s?.user ?? null, loading: !extrasLoaded.has(uid) });
     if (changed || event === "USER_UPDATED") {
-      if (event === "USER_UPDATED") extrasFor = null;
+      if (event === "USER_UPDATED") {
+        extrasFor = null;
+        extrasLoaded.delete(uid);
+      }
       void loadExtras(uid);
     }
   });
@@ -92,7 +101,7 @@ function start() {
       emit({ session: null, user: null, loading: false });
       return;
     }
-    emit({ session: s, user: s.user, loading: extrasFor !== s.user.id });
+    emit({ session: s, user: s.user, loading: !extrasLoaded.has(s.user.id) });
     await loadExtras(s.user.id);
   })();
 }
@@ -118,5 +127,6 @@ export async function refreshAuthProfile() {
   const uid = snapshot.user?.id;
   if (!uid) return;
   extrasFor = null;
+  extrasLoaded.delete(uid);
   await loadExtras(uid);
 }
