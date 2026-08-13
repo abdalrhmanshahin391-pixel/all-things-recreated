@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useParams, useNavigate } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { committeeSubjectQuery } from "@/lib/committee-queries";
 import { useState } from "react";
 import { ChevronLeft, Plus, Pencil, Trash2, Shield, CalendarDays, Layers } from "lucide-react";
 import { toast } from "sonner";
@@ -71,7 +72,7 @@ function YearPage() {
         .eq("year_number", Number(year))
         .maybeSingle();
       if (!y) return { year: null, subjects: [] as Subject[], semesters: [] as Semester[], modules: [] as Module[] };
-      const [{ data: s }, { data: sem }] = await Promise.all([
+      const [{ data: s }, { data: sem }, { data: allMods }] = await Promise.all([
         supabase
           .from("committee_subjects")
           .select(`id, year_id, semester_id, module_id, name, icon_key, sort_order, tag_label, tag_color, ${CLOSED_SELECT}`)
@@ -82,15 +83,13 @@ function YearPage() {
           .select(`id, year_id, name, number, sort_order, ${CLOSED_SELECT}`)
           .eq("year_id", y.id)
           .order("sort_order"),
+        supabase
+          .from("committee_modules")
+          .select(`id, semester_id, name, icon_key, sort_order, ${CLOSED_SELECT}`)
+          .order("sort_order"),
       ]);
       const semIds = (sem ?? []).map((x: { id: string }) => x.id);
-      const { data: mods } = semIds.length
-        ? await supabase
-            .from("committee_modules")
-            .select(`id, semester_id, name, icon_key, sort_order, ${CLOSED_SELECT}`)
-            .in("semester_id", semIds)
-            .order("sort_order")
-        : { data: [] as Module[] };
+      const mods = ((allMods ?? []) as Module[]).filter((m) => semIds.includes(m.semester_id));
       return {
         year: y,
         subjects: (s ?? []) as Subject[],
@@ -98,7 +97,10 @@ function YearPage() {
         modules: (mods ?? []) as Module[],
       };
     },
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: false,
   });
 
   const YearIcon = iconOf(data?.year?.icon_key ?? "graduation-cap");
@@ -402,6 +404,8 @@ function YearPage() {
                   <Link
                     to="/committee/$year/$subject"
                     params={{ year, subject: s.id }}
+                    onMouseEnter={() => qc.prefetchQuery(committeeSubjectQuery(s.id))}
+                    onTouchStart={() => qc.prefetchQuery(committeeSubjectQuery(s.id))}
                     className="flex min-h-32 flex-col items-center text-center gap-3 p-5 rounded-xl bg-card border border-border hover:border-primary/40 hover:shadow-sm transition-all"
                     preload="intent"
                   >

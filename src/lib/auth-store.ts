@@ -14,6 +14,7 @@ export type AuthSnapshot = {
   user: User | null;
   profile: Profile | null;
   isRealAdmin: boolean;
+  isCommittee: boolean;
   /** true until the very first session check resolves */
   loading: boolean;
 };
@@ -23,6 +24,7 @@ const EMPTY: AuthSnapshot = {
   user: null,
   profile: null,
   isRealAdmin: false,
+  isCommittee: false,
   loading: true,
 };
 
@@ -54,6 +56,7 @@ async function loadExtras(uid: string) {
   emit({
     profile: (prof as Profile | null) ?? null,
     isRealAdmin: (roles ?? []).some((r: { role: string }) => r.role === "admin"),
+    isCommittee: (roles ?? []).some((r: { role: string }) => r.role === "committee"),
     // Roles are part of "who is this user" — admin pages redirect on
     // !isAdmin, so loading must not clear before the roles are known.
     loading: false,
@@ -72,7 +75,7 @@ function start() {
     const changed = uid !== (snapshot.user?.id ?? null);
     if (!uid) {
       extrasFor = null;
-      emit({ session: null, user: null, profile: null, isRealAdmin: false, loading: false });
+      emit({ session: null, user: null, profile: null, isRealAdmin: false, isCommittee: false, loading: false });
       return;
     }
     emit({ session: s, user: s?.user ?? null, loading: extrasFor !== uid });

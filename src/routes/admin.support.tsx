@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
 import {
-  fetchSupportSettings, fetchSupportChannels, CHANNEL_ICONS, SUPPORT_STATUSES,
+  fetchSupportSettings, fetchSupportNotify, fetchSupportChannels, CHANNEL_ICONS, SUPPORT_STATUSES,
   type SupportSettings, type SupportChannel, type SupportRequest,
 } from "@/lib/support";
 
@@ -353,7 +353,12 @@ function PageTab() {
 function AlertsTab() {
   const [s, setS] = useState<SupportSettings | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { void fetchSupportSettings().then(setS); }, []);
+  useEffect(() => {
+    void (async () => {
+      const [base, notify] = await Promise.all([fetchSupportSettings(), fetchSupportNotify()]);
+      setS({ ...base, ...notify });
+    })();
+  }, []);
 
   async function save() {
     if (!s) return;

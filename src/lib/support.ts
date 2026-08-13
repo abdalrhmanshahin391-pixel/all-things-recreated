@@ -95,7 +95,10 @@ export function pick(lang: string, en: string, ar: string) {
 
 export async function fetchSupportSettings(): Promise<SupportSettings> {
   const { data } = await (supabase.from as any)("support_settings")
-    .select("*")
+    // notify_* are admin-only columns; fetch them separately via fetchSupportNotify()
+    .select(
+      "id,page_enabled,form_enabled,channels_enabled,intro_title_en,intro_title_ar,intro_text_en,intro_text_ar,response_note_en,response_note_ar,categories,created_at,updated_at",
+    )
     .eq("id", true)
     .maybeSingle();
   if (!data) return SUPPORT_DEFAULTS;
@@ -104,6 +107,13 @@ export async function fetchSupportSettings(): Promise<SupportSettings> {
     ...data,
     categories: Array.isArray(data.categories) ? data.categories : SUPPORT_DEFAULTS.categories,
   } as SupportSettings;
+}
+
+/** Admin-only: the internal notification email is hidden from everyone else. */
+export async function fetchSupportNotify(): Promise<{ notify_enabled: boolean; notify_email: string }> {
+  const { data } = await (supabase.rpc as any)("admin_support_notify");
+  const row = Array.isArray(data) ? data[0] : data;
+  return { notify_enabled: !!row?.notify_enabled, notify_email: row?.notify_email ?? "" };
 }
 
 export async function fetchSupportChannels(): Promise<SupportChannel[]> {

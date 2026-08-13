@@ -4522,9 +4522,20 @@ export type Database = {
         Returns: undefined
       }
       admin_server_stats: { Args: never; Returns: Json }
+      admin_support_notify: {
+        Args: never
+        Returns: {
+          notify_email: string
+          notify_enabled: boolean
+        }[]
+      }
       apply_coupon: {
         Args: { _code: string; _course_id: string }
         Returns: Json
+      }
+      can_access_committee_subject: {
+        Args: { _subject_id: string }
+        Returns: boolean
       }
       can_manage_committee: { Args: { _user_id: string }; Returns: boolean }
       get_course_real_counts: {
