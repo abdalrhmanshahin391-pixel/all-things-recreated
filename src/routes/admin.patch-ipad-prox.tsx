@@ -114,7 +114,14 @@ function PatchIpadProX() {
   function addLog(m: string) { setLog((p) => [`${new Date().toLocaleTimeString()} · ${m}`, ...p].slice(0, 40)); }
 
   async function refreshJobs() {
-    try { const r: any = await listFn(); setJobs((r?.rows ?? []) as JobRow[]); } catch { /* silent */ }
+    try {
+      const r: any = await listFn();
+      const rows = (r?.rows ?? []) as JobRow[];
+      setJobs(rows);
+      return rows;
+    } catch {
+      return [] as JobRow[];
+    }
   }
   async function loadJob(id: string) {
     const r: any = await getFn({ data: { jobId: id } });
@@ -128,7 +135,14 @@ function PatchIpadProX() {
         .select("id,title,year,kind").eq("kind", "questions").order("year");
       setCourses((data ?? []) as Course[]);
     })();
-    refreshJobs();
+    void (async () => {
+      const rows = await refreshJobs();
+      const active = rows.find((row) => row.phase !== "imported") ?? rows[0];
+      if (active) {
+        setJobId(active.id);
+        await loadJob(active.id).catch(() => {});
+      }
+    })();
   }, []);
 
   useEffect(() => {
