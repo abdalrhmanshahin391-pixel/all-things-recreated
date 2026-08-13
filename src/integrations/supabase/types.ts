@@ -4372,7 +4372,48 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      support_settings_public: {
+        Row: {
+          categories: Json | null
+          channels_enabled: boolean | null
+          form_enabled: boolean | null
+          id: boolean | null
+          intro_text_ar: string | null
+          intro_text_en: string | null
+          intro_title_ar: string | null
+          intro_title_en: string | null
+          page_enabled: boolean | null
+          response_note_ar: string | null
+          response_note_en: string | null
+        }
+        Insert: {
+          categories?: Json | null
+          channels_enabled?: boolean | null
+          form_enabled?: boolean | null
+          id?: boolean | null
+          intro_text_ar?: string | null
+          intro_text_en?: string | null
+          intro_title_ar?: string | null
+          intro_title_en?: string | null
+          page_enabled?: boolean | null
+          response_note_ar?: string | null
+          response_note_en?: string | null
+        }
+        Update: {
+          categories?: Json | null
+          channels_enabled?: boolean | null
+          form_enabled?: boolean | null
+          id?: boolean | null
+          intro_text_ar?: string | null
+          intro_text_en?: string | null
+          intro_title_ar?: string | null
+          intro_title_en?: string | null
+          page_enabled?: boolean | null
+          response_note_ar?: string | null
+          response_note_en?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       account_active: { Args: { _user_id: string }; Returns: boolean }
