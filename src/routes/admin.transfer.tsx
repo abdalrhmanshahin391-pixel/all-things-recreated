@@ -134,6 +134,7 @@ function TransferPage() {
   const [code, setCode] = useState("");
   const [savedCode, setSavedCode] = useState<string | null>(null);
   const [showCode, setShowCode] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
@@ -142,7 +143,12 @@ function TransferPage() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    readCode({}).then((r) => setSavedCode(r.code)).catch(() => {});
+    readCode({})
+      .then((r) => {
+        setSavedCode(r.code);
+        setCode((prev) => (prev.trim() ? prev : r.code));
+      })
+      .catch(() => {});
   }, [isAdmin]);
 
   const failures = useMemo(
@@ -297,17 +303,24 @@ function TransferPage() {
   }
 
   async function runRestore(pf: Pending) {
-    if (!code.trim()) { toast.error("Enter the transfer code first"); return; }
+    setRestoreError(null);
+    if (!code.trim()) {
+      setRestoreError("Enter your transfer code in the box above, then press Restore now.");
+      toast.error("Enter the transfer code first");
+      return;
+    }
     setBusy("import"); setResult(null); setReport(null);
     setProgress({ label: "Checking transfer code…", done: 0, total: 1, indeterminate: true });
     try {
       await unlock({ data: { code } });
     } catch (e: any) {
       setBusy(null); setProgress(null);
+      setRestoreError(e?.message ?? "Wrong transfer code");
       toast.error(e?.message ?? "Wrong transfer code");
       return;
     }
     setPending(null);
+    setRestoreError(null);
 
     const results: ImportTableResult[] = [];
     try {
@@ -369,6 +382,7 @@ function TransferPage() {
       if (bad) toast.warning(`${bad} rows could not be restored — see the report`);
       else toast.success("Website restored from the package");
     } catch (e: any) {
+      setRestoreError(e?.message ?? "Restore failed");
       toast.error(e?.message ?? "Restore failed");
     } finally {
       setBusy(null); setProgress(null);
@@ -593,16 +607,27 @@ function TransferPage() {
                 </div>
               ))}
             </div>
+            {restoreError && (
+              <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                {restoreError}
+              </div>
+            )}
+            {!code.trim() && (
+              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                Enter your transfer code in the box above, then press Restore now.
+              </div>
+            )}
             <div className="flex gap-2">
               <button
-                onClick={() => setPending(null)}
+                onClick={() => { setRestoreError(null); setPending(null); }}
                 className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold hover:bg-slate-50"
               >
                 Cancel
               </button>
               <button
                 onClick={() => runRestore(pending)}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 text-white px-4 py-2.5 text-sm font-bold hover:bg-sky-700"
+                disabled={!code.trim() || busy === "import"}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 text-white px-4 py-2.5 text-sm font-bold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <RefreshCw size={15} /> Restore now
               </button>
