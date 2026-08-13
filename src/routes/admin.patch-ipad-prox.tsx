@@ -212,7 +212,7 @@ function PatchIpadProX() {
   const canStartPhase1 = Boolean(courseId && groupId && file && !busy);
   const canStartPhase2 = Boolean(jobId && stats.phase1Done && items.length > 0 && !busy
     && items.every((i) => i.status === "pending" || i.status === "failed"));
-  const canImport = Boolean(jobId && stats.phase2Done && stats.solved > 0 && !busy);
+  const canImport = Boolean(jobId && job?.phase !== "imported" && stats.phase2Done && stats.solved > 0 && !busy);
   const cutReadyPages = pages.filter((p) => p.status === "cut_ready");
   const failedPages = pages.filter((p) => p.status.includes("failed"));
   const waitingForCut = job?.phase === "cut_submitted";
@@ -425,6 +425,12 @@ function PatchIpadProX() {
       disabled: true,
       action: () => {},
       icon: <Loader2 className="animate-spin" size={16} />,
+    };
+    if (job?.phase === "imported") return {
+      label: `${job.imported_count || stats.solved} questions imported`,
+      disabled: true,
+      action: () => {},
+      icon: <CheckCircle2 size={16} />,
     };
     if (canImport) return {
       label: `Import ${stats.solved} questions`,
