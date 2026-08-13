@@ -11,6 +11,7 @@ import {
   X,
   ShieldCheck,
   LayoutGrid,
+  MoonStar,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -148,6 +149,16 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
 
         {/* Right cluster */}
         <div className={`flex items-center gap-2.5 md:gap-3 ${skin.rail ? "md:ps-6 md:border-s md:border-border" : ""}`}>
+          {user && (
+            <Link
+              to="/mentor"
+              title="My Mentor · مرشدي"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              <MoonStar size={16} className="text-primary" />
+              <span className="hidden lg:inline">My Mentor</span>
+            </Link>
+          )}
           <button
             type="button"
             onClick={toggleLang}
@@ -282,6 +293,16 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
             {navLinks.map((l) => (
               <NavEntry key={l.id} item={l} mobile />
             ))}
+            {user && (
+              <Link
+                to="/mentor"
+                onClick={() => setMobileOpen(false)}
+                className={`${skin.navMobile} w-fit inline-flex items-center gap-2 text-foreground`}
+              >
+                <MoonStar size={16} className="text-primary" />
+                My Mentor · مرشدي
+              </Link>
+            )}
             {!user && !authLoading && (
               <div className="pt-3 mt-2 border-t border-border flex gap-2">
                 <Link

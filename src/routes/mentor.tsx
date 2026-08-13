@@ -1,5 +1,4 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -10,7 +9,6 @@ import {
   ChevronLeft,
   ChevronRight,
   BookOpen,
-  Feather,
   ListChecks,
   Gem,
   Flame,
@@ -20,6 +18,7 @@ import {
   Star,
   Sunrise,
   Moon,
+  MoonStar,
   X,
   Copy,
   BookHeart,
@@ -39,13 +38,22 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-export const Route = createFileRoute("/admin/mentor")({
-  head: () => ({ meta: [{ title: "مرشدي — My Mentor" }] }),
+export const Route = createFileRoute("/mentor")({
+  head: () => ({
+    meta: [
+      { title: "My Mentor — مرشدي" },
+      { name: "description", content: "My Mentor: your personal duas, daily obligations and reflection journal." },
+      { property: "og:title", content: "My Mentor — مرشدي" },
+      { property: "og:description", content: "Personal duas, daily obligations and a reflection journal." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: MentorPage,
 });
 
-type Kind = "dua" | "stoic";
-type TaskKind = "religious" | "stoic";
+type Kind = "dua";
+type TaskKind = "religious";
 type Category = { id: string; kind: Kind; title: string; sort_order: number };
 type Entry = {
   id: string;
@@ -85,15 +93,14 @@ function todayUtcDate(): string {
 }
 
 function MentorPage() {
-  const { user, isAdmin, loading } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
-    else if (!loading && user && !isAdmin) guardRedirect(navigate);
-  }, [loading, user, isAdmin, navigate]);
+  }, [loading, user, navigate]);
 
-  if (loading || !user || !isAdmin) return <div className="min-h-screen bg-background" />;
+  if (loading || !user) return <div className="min-h-screen bg-background" />;
 
   return (
     <div className="min-h-screen bg-background text-foreground" dir="rtl">
@@ -102,19 +109,8 @@ function MentorPage() {
         <MentorHero />
         <StatsStrip />
 
-        <section className="grid md:grid-cols-2 gap-6">
-          <CategoriesPanel
-            kind="dua"
-            heading="الأدعية"
-            icon={<BookOpen size={18} />}
-            tone="dua"
-          />
-          <CategoriesPanel
-            kind="stoic"
-            heading="تعاليم الرواقية"
-            icon={<Feather size={18} />}
-            tone="stoic"
-          />
+        <section>
+          <CategoriesPanel kind="dua" heading="الأدعية" icon={<BookOpen size={18} />} tone="dua" />
         </section>
 
         <section>
@@ -122,9 +118,8 @@ function MentorPage() {
             <ListChecks className="text-primary" size={20} />
             <h2 className="text-xl font-semibold">قائمة المهام اليومية</h2>
           </div>
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid gap-6">
             <ChecklistPanel kind="religious" heading="الواجبات الدينية" />
-            <ChecklistPanel kind="stoic" heading="الالتزامات الرواقية" />
           </div>
         </section>
 
@@ -240,10 +235,12 @@ function MentorHero() {
         <div className="flex items-start justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
             <div className="rounded-2xl bg-primary/10 p-2.5 text-primary">
-              <Feather size={20} />
+              <MoonStar size={20} />
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">مرشدي</h1>
+              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+                My Mentor <span className="text-muted-foreground font-bold">· مرشدي</span>
+              </h1>
               <p className="text-xs md:text-sm text-muted-foreground">
                 {date.g}
                 {date.h ? ` · ${date.h}` : ""}
@@ -405,7 +402,7 @@ function TreasuresManager({ onClose }: { onClose: () => void }) {
         </DialogHeader>
 
         <div className="flex items-center gap-2 border-b border-border pb-2">
-          {(["dua", "stoic"] as const).map((k) => (
+          {(["dua"] as const).map((k) => (
             <button
               key={k}
               onClick={() => setTab(k)}
@@ -416,7 +413,7 @@ function TreasuresManager({ onClose }: { onClose: () => void }) {
                   : "hover:bg-accent text-muted-foreground")
               }
             >
-              {k === "dua" ? "أدعية مختارة" : "اقتباسات رواقية"}
+              {k === "dua" ? "أدعية مختارة" : ""}
             </button>
           ))}
           <div className="flex-1" />
@@ -432,7 +429,7 @@ function TreasuresManager({ onClose }: { onClose: () => void }) {
           {(addMode || editing) && (
             <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2">
               <Input
-                placeholder="عنوان (اختياري — مثلاً: أيوب، ماركوس أوريليوس)"
+                placeholder="عنوان (اختياري — مثلاً: دعاء الكرب)"
                 value={draft.title}
                 onChange={(e) => setDraft({ ...draft, title: e.target.value })}
               />
@@ -552,14 +549,12 @@ function StatsStrip() {
   const { data: counts } = useQuery({
     queryKey: ["mentor_counts"],
     queryFn: async () => {
-      const [duas, stoic, treasures] = await Promise.all([
+      const [duas, treasures] = await Promise.all([
         supabase.from("mentor_entries").select("id", { count: "exact", head: true }),
-        supabase.from("mentor_categories").select("id", { count: "exact", head: true }).eq("kind", "stoic"),
         supabase.from("mentor_treasures").select("id", { count: "exact", head: true }),
       ]);
       return {
         duas: duas.count ?? 0,
-        stoic: stoic.count ?? 0,
         treasures: treasures.count ?? 0,
       };
     },
@@ -857,7 +852,7 @@ function CategoriesPanel({
   kind: Kind;
   heading: string;
   icon: React.ReactNode;
-  tone: "dua" | "stoic";
+  tone: "dua";
 }) {
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
