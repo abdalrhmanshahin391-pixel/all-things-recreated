@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useParams, useNavigate } from "@tanstack/react-router";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { committeeSubjectQuery } from "@/lib/committee-queries";
 import { useState } from "react";
 import { ChevronLeft, Plus, Pencil, Trash2, Shield, CalendarDays, Layers } from "lucide-react";
 import { toast } from "sonner";
