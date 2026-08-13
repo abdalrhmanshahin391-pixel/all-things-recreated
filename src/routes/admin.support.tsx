@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
 import {
-  fetchSupportSettings, fetchSupportChannels, CHANNEL_ICONS, SUPPORT_STATUSES,
+  fetchSupportSettings, fetchSupportNotify, fetchSupportChannels, CHANNEL_ICONS, SUPPORT_STATUSES,
   type SupportSettings, type SupportChannel, type SupportRequest,
 } from "@/lib/support";
 
