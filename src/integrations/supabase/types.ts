@@ -4526,6 +4526,10 @@ export type Database = {
         Args: { _code: string; _course_id: string }
         Returns: Json
       }
+      can_access_committee_subject: {
+        Args: { _subject_id: string }
+        Returns: boolean
+      }
       can_manage_committee: { Args: { _user_id: string }; Returns: boolean }
       get_course_real_counts: {
         Args: { _course_ids: string[] }
