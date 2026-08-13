@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Mail, Instagram, Send } from "lucide-react";
+import { Instagram } from "lucide-react";
 import { useLang } from "@/components/LanguageProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -26,15 +26,12 @@ export function SiteFooter() {
       links: [
         { label: ar ? "الجامعات" : "Universities", to: "/universities" },
         { label: ar ? "الدورات" : "Courses", to: "/courses" },
-        { label: ar ? "المحاضرات" : "Lectures", to: "/lectures" },
-        { label: ar ? "الباقات" : "Packages", to: "/packages" },
         { label: ar ? "أدلة الدراسة" : "Study Guides", to: "/guides" },
       ],
     },
     {
       heading: ar ? "الأدوات" : "Tools",
       links: [
-        { label: ar ? "مركز الدراسة" : "Study Hub", to: "/study-hub" },
         { label: ar ? "الملخّصات" : "Summaries", to: "/summaries" },
         { label: ar ? "ملاحظاتي" : "My Notes", to: "/notes" },
         { label: ar ? "اللجنة" : "Committee", to: "/committee" },
@@ -74,14 +71,26 @@ export function SiteFooter() {
                 ? "مهمّتنا: أن يتدرّب كل طالب طب بالأسئلة والحالات، لا بالحفظ وحده."
                 : "Our mission: let every medical student learn by answering questions and meeting real cases — not by memorising slides."}
             </p>
+            <div className="mt-5 space-y-1.5 text-sm">
+              <div>
+                <a
+                  href="mailto:aquaqbank@gmail.com"
+                  className="font-bold text-foreground transition-colors hover:text-primary"
+                >
+                  aquaqbank@gmail.com
+                </a>
+              </div>
+              <div>
+                <a
+                  href="tel:0798890962"
+                  dir="ltr"
+                  className="inline-block font-bold text-foreground transition-colors hover:text-primary"
+                >
+                  0798890962
+                </a>
+              </div>
+            </div>
             <div className="mt-5 flex flex-wrap gap-2">
-              <a
-                href="mailto:aquaqbank@gmail.com"
-                aria-label="Email"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-              >
-                <Mail size={17} />
-              </a>
               <a
                 href="https://instagram.com"
                 target="_blank"
@@ -90,15 +99,6 @@ export function SiteFooter() {
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
               >
                 <Instagram size={17} />
-              </a>
-              <a
-                href="https://t.me"
-                target="_blank"
-                rel="noreferrer noopener"
-                aria-label="Telegram"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-              >
-                <Send size={17} />
               </a>
             </div>
           </div>
