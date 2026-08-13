@@ -4372,48 +4372,7 @@ export type Database = {
       }
     }
     Views: {
-      support_settings_public: {
-        Row: {
-          categories: Json | null
-          channels_enabled: boolean | null
-          form_enabled: boolean | null
-          id: boolean | null
-          intro_text_ar: string | null
-          intro_text_en: string | null
-          intro_title_ar: string | null
-          intro_title_en: string | null
-          page_enabled: boolean | null
-          response_note_ar: string | null
-          response_note_en: string | null
-        }
-        Insert: {
-          categories?: Json | null
-          channels_enabled?: boolean | null
-          form_enabled?: boolean | null
-          id?: boolean | null
-          intro_text_ar?: string | null
-          intro_text_en?: string | null
-          intro_title_ar?: string | null
-          intro_title_en?: string | null
-          page_enabled?: boolean | null
-          response_note_ar?: string | null
-          response_note_en?: string | null
-        }
-        Update: {
-          categories?: Json | null
-          channels_enabled?: boolean | null
-          form_enabled?: boolean | null
-          id?: boolean | null
-          intro_text_ar?: string | null
-          intro_text_en?: string | null
-          intro_title_ar?: string | null
-          intro_title_en?: string | null
-          page_enabled?: boolean | null
-          response_note_ar?: string | null
-          response_note_en?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       account_active: { Args: { _user_id: string }; Returns: boolean }
@@ -4563,6 +4522,13 @@ export type Database = {
         Returns: undefined
       }
       admin_server_stats: { Args: never; Returns: Json }
+      admin_support_notify: {
+        Args: never
+        Returns: {
+          notify_email: string
+          notify_enabled: boolean
+        }[]
+      }
       apply_coupon: {
         Args: { _code: string; _course_id: string }
         Returns: Json
