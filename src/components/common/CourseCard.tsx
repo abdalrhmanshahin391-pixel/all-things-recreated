@@ -14,6 +14,9 @@ type CourseLike = {
   badge?: string | null;
   badge_color?: string | null;
   badge_expires_at?: string | null;
+  compare_at_price?: number | null;
+  discount_active?: boolean | null;
+  discount_ends_at?: string | null;
 };
 
 const SYMBOL: Record<string, string> = { USD: "USD ", EUR: "€", GBP: "£", JOD: "JD ", SAR: "SAR " };
@@ -44,6 +47,14 @@ export function CourseCard({
   const owned = unlocked || !isPaid;
   const priceText = fmtPrice(course.price, course.currency);
   const label = actionLabel ?? (owned ? "Study now" : `Unlock — ${priceText}`);
+
+  // "Was 20 USD" so a discount (or a free window) never reads as the normal price.
+  const offerLive =
+    !!course.discount_active &&
+    !!course.compare_at_price &&
+    Number(course.compare_at_price) > Number(course.price ?? 0) &&
+    (!course.discount_ends_at || new Date(course.discount_ends_at).getTime() > Date.now());
+  const wasText = offerLive ? fmtPrice(Number(course.compare_at_price), course.currency) : null;
 
   // Free / owned reads green; paid reads gold so money courses stand apart.
   const pill = unlocked
@@ -88,6 +99,7 @@ export function CourseCard({
             ) : (
               <>
                 {isPaid && <Lock size={10} strokeWidth={3} />}
+                {wasText && <s className="opacity-70 font-bold">{wasText}</s>}
                 {priceText}
               </>
             )}
@@ -111,6 +123,18 @@ export function CourseCard({
         <h3 className="font-display font-black text-lg md:text-xl text-foreground leading-tight lowercase line-clamp-2 min-h-[2.4em]">
           {course.title}
         </h3>
+
+        {showPrice && !unlocked && wasText && (
+          <div className="mt-2 text-[11px] font-black uppercase tracking-wider text-amber-600">
+            <s className="text-neutral-400 me-1.5">{wasText}</s>
+            {priceText === "FREE" ? "free right now" : `now ${priceText}`}
+            {course.discount_ends_at && (
+              <span className="ms-1 normal-case font-bold text-neutral-500">
+                · ends {new Date(course.discount_ends_at).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="mt-3 flex items-center justify-center gap-3 text-[12px] font-bold text-neutral-600">
           <span className="inline-flex items-center gap-1">

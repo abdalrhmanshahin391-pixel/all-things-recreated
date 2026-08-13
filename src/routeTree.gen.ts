@@ -42,6 +42,7 @@ import { Route as AdminCommitteeLogRouteImport } from './routes/admin.committee-
 import { Route as AdminContentRouteImport } from './routes/admin.content'
 import { Route as AdminContentProtectionRouteImport } from './routes/admin.content-protection'
 import { Route as AdminCouponsRouteImport } from './routes/admin.coupons'
+import { Route as AdminCourseControlRouteImport } from './routes/admin.course-control'
 import { Route as AdminCoursesRouteImport } from './routes/admin.courses'
 import { Route as AdminDatabaseRouteImport } from './routes/admin.database'
 import { Route as AdminDevicesRouteImport } from './routes/admin.devices'
@@ -294,6 +295,11 @@ const AdminContentProtectionRoute = AdminContentProtectionRouteImport.update({
 const AdminCouponsRoute = AdminCouponsRouteImport.update({
   id: '/admin/coupons',
   path: '/admin/coupons',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCourseControlRoute = AdminCourseControlRouteImport.update({
+  id: '/admin/course-control',
+  path: '/admin/course-control',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminCoursesRoute = AdminCoursesRouteImport.update({
@@ -766,6 +772,7 @@ export interface FileRoutesByFullPath {
   '/admin/content': typeof AdminContentRoute
   '/admin/content-protection': typeof AdminContentProtectionRoute
   '/admin/coupons': typeof AdminCouponsRoute
+  '/admin/course-control': typeof AdminCourseControlRoute
   '/admin/courses': typeof AdminCoursesRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
@@ -883,6 +890,7 @@ export interface FileRoutesByTo {
   '/admin/content': typeof AdminContentRoute
   '/admin/content-protection': typeof AdminContentProtectionRoute
   '/admin/coupons': typeof AdminCouponsRoute
+  '/admin/course-control': typeof AdminCourseControlRoute
   '/admin/courses': typeof AdminCoursesRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
@@ -1000,6 +1008,7 @@ export interface FileRoutesById {
   '/admin/content': typeof AdminContentRoute
   '/admin/content-protection': typeof AdminContentProtectionRoute
   '/admin/coupons': typeof AdminCouponsRoute
+  '/admin/course-control': typeof AdminCourseControlRoute
   '/admin/courses': typeof AdminCoursesRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
@@ -1123,6 +1132,7 @@ export interface FileRouteTypes {
     | '/admin/content'
     | '/admin/content-protection'
     | '/admin/coupons'
+    | '/admin/course-control'
     | '/admin/courses'
     | '/admin/database'
     | '/admin/devices'
@@ -1240,6 +1250,7 @@ export interface FileRouteTypes {
     | '/admin/content'
     | '/admin/content-protection'
     | '/admin/coupons'
+    | '/admin/course-control'
     | '/admin/courses'
     | '/admin/database'
     | '/admin/devices'
@@ -1356,6 +1367,7 @@ export interface FileRouteTypes {
     | '/admin/content'
     | '/admin/content-protection'
     | '/admin/coupons'
+    | '/admin/course-control'
     | '/admin/courses'
     | '/admin/database'
     | '/admin/devices'
@@ -1478,6 +1490,7 @@ export interface RootRouteChildren {
   AdminContentRoute: typeof AdminContentRoute
   AdminContentProtectionRoute: typeof AdminContentProtectionRoute
   AdminCouponsRoute: typeof AdminCouponsRoute
+  AdminCourseControlRoute: typeof AdminCourseControlRoute
   AdminCoursesRoute: typeof AdminCoursesRoute
   AdminDatabaseRoute: typeof AdminDatabaseRoute
   AdminDevicesRoute: typeof AdminDevicesRoute
@@ -1775,6 +1788,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/coupons'
       fullPath: '/admin/coupons'
       preLoaderRoute: typeof AdminCouponsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/course-control': {
+      id: '/admin/course-control'
+      path: '/admin/course-control'
+      fullPath: '/admin/course-control'
+      preLoaderRoute: typeof AdminCourseControlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/courses': {
@@ -2558,6 +2578,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminContentRoute: AdminContentRoute,
   AdminContentProtectionRoute: AdminContentProtectionRoute,
   AdminCouponsRoute: AdminCouponsRoute,
+  AdminCourseControlRoute: AdminCourseControlRoute,
   AdminCoursesRoute: AdminCoursesRoute,
   AdminDatabaseRoute: AdminDatabaseRoute,
   AdminDevicesRoute: AdminDevicesRoute,

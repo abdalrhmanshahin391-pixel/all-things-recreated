@@ -1056,13 +1056,17 @@ export type Database = {
       }
       courses: {
         Row: {
+          admin_only: boolean
           badge: string | null
           badge_color: string | null
           badge_expires_at: string | null
           category: string
+          compare_at_price: number | null
           created_at: string
           created_by: string | null
           currency: string
+          discount_active: boolean
+          discount_ends_at: string | null
           exam_type: string
           id: string
           image_url: string | null
@@ -1075,6 +1079,7 @@ export type Database = {
           published: boolean
           questions_count_final: number
           questions_count_mid: number
+          show_on_home: boolean
           subjects_count: number
           title: string
           university_id: string
@@ -1082,13 +1087,17 @@ export type Database = {
           year: number
         }
         Insert: {
+          admin_only?: boolean
           badge?: string | null
           badge_color?: string | null
           badge_expires_at?: string | null
           category?: string
+          compare_at_price?: number | null
           created_at?: string
           created_by?: string | null
           currency?: string
+          discount_active?: boolean
+          discount_ends_at?: string | null
           exam_type?: string
           id?: string
           image_url?: string | null
@@ -1101,6 +1110,7 @@ export type Database = {
           published?: boolean
           questions_count_final?: number
           questions_count_mid?: number
+          show_on_home?: boolean
           subjects_count?: number
           title: string
           university_id: string
@@ -1108,13 +1118,17 @@ export type Database = {
           year: number
         }
         Update: {
+          admin_only?: boolean
           badge?: string | null
           badge_color?: string | null
           badge_expires_at?: string | null
           category?: string
+          compare_at_price?: number | null
           created_at?: string
           created_by?: string | null
           currency?: string
+          discount_active?: boolean
+          discount_ends_at?: string | null
           exam_type?: string
           id?: string
           image_url?: string | null
@@ -1127,6 +1141,7 @@ export type Database = {
           published?: boolean
           questions_count_final?: number
           questions_count_mid?: number
+          show_on_home?: boolean
           subjects_count?: number
           title?: string
           university_id?: string
