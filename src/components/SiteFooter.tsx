@@ -122,7 +122,14 @@ export function SiteFooter() {
                     </li>
                   ))}
                   {col.heading === (ar ? "الموقع" : "Site") &&
-                    items.map((item) => {
+                    items
+                      .filter(
+                        (item) =>
+                          !col.links.some(
+                            (l) => l.to === targetHref(item.target_kind, item.target_value),
+                          ),
+                      )
+                      .map((item) => {
                       const href = targetHref(item.target_kind, item.target_value);
                       const label = navLabel(item, lang);
                       if (item.coming_soon) {
