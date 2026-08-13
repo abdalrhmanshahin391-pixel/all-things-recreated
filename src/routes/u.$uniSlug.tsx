@@ -495,7 +495,7 @@ function ResourcesTile({
     countLabel ?? `year${count === 1 ? "" : "s"} available`;
 
   const blocked = !!locked && !adminBypass;
-  const cls = `group relative block rounded-2xl p-7 overflow-hidden transition-all ${
+  const cls = `group relative flex min-h-[290px] flex-col rounded-3xl p-6 overflow-hidden transition-all ${
     blocked ? "cursor-not-allowed select-none" : "hover:-translate-y-1"
   } ${highlighted ? "ring-2 ring-amber-400/50 shadow-xl" : "hover:shadow-xl"} ${
     locked ? "saturate-75" : ""
@@ -525,7 +525,7 @@ function ResourcesTile({
         </span>
       ) : null}
       <div className="relative flex items-start justify-between">
-        <div className="grid place-items-center h-14 w-14 rounded-xl bg-white/95 text-amber-700 shadow-md">
+        <div className="grid place-items-center h-14 w-14 rounded-2xl bg-white/95 text-amber-700 shadow-md">
           {icon ?? <Sparkles size={26} strokeWidth={2} />}
         </div>
         {locked ? (
@@ -533,20 +533,25 @@ function ResourcesTile({
             <Lock size={16} strokeWidth={2.5} />
           </span>
         ) : (
-          <ArrowRight size={20} className="text-white/90 group-hover:translate-x-0.5 transition-all mt-2" />
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-white/25 text-white transition-all group-hover:bg-white/40 group-hover:translate-x-0.5">
+            <ArrowRight size={18} />
+          </span>
         )}
       </div>
-      <h2 className="relative mt-6 text-2xl font-black tracking-tight text-white drop-shadow-sm">
+      <div className="relative mt-auto pt-8">
+      <h2 className="text-2xl font-black tracking-tight text-white drop-shadow-sm">
         {resolvedTitle}
       </h2>
-      <p className="relative mt-1 text-sm font-medium text-white/90">
+      <p className="mt-1 text-sm font-medium text-white/90">
         {resolvedSubtitle}
       </p>
       {(badge || resolvedCountLabel) && (
-        <div className="relative mt-5 inline-flex items-center text-[11px] font-black uppercase tracking-widest text-amber-900 bg-white/95 rounded-full px-3 py-1 shadow-sm">
+        <div className="mt-4 inline-flex items-center text-[11px] font-black uppercase tracking-widest text-amber-900 bg-white/95 rounded-full px-3 py-1 shadow-sm">
           {badge ?? `${count} ${resolvedCountLabel}`}
         </div>
       )}
+      {locked && adminBypass && <AdminLockHint />}
+      </div>
     </>
   );
 
