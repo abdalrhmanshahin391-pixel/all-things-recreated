@@ -11,46 +11,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import {
+  PROX_CUT_MODEL, PROX_SOLVE_MODEL, PROX_JOBS, PROX_PAGES, PROX_ITEMS,
+  ensureProxAdmin, getProxGeminiKey, submitProxBatch,
   CUTTER_SYSTEM, IMAGE_SOLVER_SYSTEM, buildSubjectsBlock, decideCorrectLetter,
   extractJson, fetchBatch, downloadResponses, getBatchState, mapBatchStatus,
   responseText, normalizeLetter,
 } from "@/lib/patch-ipad-prox.server";
-
-const CUT_MODEL = "gemini-2.5-flash";
-const SOLVE_MODEL = "gemini-2.5-flash";
-const JOBS = "patch_prox_jobs";
-const PAGES = "patch_prox_pages";
-const ITEMS = "patch_prox_items";
-export const PROX_BUCKET = "question-images";
-
-async function ensureAdmin(context: any) {
-  const { supabase, userId } = context;
-  const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
-  if (!isAdmin) throw new Error("Forbidden");
-  return { supabase: supabase as any, userId: userId as string };
-}
-
-async function getGeminiKey(supabase: any): Promise<string> {
-  const { data, error } = await supabase
-    .from("admin_ai_keys").select("api_key, slot").eq("provider", "gemini")
-    .order("slot", { ascending: true }).limit(1).maybeSingle();
-  if (error) throw error;
-  if (!data?.api_key) throw new Error("No Gemini API key configured. Add one in /admin/gemini-keys.");
-  return data.api_key as string;
-}
-
-async function submitBatch(apiKey: string, model: string, displayName: string, requests: any[]) {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:batchGenerateContent`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-    body: JSON.stringify({ batch: { display_name: displayName, input_config: { requests: { requests } } } }),
-  });
-  const json = await res.json().catch(() => ({} as any));
-  if (!res.ok) throw new Error(`Batch submit failed (${res.status}): ${JSON.stringify(json).slice(0, 300)}`);
-  const name: string | undefined = json?.name || json?.metadata?.name;
-  if (!name) throw new Error("Batch submit returned no name");
-  return name;
-}
 
 // ---------------- 1. create job ----------------
 
@@ -65,8 +31,8 @@ export const createProxJob = createServerFn({ method: "POST" })
     subjectCandidates: z.array(z.string().min(1).max(120)).max(200).default([]),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = await ensureAdmin(context);
-    const { data: job, error } = await supabase.from(JOBS).insert({
+    const { supabase, userId } = await ensureProxAdmin(context);
+    const { data: job, error } = await supabase.from(PROX_JOBS).insert({
       user_id: userId,
       course_id: data.courseId,
       group_id: data.groupId,
@@ -81,7 +47,7 @@ export const createProxJob = createServerFn({ method: "POST" })
     const rows = Array.from({ length: data.totalPages }, (_, i) => ({
       job_id: job.id, page_number: i + 1, status: "pending",
     }));
-    const { error: pErr } = await supabase.from(PAGES).insert(rows);
+    const { error: pErr } = await supabase.from(PROX_PAGES).insert(rows);
     if (pErr) throw pErr;
     return { jobId: job.id as string };
   });
@@ -98,9 +64,9 @@ export const submitCutBatchProX = createServerFn({ method: "POST" })
     })).min(1).max(10),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureAdmin(context);
-    const apiKey = await getGeminiKey(supabase);
-    const { data: job, error } = await supabase.from(JOBS).select("id, cut_batch_ids").eq("id", data.jobId).single();
+    const { supabase } = await ensureProxAdmin(context);
+    const apiKey = await getProxGeminiKey(supabase);
+    const { data: job, error } = await supabase.from(PROX_JOBS).select("id, cut_batch_ids").eq("id", data.jobId).single();
     if (error) throw error;
 
     const requests = data.pages.map((p) => ({
@@ -118,10 +84,10 @@ export const submitCutBatchProX = createServerFn({ method: "POST" })
       metadata: { key: `page-${p.pageNumber}` },
     }));
 
-    const batchName = await submitBatch(apiKey, CUT_MODEL, `prox-cut-${data.jobId.slice(0, 8)}-${Date.now()}`, requests);
+    const batchName = await submitProxBatch(apiKey, PROX_CUT_MODEL, `prox-cut-${data.jobId.slice(0, 8)}-${Date.now()}`, requests);
     const ids = [...(Array.isArray(job.cut_batch_ids) ? job.cut_batch_ids : []), batchName];
-    await supabase.from(JOBS).update({ cut_batch_ids: ids, phase: "cut_submitted", error: null, updated_at: new Date().toISOString() }).eq("id", data.jobId);
-    await supabase.from(PAGES).update({ status: "cut_submitted" })
+    await supabase.from(PROX_JOBS).update({ cut_batch_ids: ids, phase: "cut_submitted", error: null, updated_at: new Date().toISOString() }).eq("id", data.jobId);
+    await supabase.from(PROX_PAGES).update({ status: "cut_submitted" })
       .eq("job_id", data.jobId).in("page_number", data.pages.map((p) => p.pageNumber));
 
     return { batchId: batchName, pages: data.pages.length };
@@ -133,9 +99,9 @@ export const pollCutBatchProX = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ jobId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureAdmin(context);
-    const apiKey = await getGeminiKey(supabase);
-    const { data: job, error } = await supabase.from(JOBS).select("id, cut_batch_ids").eq("id", data.jobId).single();
+    const { supabase } = await ensureProxAdmin(context);
+    const apiKey = await getProxGeminiKey(supabase);
+    const { data: job, error } = await supabase.from(PROX_JOBS).select("id, cut_batch_ids").eq("id", data.jobId).single();
     if (error) throw error;
     const batches: string[] = Array.isArray(job.cut_batch_ids) ? job.cut_batch_ids : [];
     if (!batches.length) return { done: false, states: [] as string[] };
@@ -168,7 +134,7 @@ export const pollCutBatchProX = createServerFn({ method: "POST" })
             x_right: Number(r?.x_right ?? 1000),
           }))
           .filter((r) => Number.isFinite(r.y_top) && Number.isFinite(r.y_bottom) && r.y_bottom - r.y_top >= 15);
-        await supabase.from(PAGES).update({
+        await supabase.from(PROX_PAGES).update({
           regions,
           status: regions.length ? "cut_ready" : "empty",
           error: it?.error ? JSON.stringify(it.error).slice(0, 200) : null,
@@ -178,9 +144,9 @@ export const pollCutBatchProX = createServerFn({ method: "POST" })
 
     // pages that were submitted but got no answer back stay pending -> mark failed
     if (allDone) {
-      await supabase.from(PAGES).update({ status: "cut_failed", error: "Gemini returned no borders for this page" })
+      await supabase.from(PROX_PAGES).update({ status: "cut_failed", error: "Gemini returned no borders for this page" })
         .eq("job_id", data.jobId).eq("status", "cut_submitted");
-      await supabase.from(JOBS).update({ phase: "cut_ready", updated_at: new Date().toISOString() }).eq("id", data.jobId);
+      await supabase.from(PROX_JOBS).update({ phase: "cut_ready", updated_at: new Date().toISOString() }).eq("id", data.jobId);
     }
     return { done: allDone, states };
   });
@@ -195,8 +161,8 @@ export const saveCropsProX = createServerFn({ method: "POST" })
     crops: z.array(z.object({ path: z.string().min(3).max(300), label: z.string().max(120).optional() })).max(40),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureAdmin(context);
-    await supabase.from(PAGES).update({
+    const { supabase } = await ensureProxAdmin(context);
+    await supabase.from(PROX_PAGES).update({
       crops: data.crops,
       status: data.crops.length ? "cropped" : "empty",
       error: null,
@@ -207,8 +173,8 @@ export const saveCropsProX = createServerFn({ method: "POST" })
         job_id: data.jobId, page_number: data.pageNumber, item_index: i,
         image_path: c.path, status: "pending",
       }));
-      await supabase.from(ITEMS).delete().eq("job_id", data.jobId).eq("page_number", data.pageNumber);
-      const { error } = await supabase.from(ITEMS).insert(rows);
+      await supabase.from(PROX_ITEMS).delete().eq("job_id", data.jobId).eq("page_number", data.pageNumber);
+      const { error } = await supabase.from(PROX_ITEMS).insert(rows);
       if (error) throw error;
     }
     return { saved: data.crops.length };
@@ -227,15 +193,15 @@ export const submitSolveBatchProX = createServerFn({ method: "POST" })
     })).min(1).max(12),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureAdmin(context);
-    const apiKey = await getGeminiKey(supabase);
+    const { supabase } = await ensureProxAdmin(context);
+    const apiKey = await getProxGeminiKey(supabase);
 
-    const { data: job, error } = await supabase.from(JOBS)
+    const { data: job, error } = await supabase.from(PROX_JOBS)
       .select("id, phase, subject_candidates, solve_batch_ids").eq("id", data.jobId).single();
     if (error) throw error;
 
     // gate: phase 1 must be finished
-    const { data: pages } = await supabase.from(PAGES).select("status").eq("job_id", data.jobId);
+    const { data: pages } = await supabase.from(PROX_PAGES).select("status").eq("job_id", data.jobId);
     const unfinished = (pages ?? []).filter((p: any) => p.status !== "cropped" && p.status !== "empty");
     if (unfinished.length) throw new Error(`Phase 1 is not finished yet — ${unfinished.length} page(s) still pending.`);
 
@@ -255,11 +221,11 @@ export const submitSolveBatchProX = createServerFn({ method: "POST" })
       metadata: { key: `q-${it.pageNumber}-${it.itemIndex}` },
     }));
 
-    const batchName = await submitBatch(apiKey, SOLVE_MODEL, `prox-solve-${data.jobId.slice(0, 8)}-${Date.now()}`, requests);
+    const batchName = await submitProxBatch(apiKey, PROX_SOLVE_MODEL, `prox-solve-${data.jobId.slice(0, 8)}-${Date.now()}`, requests);
     const ids = [...(Array.isArray(job.solve_batch_ids) ? job.solve_batch_ids : []), batchName];
-    await supabase.from(JOBS).update({ solve_batch_ids: ids, phase: "solve_submitted", updated_at: new Date().toISOString() }).eq("id", data.jobId);
+    await supabase.from(PROX_JOBS).update({ solve_batch_ids: ids, phase: "solve_submitted", updated_at: new Date().toISOString() }).eq("id", data.jobId);
     for (const it of data.items) {
-      await supabase.from(ITEMS).update({ status: "submitted" })
+      await supabase.from(PROX_ITEMS).update({ status: "submitted" })
         .eq("job_id", data.jobId).eq("page_number", it.pageNumber).eq("item_index", it.itemIndex);
     }
     return { batchId: batchName, count: data.items.length };
@@ -271,9 +237,9 @@ export const pollSolveBatchProX = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ jobId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureAdmin(context);
-    const apiKey = await getGeminiKey(supabase);
-    const { data: job, error } = await supabase.from(JOBS).select("id, solve_batch_ids").eq("id", data.jobId).single();
+    const { supabase } = await ensureProxAdmin(context);
+    const apiKey = await getProxGeminiKey(supabase);
+    const { data: job, error } = await supabase.from(PROX_JOBS).select("id, solve_batch_ids").eq("id", data.jobId).single();
     if (error) throw error;
     const batches: string[] = Array.isArray(job.solve_batch_ids) ? job.solve_batch_ids : [];
     if (!batches.length) return { done: false, states: [] as string[] };
@@ -297,7 +263,7 @@ export const pollSolveBatchProX = createServerFn({ method: "POST" })
         const itemIndex = Number(m[2]);
         const parsed = it?.error ? null : extractJson(responseText(it));
         if (!parsed?.correct_letter && !parsed?.explanation) {
-          await supabase.from(ITEMS).update({
+          await supabase.from(PROX_ITEMS).update({
             status: "failed",
             error: it?.error ? JSON.stringify(it.error).slice(0, 200) : "no usable answer from Gemini",
           }).eq("job_id", data.jobId).eq("page_number", pageNumber).eq("item_index", itemIndex);
@@ -308,7 +274,7 @@ export const pollSolveBatchProX = createServerFn({ method: "POST" })
           : ["A", "B", "C", "D"];
         const explanation = String(parsed.explanation || "").trim();
         const correct = decideCorrectLetter(explanation, letters, parsed.correct_letter);
-        await supabase.from(ITEMS).update({
+        await supabase.from(PROX_ITEMS).update({
           status: "solved",
           letters,
           correct_letter: correct,
@@ -321,9 +287,9 @@ export const pollSolveBatchProX = createServerFn({ method: "POST" })
     }
 
     if (allDone) {
-      await supabase.from(ITEMS).update({ status: "failed", error: "no answer returned for this picture" })
+      await supabase.from(PROX_ITEMS).update({ status: "failed", error: "no answer returned for this picture" })
         .eq("job_id", data.jobId).eq("status", "submitted");
-      await supabase.from(JOBS).update({ phase: "solve_ready", updated_at: new Date().toISOString() }).eq("id", data.jobId);
+      await supabase.from(PROX_JOBS).update({ phase: "solve_ready", updated_at: new Date().toISOString() }).eq("id", data.jobId);
     }
     return { done: allDone, states };
   });
@@ -334,12 +300,12 @@ export const importProxJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ jobId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureAdmin(context);
-    const { data: job, error } = await supabase.from(JOBS)
+    const { supabase } = await ensureProxAdmin(context);
+    const { data: job, error } = await supabase.from(PROX_JOBS)
       .select("id, subject_id, group_id, subject_candidates").eq("id", data.jobId).single();
     if (error) throw error;
 
-    const { data: items, error: iErr } = await supabase.from(ITEMS)
+    const { data: items, error: iErr } = await supabase.from(PROX_ITEMS)
       .select("id, page_number, item_index, image_path, status, letters, correct_letter, stem, explanation, subject_index")
       .eq("job_id", data.jobId).order("page_number").order("item_index");
     if (iErr) throw iErr;
@@ -399,7 +365,7 @@ export const importProxJob = createServerFn({ method: "POST" })
         if (!rows.some((r) => r.is_correct)) rows[0].is_correct = true;
         const { error: oErr } = await supabase.from("question_options").insert(rows);
         if (oErr) throw oErr;
-        await supabase.from(ITEMS).update({ status: "imported" }).eq("id", it.id);
+        await supabase.from(PROX_ITEMS).update({ status: "imported" }).eq("id", it.id);
         inserted++;
       } catch (e: any) {
         failed++;
@@ -407,7 +373,7 @@ export const importProxJob = createServerFn({ method: "POST" })
       }
     }
 
-    await supabase.from(JOBS).update({
+    await supabase.from(PROX_JOBS).update({
       phase: "imported", imported_count: inserted, updated_at: new Date().toISOString(),
       error: errors.length ? errors.slice(0, 5).join("; ").slice(0, 500) : null,
     }).eq("id", data.jobId);
@@ -420,8 +386,8 @@ export const importProxJob = createServerFn({ method: "POST" })
 export const listProxJobs = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase } = await ensureAdmin(context);
-    const { data, error } = await supabase.from(JOBS)
+    const { supabase } = await ensureProxAdmin(context);
+    const { data, error } = await supabase.from(PROX_JOBS)
       .select("id, pdf_name, total_pages, phase, imported_count, error, created_at")
       .order("created_at", { ascending: false }).limit(25);
     if (error) throw error;
@@ -432,12 +398,12 @@ export const getProxJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ jobId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureAdmin(context);
-    const { data: job, error } = await supabase.from(JOBS).select("*").eq("id", data.jobId).single();
+    const { supabase } = await ensureProxAdmin(context);
+    const { data: job, error } = await supabase.from(PROX_JOBS).select("*").eq("id", data.jobId).single();
     if (error) throw error;
-    const { data: pages } = await supabase.from(PAGES)
+    const { data: pages } = await supabase.from(PROX_PAGES)
       .select("id, page_number, status, regions, crops, error").eq("job_id", data.jobId).order("page_number");
-    const { data: items } = await supabase.from(ITEMS)
+    const { data: items } = await supabase.from(PROX_ITEMS)
       .select("id, page_number, item_index, image_path, status, correct_letter, error")
       .eq("job_id", data.jobId).order("page_number").order("item_index");
     return { job, pages: pages ?? [], items: items ?? [] };
@@ -447,8 +413,8 @@ export const deleteProxJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ jobId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureAdmin(context);
-    const { error } = await supabase.from(JOBS).delete().eq("id", data.jobId);
+    const { supabase } = await ensureProxAdmin(context);
+    const { error } = await supabase.from(PROX_JOBS).delete().eq("id", data.jobId);
     if (error) throw error;
     return { ok: true };
   });
