@@ -9,7 +9,6 @@ import {
   ChevronLeft,
   ChevronRight,
   BookOpen,
-  Feather,
   ListChecks,
   Gem,
   Flame,
