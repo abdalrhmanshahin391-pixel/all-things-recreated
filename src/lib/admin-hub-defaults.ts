@@ -97,7 +97,7 @@ export const DEFAULT_LAYOUT: HubLayout = {
       label: "Tools",
       labelAr: "أدوات",
       tiles: [
-        t("/admin/mentor", "مرشدي", "Compass"),
+        t("/mentor", "My Mentor · مرشدي", "MoonStar"),
         t("/admin/pdf-slicer", "PDF Slicer", "FileText"),
         t("/admin/jarvis-batch", "Jarvis Batch (50% off)", "MoonStar"),
         t("/admin/jarvis-batch-v2", "Jarvis Batch v2", "Sparkles"),

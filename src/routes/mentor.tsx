@@ -19,6 +19,7 @@ import {
   Star,
   Sunrise,
   Moon,
+  MoonStar,
   X,
   Copy,
   BookHeart,
@@ -235,10 +236,12 @@ function MentorHero() {
         <div className="flex items-start justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
             <div className="rounded-2xl bg-primary/10 p-2.5 text-primary">
-              <Feather size={20} />
+              <MoonStar size={20} />
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">مرشدي</h1>
+              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+                My Mentor <span className="text-muted-foreground font-bold">· مرشدي</span>
+              </h1>
               <p className="text-xs md:text-sm text-muted-foreground">
                 {date.g}
                 {date.h ? ` · ${date.h}` : ""}
