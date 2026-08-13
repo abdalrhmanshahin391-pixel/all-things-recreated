@@ -15,6 +15,7 @@ import {
   buttonClass,
   ErrorBox,
 } from "@/components/AuthShell";
+import { SocialAuthButtons } from "@/components/auth/SocialAuthButtons";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -165,7 +166,7 @@ function LoginPage() {
       footer={
         <>
           {t("cms.login.footerText")}{" "}
-          <Link to="/register" className="text-white font-semibold hover:underline">
+          <Link to="/register" className="font-semibold text-[var(--primary)] hover:underline">
             {t("cms.login.footerLink")}
           </Link>
         </>
@@ -201,6 +202,8 @@ function LoginPage() {
           </div>
         </div>
       )}
+
+      <SocialAuthButtons {...(next ? { redirectTo: next } : {})} />
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {error && <ErrorBox message={error} />}

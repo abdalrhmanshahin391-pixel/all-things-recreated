@@ -11,6 +11,7 @@ import {
   buttonClass,
   ErrorBox,
 } from "@/components/AuthShell";
+import { SocialAuthButtons } from "@/components/auth/SocialAuthButtons";
 
 export const Route = createFileRoute("/register")({
   head: () => ({
@@ -159,7 +160,7 @@ function RegisterPage() {
         footer={
           <>
             Already verified?{" "}
-            <Link to="/login" className="text-white font-semibold hover:underline">
+            <Link to="/login" className="font-semibold text-[var(--primary)] hover:underline">
               Sign in
             </Link>
           </>
@@ -193,12 +194,14 @@ function RegisterPage() {
       footer={
         <>
           {t("cms.register.footerText")}{" "}
-          <Link to="/login" className="text-white font-semibold hover:underline">
+          <Link to="/login" className="font-semibold text-[var(--primary)] hover:underline">
             {t("cms.register.footerLink")}
           </Link>
         </>
       }
     >
+      <SocialAuthButtons />
+
       <form onSubmit={handleSubmit} className="space-y-5">
         {error && <ErrorBox message={error} />}
 
