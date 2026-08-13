@@ -166,7 +166,7 @@ function LoginPage() {
       footer={
         <>
           {t("cms.login.footerText")}{" "}
-          <Link to="/register" className="text-white font-semibold hover:underline">
+          <Link to="/register" className="font-semibold text-[var(--primary)] hover:underline">
             {t("cms.login.footerLink")}
           </Link>
         </>
