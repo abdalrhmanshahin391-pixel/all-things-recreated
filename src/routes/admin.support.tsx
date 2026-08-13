@@ -353,7 +353,12 @@ function PageTab() {
 function AlertsTab() {
   const [s, setS] = useState<SupportSettings | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { void fetchSupportSettings().then(setS); }, []);
+  useEffect(() => {
+    void (async () => {
+      const [base, notify] = await Promise.all([fetchSupportSettings(), fetchSupportNotify()]);
+      setS({ ...base, ...notify });
+    })();
+  }, []);
 
   async function save() {
     if (!s) return;
