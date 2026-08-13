@@ -403,6 +403,8 @@ function YearPage() {
                   <Link
                     to="/committee/$year/$subject"
                     params={{ year, subject: s.id }}
+                    onMouseEnter={() => qc.prefetchQuery(committeeSubjectQuery(s.id))}
+                    onTouchStart={() => qc.prefetchQuery(committeeSubjectQuery(s.id))}
                     className="flex min-h-32 flex-col items-center text-center gap-3 p-5 rounded-xl bg-card border border-border hover:border-primary/40 hover:shadow-sm transition-all"
                     preload="intent"
                   >

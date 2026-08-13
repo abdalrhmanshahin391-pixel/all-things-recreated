@@ -156,6 +156,8 @@ function CommitteePage() {
                     to="/committee/$year"
                     params={{ year: String(y.year_number) }}
                     search={{ sem: undefined, mod: undefined }}
+                    onMouseEnter={() => qc.prefetchQuery(committeeYearQuery(y.year_number))}
+                    onTouchStart={() => qc.prefetchQuery(committeeYearQuery(y.year_number))}
                     className="flex items-center gap-4 p-5 rounded-xl bg-card border border-border hover:border-primary/40 hover:shadow-sm transition-all"
                   >
                     <div className="grid place-items-center h-12 w-12 rounded-lg bg-muted text-primary shrink-0">
