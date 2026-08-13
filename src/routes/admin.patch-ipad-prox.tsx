@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Upload, Loader2, ScanEye, Trash2, CheckCircle2, PlayCircle, Download } from "lucide-react";
+import { ArrowLeft, Upload, Loader2, ScanEye, Trash2, CheckCircle2, PlayCircle, Download, Clock3, AlertTriangle } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -88,6 +88,8 @@ function PatchIpadProX() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [log, setLog] = useState<string[]>([]);
+  const [lastChecked, setLastChecked] = useState<string | null>(null);
+  const [pollError, setPollError] = useState<string | null>(null);
 
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -96,6 +98,7 @@ function PatchIpadProX() {
   const [items, setItems] = useState<ItemRow[]>([]);
 
   const miniByPage = useRef<Record<number, File>>({});
+  const pollingRef = useRef(false);
 
   const createJobFn = useServerFn(createProxJob);
   const submitCutFn = useServerFn(submitCutBatchProX);
@@ -111,7 +114,14 @@ function PatchIpadProX() {
   function addLog(m: string) { setLog((p) => [`${new Date().toLocaleTimeString()} · ${m}`, ...p].slice(0, 40)); }
 
   async function refreshJobs() {
-    try { const r: any = await listFn(); setJobs((r?.rows ?? []) as JobRow[]); } catch { /* silent */ }
+    try {
+      const r: any = await listFn();
+      const rows = (r?.rows ?? []) as JobRow[];
+      setJobs(rows);
+      return rows;
+    } catch {
+      return [] as JobRow[];
+    }
   }
   async function loadJob(id: string) {
     const r: any = await getFn({ data: { jobId: id } });
@@ -125,7 +135,14 @@ function PatchIpadProX() {
         .select("id,title,year,kind").eq("kind", "questions").order("year");
       setCourses((data ?? []) as Course[]);
     })();
-    refreshJobs();
+    void (async () => {
+      const rows = await refreshJobs();
+      const active = rows.find((row) => row.phase !== "imported") ?? rows[0];
+      if (active) {
+        setJobId(active.id);
+        await loadJob(active.id).catch(() => {});
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -152,6 +169,45 @@ function PatchIpadProX() {
     return () => clearInterval(t);
   }, [jobId]);
 
+  useEffect(() => {
+    if (!jobId || busy) return;
+    const waitingForCut = job?.phase === "cut_submitted";
+    const waitingForSolve = job?.phase === "solve_submitted";
+    if (!waitingForCut && !waitingForSolve) return;
+
+    const check = async () => {
+      if (pollingRef.current) return;
+      pollingRef.current = true;
+      try {
+        const r: any = waitingForCut
+          ? await pollCutFn({ data: { jobId } })
+          : await pollSolveFn({ data: { jobId } });
+        setLastChecked(new Date().toLocaleTimeString());
+        setPollError(r?.error ?? null);
+        await loadJob(jobId);
+        if (r?.terminal) {
+          setProgress(r.error || "The Gemini batch failed. Only the failed work needs retrying.");
+        } else if (r?.done && waitingForCut) {
+          if (Object.keys(miniByPage.current).length) await cropAndUpload(jobId);
+          else setProgress("Gemini found the question borders. Select the same PDF once to create the question pictures.");
+        } else if (r?.done) {
+          setProgress("All Gemini answers are saved. The questions are ready to import.");
+        } else {
+          const states = (r?.states ?? []).join(", ") || "queued";
+          setProgress(`Gemini batch is ${states}. This page is checking automatically.`);
+        }
+      } catch (e: any) {
+        setPollError(e?.message || "Could not check Gemini");
+      } finally {
+        pollingRef.current = false;
+      }
+    };
+
+    void check();
+    const timer = setInterval(check, 12_000);
+    return () => clearInterval(timer);
+  }, [jobId, job?.phase, busy]);
+
   const stats = useMemo(() => {
     const cutDone = pages.filter((p) => p.status === "cropped" || p.status === "empty").length;
     const solved = items.filter((i) => i.status === "solved" || i.status === "imported").length;
@@ -163,14 +219,45 @@ function PatchIpadProX() {
       solved,
       failedItems,
       phase1Done: pages.length > 0 && cutDone === pages.length,
-      phase2Done: items.length > 0 && solved + failedItems === items.length,
+      phase2Done: items.length > 0 && solved === items.length,
     };
   }, [pages, items]);
 
   const canStartPhase1 = Boolean(courseId && groupId && file && !busy);
   const canStartPhase2 = Boolean(jobId && stats.phase1Done && items.length > 0 && !busy
-    && items.every((i) => i.status === "pending"));
-  const canImport = Boolean(jobId && stats.phase2Done && stats.solved > 0 && !busy);
+    && items.every((i) => i.status === "pending" || i.status === "failed"));
+  const canImport = Boolean(jobId && job?.phase !== "imported" && stats.phase2Done && stats.solved > 0 && !busy);
+  const cutReadyPages = pages.filter((p) => p.status === "cut_ready");
+  const failedPages = pages.filter((p) => p.status.includes("failed"));
+  const waitingForCut = job?.phase === "cut_submitted";
+  const waitingForSolve = job?.phase === "solve_submitted";
+
+  async function prepareExistingPdfAndCrop() {
+    if (!file || !jobId || !job) return;
+    setBusy(true);
+    setPollError(null);
+    miniByPage.current = {};
+    clearPdfRenderCache();
+    try {
+      if (file.name !== job.pdf_name) throw new Error(`Choose the same PDF used for this run: ${job.pdf_name}`);
+      setProgress(`Opening ${file.name} to finish the saved Gemini borders…`);
+      const mini = await withTimeout(
+        splitPdfInto2PageBlobs(file, (done, total) => setProgress(`Preparing PDF: ${done}/${total} pages`), 1),
+        180_000,
+        "PDF preparation",
+      );
+      if (mini.length !== job.total_pages) throw new Error(`This PDF has ${mini.length} pages; the selected run expects ${job.total_pages}.`);
+      for (const m of mini) miniByPage.current[m.pageFrom] = miniPdfAsFile(m, file.name);
+      await cropAndUpload(jobId);
+    } catch (e: any) {
+      const message = e?.message || "Could not finish cutting the PDF";
+      setPollError(message);
+      toast.error(message);
+    } finally {
+      setBusy(false);
+      await loadJob(jobId).catch(() => {});
+    }
+  }
 
   // ---------- PHASE 1 ----------
   async function runPhase1() {
@@ -229,7 +316,7 @@ function PatchIpadProX() {
           const r: any = await pollCutFn({ data: { jobId: id } });
           done = Boolean(r?.done);
           setProgress(`Phase 1: batch state ${(r?.states ?? []).join(", ") || "pending"}…`);
-        } catch { /* keep waiting */ }
+        } catch (e: any) { setPollError(e?.message || "Could not check Gemini"); }
       }
       if (!done) throw new Error("Gemini is still working on the borders. Press “Resume phase 1” later.");
 
@@ -275,24 +362,12 @@ function PatchIpadProX() {
     toast.success("Phase 1 done");
   }
 
-  async function resumePhase1() {
-    if (!jobId) return;
-    setBusy(true);
-    try {
-      const r: any = await pollCutFn({ data: { jobId } });
-      if (!r?.done) { setProgress("Still waiting on the border batch…"); await loadJob(jobId); return; }
-      await cropAndUpload(jobId);
-    } catch (e: any) {
-      toast.error(e?.message || "Could not resume");
-    } finally { setBusy(false); }
-  }
-
   // ---------- PHASE 2 ----------
   async function runPhase2() {
     if (!jobId) return;
     setBusy(true);
     try {
-      const pending = items.filter((i) => i.status === "pending");
+      const pending = items.filter((i) => i.status === "pending" || i.status === "failed");
       setProgress(`Phase 2: sending ${pending.length} question picture(s) to the 50%-off solve batch…`);
       let slice: { pageNumber: number; itemIndex: number; base64: string }[] = [];
       for (const it of pending) {
@@ -320,7 +395,7 @@ function PatchIpadProX() {
           const r: any = await pollSolveFn({ data: { jobId } });
           done = Boolean(r?.done);
           setProgress(`Phase 2: batch state ${(r?.states ?? []).join(", ") || "pending"}…`);
-        } catch { /* keep waiting */ }
+        } catch (e: any) { setPollError(e?.message || "Could not check Gemini"); }
         await loadJob(jobId).catch(() => {});
       }
       setProgress(done ? "Phase 2 finished. You can import now." : "Gemini is still answering — press “Check phase 2” later.");
@@ -328,19 +403,68 @@ function PatchIpadProX() {
     } catch (e: any) {
       toast.error(e?.message || "Phase 2 failed");
       addLog(`✗ ${e?.message || e}`);
-    } finally { setBusy(false); await loadJob(jobId!).catch(() => {}); }
+    } finally {
+      setBusy(false);
+      if (jobId) await loadJob(jobId).catch(() => {});
+    }
   }
 
-  async function checkPhase2() {
-    if (!jobId) return;
-    setBusy(true);
-    try {
-      const r: any = await pollSolveFn({ data: { jobId } });
-      await loadJob(jobId);
-      setProgress(r?.done ? "Phase 2 finished. You can import now." : "Still waiting on Gemini answers…");
-    } catch (e: any) { toast.error(e?.message || "Check failed"); }
-    finally { setBusy(false); }
-  }
+  const primaryControl = (() => {
+    if (!jobId) return {
+      label: "Choose PDF and start",
+      disabled: !canStartPhase1,
+      action: runPhase1,
+      icon: <PlayCircle size={16} />,
+    };
+    if (waitingForCut) return {
+      label: "Waiting for Gemini — checking automatically",
+      disabled: true,
+      action: () => {},
+      icon: <Loader2 className="animate-spin" size={16} />,
+    };
+    if (cutReadyPages.length > 0) return {
+      label: file ? `Finish cutting ${cutReadyPages.length} page(s)` : "Select the same PDF to finish cutting",
+      disabled: !file || busy,
+      action: prepareExistingPdfAndCrop,
+      icon: file ? <PlayCircle size={16} /> : <Upload size={16} />,
+    };
+    if (failedPages.length > 0 || job?.phase === "cut_failed") return {
+      label: "Phase 1 failed — start a new run with the PDF",
+      disabled: !canStartPhase1,
+      action: runPhase1,
+      icon: <AlertTriangle size={16} />,
+    };
+    if (waitingForSolve) return {
+      label: "Waiting for Gemini answers — checking automatically",
+      disabled: true,
+      action: () => {},
+      icon: <Loader2 className="animate-spin" size={16} />,
+    };
+    if (job?.phase === "imported") return {
+      label: `${job.imported_count || stats.solved} questions imported`,
+      disabled: true,
+      action: () => {},
+      icon: <CheckCircle2 size={16} />,
+    };
+    if (canImport) return {
+      label: `Import ${stats.solved} questions`,
+      disabled: false,
+      action: runImport,
+      icon: <Download size={16} />,
+    };
+    if (job?.phase === "solve_failed" || stats.failedItems > 0) return {
+      label: `${stats.failedItems} answer(s) failed — retry failed questions`,
+      disabled: busy,
+      action: runPhase2,
+      icon: <AlertTriangle size={16} />,
+    };
+    return {
+      label: `Start solving ${items.length} questions`,
+      disabled: !canStartPhase2,
+      action: runPhase2,
+      icon: <PlayCircle size={16} />,
+    };
+  })();
 
   async function runImport() {
     if (!jobId) return;
@@ -397,6 +521,30 @@ function PatchIpadProX() {
           </label>
         </section>
 
+        <section className={`border p-5 mb-5 ${pollError || job?.error ? "border-destructive/50 bg-destructive/5" : "border-primary/40 bg-primary/5"}`}>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase text-muted-foreground">Current status</p>
+              <p className="mt-1 text-base font-bold">
+                {pollError || job?.error || progress || (jobId ? "Run selected" : "Choose where to save and select a PDF")}
+              </p>
+              {lastChecked && (
+                <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                  <Clock3 size={12} /> Last checked {lastChecked}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={primaryControl.action}
+              disabled={primaryControl.disabled || busy}
+              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 bg-primary px-4 py-2 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="animate-spin" size={16} /> : primaryControl.icon}
+              {primaryControl.label}
+            </button>
+          </div>
+        </section>
+
         {/* phases */}
         <section className="grid md:grid-cols-3 gap-4 mb-5">
           <PhaseCard
@@ -404,47 +552,23 @@ function PatchIpadProX() {
             title="Read the pages"
             detail={stats.pages ? `${stats.cutDone}/${stats.pages} pages cut · ${stats.crops} question pictures` : "not started"}
             done={stats.phase1Done}
-            action={
-              <div className="flex gap-2">
-                <button onClick={runPhase1} disabled={!canStartPhase1} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold disabled:opacity-40">
-                  {busy ? <Loader2 className="animate-spin" size={14} /> : <PlayCircle size={14} />} Start phase 1
-                </button>
-                {jobId && !stats.phase1Done && (
-                  <button onClick={resumePhase1} disabled={busy} className="px-3 py-2 rounded-xl border border-border text-xs font-bold disabled:opacity-40">Resume</button>
-                )}
-              </div>
-            }
+            action={<span className="text-xs font-bold text-muted-foreground">{waitingForCut ? "Gemini is processing" : cutReadyPages.length ? "Borders received; PDF needed" : stats.phase1Done ? "Complete" : "Not started"}</span>}
           />
           <PhaseCard
             step="Phase 2"
             title="Solve the questions"
             detail={stats.crops ? `${stats.solved}/${stats.crops} solved${stats.failedItems ? ` · ${stats.failedItems} failed` : ""}` : "waiting for phase 1"}
             done={stats.phase2Done}
-            action={
-              <div className="flex gap-2">
-                <button onClick={runPhase2} disabled={!canStartPhase2} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold disabled:opacity-40">
-                  {busy ? <Loader2 className="animate-spin" size={14} /> : <PlayCircle size={14} />} Start phase 2
-                </button>
-                {jobId && items.length > 0 && !stats.phase2Done && (
-                  <button onClick={checkPhase2} disabled={busy} className="px-3 py-2 rounded-xl border border-border text-xs font-bold disabled:opacity-40">Check</button>
-                )}
-              </div>
-            }
+            action={<span className="text-xs font-bold text-muted-foreground">{waitingForSolve ? "Gemini is processing" : stats.phase2Done ? "Complete" : stats.phase1Done ? "Ready when you are" : "Locked"}</span>}
           />
           <PhaseCard
             step="Import"
             title="Save into the subject"
             detail={job?.imported_count ? `${job.imported_count} imported` : stats.phase2Done ? "ready to import" : "locked until phase 2 is done"}
             done={Boolean(job?.imported_count)}
-            action={
-              <button onClick={runImport} disabled={!canImport} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold disabled:opacity-40">
-                {busy ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />} Import
-              </button>
-            }
+            action={<span className="text-xs font-bold text-muted-foreground">{canImport ? "Ready" : "Locked"}</span>}
           />
         </section>
-
-        {progress && <p className="text-sm mb-4 text-muted-foreground">{progress}</p>}
 
         {log.length > 0 && (
           <div className="rounded-2xl bg-slate-900 text-slate-100 p-4 mb-5 text-xs font-mono max-h-56 overflow-y-auto">
@@ -464,7 +588,15 @@ function PatchIpadProX() {
                       : p.status === "empty" ? "bg-muted text-muted-foreground"
                       : p.status.includes("failed") ? "bg-rose-500/15 text-rose-600"
                       : "bg-amber-500/15 text-amber-600"}`}>
-                  p{p.page_number} · {Array.isArray(p.crops) ? p.crops.length : 0}
+                  Page {p.page_number} · {p.status === "cut_ready"
+                    ? `${Array.isArray(p.regions) ? p.regions.length : 0} borders found · needs cutting`
+                    : p.status === "cropped"
+                      ? `${Array.isArray(p.crops) ? p.crops.length : 0} pictures ready`
+                      : p.status === "cut_submitted"
+                        ? "waiting for Gemini"
+                        : p.status === "empty"
+                          ? "no questions found"
+                          : "failed"}
                 </span>
               ))}
             </div>
