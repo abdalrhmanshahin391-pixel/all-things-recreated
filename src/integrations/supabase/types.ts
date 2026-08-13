@@ -230,6 +230,176 @@ export type Database = {
           },
         ]
       }
+      aquavision_items: {
+        Row: {
+          answer_letter: string | null
+          concept: string | null
+          created_at: string
+          error: string | null
+          explanation: string | null
+          id: string
+          imported: boolean
+          item_index: number
+          job_id: string
+          number: string | null
+          options: Json
+          page_id: string | null
+          solved: boolean
+          status: string
+          stem: string
+          summary_table: string | null
+        }
+        Insert: {
+          answer_letter?: string | null
+          concept?: string | null
+          created_at?: string
+          error?: string | null
+          explanation?: string | null
+          id?: string
+          imported?: boolean
+          item_index?: number
+          job_id: string
+          number?: string | null
+          options?: Json
+          page_id?: string | null
+          solved?: boolean
+          status?: string
+          stem: string
+          summary_table?: string | null
+        }
+        Update: {
+          answer_letter?: string | null
+          concept?: string | null
+          created_at?: string
+          error?: string | null
+          explanation?: string | null
+          id?: string
+          imported?: boolean
+          item_index?: number
+          job_id?: string
+          number?: string | null
+          options?: Json
+          page_id?: string | null
+          solved?: boolean
+          status?: string
+          stem?: string
+          summary_table?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aquavision_items_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "aquavision_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aquavision_items_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "aquavision_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      aquavision_jobs: {
+        Row: {
+          answer_batch_id: string | null
+          course_id: string | null
+          created_at: string
+          error: string | null
+          group_id: string | null
+          id: string
+          imported_count: number
+          pdf_name: string
+          read_batch_id: string | null
+          stage: string
+          status: string
+          subject_id: string | null
+          total_pages: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          answer_batch_id?: string | null
+          course_id?: string | null
+          created_at?: string
+          error?: string | null
+          group_id?: string | null
+          id?: string
+          imported_count?: number
+          pdf_name: string
+          read_batch_id?: string | null
+          stage?: string
+          status?: string
+          subject_id?: string | null
+          total_pages?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          answer_batch_id?: string | null
+          course_id?: string | null
+          created_at?: string
+          error?: string | null
+          group_id?: string | null
+          id?: string
+          imported_count?: number
+          pdf_name?: string
+          read_batch_id?: string | null
+          stage?: string
+          status?: string
+          subject_id?: string | null
+          total_pages?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      aquavision_pages: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          job_id: string
+          page_number: number
+          pdf_b64: string | null
+          question_count: number
+          raw_json: Json | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          job_id: string
+          page_number: number
+          pdf_b64?: string | null
+          question_count?: number
+          raw_json?: Json | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          job_id?: string
+          page_number?: number
+          pdf_b64?: string | null
+          question_count?: number
+          raw_json?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aquavision_pages_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "aquavision_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       committee_activity_log: {
         Row: {
           action: string
