@@ -71,16 +71,29 @@ export function AuthShell({
         className="hidden lg:flex relative overflow-hidden"
         style={{
           background:
-            "linear-gradient(160deg, #f0fdf4 0%, #ecfdf5 40%, #e0f2fe 100%)",
+            "linear-gradient(165deg, oklch(0.24 0.045 255) 0%, oklch(0.19 0.04 260) 55%, oklch(0.15 0.035 265) 100%)",
         }}
       >
-        <FloatingMedicalBackdrop />
+        <div className="absolute inset-0 opacity-[0.18] mix-blend-screen pointer-events-none">
+          <FloatingMedicalBackdrop />
+        </div>
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(60% 45% at 20% 15%, color-mix(in oklab, var(--primary) 22%, transparent) 0%, transparent 70%)",
+          }}
+        />
 
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           <div className="flex items-center gap-2">
             <span
-              className="inline-flex items-center gap-2 rounded-full bg-card border-2 px-3.5 py-1 text-[10px] font-black uppercase tracking-[0.18em]"
-              style={{ borderColor: "var(--primary-soft)", color: "var(--primary)", boxShadow: "0 3px 0 var(--primary-soft)" }}
+              className="inline-flex items-center gap-2 rounded-full border-2 px-3.5 py-1 text-[10px] font-black uppercase tracking-[0.18em]"
+              style={{
+                borderColor: "color-mix(in oklab, var(--primary) 55%, transparent)",
+                background: "color-mix(in oklab, var(--primary) 14%, transparent)",
+                color: "var(--primary)",
+              }}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-[var(--primary)]" />
               AquaQBank academy
@@ -89,14 +102,14 @@ export function AuthShell({
 
           <div className="max-w-md">
             <h2
-              className="font-display font-black text-foreground tracking-tight leading-[1.05] lowercase"
+              className="font-display font-black tracking-tight leading-[1.05] lowercase text-white"
               style={{ fontSize: "clamp(2rem, 3.6vw, 3rem)" }}
             >
               {isLogin
                 ? "welcome back to your study desk."
                 : "built for the rigor of medical school."}
             </h2>
-            <p className="mt-5 text-sm md:text-base text-muted-foreground leading-relaxed">
+            <p className="mt-5 text-sm md:text-base leading-relaxed text-white/70">
               {isLogin
                 ? "your courses, lectures, and committee summaries are exactly where you left them."
                 : "curated question banks, structured review, and lecture libraries — designed for students who want clarity, not noise."}
@@ -109,7 +122,7 @@ export function AuthShell({
             </ul>
           </div>
 
-          <p className="text-xs text-muted-foreground tracking-wide">
+          <p className="text-xs tracking-wide text-white/45">
             AquaQBank academy · your medical school, all in one place.
           </p>
         </div>
@@ -122,12 +135,12 @@ function BulletRow({ children }: { children: ReactNode }) {
   return (
     <li className="flex items-start gap-3">
       <span
-        className="mt-1.5 grid place-items-center h-4 w-4 rounded-full text-white text-[10px] font-black shrink-0"
-        style={{ background: "var(--primary)" }}
+        className="mt-1.5 grid place-items-center h-4 w-4 rounded-full text-[10px] font-black shrink-0"
+        style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
       >
         ✓
       </span>
-      <span className="text-foreground/85 font-medium">{children}</span>
+      <span className="font-medium text-white/85">{children}</span>
     </li>
   );
 }
