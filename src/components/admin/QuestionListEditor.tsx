@@ -190,7 +190,7 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
 
       <div className="space-y-3">
         {filtered.map((q) => {
-          const index = rows.findIndex((r) => r.id === q.id);
+          const index = indexById.get(q.id) ?? 0;
           return (
             <div key={q.id} className="rounded-xl border border-white/10 bg-black/30 p-4">
               <div className="flex items-start gap-3">
