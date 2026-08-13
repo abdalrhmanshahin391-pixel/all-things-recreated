@@ -514,7 +514,6 @@ function ResourcesTile({
       />
       {locked && <div aria-hidden className="absolute inset-0 z-10 bg-black/25" />}
       {locked && <LockBadge note={lockNote ?? "Coming soon"} onDark />}
-      {locked && adminBypass && <AdminLockHint />}
       {hiddenFromUsers ? (
         <span className="absolute top-3 right-3 z-20 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-white/95 text-amber-800 shadow-sm">
           <EyeOff size={10} /> Hidden
