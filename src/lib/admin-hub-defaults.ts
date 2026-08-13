@@ -63,6 +63,7 @@ export const DEFAULT_LAYOUT: HubLayout = {
       labelAr: "المحتوى",
       tiles: [
         t("/admin/courses", "Courses Control", "BookOpen"),
+        t("/admin/course-control", "Course Control New", "Rocket"),
         t("/admin/lectures", "Lectures Syllabus", "Video"),
         t("/admin/questions", "Questions", "ListPlus"),
         t("/admin/question-generator", "Questions Generator", "Sparkles"),
