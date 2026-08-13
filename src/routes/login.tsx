@@ -15,6 +15,7 @@ import {
   buttonClass,
   ErrorBox,
 } from "@/components/AuthShell";
+import { SocialAuthButtons } from "@/components/auth/SocialAuthButtons";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -201,6 +202,8 @@ function LoginPage() {
           </div>
         </div>
       )}
+
+      <SocialAuthButtons {...(next ? { redirectTo: next } : {})} />
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {error && <ErrorBox message={error} />}

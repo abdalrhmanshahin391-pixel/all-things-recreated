@@ -5,6 +5,7 @@ import {
   createRootRouteWithContext,
   useRouter,
   useRouterState,
+  useNavigate,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -23,6 +24,8 @@ import { SeasonalTheme } from "@/components/SeasonalTheme";
 import { ThemeDecor } from "@/components/ThemeDecor";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { SiteFooter } from "@/components/SiteFooter";
+import { useAuth } from "@/hooks/useAuth";
+import { needsProfileCompletion } from "@/lib/profile-completion";
 import "@/i18n";
 import { Toaster } from "@/components/ui/sonner";
 
