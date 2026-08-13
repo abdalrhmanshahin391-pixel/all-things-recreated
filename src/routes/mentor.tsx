@@ -16,12 +16,9 @@ import {
   RefreshCw,
   Pin,
   Star,
-  Sunrise,
-  Moon,
   MoonStar,
   X,
   Copy,
-  BookHeart,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -79,14 +76,6 @@ type Treasure = {
   is_pinned_today: boolean;
   pinned_on: string | null;
 };
-type Journal = {
-  id?: string;
-  entry_date: string;
-  intention: string | null;
-  did_well: string | null;
-  fell_short: string | null;
-  tomorrow: string | null;
-};
 
 function todayUtcDate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -123,7 +112,6 @@ function MentorPage() {
           </div>
         </section>
 
-        <JournalSection />
       </main>
     </div>
   );
@@ -691,151 +679,6 @@ function ProgressChip({
         </div>
       </div>
     </div>
-  );
-}
-
-/* ============================================================ */
-/*                          JOURNAL                              */
-/* ============================================================ */
-
-function JournalSection() {
-  const qc = useQueryClient();
-  const today = todayUtcDate();
-  const hour = new Date().getHours();
-  const showEvening = hour >= 18 || hour < 4;
-
-  const { data: journal } = useQuery({
-    queryKey: ["mentor_journal", today],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("mentor_journal")
-        .select("id,entry_date,intention,did_well,fell_short,tomorrow")
-        .eq("entry_date", today)
-        .maybeSingle();
-      if (error) throw error;
-      return (data as Journal | null) ?? null;
-    },
-  });
-
-  const [intention, setIntention] = useState("");
-  const [didWell, setDidWell] = useState("");
-  const [fellShort, setFellShort] = useState("");
-  const [tomorrow, setTomorrow] = useState("");
-
-  useEffect(() => {
-    setIntention(journal?.intention ?? "");
-    setDidWell(journal?.did_well ?? "");
-    setFellShort(journal?.fell_short ?? "");
-    setTomorrow(journal?.tomorrow ?? "");
-  }, [journal?.id]);
-
-  const upsert = useCallback(
-    async (patch: Partial<Journal>) => {
-      const { data: u } = await supabase.auth.getUser();
-      const uid = u.user?.id;
-      if (!uid) return;
-      const { error } = await supabase
-        .from("mentor_journal")
-        .upsert(
-          { user_id: uid, entry_date: today, ...patch },
-          { onConflict: "user_id,entry_date" },
-        );
-      if (error) return toast.error(error.message);
-      qc.invalidateQueries({ queryKey: ["mentor_journal", today] });
-    },
-    [qc, today],
-  );
-
-  return (
-    <section className="space-y-4">
-      <div className="flex items-center gap-2">
-        <BookHeart className="text-primary" size={20} />
-        <h2 className="text-xl font-semibold">يومياتي</h2>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-4">
-        {/* Morning intention */}
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Sunrise size={16} className="text-amber-600" />
-            <h3 className="font-bold">نيّة اليوم</h3>
-          </div>
-          <Textarea
-            value={intention}
-            onChange={(e) => setIntention(e.target.value)}
-            onBlur={() => upsert({ intention })}
-            placeholder="بِمَ تنوي اليوم؟ اكتب جملة واحدة تقودك…"
-            rows={2}
-            className="text-base"
-          />
-        </div>
-
-        {/* Evening reflection */}
-        <div
-          className={
-            "rounded-2xl border p-5 " +
-            (showEvening
-              ? "border-primary/40 bg-primary/5"
-              : "border-border bg-card opacity-90")
-          }
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <Moon size={16} className="text-indigo-500" />
-            <h3 className="font-bold">محاسبة المساء</h3>
-            {showEvening && (
-              <span className="text-[10px] uppercase tracking-wide rounded-full bg-primary/15 text-primary px-2 py-0.5 font-semibold">
-                وقتها الآن
-              </span>
-            )}
-          </div>
-          <div className="space-y-2">
-            <ReflectField
-              label="ما الذي أحسنت فيه؟"
-              value={didWell}
-              onChange={setDidWell}
-              onBlur={() => upsert({ did_well: didWell })}
-            />
-            <ReflectField
-              label="ما الذي قصّرت فيه؟"
-              value={fellShort}
-              onChange={setFellShort}
-              onBlur={() => upsert({ fell_short: fellShort })}
-            />
-            <ReflectField
-              label="ماذا ستفعل غداً؟"
-              value={tomorrow}
-              onChange={setTomorrow}
-              onBlur={() => upsert({ tomorrow: tomorrow })}
-            />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ReflectField({
-  label,
-  value,
-  onChange,
-  onBlur,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  onBlur: () => void;
-}) {
-  return (
-    <label className="block">
-      <span className="block text-xs text-muted-foreground mb-1">{label}</span>
-      <Textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
-        rows={2}
-        className="text-sm"
-      />
-    </label>
   );
 }
 
