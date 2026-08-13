@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { Plus, Sparkles, Trash2, Eye, EyeOff, Share2 } from "lucide-react";
@@ -45,7 +46,7 @@ function SummariesHub() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   useEffect(() => {
-    if (!loading && user && !isAdmin) navigate({ to: "/" });
+    if (!loading && user && !isAdmin) guardRedirect(navigate);
   }, [loading, user, isAdmin, navigate]);
   const { data: rows = [] } = useQuery({
     queryKey: ["my-summaries", user?.id],

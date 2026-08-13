@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Plus, Trash2, ArrowLeft, Upload, Save, Link2, Video } from "lucide-react";
@@ -56,7 +57,7 @@ function AdminCommittee() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loading && !isAdmin) navigate({ to: "/" });
+    if (!loading && !isAdmin) guardRedirect(navigate);
   }, [isAdmin, loading, navigate]);
 
   const [yearId, setYearId] = useState<string | null>(null);

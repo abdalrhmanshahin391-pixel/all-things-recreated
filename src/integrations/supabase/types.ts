@@ -4589,7 +4589,6 @@ export type Database = {
           username: string
         }[]
       }
-      toggle_self_admin: { Args: { _enable: boolean }; Returns: boolean }
       university_id_by_slug: { Args: { _slug: string }; Returns: string }
       user_in_group: {
         Args: { _group_id: string; _user_id: string }

@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { CheckCircle2, ListPlus, Plus, Save, X, FolderPlus, Sparkles, Upload, Loader2, ImageIcon, KeyRound, Film, Pencil, Trash2, ArrowRightLeft } from "lucide-react";
@@ -50,7 +51,7 @@ function AdminQuestionsPage() {
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
-    else if (!loading && user && !isAdmin) navigate({ to: "/" });
+    else if (!loading && user && !isAdmin) guardRedirect(navigate);
   }, [loading, user, isAdmin, navigate]);
 
   useEffect(() => {

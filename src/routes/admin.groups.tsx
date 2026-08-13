@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Plus, Trash2, Users, Search, X, Megaphone, Copy } from "lucide-react";
 import { toast } from "sonner";
@@ -50,7 +51,7 @@ function AdminGroups() {
   const [openId, setOpenId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loading && !isAdmin) navigate({ to: "/" });
+    if (!loading && !isAdmin) guardRedirect(navigate);
   }, [loading, isAdmin, navigate]);
 
   async function add() {

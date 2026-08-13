@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -135,7 +136,7 @@ function DatabaseUltimate() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loading && !isAdmin) navigate({ to: "/" });
+    if (!loading && !isAdmin) guardRedirect(navigate);
   }, [loading, isAdmin, navigate]);
 
   const { data, isFetching, refetch, error } = useQuery({

@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Sparkles, Upload, Wand2, BookOpen, Layers, RefreshCw, Trash2, CheckCircle2, AlertCircle, Loader2, Download, KeyRound, RotateCw } from "lucide-react";
@@ -139,7 +140,7 @@ function JarvisBatchV2Ipad() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loading && (!user || !isAdmin)) navigate({ to: "/" });
+    if (!loading && (!user || !isAdmin)) guardRedirect(navigate);
   }, [loading, user, isAdmin, navigate]);
 
   const [courses, setCourses] = useState<Course[]>([]);

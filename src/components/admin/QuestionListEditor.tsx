@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -30,6 +30,9 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
   const [rows, setRows] = useState<Question[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
+  // Keep typing responsive: filtering the (possibly large) list happens at a
+  // lower priority than the keystroke itself.
+  const deferredQuery = useDeferredValue(query);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<Question | null>(null);
   const [busy, setBusy] = useState(false);
@@ -74,7 +77,7 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
   }, [load]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter(
       (r) =>
@@ -82,7 +85,15 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
         (r.explanation ?? "").toLowerCase().includes(q) ||
         r.options.some((o) => o.text.toLowerCase().includes(q)),
     );
-  }, [rows, query]);
+  }, [rows, deferredQuery]);
+
+  // Position lookup: doing rows.findIndex() inside the render loop made the
+  // list quadratic, which is what made typing feel laggy on big subjects.
+  const indexById = useMemo(() => {
+    const m = new Map<string, number>();
+    rows.forEach((r, i) => m.set(r.id, i));
+    return m;
+  }, [rows]);
 
   async function deleteQuestions(ids: string[]) {
     if (ids.length === 0) return;
@@ -179,7 +190,7 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
 
       <div className="space-y-3">
         {filtered.map((q) => {
-          const index = rows.findIndex((r) => r.id === q.id);
+          const index = indexById.get(q.id) ?? 0;
           return (
             <div key={q.id} className="rounded-xl border border-white/10 bg-black/30 p-4">
               <div className="flex items-start gap-3">
