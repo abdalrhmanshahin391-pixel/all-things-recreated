@@ -14,6 +14,9 @@ type Course = {
   exam_type: string | null;
   price: number | null;
   currency: string | null;
+  compare_at_price?: number | null;
+  discount_active?: boolean | null;
+  discount_ends_at?: string | null;
 };
 
 type Counts = Record<string, { subjects: number; questions: number }>;
@@ -29,8 +32,12 @@ export const homeCoursesQuery = queryOptions({
   queryFn: async (): Promise<{ courses: Course[]; counts: Counts }> => {
       const { data } = await supabase
         .from("courses")
-        .select("id, title, year, category, image_url, exam_type, price, currency, badge, badge_color, badge_expires_at")
+        .select(
+          "id, title, year, category, image_url, exam_type, price, currency, badge, badge_color, badge_expires_at, compare_at_price, discount_active, discount_ends_at",
+        )
         .eq("published", true)
+        .eq("show_on_home", true)
+        .eq("admin_only", false)
         .eq("kind", "questions")
         .order("year", { ascending: true })
         .order("title", { ascending: true });
