@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Loader2, Send, MessageCircle, Mail, Phone, Instagram, Link2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { SiteHeader } from "@/components/SiteHeader";
-import { SiteFooter } from "@/components/SiteFooter";
 import { useLang } from "@/components/LanguageProvider";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -210,7 +209,6 @@ function SupportPage() {
           </>
         )}
       </main>
-      <SiteFooter />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import { ExamPrepPanel } from "@/components/home/ExamPrepPanel";
 import { QuestionCountsSection } from "@/components/home/QuestionCountsSection";
 import { InstallAppBanner } from "@/components/InstallAppButton";
 import { AcademyHome } from "@/components/home/academy/AcademyHome";
+import { EthicsBands } from "@/components/about/EthicsBands";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import ogImage from "@/assets/aquaqbank-og-gold.jpg.asset.json";
 
@@ -130,6 +131,7 @@ function Index() {
                 {/* The FAQ always sits directly above the closing call to action. */}
                 {node.builtin_key === "footer_cta" && <HomeFaq />}
                 {builtins[node.builtin_key] ?? null}
+                {node.builtin_key === "feature1" && <HomeEthics />}
               </div>
             ) : (
               <div key={node.id} className="mx-auto max-w-5xl px-4 md:px-8 py-14">
@@ -141,10 +143,22 @@ function Index() {
             <div key={b.key}>
               {b.key === "footer_cta" && <HomeFaq />}
               {builtins[b.key]}
+              {b.key === "feature1" && <HomeEthics />}
             </div>
           ))}
 
       <InstallAppBanner />
     </div>
+  );
+}
+
+/** The two Golden-Age paintings and their ethics, shared with the About page. */
+function HomeEthics() {
+  return (
+    <section className="bg-background py-16 md:py-24">
+      <div className="mx-auto max-w-6xl px-4 md:px-8">
+        <EthicsBands />
+      </div>
+    </section>
   );
 }

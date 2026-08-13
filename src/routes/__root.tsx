@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -21,6 +22,7 @@ import { LanguageProvider } from "@/components/LanguageProvider";
 import { SeasonalTheme } from "@/components/SeasonalTheme";
 import { ThemeDecor } from "@/components/ThemeDecor";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
+import { SiteFooter } from "@/components/SiteFooter";
 import "@/i18n";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -260,6 +262,7 @@ function RootComponent() {
           <AnnouncementBar />
           {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
           <Outlet />
+          <GlobalFooter />
           <Toaster richColors position="top-right" />
         </LanguageProvider>
       </ThemeProvider>
@@ -270,6 +273,30 @@ function RootComponent() {
 function PresenceTracker() {
   usePresence();
   return null;
+}
+
+/**
+ * The site directory footer on every page except full-screen working
+ * surfaces (admin, quiz/study players, auth-blocked screens) where it
+ * would only get in the way.
+ */
+const NO_FOOTER = [
+  "/admin",
+  "/locked",
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/.lovable",
+];
+
+function GlobalFooter() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const hidden =
+    NO_FOOTER.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
+    /\/(run|exam|match|tap|checkout)(\/|$)/.test(pathname);
+  if (hidden) return null;
+  return <SiteFooter />;
 }
 
 function DeviceTracker() {

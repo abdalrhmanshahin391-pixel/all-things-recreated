@@ -21,11 +21,6 @@ export const HOME_FAQ: Array<{ q: string; a: string }> = [
     a: "AquaQBank is the short name of AquaQBank Academy — an online study academy for medical students that brings question banks, past exam-style questions, video lectures and committee notes together in one place, organized by academic year and course.",
   },
   {
-    q: "Is AquaQBank a bank?",
-    a: "No. AquaQBank Academy is not a bank or a financial service. The name comes from 'question bank': it is a medical education academy where students practise exam questions and study from organized course material.",
-  },
-
-  {
     q: "Which universities does AquaQBank support?",
     a: "AquaQBank Academy is built to host any medical school. Each university in the academy gets its own space with its own years, courses, subjects and materials, and new universities are added over time.",
   },
@@ -47,10 +42,6 @@ const FAQ_AR: Array<{ q: string; a: string }> = [
   {
     q: "ما هي أكاديمية AquaQBank؟",
     a: "أكاديمية AquaQBank هي منصة دراسة لطلاب الطب تجمع بنوك الأسئلة والمحاضرات المرئية وملاحظات اللجنة في مكان واحد، مرتّبة حسب السنة الدراسية والمادة.",
-  },
-  {
-    q: "هل AquaQBank بنك مالي؟",
-    a: "لا. الاسم مشتق من «بنك الأسئلة»؛ المنصة تعليمية طبية بالكامل وليست خدمة مصرفية.",
   },
   {
     q: "ما الجامعات المدعومة؟",

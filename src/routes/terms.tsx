@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { SiteHeader } from "@/components/SiteHeader";
-import { SiteFooter } from "@/components/SiteFooter";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { TERMS_EN, TERMS_AR, LEGAL_UPDATED } from "@/lib/legal-content";
 
@@ -82,7 +81,6 @@ export function LegalArticle({
         </article>
         <p className="mt-4 text-xs text-muted-foreground">Last updated: {LEGAL_UPDATED}</p>
       </main>
-      <SiteFooter />
     </div>
   );
 }
