@@ -16,7 +16,6 @@ import {
   RefreshCw,
   Pin,
   Star,
-  Moon,
   MoonStar,
   X,
   Copy,
