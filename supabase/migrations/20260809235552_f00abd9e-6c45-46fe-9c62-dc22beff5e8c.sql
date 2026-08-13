@@ -1,0 +1,11 @@
+CREATE INDEX IF NOT EXISTS question_options_question_id_idx ON public.question_options (question_id);
+CREATE INDEX IF NOT EXISTS questions_subject_id_idx ON public.questions (subject_id);
+CREATE INDEX IF NOT EXISTS subjects_group_id_idx ON public.subjects (group_id);
+CREATE INDEX IF NOT EXISTS subject_groups_course_id_idx ON public.subject_groups (course_id);
+CREATE INDEX IF NOT EXISTS lecture_items_subject_id_idx ON public.lecture_items (subject_id);
+CREATE INDEX IF NOT EXISTS user_lecture_courses_course_id_idx ON public.user_lecture_courses (course_id);
+CREATE INDEX IF NOT EXISTS user_courses_course_id_idx ON public.user_courses (course_id);
+CREATE INDEX IF NOT EXISTS question_attempts_question_id_idx ON public.question_attempts (question_id);
+CREATE INDEX IF NOT EXISTS coupon_redemptions_user_id_idx ON public.coupon_redemptions (user_id);
+CREATE INDEX IF NOT EXISTS coupon_redemptions_course_id_idx ON public.coupon_redemptions (course_id);
+CREATE INDEX IF NOT EXISTS package_purchases_buyer_id_idx ON public.package_purchases (buyer_id);

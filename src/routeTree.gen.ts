@@ -10,33 +10,1512 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AboutRouteImport } from './routes/about'
+import { Route as CommitteeRouteImport } from './routes/committee'
+import { Route as CoursesRouteImport } from './routes/courses'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as LecturesRouteImport } from './routes/lectures'
+import { Route as LockedRouteImport } from './routes/locked'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as McpRouteImport } from './routes/mcp'
+import { Route as NotesRouteImport } from './routes/notes'
+import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as RefundPolicyRouteImport } from './routes/refund-policy'
+import { Route as RegisterRouteImport } from './routes/register'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as StudyHubRouteImport } from './routes/study-hub'
+import { Route as SupportRouteImport } from './routes/support'
+import { Route as TermsRouteImport } from './routes/terms'
+import { Route as UniversitiesRouteImport } from './routes/universities'
+import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminAboutRouteImport } from './routes/admin.about'
+import { Route as AdminAiKeysRouteImport } from './routes/admin.ai-keys'
+import { Route as AdminBackupsRouteImport } from './routes/admin.backups'
+import { Route as AdminCommitteeRouteImport } from './routes/admin.committee'
+import { Route as AdminCommitteeLogRouteImport } from './routes/admin.committee-log'
+import { Route as AdminContentRouteImport } from './routes/admin.content'
+import { Route as AdminContentProtectionRouteImport } from './routes/admin.content-protection'
+import { Route as AdminCouponsRouteImport } from './routes/admin.coupons'
+import { Route as AdminCoursesRouteImport } from './routes/admin.courses'
+import { Route as AdminDatabaseRouteImport } from './routes/admin.database'
+import { Route as AdminDevicesRouteImport } from './routes/admin.devices'
+import { Route as AdminGeminiKeysRouteImport } from './routes/admin.gemini-keys'
+import { Route as AdminGermanRouteImport } from './routes/admin.german'
+import { Route as AdminGroupsRouteImport } from './routes/admin.groups'
+import { Route as AdminJarvisBatchRouteImport } from './routes/admin.jarvis-batch'
+import { Route as AdminJarvisBatchGermanIpadRouteImport } from './routes/admin.jarvis-batch-german-ipad'
+import { Route as AdminJarvisBatchV2RouteImport } from './routes/admin.jarvis-batch-v2'
+import { Route as AdminJarvisBatchV2IpadRouteImport } from './routes/admin.jarvis-batch-v2-ipad'
+import { Route as AdminLecturesRouteImport } from './routes/admin.lectures'
+import { Route as AdminLegalRouteImport } from './routes/admin.legal'
+import { Route as AdminMarketingRouteImport } from './routes/admin.marketing'
+import { Route as AdminMentorRouteImport } from './routes/admin.mentor'
+import { Route as AdminNavigationRouteImport } from './routes/admin.navigation'
+import { Route as AdminPackagesRouteImport } from './routes/admin.packages'
+import { Route as AdminPdfSlicerRouteImport } from './routes/admin.pdf-slicer'
+import { Route as AdminPeopleRouteImport } from './routes/admin.people'
+import { Route as AdminQuestionBankRouteImport } from './routes/admin.question-bank'
+import { Route as AdminQuestionGeneratorRouteImport } from './routes/admin.question-generator'
+import { Route as AdminQuestionsRouteImport } from './routes/admin.questions'
+import { Route as AdminRolesRouteImport } from './routes/admin.roles'
+import { Route as AdminServersRouteImport } from './routes/admin.servers'
+import { Route as AdminSiteSettingsRouteImport } from './routes/admin.site-settings'
+import { Route as AdminSonicRouteImport } from './routes/admin.sonic'
+import { Route as AdminStudyHubRouteImport } from './routes/admin.study-hub'
+import { Route as AdminSupportRouteImport } from './routes/admin.support'
+import { Route as AdminThemeRouteImport } from './routes/admin.theme'
+import { Route as AdminTransferRouteImport } from './routes/admin.transfer'
+import { Route as AdminUniversitiesRouteImport } from './routes/admin.universities'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as AdminVisionProBatchRouteImport } from './routes/admin.vision-pro-batch'
+import { Route as ApiCommitteeDriveUploadRouteImport } from './routes/api/committee-drive-upload'
+import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
+import { Route as CommitteeIndexRouteImport } from './routes/committee.index'
+import { Route as CommitteeYearRouteImport } from './routes/committee.$year'
+import { Route as CommitteeStudyPlanRouteImport } from './routes/committee.study-plan'
+import { Route as CoursesIndexRouteImport } from './routes/courses.index'
+import { Route as CoursesCourseIdRouteImport } from './routes/courses.$courseId'
+import { Route as GuidesIndexRouteImport } from './routes/guides.index'
+import { Route as GuidesSlugRouteImport } from './routes/guides.$slug'
+import { Route as LecturesIndexRouteImport } from './routes/lectures.index'
+import { Route as LecturesCourseIdRouteImport } from './routes/lectures.$courseId'
+import { Route as MyCoursesRouteImport } from './routes/my.courses'
+import { Route as MyLecturesRouteImport } from './routes/my.lectures'
+import { Route as PSlugRouteImport } from './routes/p.$slug'
+import { Route as PackagesIndexRouteImport } from './routes/packages.index'
+import { Route as StudyHubIndexRouteImport } from './routes/study-hub.index'
+import { Route as StudyHubExamsRouteImport } from './routes/study-hub.exams'
+import { Route as StudyHubFocusRouteImport } from './routes/study-hub.focus'
+import { Route as StudyHubTodoRouteImport } from './routes/study-hub.todo'
+import { Route as SummariesIndexRouteImport } from './routes/summaries.index'
+import { Route as SummariesSummaryIdRouteImport } from './routes/summaries.$summaryId'
+import { Route as SummariesNewRouteImport } from './routes/summaries.new'
+import { Route as UUniSlugRouteImport } from './routes/u.$uniSlug'
+import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
+import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
+import { Route as AdminGermanIndexRouteImport } from './routes/admin.german.index'
+import { Route as AdminGermanCourseIdRouteImport } from './routes/admin.german.$courseId'
+import { Route as AdminPagesIndexRouteImport } from './routes/admin.pages.index'
+import { Route as AdminPagesPageIdRouteImport } from './routes/admin.pages.$pageId'
+import { Route as AdminUniTilesUniIdRouteImport } from './routes/admin.uni-tiles.$uniId'
+import { Route as ApiGermanTtsRouteImport } from './routes/api/german/tts'
+import { Route as CommitteeYearIndexRouteImport } from './routes/committee.$year.index'
+import { Route as CommitteeYearSubjectRouteImport } from './routes/committee.$year.$subject'
+import { Route as CoursesCourseIdIndexRouteImport } from './routes/courses.$courseId.index'
+import { Route as CoursesCourseIdCheckoutRouteImport } from './routes/courses.$courseId.checkout'
+import { Route as CoursesCourseIdRunRouteImport } from './routes/courses.$courseId.run'
+import { Route as GermanCourseIdIndexRouteImport } from './routes/german.$courseId.index'
+import { Route as GermanCourseIdExamRouteImport } from './routes/german.$courseId.exam'
+import { Route as GermanCourseIdMatchRouteImport } from './routes/german.$courseId.match'
+import { Route as GermanCourseIdReviewRouteImport } from './routes/german.$courseId.review'
+import { Route as GermanCourseIdRunRouteImport } from './routes/german.$courseId.run'
+import { Route as GermanCourseIdTapRouteImport } from './routes/german.$courseId.tap'
+import { Route as HyGuidesIndexRouteImport } from './routes/hy.guides.index'
+import { Route as HyGuidesSlugRouteImport } from './routes/hy.guides.$slug'
+import { Route as LecturesCourseIdIndexRouteImport } from './routes/lectures.$courseId.index'
+import { Route as RuGuidesIndexRouteImport } from './routes/ru.guides.index'
+import { Route as RuGuidesSlugRouteImport } from './routes/ru.guides.$slug'
+import { Route as AdminGermanCourseIdManageRouteImport } from './routes/admin.german.$courseId.manage'
+import { Route as ApiPublicPaymentsWebhookRouteImport } from './routes/api/public/payments/webhook'
+import { Route as GermanCourseIdReviewIndexRouteImport } from './routes/german.$courseId.review.index'
+import { Route as GermanCourseIdReviewRunRouteImport } from './routes/german.$courseId.review.run'
+import { Route as LecturesCourseIdQuizQuizIdRouteImport } from './routes/lectures.$courseId.quiz.$quizId'
+import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
+import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AboutRoute = AboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommitteeRoute = CommitteeRouteImport.update({
+  id: '/committee',
+  path: '/committee',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoursesRoute = CoursesRouteImport.update({
+  id: '/courses',
+  path: '/courses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LecturesRoute = LecturesRouteImport.update({
+  id: '/lectures',
+  path: '/lectures',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LockedRoute = LockedRouteImport.update({
+  id: '/locked',
+  path: '/locked',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotesRoute = NotesRouteImport.update({
+  id: '/notes',
+  path: '/notes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RefundPolicyRoute = RefundPolicyRouteImport.update({
+  id: '/refund-policy',
+  path: '/refund-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StudyHubRoute = StudyHubRouteImport.update({
+  id: '/study-hub',
+  path: '/study-hub',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupportRoute = SupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UniversitiesRoute = UniversitiesRouteImport.update({
+  id: '/universities',
+  path: '/universities',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Char91DotmcpChar93ListToolsRoute =
+  Char91DotmcpChar93ListToolsRouteImport.update({
+    id: '/.mcp/list-tools',
+    path: '/.mcp/list-tools',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAboutRoute = AdminAboutRouteImport.update({
+  id: '/admin/about',
+  path: '/admin/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAiKeysRoute = AdminAiKeysRouteImport.update({
+  id: '/admin/ai-keys',
+  path: '/admin/ai-keys',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminBackupsRoute = AdminBackupsRouteImport.update({
+  id: '/admin/backups',
+  path: '/admin/backups',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCommitteeRoute = AdminCommitteeRouteImport.update({
+  id: '/admin/committee',
+  path: '/admin/committee',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCommitteeLogRoute = AdminCommitteeLogRouteImport.update({
+  id: '/admin/committee-log',
+  path: '/admin/committee-log',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminContentRoute = AdminContentRouteImport.update({
+  id: '/admin/content',
+  path: '/admin/content',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminContentProtectionRoute = AdminContentProtectionRouteImport.update({
+  id: '/admin/content-protection',
+  path: '/admin/content-protection',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCouponsRoute = AdminCouponsRouteImport.update({
+  id: '/admin/coupons',
+  path: '/admin/coupons',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCoursesRoute = AdminCoursesRouteImport.update({
+  id: '/admin/courses',
+  path: '/admin/courses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminDatabaseRoute = AdminDatabaseRouteImport.update({
+  id: '/admin/database',
+  path: '/admin/database',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminDevicesRoute = AdminDevicesRouteImport.update({
+  id: '/admin/devices',
+  path: '/admin/devices',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminGeminiKeysRoute = AdminGeminiKeysRouteImport.update({
+  id: '/admin/gemini-keys',
+  path: '/admin/gemini-keys',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminGermanRoute = AdminGermanRouteImport.update({
+  id: '/admin/german',
+  path: '/admin/german',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminGroupsRoute = AdminGroupsRouteImport.update({
+  id: '/admin/groups',
+  path: '/admin/groups',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminJarvisBatchRoute = AdminJarvisBatchRouteImport.update({
+  id: '/admin/jarvis-batch',
+  path: '/admin/jarvis-batch',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminJarvisBatchGermanIpadRoute =
+  AdminJarvisBatchGermanIpadRouteImport.update({
+    id: '/admin/jarvis-batch-german-ipad',
+    path: '/admin/jarvis-batch-german-ipad',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminJarvisBatchV2Route = AdminJarvisBatchV2RouteImport.update({
+  id: '/admin/jarvis-batch-v2',
+  path: '/admin/jarvis-batch-v2',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminJarvisBatchV2IpadRoute = AdminJarvisBatchV2IpadRouteImport.update({
+  id: '/admin/jarvis-batch-v2-ipad',
+  path: '/admin/jarvis-batch-v2-ipad',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLecturesRoute = AdminLecturesRouteImport.update({
+  id: '/admin/lectures',
+  path: '/admin/lectures',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLegalRoute = AdminLegalRouteImport.update({
+  id: '/admin/legal',
+  path: '/admin/legal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminMarketingRoute = AdminMarketingRouteImport.update({
+  id: '/admin/marketing',
+  path: '/admin/marketing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminMentorRoute = AdminMentorRouteImport.update({
+  id: '/admin/mentor',
+  path: '/admin/mentor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminNavigationRoute = AdminNavigationRouteImport.update({
+  id: '/admin/navigation',
+  path: '/admin/navigation',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPackagesRoute = AdminPackagesRouteImport.update({
+  id: '/admin/packages',
+  path: '/admin/packages',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPdfSlicerRoute = AdminPdfSlicerRouteImport.update({
+  id: '/admin/pdf-slicer',
+  path: '/admin/pdf-slicer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPeopleRoute = AdminPeopleRouteImport.update({
+  id: '/admin/people',
+  path: '/admin/people',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminQuestionBankRoute = AdminQuestionBankRouteImport.update({
+  id: '/admin/question-bank',
+  path: '/admin/question-bank',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminQuestionGeneratorRoute = AdminQuestionGeneratorRouteImport.update({
+  id: '/admin/question-generator',
+  path: '/admin/question-generator',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminQuestionsRoute = AdminQuestionsRouteImport.update({
+  id: '/admin/questions',
+  path: '/admin/questions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRolesRoute = AdminRolesRouteImport.update({
+  id: '/admin/roles',
+  path: '/admin/roles',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminServersRoute = AdminServersRouteImport.update({
+  id: '/admin/servers',
+  path: '/admin/servers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSiteSettingsRoute = AdminSiteSettingsRouteImport.update({
+  id: '/admin/site-settings',
+  path: '/admin/site-settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSonicRoute = AdminSonicRouteImport.update({
+  id: '/admin/sonic',
+  path: '/admin/sonic',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminStudyHubRoute = AdminStudyHubRouteImport.update({
+  id: '/admin/study-hub',
+  path: '/admin/study-hub',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSupportRoute = AdminSupportRouteImport.update({
+  id: '/admin/support',
+  path: '/admin/support',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminThemeRoute = AdminThemeRouteImport.update({
+  id: '/admin/theme',
+  path: '/admin/theme',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminTransferRoute = AdminTransferRouteImport.update({
+  id: '/admin/transfer',
+  path: '/admin/transfer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminUniversitiesRoute = AdminUniversitiesRouteImport.update({
+  id: '/admin/universities',
+  path: '/admin/universities',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/admin/users',
+  path: '/admin/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminVisionProBatchRoute = AdminVisionProBatchRouteImport.update({
+  id: '/admin/vision-pro-batch',
+  path: '/admin/vision-pro-batch',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCommitteeDriveUploadRoute = ApiCommitteeDriveUploadRouteImport.update({
+  id: '/api/committee-drive-upload',
+  path: '/api/committee-drive-upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutSuccessRoute = CheckoutSuccessRouteImport.update({
+  id: '/checkout/success',
+  path: '/checkout/success',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommitteeIndexRoute = CommitteeIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CommitteeRoute,
+} as any)
+const CommitteeYearRoute = CommitteeYearRouteImport.update({
+  id: '/$year',
+  path: '/$year',
+  getParentRoute: () => CommitteeRoute,
+} as any)
+const CommitteeStudyPlanRoute = CommitteeStudyPlanRouteImport.update({
+  id: '/study-plan',
+  path: '/study-plan',
+  getParentRoute: () => CommitteeRoute,
+} as any)
+const CoursesIndexRoute = CoursesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CoursesRoute,
+} as any)
+const CoursesCourseIdRoute = CoursesCourseIdRouteImport.update({
+  id: '/$courseId',
+  path: '/$courseId',
+  getParentRoute: () => CoursesRoute,
+} as any)
+const GuidesIndexRoute = GuidesIndexRouteImport.update({
+  id: '/guides/',
+  path: '/guides/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuidesSlugRoute = GuidesSlugRouteImport.update({
+  id: '/guides/$slug',
+  path: '/guides/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LecturesIndexRoute = LecturesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LecturesRoute,
+} as any)
+const LecturesCourseIdRoute = LecturesCourseIdRouteImport.update({
+  id: '/$courseId',
+  path: '/$courseId',
+  getParentRoute: () => LecturesRoute,
+} as any)
+const MyCoursesRoute = MyCoursesRouteImport.update({
+  id: '/my/courses',
+  path: '/my/courses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MyLecturesRoute = MyLecturesRouteImport.update({
+  id: '/my/lectures',
+  path: '/my/lectures',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PSlugRoute = PSlugRouteImport.update({
+  id: '/p/$slug',
+  path: '/p/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PackagesIndexRoute = PackagesIndexRouteImport.update({
+  id: '/packages/',
+  path: '/packages/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StudyHubIndexRoute = StudyHubIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => StudyHubRoute,
+} as any)
+const StudyHubExamsRoute = StudyHubExamsRouteImport.update({
+  id: '/exams',
+  path: '/exams',
+  getParentRoute: () => StudyHubRoute,
+} as any)
+const StudyHubFocusRoute = StudyHubFocusRouteImport.update({
+  id: '/focus',
+  path: '/focus',
+  getParentRoute: () => StudyHubRoute,
+} as any)
+const StudyHubTodoRoute = StudyHubTodoRouteImport.update({
+  id: '/todo',
+  path: '/todo',
+  getParentRoute: () => StudyHubRoute,
+} as any)
+const SummariesIndexRoute = SummariesIndexRouteImport.update({
+  id: '/summaries/',
+  path: '/summaries/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SummariesSummaryIdRoute = SummariesSummaryIdRouteImport.update({
+  id: '/summaries/$summaryId',
+  path: '/summaries/$summaryId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SummariesNewRoute = SummariesNewRouteImport.update({
+  id: '/summaries/new',
+  path: '/summaries/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UUniSlugRoute = UUniSlugRouteImport.update({
+  id: '/u/$uniSlug',
+  path: '/u/$uniSlug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Char91DotmcpChar93InvokeToolToolRoute =
+  Char91DotmcpChar93InvokeToolToolRouteImport.update({
+    id: '/.mcp/invoke-tool/$tool',
+    path: '/.mcp/invoke-tool/$tool',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminGermanIndexRoute = AdminGermanIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminGermanRoute,
+} as any)
+const AdminGermanCourseIdRoute = AdminGermanCourseIdRouteImport.update({
+  id: '/$courseId',
+  path: '/$courseId',
+  getParentRoute: () => AdminGermanRoute,
+} as any)
+const AdminPagesIndexRoute = AdminPagesIndexRouteImport.update({
+  id: '/admin/pages/',
+  path: '/admin/pages/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPagesPageIdRoute = AdminPagesPageIdRouteImport.update({
+  id: '/admin/pages/$pageId',
+  path: '/admin/pages/$pageId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminUniTilesUniIdRoute = AdminUniTilesUniIdRouteImport.update({
+  id: '/admin/uni-tiles/$uniId',
+  path: '/admin/uni-tiles/$uniId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGermanTtsRoute = ApiGermanTtsRouteImport.update({
+  id: '/api/german/tts',
+  path: '/api/german/tts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommitteeYearIndexRoute = CommitteeYearIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CommitteeYearRoute,
+} as any)
+const CommitteeYearSubjectRoute = CommitteeYearSubjectRouteImport.update({
+  id: '/$subject',
+  path: '/$subject',
+  getParentRoute: () => CommitteeYearRoute,
+} as any)
+const CoursesCourseIdIndexRoute = CoursesCourseIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CoursesCourseIdRoute,
+} as any)
+const CoursesCourseIdCheckoutRoute = CoursesCourseIdCheckoutRouteImport.update({
+  id: '/checkout',
+  path: '/checkout',
+  getParentRoute: () => CoursesCourseIdRoute,
+} as any)
+const CoursesCourseIdRunRoute = CoursesCourseIdRunRouteImport.update({
+  id: '/run',
+  path: '/run',
+  getParentRoute: () => CoursesCourseIdRoute,
+} as any)
+const GermanCourseIdIndexRoute = GermanCourseIdIndexRouteImport.update({
+  id: '/german/$courseId/',
+  path: '/german/$courseId/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GermanCourseIdExamRoute = GermanCourseIdExamRouteImport.update({
+  id: '/german/$courseId/exam',
+  path: '/german/$courseId/exam',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GermanCourseIdMatchRoute = GermanCourseIdMatchRouteImport.update({
+  id: '/german/$courseId/match',
+  path: '/german/$courseId/match',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GermanCourseIdReviewRoute = GermanCourseIdReviewRouteImport.update({
+  id: '/german/$courseId/review',
+  path: '/german/$courseId/review',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GermanCourseIdRunRoute = GermanCourseIdRunRouteImport.update({
+  id: '/german/$courseId/run',
+  path: '/german/$courseId/run',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GermanCourseIdTapRoute = GermanCourseIdTapRouteImport.update({
+  id: '/german/$courseId/tap',
+  path: '/german/$courseId/tap',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HyGuidesIndexRoute = HyGuidesIndexRouteImport.update({
+  id: '/hy/guides/',
+  path: '/hy/guides/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HyGuidesSlugRoute = HyGuidesSlugRouteImport.update({
+  id: '/hy/guides/$slug',
+  path: '/hy/guides/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LecturesCourseIdIndexRoute = LecturesCourseIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LecturesCourseIdRoute,
+} as any)
+const RuGuidesIndexRoute = RuGuidesIndexRouteImport.update({
+  id: '/ru/guides/',
+  path: '/ru/guides/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RuGuidesSlugRoute = RuGuidesSlugRouteImport.update({
+  id: '/ru/guides/$slug',
+  path: '/ru/guides/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminGermanCourseIdManageRoute =
+  AdminGermanCourseIdManageRouteImport.update({
+    id: '/manage',
+    path: '/manage',
+    getParentRoute: () => AdminGermanCourseIdRoute,
+  } as any)
+const ApiPublicPaymentsWebhookRoute =
+  ApiPublicPaymentsWebhookRouteImport.update({
+    id: '/api/public/payments/webhook',
+    path: '/api/public/payments/webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const GermanCourseIdReviewIndexRoute =
+  GermanCourseIdReviewIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => GermanCourseIdReviewRoute,
+  } as any)
+const GermanCourseIdReviewRunRoute = GermanCourseIdReviewRunRouteImport.update({
+  id: '/run',
+  path: '/run',
+  getParentRoute: () => GermanCourseIdReviewRoute,
+} as any)
+const LecturesCourseIdQuizQuizIdRoute =
+  LecturesCourseIdQuizQuizIdRouteImport.update({
+    id: '/quiz/$quizId',
+    path: '/quiz/$quizId',
+    getParentRoute: () => LecturesCourseIdRoute,
+  } as any)
+const LovableEmailAuthPreviewRoute = LovableEmailAuthPreviewRouteImport.update({
+  id: '/lovable/email/auth/preview',
+  path: '/lovable/email/auth/preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LovableEmailAuthWebhookRoute = LovableEmailAuthWebhookRouteImport.update({
+  id: '/lovable/email/auth/webhook',
+  path: '/lovable/email/auth/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/committee': typeof CommitteeRouteWithChildren
+  '/courses': typeof CoursesRouteWithChildren
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/lectures': typeof LecturesRouteWithChildren
+  '/locked': typeof LockedRoute
+  '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
+  '/notes': typeof NotesRoute
+  '/privacy': typeof PrivacyRoute
+  '/profile': typeof ProfileRoute
+  '/refund-policy': typeof RefundPolicyRoute
+  '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/study-hub': typeof StudyHubRouteWithChildren
+  '/support': typeof SupportRoute
+  '/terms': typeof TermsRoute
+  '/universities': typeof UniversitiesRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/admin/about': typeof AdminAboutRoute
+  '/admin/ai-keys': typeof AdminAiKeysRoute
+  '/admin/backups': typeof AdminBackupsRoute
+  '/admin/committee': typeof AdminCommitteeRoute
+  '/admin/committee-log': typeof AdminCommitteeLogRoute
+  '/admin/content': typeof AdminContentRoute
+  '/admin/content-protection': typeof AdminContentProtectionRoute
+  '/admin/coupons': typeof AdminCouponsRoute
+  '/admin/courses': typeof AdminCoursesRoute
+  '/admin/database': typeof AdminDatabaseRoute
+  '/admin/devices': typeof AdminDevicesRoute
+  '/admin/gemini-keys': typeof AdminGeminiKeysRoute
+  '/admin/german': typeof AdminGermanRouteWithChildren
+  '/admin/groups': typeof AdminGroupsRoute
+  '/admin/jarvis-batch': typeof AdminJarvisBatchRoute
+  '/admin/jarvis-batch-german-ipad': typeof AdminJarvisBatchGermanIpadRoute
+  '/admin/jarvis-batch-v2': typeof AdminJarvisBatchV2Route
+  '/admin/jarvis-batch-v2-ipad': typeof AdminJarvisBatchV2IpadRoute
+  '/admin/lectures': typeof AdminLecturesRoute
+  '/admin/legal': typeof AdminLegalRoute
+  '/admin/marketing': typeof AdminMarketingRoute
+  '/admin/mentor': typeof AdminMentorRoute
+  '/admin/navigation': typeof AdminNavigationRoute
+  '/admin/packages': typeof AdminPackagesRoute
+  '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
+  '/admin/people': typeof AdminPeopleRoute
+  '/admin/question-bank': typeof AdminQuestionBankRoute
+  '/admin/question-generator': typeof AdminQuestionGeneratorRoute
+  '/admin/questions': typeof AdminQuestionsRoute
+  '/admin/roles': typeof AdminRolesRoute
+  '/admin/servers': typeof AdminServersRoute
+  '/admin/site-settings': typeof AdminSiteSettingsRoute
+  '/admin/sonic': typeof AdminSonicRoute
+  '/admin/study-hub': typeof AdminStudyHubRoute
+  '/admin/support': typeof AdminSupportRoute
+  '/admin/theme': typeof AdminThemeRoute
+  '/admin/transfer': typeof AdminTransferRoute
+  '/admin/universities': typeof AdminUniversitiesRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/vision-pro-batch': typeof AdminVisionProBatchRoute
+  '/api/committee-drive-upload': typeof ApiCommitteeDriveUploadRoute
+  '/checkout/success': typeof CheckoutSuccessRoute
+  '/committee/$year': typeof CommitteeYearRouteWithChildren
+  '/committee/study-plan': typeof CommitteeStudyPlanRoute
+  '/courses/$courseId': typeof CoursesCourseIdRouteWithChildren
+  '/guides/$slug': typeof GuidesSlugRoute
+  '/lectures/$courseId': typeof LecturesCourseIdRouteWithChildren
+  '/my/courses': typeof MyCoursesRoute
+  '/my/lectures': typeof MyLecturesRoute
+  '/p/$slug': typeof PSlugRoute
+  '/study-hub/exams': typeof StudyHubExamsRoute
+  '/study-hub/focus': typeof StudyHubFocusRoute
+  '/study-hub/todo': typeof StudyHubTodoRoute
+  '/summaries/$summaryId': typeof SummariesSummaryIdRoute
+  '/summaries/new': typeof SummariesNewRoute
+  '/u/$uniSlug': typeof UUniSlugRoute
+  '/admin/': typeof AdminIndexRoute
+  '/committee/': typeof CommitteeIndexRoute
+  '/courses/': typeof CoursesIndexRoute
+  '/guides/': typeof GuidesIndexRoute
+  '/lectures/': typeof LecturesIndexRoute
+  '/packages/': typeof PackagesIndexRoute
+  '/study-hub/': typeof StudyHubIndexRoute
+  '/summaries/': typeof SummariesIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
+  '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
+  '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
+  '/api/german/tts': typeof ApiGermanTtsRoute
+  '/committee/$year/$subject': typeof CommitteeYearSubjectRoute
+  '/courses/$courseId/checkout': typeof CoursesCourseIdCheckoutRoute
+  '/courses/$courseId/run': typeof CoursesCourseIdRunRoute
+  '/german/$courseId/exam': typeof GermanCourseIdExamRoute
+  '/german/$courseId/match': typeof GermanCourseIdMatchRoute
+  '/german/$courseId/review': typeof GermanCourseIdReviewRouteWithChildren
+  '/german/$courseId/run': typeof GermanCourseIdRunRoute
+  '/german/$courseId/tap': typeof GermanCourseIdTapRoute
+  '/hy/guides/$slug': typeof HyGuidesSlugRoute
+  '/ru/guides/$slug': typeof RuGuidesSlugRoute
+  '/admin/german/': typeof AdminGermanIndexRoute
+  '/admin/pages/': typeof AdminPagesIndexRoute
+  '/committee/$year/': typeof CommitteeYearIndexRoute
+  '/courses/$courseId/': typeof CoursesCourseIdIndexRoute
+  '/german/$courseId/': typeof GermanCourseIdIndexRoute
+  '/hy/guides/': typeof HyGuidesIndexRoute
+  '/lectures/$courseId/': typeof LecturesCourseIdIndexRoute
+  '/ru/guides/': typeof RuGuidesIndexRoute
+  '/admin/german/$courseId/manage': typeof AdminGermanCourseIdManageRoute
+  '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
+  '/german/$courseId/review/run': typeof GermanCourseIdReviewRunRoute
+  '/lectures/$courseId/quiz/$quizId': typeof LecturesCourseIdQuizQuizIdRoute
+  '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
+  '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
+  '/german/$courseId/review/': typeof GermanCourseIdReviewIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/locked': typeof LockedRoute
+  '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
+  '/notes': typeof NotesRoute
+  '/privacy': typeof PrivacyRoute
+  '/profile': typeof ProfileRoute
+  '/refund-policy': typeof RefundPolicyRoute
+  '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/support': typeof SupportRoute
+  '/terms': typeof TermsRoute
+  '/universities': typeof UniversitiesRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/admin/about': typeof AdminAboutRoute
+  '/admin/ai-keys': typeof AdminAiKeysRoute
+  '/admin/backups': typeof AdminBackupsRoute
+  '/admin/committee': typeof AdminCommitteeRoute
+  '/admin/committee-log': typeof AdminCommitteeLogRoute
+  '/admin/content': typeof AdminContentRoute
+  '/admin/content-protection': typeof AdminContentProtectionRoute
+  '/admin/coupons': typeof AdminCouponsRoute
+  '/admin/courses': typeof AdminCoursesRoute
+  '/admin/database': typeof AdminDatabaseRoute
+  '/admin/devices': typeof AdminDevicesRoute
+  '/admin/gemini-keys': typeof AdminGeminiKeysRoute
+  '/admin/groups': typeof AdminGroupsRoute
+  '/admin/jarvis-batch': typeof AdminJarvisBatchRoute
+  '/admin/jarvis-batch-german-ipad': typeof AdminJarvisBatchGermanIpadRoute
+  '/admin/jarvis-batch-v2': typeof AdminJarvisBatchV2Route
+  '/admin/jarvis-batch-v2-ipad': typeof AdminJarvisBatchV2IpadRoute
+  '/admin/lectures': typeof AdminLecturesRoute
+  '/admin/legal': typeof AdminLegalRoute
+  '/admin/marketing': typeof AdminMarketingRoute
+  '/admin/mentor': typeof AdminMentorRoute
+  '/admin/navigation': typeof AdminNavigationRoute
+  '/admin/packages': typeof AdminPackagesRoute
+  '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
+  '/admin/people': typeof AdminPeopleRoute
+  '/admin/question-bank': typeof AdminQuestionBankRoute
+  '/admin/question-generator': typeof AdminQuestionGeneratorRoute
+  '/admin/questions': typeof AdminQuestionsRoute
+  '/admin/roles': typeof AdminRolesRoute
+  '/admin/servers': typeof AdminServersRoute
+  '/admin/site-settings': typeof AdminSiteSettingsRoute
+  '/admin/sonic': typeof AdminSonicRoute
+  '/admin/study-hub': typeof AdminStudyHubRoute
+  '/admin/support': typeof AdminSupportRoute
+  '/admin/theme': typeof AdminThemeRoute
+  '/admin/transfer': typeof AdminTransferRoute
+  '/admin/universities': typeof AdminUniversitiesRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/vision-pro-batch': typeof AdminVisionProBatchRoute
+  '/api/committee-drive-upload': typeof ApiCommitteeDriveUploadRoute
+  '/checkout/success': typeof CheckoutSuccessRoute
+  '/committee/study-plan': typeof CommitteeStudyPlanRoute
+  '/guides/$slug': typeof GuidesSlugRoute
+  '/my/courses': typeof MyCoursesRoute
+  '/my/lectures': typeof MyLecturesRoute
+  '/p/$slug': typeof PSlugRoute
+  '/study-hub/exams': typeof StudyHubExamsRoute
+  '/study-hub/focus': typeof StudyHubFocusRoute
+  '/study-hub/todo': typeof StudyHubTodoRoute
+  '/summaries/$summaryId': typeof SummariesSummaryIdRoute
+  '/summaries/new': typeof SummariesNewRoute
+  '/u/$uniSlug': typeof UUniSlugRoute
+  '/admin': typeof AdminIndexRoute
+  '/committee': typeof CommitteeIndexRoute
+  '/courses': typeof CoursesIndexRoute
+  '/guides': typeof GuidesIndexRoute
+  '/lectures': typeof LecturesIndexRoute
+  '/packages': typeof PackagesIndexRoute
+  '/study-hub': typeof StudyHubIndexRoute
+  '/summaries': typeof SummariesIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
+  '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
+  '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
+  '/api/german/tts': typeof ApiGermanTtsRoute
+  '/committee/$year/$subject': typeof CommitteeYearSubjectRoute
+  '/courses/$courseId/checkout': typeof CoursesCourseIdCheckoutRoute
+  '/courses/$courseId/run': typeof CoursesCourseIdRunRoute
+  '/german/$courseId/exam': typeof GermanCourseIdExamRoute
+  '/german/$courseId/match': typeof GermanCourseIdMatchRoute
+  '/german/$courseId/run': typeof GermanCourseIdRunRoute
+  '/german/$courseId/tap': typeof GermanCourseIdTapRoute
+  '/hy/guides/$slug': typeof HyGuidesSlugRoute
+  '/ru/guides/$slug': typeof RuGuidesSlugRoute
+  '/admin/german': typeof AdminGermanIndexRoute
+  '/admin/pages': typeof AdminPagesIndexRoute
+  '/committee/$year': typeof CommitteeYearIndexRoute
+  '/courses/$courseId': typeof CoursesCourseIdIndexRoute
+  '/german/$courseId': typeof GermanCourseIdIndexRoute
+  '/hy/guides': typeof HyGuidesIndexRoute
+  '/lectures/$courseId': typeof LecturesCourseIdIndexRoute
+  '/ru/guides': typeof RuGuidesIndexRoute
+  '/admin/german/$courseId/manage': typeof AdminGermanCourseIdManageRoute
+  '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
+  '/german/$courseId/review/run': typeof GermanCourseIdReviewRunRoute
+  '/lectures/$courseId/quiz/$quizId': typeof LecturesCourseIdQuizQuizIdRoute
+  '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
+  '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
+  '/german/$courseId/review': typeof GermanCourseIdReviewIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/committee': typeof CommitteeRouteWithChildren
+  '/courses': typeof CoursesRouteWithChildren
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/lectures': typeof LecturesRouteWithChildren
+  '/locked': typeof LockedRoute
+  '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
+  '/notes': typeof NotesRoute
+  '/privacy': typeof PrivacyRoute
+  '/profile': typeof ProfileRoute
+  '/refund-policy': typeof RefundPolicyRoute
+  '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/study-hub': typeof StudyHubRouteWithChildren
+  '/support': typeof SupportRoute
+  '/terms': typeof TermsRoute
+  '/universities': typeof UniversitiesRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/admin/about': typeof AdminAboutRoute
+  '/admin/ai-keys': typeof AdminAiKeysRoute
+  '/admin/backups': typeof AdminBackupsRoute
+  '/admin/committee': typeof AdminCommitteeRoute
+  '/admin/committee-log': typeof AdminCommitteeLogRoute
+  '/admin/content': typeof AdminContentRoute
+  '/admin/content-protection': typeof AdminContentProtectionRoute
+  '/admin/coupons': typeof AdminCouponsRoute
+  '/admin/courses': typeof AdminCoursesRoute
+  '/admin/database': typeof AdminDatabaseRoute
+  '/admin/devices': typeof AdminDevicesRoute
+  '/admin/gemini-keys': typeof AdminGeminiKeysRoute
+  '/admin/german': typeof AdminGermanRouteWithChildren
+  '/admin/groups': typeof AdminGroupsRoute
+  '/admin/jarvis-batch': typeof AdminJarvisBatchRoute
+  '/admin/jarvis-batch-german-ipad': typeof AdminJarvisBatchGermanIpadRoute
+  '/admin/jarvis-batch-v2': typeof AdminJarvisBatchV2Route
+  '/admin/jarvis-batch-v2-ipad': typeof AdminJarvisBatchV2IpadRoute
+  '/admin/lectures': typeof AdminLecturesRoute
+  '/admin/legal': typeof AdminLegalRoute
+  '/admin/marketing': typeof AdminMarketingRoute
+  '/admin/mentor': typeof AdminMentorRoute
+  '/admin/navigation': typeof AdminNavigationRoute
+  '/admin/packages': typeof AdminPackagesRoute
+  '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
+  '/admin/people': typeof AdminPeopleRoute
+  '/admin/question-bank': typeof AdminQuestionBankRoute
+  '/admin/question-generator': typeof AdminQuestionGeneratorRoute
+  '/admin/questions': typeof AdminQuestionsRoute
+  '/admin/roles': typeof AdminRolesRoute
+  '/admin/servers': typeof AdminServersRoute
+  '/admin/site-settings': typeof AdminSiteSettingsRoute
+  '/admin/sonic': typeof AdminSonicRoute
+  '/admin/study-hub': typeof AdminStudyHubRoute
+  '/admin/support': typeof AdminSupportRoute
+  '/admin/theme': typeof AdminThemeRoute
+  '/admin/transfer': typeof AdminTransferRoute
+  '/admin/universities': typeof AdminUniversitiesRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/vision-pro-batch': typeof AdminVisionProBatchRoute
+  '/api/committee-drive-upload': typeof ApiCommitteeDriveUploadRoute
+  '/checkout/success': typeof CheckoutSuccessRoute
+  '/committee/$year': typeof CommitteeYearRouteWithChildren
+  '/committee/study-plan': typeof CommitteeStudyPlanRoute
+  '/courses/$courseId': typeof CoursesCourseIdRouteWithChildren
+  '/guides/$slug': typeof GuidesSlugRoute
+  '/lectures/$courseId': typeof LecturesCourseIdRouteWithChildren
+  '/my/courses': typeof MyCoursesRoute
+  '/my/lectures': typeof MyLecturesRoute
+  '/p/$slug': typeof PSlugRoute
+  '/study-hub/exams': typeof StudyHubExamsRoute
+  '/study-hub/focus': typeof StudyHubFocusRoute
+  '/study-hub/todo': typeof StudyHubTodoRoute
+  '/summaries/$summaryId': typeof SummariesSummaryIdRoute
+  '/summaries/new': typeof SummariesNewRoute
+  '/u/$uniSlug': typeof UUniSlugRoute
+  '/admin/': typeof AdminIndexRoute
+  '/committee/': typeof CommitteeIndexRoute
+  '/courses/': typeof CoursesIndexRoute
+  '/guides/': typeof GuidesIndexRoute
+  '/lectures/': typeof LecturesIndexRoute
+  '/packages/': typeof PackagesIndexRoute
+  '/study-hub/': typeof StudyHubIndexRoute
+  '/summaries/': typeof SummariesIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
+  '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
+  '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
+  '/api/german/tts': typeof ApiGermanTtsRoute
+  '/committee/$year/$subject': typeof CommitteeYearSubjectRoute
+  '/courses/$courseId/checkout': typeof CoursesCourseIdCheckoutRoute
+  '/courses/$courseId/run': typeof CoursesCourseIdRunRoute
+  '/german/$courseId/exam': typeof GermanCourseIdExamRoute
+  '/german/$courseId/match': typeof GermanCourseIdMatchRoute
+  '/german/$courseId/review': typeof GermanCourseIdReviewRouteWithChildren
+  '/german/$courseId/run': typeof GermanCourseIdRunRoute
+  '/german/$courseId/tap': typeof GermanCourseIdTapRoute
+  '/hy/guides/$slug': typeof HyGuidesSlugRoute
+  '/ru/guides/$slug': typeof RuGuidesSlugRoute
+  '/admin/german/': typeof AdminGermanIndexRoute
+  '/admin/pages/': typeof AdminPagesIndexRoute
+  '/committee/$year/': typeof CommitteeYearIndexRoute
+  '/courses/$courseId/': typeof CoursesCourseIdIndexRoute
+  '/german/$courseId/': typeof GermanCourseIdIndexRoute
+  '/hy/guides/': typeof HyGuidesIndexRoute
+  '/lectures/$courseId/': typeof LecturesCourseIdIndexRoute
+  '/ru/guides/': typeof RuGuidesIndexRoute
+  '/admin/german/$courseId/manage': typeof AdminGermanCourseIdManageRoute
+  '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
+  '/german/$courseId/review/run': typeof GermanCourseIdReviewRunRoute
+  '/lectures/$courseId/quiz/$quizId': typeof LecturesCourseIdQuizQuizIdRoute
+  '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
+  '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
+  '/german/$courseId/review/': typeof GermanCourseIdReviewIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/committee'
+    | '/courses'
+    | '/forgot-password'
+    | '/lectures'
+    | '/locked'
+    | '/login'
+    | '/mcp'
+    | '/notes'
+    | '/privacy'
+    | '/profile'
+    | '/refund-policy'
+    | '/register'
+    | '/reset-password'
+    | '/sitemap.xml'
+    | '/study-hub'
+    | '/support'
+    | '/terms'
+    | '/universities'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
+    | '/admin/about'
+    | '/admin/ai-keys'
+    | '/admin/backups'
+    | '/admin/committee'
+    | '/admin/committee-log'
+    | '/admin/content'
+    | '/admin/content-protection'
+    | '/admin/coupons'
+    | '/admin/courses'
+    | '/admin/database'
+    | '/admin/devices'
+    | '/admin/gemini-keys'
+    | '/admin/german'
+    | '/admin/groups'
+    | '/admin/jarvis-batch'
+    | '/admin/jarvis-batch-german-ipad'
+    | '/admin/jarvis-batch-v2'
+    | '/admin/jarvis-batch-v2-ipad'
+    | '/admin/lectures'
+    | '/admin/legal'
+    | '/admin/marketing'
+    | '/admin/mentor'
+    | '/admin/navigation'
+    | '/admin/packages'
+    | '/admin/pdf-slicer'
+    | '/admin/people'
+    | '/admin/question-bank'
+    | '/admin/question-generator'
+    | '/admin/questions'
+    | '/admin/roles'
+    | '/admin/servers'
+    | '/admin/site-settings'
+    | '/admin/sonic'
+    | '/admin/study-hub'
+    | '/admin/support'
+    | '/admin/theme'
+    | '/admin/transfer'
+    | '/admin/universities'
+    | '/admin/users'
+    | '/admin/vision-pro-batch'
+    | '/api/committee-drive-upload'
+    | '/checkout/success'
+    | '/committee/$year'
+    | '/committee/study-plan'
+    | '/courses/$courseId'
+    | '/guides/$slug'
+    | '/lectures/$courseId'
+    | '/my/courses'
+    | '/my/lectures'
+    | '/p/$slug'
+    | '/study-hub/exams'
+    | '/study-hub/focus'
+    | '/study-hub/todo'
+    | '/summaries/$summaryId'
+    | '/summaries/new'
+    | '/u/$uniSlug'
+    | '/admin/'
+    | '/committee/'
+    | '/courses/'
+    | '/guides/'
+    | '/lectures/'
+    | '/packages/'
+    | '/study-hub/'
+    | '/summaries/'
+    | '/.lovable/oauth/consent'
+    | '/.mcp/invoke-tool/$tool'
+    | '/admin/german/$courseId'
+    | '/admin/pages/$pageId'
+    | '/admin/uni-tiles/$uniId'
+    | '/api/german/tts'
+    | '/committee/$year/$subject'
+    | '/courses/$courseId/checkout'
+    | '/courses/$courseId/run'
+    | '/german/$courseId/exam'
+    | '/german/$courseId/match'
+    | '/german/$courseId/review'
+    | '/german/$courseId/run'
+    | '/german/$courseId/tap'
+    | '/hy/guides/$slug'
+    | '/ru/guides/$slug'
+    | '/admin/german/'
+    | '/admin/pages/'
+    | '/committee/$year/'
+    | '/courses/$courseId/'
+    | '/german/$courseId/'
+    | '/hy/guides/'
+    | '/lectures/$courseId/'
+    | '/ru/guides/'
+    | '/admin/german/$courseId/manage'
+    | '/api/public/payments/webhook'
+    | '/german/$courseId/review/run'
+    | '/lectures/$courseId/quiz/$quizId'
+    | '/lovable/email/auth/preview'
+    | '/lovable/email/auth/webhook'
+    | '/german/$courseId/review/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/about'
+    | '/forgot-password'
+    | '/locked'
+    | '/login'
+    | '/mcp'
+    | '/notes'
+    | '/privacy'
+    | '/profile'
+    | '/refund-policy'
+    | '/register'
+    | '/reset-password'
+    | '/sitemap.xml'
+    | '/support'
+    | '/terms'
+    | '/universities'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
+    | '/admin/about'
+    | '/admin/ai-keys'
+    | '/admin/backups'
+    | '/admin/committee'
+    | '/admin/committee-log'
+    | '/admin/content'
+    | '/admin/content-protection'
+    | '/admin/coupons'
+    | '/admin/courses'
+    | '/admin/database'
+    | '/admin/devices'
+    | '/admin/gemini-keys'
+    | '/admin/groups'
+    | '/admin/jarvis-batch'
+    | '/admin/jarvis-batch-german-ipad'
+    | '/admin/jarvis-batch-v2'
+    | '/admin/jarvis-batch-v2-ipad'
+    | '/admin/lectures'
+    | '/admin/legal'
+    | '/admin/marketing'
+    | '/admin/mentor'
+    | '/admin/navigation'
+    | '/admin/packages'
+    | '/admin/pdf-slicer'
+    | '/admin/people'
+    | '/admin/question-bank'
+    | '/admin/question-generator'
+    | '/admin/questions'
+    | '/admin/roles'
+    | '/admin/servers'
+    | '/admin/site-settings'
+    | '/admin/sonic'
+    | '/admin/study-hub'
+    | '/admin/support'
+    | '/admin/theme'
+    | '/admin/transfer'
+    | '/admin/universities'
+    | '/admin/users'
+    | '/admin/vision-pro-batch'
+    | '/api/committee-drive-upload'
+    | '/checkout/success'
+    | '/committee/study-plan'
+    | '/guides/$slug'
+    | '/my/courses'
+    | '/my/lectures'
+    | '/p/$slug'
+    | '/study-hub/exams'
+    | '/study-hub/focus'
+    | '/study-hub/todo'
+    | '/summaries/$summaryId'
+    | '/summaries/new'
+    | '/u/$uniSlug'
+    | '/admin'
+    | '/committee'
+    | '/courses'
+    | '/guides'
+    | '/lectures'
+    | '/packages'
+    | '/study-hub'
+    | '/summaries'
+    | '/.lovable/oauth/consent'
+    | '/.mcp/invoke-tool/$tool'
+    | '/admin/german/$courseId'
+    | '/admin/pages/$pageId'
+    | '/admin/uni-tiles/$uniId'
+    | '/api/german/tts'
+    | '/committee/$year/$subject'
+    | '/courses/$courseId/checkout'
+    | '/courses/$courseId/run'
+    | '/german/$courseId/exam'
+    | '/german/$courseId/match'
+    | '/german/$courseId/run'
+    | '/german/$courseId/tap'
+    | '/hy/guides/$slug'
+    | '/ru/guides/$slug'
+    | '/admin/german'
+    | '/admin/pages'
+    | '/committee/$year'
+    | '/courses/$courseId'
+    | '/german/$courseId'
+    | '/hy/guides'
+    | '/lectures/$courseId'
+    | '/ru/guides'
+    | '/admin/german/$courseId/manage'
+    | '/api/public/payments/webhook'
+    | '/german/$courseId/review/run'
+    | '/lectures/$courseId/quiz/$quizId'
+    | '/lovable/email/auth/preview'
+    | '/lovable/email/auth/webhook'
+    | '/german/$courseId/review'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/committee'
+    | '/courses'
+    | '/forgot-password'
+    | '/lectures'
+    | '/locked'
+    | '/login'
+    | '/mcp'
+    | '/notes'
+    | '/privacy'
+    | '/profile'
+    | '/refund-policy'
+    | '/register'
+    | '/reset-password'
+    | '/sitemap.xml'
+    | '/study-hub'
+    | '/support'
+    | '/terms'
+    | '/universities'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
+    | '/admin/about'
+    | '/admin/ai-keys'
+    | '/admin/backups'
+    | '/admin/committee'
+    | '/admin/committee-log'
+    | '/admin/content'
+    | '/admin/content-protection'
+    | '/admin/coupons'
+    | '/admin/courses'
+    | '/admin/database'
+    | '/admin/devices'
+    | '/admin/gemini-keys'
+    | '/admin/german'
+    | '/admin/groups'
+    | '/admin/jarvis-batch'
+    | '/admin/jarvis-batch-german-ipad'
+    | '/admin/jarvis-batch-v2'
+    | '/admin/jarvis-batch-v2-ipad'
+    | '/admin/lectures'
+    | '/admin/legal'
+    | '/admin/marketing'
+    | '/admin/mentor'
+    | '/admin/navigation'
+    | '/admin/packages'
+    | '/admin/pdf-slicer'
+    | '/admin/people'
+    | '/admin/question-bank'
+    | '/admin/question-generator'
+    | '/admin/questions'
+    | '/admin/roles'
+    | '/admin/servers'
+    | '/admin/site-settings'
+    | '/admin/sonic'
+    | '/admin/study-hub'
+    | '/admin/support'
+    | '/admin/theme'
+    | '/admin/transfer'
+    | '/admin/universities'
+    | '/admin/users'
+    | '/admin/vision-pro-batch'
+    | '/api/committee-drive-upload'
+    | '/checkout/success'
+    | '/committee/$year'
+    | '/committee/study-plan'
+    | '/courses/$courseId'
+    | '/guides/$slug'
+    | '/lectures/$courseId'
+    | '/my/courses'
+    | '/my/lectures'
+    | '/p/$slug'
+    | '/study-hub/exams'
+    | '/study-hub/focus'
+    | '/study-hub/todo'
+    | '/summaries/$summaryId'
+    | '/summaries/new'
+    | '/u/$uniSlug'
+    | '/admin/'
+    | '/committee/'
+    | '/courses/'
+    | '/guides/'
+    | '/lectures/'
+    | '/packages/'
+    | '/study-hub/'
+    | '/summaries/'
+    | '/.lovable/oauth/consent'
+    | '/.mcp/invoke-tool/$tool'
+    | '/admin/german/$courseId'
+    | '/admin/pages/$pageId'
+    | '/admin/uni-tiles/$uniId'
+    | '/api/german/tts'
+    | '/committee/$year/$subject'
+    | '/courses/$courseId/checkout'
+    | '/courses/$courseId/run'
+    | '/german/$courseId/exam'
+    | '/german/$courseId/match'
+    | '/german/$courseId/review'
+    | '/german/$courseId/run'
+    | '/german/$courseId/tap'
+    | '/hy/guides/$slug'
+    | '/ru/guides/$slug'
+    | '/admin/german/'
+    | '/admin/pages/'
+    | '/committee/$year/'
+    | '/courses/$courseId/'
+    | '/german/$courseId/'
+    | '/hy/guides/'
+    | '/lectures/$courseId/'
+    | '/ru/guides/'
+    | '/admin/german/$courseId/manage'
+    | '/api/public/payments/webhook'
+    | '/german/$courseId/review/run'
+    | '/lectures/$courseId/quiz/$quizId'
+    | '/lovable/email/auth/preview'
+    | '/lovable/email/auth/webhook'
+    | '/german/$courseId/review/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AboutRoute: typeof AboutRoute
+  CommitteeRoute: typeof CommitteeRouteWithChildren
+  CoursesRoute: typeof CoursesRouteWithChildren
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
+  LecturesRoute: typeof LecturesRouteWithChildren
+  LockedRoute: typeof LockedRoute
+  LoginRoute: typeof LoginRoute
+  McpRoute: typeof McpRoute
+  NotesRoute: typeof NotesRoute
+  PrivacyRoute: typeof PrivacyRoute
+  ProfileRoute: typeof ProfileRoute
+  RefundPolicyRoute: typeof RefundPolicyRoute
+  RegisterRoute: typeof RegisterRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  StudyHubRoute: typeof StudyHubRouteWithChildren
+  SupportRoute: typeof SupportRoute
+  TermsRoute: typeof TermsRoute
+  UniversitiesRoute: typeof UniversitiesRoute
+  Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
+  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  AdminAboutRoute: typeof AdminAboutRoute
+  AdminAiKeysRoute: typeof AdminAiKeysRoute
+  AdminBackupsRoute: typeof AdminBackupsRoute
+  AdminCommitteeRoute: typeof AdminCommitteeRoute
+  AdminCommitteeLogRoute: typeof AdminCommitteeLogRoute
+  AdminContentRoute: typeof AdminContentRoute
+  AdminContentProtectionRoute: typeof AdminContentProtectionRoute
+  AdminCouponsRoute: typeof AdminCouponsRoute
+  AdminCoursesRoute: typeof AdminCoursesRoute
+  AdminDatabaseRoute: typeof AdminDatabaseRoute
+  AdminDevicesRoute: typeof AdminDevicesRoute
+  AdminGeminiKeysRoute: typeof AdminGeminiKeysRoute
+  AdminGermanRoute: typeof AdminGermanRouteWithChildren
+  AdminGroupsRoute: typeof AdminGroupsRoute
+  AdminJarvisBatchRoute: typeof AdminJarvisBatchRoute
+  AdminJarvisBatchGermanIpadRoute: typeof AdminJarvisBatchGermanIpadRoute
+  AdminJarvisBatchV2Route: typeof AdminJarvisBatchV2Route
+  AdminJarvisBatchV2IpadRoute: typeof AdminJarvisBatchV2IpadRoute
+  AdminLecturesRoute: typeof AdminLecturesRoute
+  AdminLegalRoute: typeof AdminLegalRoute
+  AdminMarketingRoute: typeof AdminMarketingRoute
+  AdminMentorRoute: typeof AdminMentorRoute
+  AdminNavigationRoute: typeof AdminNavigationRoute
+  AdminPackagesRoute: typeof AdminPackagesRoute
+  AdminPdfSlicerRoute: typeof AdminPdfSlicerRoute
+  AdminPeopleRoute: typeof AdminPeopleRoute
+  AdminQuestionBankRoute: typeof AdminQuestionBankRoute
+  AdminQuestionGeneratorRoute: typeof AdminQuestionGeneratorRoute
+  AdminQuestionsRoute: typeof AdminQuestionsRoute
+  AdminRolesRoute: typeof AdminRolesRoute
+  AdminServersRoute: typeof AdminServersRoute
+  AdminSiteSettingsRoute: typeof AdminSiteSettingsRoute
+  AdminSonicRoute: typeof AdminSonicRoute
+  AdminStudyHubRoute: typeof AdminStudyHubRoute
+  AdminSupportRoute: typeof AdminSupportRoute
+  AdminThemeRoute: typeof AdminThemeRoute
+  AdminTransferRoute: typeof AdminTransferRoute
+  AdminUniversitiesRoute: typeof AdminUniversitiesRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminVisionProBatchRoute: typeof AdminVisionProBatchRoute
+  ApiCommitteeDriveUploadRoute: typeof ApiCommitteeDriveUploadRoute
+  CheckoutSuccessRoute: typeof CheckoutSuccessRoute
+  GuidesSlugRoute: typeof GuidesSlugRoute
+  MyCoursesRoute: typeof MyCoursesRoute
+  MyLecturesRoute: typeof MyLecturesRoute
+  PSlugRoute: typeof PSlugRoute
+  SummariesSummaryIdRoute: typeof SummariesSummaryIdRoute
+  SummariesNewRoute: typeof SummariesNewRoute
+  UUniSlugRoute: typeof UUniSlugRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+  GuidesIndexRoute: typeof GuidesIndexRoute
+  PackagesIndexRoute: typeof PackagesIndexRoute
+  SummariesIndexRoute: typeof SummariesIndexRoute
+  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
+  Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
+  AdminPagesPageIdRoute: typeof AdminPagesPageIdRoute
+  AdminUniTilesUniIdRoute: typeof AdminUniTilesUniIdRoute
+  ApiGermanTtsRoute: typeof ApiGermanTtsRoute
+  GermanCourseIdExamRoute: typeof GermanCourseIdExamRoute
+  GermanCourseIdMatchRoute: typeof GermanCourseIdMatchRoute
+  GermanCourseIdReviewRoute: typeof GermanCourseIdReviewRouteWithChildren
+  GermanCourseIdRunRoute: typeof GermanCourseIdRunRoute
+  GermanCourseIdTapRoute: typeof GermanCourseIdTapRoute
+  HyGuidesSlugRoute: typeof HyGuidesSlugRoute
+  RuGuidesSlugRoute: typeof RuGuidesSlugRoute
+  AdminPagesIndexRoute: typeof AdminPagesIndexRoute
+  GermanCourseIdIndexRoute: typeof GermanCourseIdIndexRoute
+  HyGuidesIndexRoute: typeof HyGuidesIndexRoute
+  RuGuidesIndexRoute: typeof RuGuidesIndexRoute
+  ApiPublicPaymentsWebhookRoute: typeof ApiPublicPaymentsWebhookRoute
+  LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
+  LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +1527,1059 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/committee': {
+      id: '/committee'
+      path: '/committee'
+      fullPath: '/committee'
+      preLoaderRoute: typeof CommitteeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/courses': {
+      id: '/courses'
+      path: '/courses'
+      fullPath: '/courses'
+      preLoaderRoute: typeof CoursesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lectures': {
+      id: '/lectures'
+      path: '/lectures'
+      fullPath: '/lectures'
+      preLoaderRoute: typeof LecturesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/locked': {
+      id: '/locked'
+      path: '/locked'
+      fullPath: '/locked'
+      preLoaderRoute: typeof LockedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notes': {
+      id: '/notes'
+      path: '/notes'
+      fullPath: '/notes'
+      preLoaderRoute: typeof NotesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/refund-policy': {
+      id: '/refund-policy'
+      path: '/refund-policy'
+      fullPath: '/refund-policy'
+      preLoaderRoute: typeof RefundPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/study-hub': {
+      id: '/study-hub'
+      path: '/study-hub'
+      fullPath: '/study-hub'
+      preLoaderRoute: typeof StudyHubRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/support': {
+      id: '/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof SupportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/universities': {
+      id: '/universities'
+      path: '/universities'
+      fullPath: '/universities'
+      preLoaderRoute: typeof UniversitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.mcp/list-tools': {
+      id: '/.mcp/list-tools'
+      path: '/.mcp/list-tools'
+      fullPath: '/.mcp/list-tools'
+      preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/about': {
+      id: '/admin/about'
+      path: '/admin/about'
+      fullPath: '/admin/about'
+      preLoaderRoute: typeof AdminAboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/ai-keys': {
+      id: '/admin/ai-keys'
+      path: '/admin/ai-keys'
+      fullPath: '/admin/ai-keys'
+      preLoaderRoute: typeof AdminAiKeysRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/backups': {
+      id: '/admin/backups'
+      path: '/admin/backups'
+      fullPath: '/admin/backups'
+      preLoaderRoute: typeof AdminBackupsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/committee': {
+      id: '/admin/committee'
+      path: '/admin/committee'
+      fullPath: '/admin/committee'
+      preLoaderRoute: typeof AdminCommitteeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/committee-log': {
+      id: '/admin/committee-log'
+      path: '/admin/committee-log'
+      fullPath: '/admin/committee-log'
+      preLoaderRoute: typeof AdminCommitteeLogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/content': {
+      id: '/admin/content'
+      path: '/admin/content'
+      fullPath: '/admin/content'
+      preLoaderRoute: typeof AdminContentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/content-protection': {
+      id: '/admin/content-protection'
+      path: '/admin/content-protection'
+      fullPath: '/admin/content-protection'
+      preLoaderRoute: typeof AdminContentProtectionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/coupons': {
+      id: '/admin/coupons'
+      path: '/admin/coupons'
+      fullPath: '/admin/coupons'
+      preLoaderRoute: typeof AdminCouponsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/courses': {
+      id: '/admin/courses'
+      path: '/admin/courses'
+      fullPath: '/admin/courses'
+      preLoaderRoute: typeof AdminCoursesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/database': {
+      id: '/admin/database'
+      path: '/admin/database'
+      fullPath: '/admin/database'
+      preLoaderRoute: typeof AdminDatabaseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/devices': {
+      id: '/admin/devices'
+      path: '/admin/devices'
+      fullPath: '/admin/devices'
+      preLoaderRoute: typeof AdminDevicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/gemini-keys': {
+      id: '/admin/gemini-keys'
+      path: '/admin/gemini-keys'
+      fullPath: '/admin/gemini-keys'
+      preLoaderRoute: typeof AdminGeminiKeysRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/german': {
+      id: '/admin/german'
+      path: '/admin/german'
+      fullPath: '/admin/german'
+      preLoaderRoute: typeof AdminGermanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/groups': {
+      id: '/admin/groups'
+      path: '/admin/groups'
+      fullPath: '/admin/groups'
+      preLoaderRoute: typeof AdminGroupsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/jarvis-batch': {
+      id: '/admin/jarvis-batch'
+      path: '/admin/jarvis-batch'
+      fullPath: '/admin/jarvis-batch'
+      preLoaderRoute: typeof AdminJarvisBatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/jarvis-batch-german-ipad': {
+      id: '/admin/jarvis-batch-german-ipad'
+      path: '/admin/jarvis-batch-german-ipad'
+      fullPath: '/admin/jarvis-batch-german-ipad'
+      preLoaderRoute: typeof AdminJarvisBatchGermanIpadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/jarvis-batch-v2': {
+      id: '/admin/jarvis-batch-v2'
+      path: '/admin/jarvis-batch-v2'
+      fullPath: '/admin/jarvis-batch-v2'
+      preLoaderRoute: typeof AdminJarvisBatchV2RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/jarvis-batch-v2-ipad': {
+      id: '/admin/jarvis-batch-v2-ipad'
+      path: '/admin/jarvis-batch-v2-ipad'
+      fullPath: '/admin/jarvis-batch-v2-ipad'
+      preLoaderRoute: typeof AdminJarvisBatchV2IpadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/lectures': {
+      id: '/admin/lectures'
+      path: '/admin/lectures'
+      fullPath: '/admin/lectures'
+      preLoaderRoute: typeof AdminLecturesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/legal': {
+      id: '/admin/legal'
+      path: '/admin/legal'
+      fullPath: '/admin/legal'
+      preLoaderRoute: typeof AdminLegalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/marketing': {
+      id: '/admin/marketing'
+      path: '/admin/marketing'
+      fullPath: '/admin/marketing'
+      preLoaderRoute: typeof AdminMarketingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/mentor': {
+      id: '/admin/mentor'
+      path: '/admin/mentor'
+      fullPath: '/admin/mentor'
+      preLoaderRoute: typeof AdminMentorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/navigation': {
+      id: '/admin/navigation'
+      path: '/admin/navigation'
+      fullPath: '/admin/navigation'
+      preLoaderRoute: typeof AdminNavigationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/packages': {
+      id: '/admin/packages'
+      path: '/admin/packages'
+      fullPath: '/admin/packages'
+      preLoaderRoute: typeof AdminPackagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/pdf-slicer': {
+      id: '/admin/pdf-slicer'
+      path: '/admin/pdf-slicer'
+      fullPath: '/admin/pdf-slicer'
+      preLoaderRoute: typeof AdminPdfSlicerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/people': {
+      id: '/admin/people'
+      path: '/admin/people'
+      fullPath: '/admin/people'
+      preLoaderRoute: typeof AdminPeopleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/question-bank': {
+      id: '/admin/question-bank'
+      path: '/admin/question-bank'
+      fullPath: '/admin/question-bank'
+      preLoaderRoute: typeof AdminQuestionBankRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/question-generator': {
+      id: '/admin/question-generator'
+      path: '/admin/question-generator'
+      fullPath: '/admin/question-generator'
+      preLoaderRoute: typeof AdminQuestionGeneratorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/questions': {
+      id: '/admin/questions'
+      path: '/admin/questions'
+      fullPath: '/admin/questions'
+      preLoaderRoute: typeof AdminQuestionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/roles': {
+      id: '/admin/roles'
+      path: '/admin/roles'
+      fullPath: '/admin/roles'
+      preLoaderRoute: typeof AdminRolesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/servers': {
+      id: '/admin/servers'
+      path: '/admin/servers'
+      fullPath: '/admin/servers'
+      preLoaderRoute: typeof AdminServersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/site-settings': {
+      id: '/admin/site-settings'
+      path: '/admin/site-settings'
+      fullPath: '/admin/site-settings'
+      preLoaderRoute: typeof AdminSiteSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/sonic': {
+      id: '/admin/sonic'
+      path: '/admin/sonic'
+      fullPath: '/admin/sonic'
+      preLoaderRoute: typeof AdminSonicRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/study-hub': {
+      id: '/admin/study-hub'
+      path: '/admin/study-hub'
+      fullPath: '/admin/study-hub'
+      preLoaderRoute: typeof AdminStudyHubRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/support': {
+      id: '/admin/support'
+      path: '/admin/support'
+      fullPath: '/admin/support'
+      preLoaderRoute: typeof AdminSupportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/theme': {
+      id: '/admin/theme'
+      path: '/admin/theme'
+      fullPath: '/admin/theme'
+      preLoaderRoute: typeof AdminThemeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/transfer': {
+      id: '/admin/transfer'
+      path: '/admin/transfer'
+      fullPath: '/admin/transfer'
+      preLoaderRoute: typeof AdminTransferRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/universities': {
+      id: '/admin/universities'
+      path: '/admin/universities'
+      fullPath: '/admin/universities'
+      preLoaderRoute: typeof AdminUniversitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/admin/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/vision-pro-batch': {
+      id: '/admin/vision-pro-batch'
+      path: '/admin/vision-pro-batch'
+      fullPath: '/admin/vision-pro-batch'
+      preLoaderRoute: typeof AdminVisionProBatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/committee-drive-upload': {
+      id: '/api/committee-drive-upload'
+      path: '/api/committee-drive-upload'
+      fullPath: '/api/committee-drive-upload'
+      preLoaderRoute: typeof ApiCommitteeDriveUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checkout/success': {
+      id: '/checkout/success'
+      path: '/checkout/success'
+      fullPath: '/checkout/success'
+      preLoaderRoute: typeof CheckoutSuccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/committee/': {
+      id: '/committee/'
+      path: '/'
+      fullPath: '/committee/'
+      preLoaderRoute: typeof CommitteeIndexRouteImport
+      parentRoute: typeof CommitteeRoute
+    }
+    '/committee/$year': {
+      id: '/committee/$year'
+      path: '/$year'
+      fullPath: '/committee/$year'
+      preLoaderRoute: typeof CommitteeYearRouteImport
+      parentRoute: typeof CommitteeRoute
+    }
+    '/committee/study-plan': {
+      id: '/committee/study-plan'
+      path: '/study-plan'
+      fullPath: '/committee/study-plan'
+      preLoaderRoute: typeof CommitteeStudyPlanRouteImport
+      parentRoute: typeof CommitteeRoute
+    }
+    '/courses/': {
+      id: '/courses/'
+      path: '/'
+      fullPath: '/courses/'
+      preLoaderRoute: typeof CoursesIndexRouteImport
+      parentRoute: typeof CoursesRoute
+    }
+    '/courses/$courseId': {
+      id: '/courses/$courseId'
+      path: '/$courseId'
+      fullPath: '/courses/$courseId'
+      preLoaderRoute: typeof CoursesCourseIdRouteImport
+      parentRoute: typeof CoursesRoute
+    }
+    '/guides/': {
+      id: '/guides/'
+      path: '/guides'
+      fullPath: '/guides/'
+      preLoaderRoute: typeof GuidesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guides/$slug': {
+      id: '/guides/$slug'
+      path: '/guides/$slug'
+      fullPath: '/guides/$slug'
+      preLoaderRoute: typeof GuidesSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lectures/': {
+      id: '/lectures/'
+      path: '/'
+      fullPath: '/lectures/'
+      preLoaderRoute: typeof LecturesIndexRouteImport
+      parentRoute: typeof LecturesRoute
+    }
+    '/lectures/$courseId': {
+      id: '/lectures/$courseId'
+      path: '/$courseId'
+      fullPath: '/lectures/$courseId'
+      preLoaderRoute: typeof LecturesCourseIdRouteImport
+      parentRoute: typeof LecturesRoute
+    }
+    '/my/courses': {
+      id: '/my/courses'
+      path: '/my/courses'
+      fullPath: '/my/courses'
+      preLoaderRoute: typeof MyCoursesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/my/lectures': {
+      id: '/my/lectures'
+      path: '/my/lectures'
+      fullPath: '/my/lectures'
+      preLoaderRoute: typeof MyLecturesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/p/$slug': {
+      id: '/p/$slug'
+      path: '/p/$slug'
+      fullPath: '/p/$slug'
+      preLoaderRoute: typeof PSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/packages/': {
+      id: '/packages/'
+      path: '/packages'
+      fullPath: '/packages/'
+      preLoaderRoute: typeof PackagesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/study-hub/': {
+      id: '/study-hub/'
+      path: '/'
+      fullPath: '/study-hub/'
+      preLoaderRoute: typeof StudyHubIndexRouteImport
+      parentRoute: typeof StudyHubRoute
+    }
+    '/study-hub/exams': {
+      id: '/study-hub/exams'
+      path: '/exams'
+      fullPath: '/study-hub/exams'
+      preLoaderRoute: typeof StudyHubExamsRouteImport
+      parentRoute: typeof StudyHubRoute
+    }
+    '/study-hub/focus': {
+      id: '/study-hub/focus'
+      path: '/focus'
+      fullPath: '/study-hub/focus'
+      preLoaderRoute: typeof StudyHubFocusRouteImport
+      parentRoute: typeof StudyHubRoute
+    }
+    '/study-hub/todo': {
+      id: '/study-hub/todo'
+      path: '/todo'
+      fullPath: '/study-hub/todo'
+      preLoaderRoute: typeof StudyHubTodoRouteImport
+      parentRoute: typeof StudyHubRoute
+    }
+    '/summaries/': {
+      id: '/summaries/'
+      path: '/summaries'
+      fullPath: '/summaries/'
+      preLoaderRoute: typeof SummariesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/summaries/$summaryId': {
+      id: '/summaries/$summaryId'
+      path: '/summaries/$summaryId'
+      fullPath: '/summaries/$summaryId'
+      preLoaderRoute: typeof SummariesSummaryIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/summaries/new': {
+      id: '/summaries/new'
+      path: '/summaries/new'
+      fullPath: '/summaries/new'
+      preLoaderRoute: typeof SummariesNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/u/$uniSlug': {
+      id: '/u/$uniSlug'
+      path: '/u/$uniSlug'
+      fullPath: '/u/$uniSlug'
+      preLoaderRoute: typeof UUniSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.mcp/invoke-tool/$tool': {
+      id: '/.mcp/invoke-tool/$tool'
+      path: '/.mcp/invoke-tool/$tool'
+      fullPath: '/.mcp/invoke-tool/$tool'
+      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/german/': {
+      id: '/admin/german/'
+      path: '/'
+      fullPath: '/admin/german/'
+      preLoaderRoute: typeof AdminGermanIndexRouteImport
+      parentRoute: typeof AdminGermanRoute
+    }
+    '/admin/german/$courseId': {
+      id: '/admin/german/$courseId'
+      path: '/$courseId'
+      fullPath: '/admin/german/$courseId'
+      preLoaderRoute: typeof AdminGermanCourseIdRouteImport
+      parentRoute: typeof AdminGermanRoute
+    }
+    '/admin/pages/': {
+      id: '/admin/pages/'
+      path: '/admin/pages'
+      fullPath: '/admin/pages/'
+      preLoaderRoute: typeof AdminPagesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/pages/$pageId': {
+      id: '/admin/pages/$pageId'
+      path: '/admin/pages/$pageId'
+      fullPath: '/admin/pages/$pageId'
+      preLoaderRoute: typeof AdminPagesPageIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/uni-tiles/$uniId': {
+      id: '/admin/uni-tiles/$uniId'
+      path: '/admin/uni-tiles/$uniId'
+      fullPath: '/admin/uni-tiles/$uniId'
+      preLoaderRoute: typeof AdminUniTilesUniIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/german/tts': {
+      id: '/api/german/tts'
+      path: '/api/german/tts'
+      fullPath: '/api/german/tts'
+      preLoaderRoute: typeof ApiGermanTtsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/committee/$year/': {
+      id: '/committee/$year/'
+      path: '/'
+      fullPath: '/committee/$year/'
+      preLoaderRoute: typeof CommitteeYearIndexRouteImport
+      parentRoute: typeof CommitteeYearRoute
+    }
+    '/committee/$year/$subject': {
+      id: '/committee/$year/$subject'
+      path: '/$subject'
+      fullPath: '/committee/$year/$subject'
+      preLoaderRoute: typeof CommitteeYearSubjectRouteImport
+      parentRoute: typeof CommitteeYearRoute
+    }
+    '/courses/$courseId/': {
+      id: '/courses/$courseId/'
+      path: '/'
+      fullPath: '/courses/$courseId/'
+      preLoaderRoute: typeof CoursesCourseIdIndexRouteImport
+      parentRoute: typeof CoursesCourseIdRoute
+    }
+    '/courses/$courseId/checkout': {
+      id: '/courses/$courseId/checkout'
+      path: '/checkout'
+      fullPath: '/courses/$courseId/checkout'
+      preLoaderRoute: typeof CoursesCourseIdCheckoutRouteImport
+      parentRoute: typeof CoursesCourseIdRoute
+    }
+    '/courses/$courseId/run': {
+      id: '/courses/$courseId/run'
+      path: '/run'
+      fullPath: '/courses/$courseId/run'
+      preLoaderRoute: typeof CoursesCourseIdRunRouteImport
+      parentRoute: typeof CoursesCourseIdRoute
+    }
+    '/german/$courseId/': {
+      id: '/german/$courseId/'
+      path: '/german/$courseId'
+      fullPath: '/german/$courseId/'
+      preLoaderRoute: typeof GermanCourseIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/german/$courseId/exam': {
+      id: '/german/$courseId/exam'
+      path: '/german/$courseId/exam'
+      fullPath: '/german/$courseId/exam'
+      preLoaderRoute: typeof GermanCourseIdExamRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/german/$courseId/match': {
+      id: '/german/$courseId/match'
+      path: '/german/$courseId/match'
+      fullPath: '/german/$courseId/match'
+      preLoaderRoute: typeof GermanCourseIdMatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/german/$courseId/review': {
+      id: '/german/$courseId/review'
+      path: '/german/$courseId/review'
+      fullPath: '/german/$courseId/review'
+      preLoaderRoute: typeof GermanCourseIdReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/german/$courseId/run': {
+      id: '/german/$courseId/run'
+      path: '/german/$courseId/run'
+      fullPath: '/german/$courseId/run'
+      preLoaderRoute: typeof GermanCourseIdRunRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/german/$courseId/tap': {
+      id: '/german/$courseId/tap'
+      path: '/german/$courseId/tap'
+      fullPath: '/german/$courseId/tap'
+      preLoaderRoute: typeof GermanCourseIdTapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hy/guides/': {
+      id: '/hy/guides/'
+      path: '/hy/guides'
+      fullPath: '/hy/guides/'
+      preLoaderRoute: typeof HyGuidesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hy/guides/$slug': {
+      id: '/hy/guides/$slug'
+      path: '/hy/guides/$slug'
+      fullPath: '/hy/guides/$slug'
+      preLoaderRoute: typeof HyGuidesSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lectures/$courseId/': {
+      id: '/lectures/$courseId/'
+      path: '/'
+      fullPath: '/lectures/$courseId/'
+      preLoaderRoute: typeof LecturesCourseIdIndexRouteImport
+      parentRoute: typeof LecturesCourseIdRoute
+    }
+    '/ru/guides/': {
+      id: '/ru/guides/'
+      path: '/ru/guides'
+      fullPath: '/ru/guides/'
+      preLoaderRoute: typeof RuGuidesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ru/guides/$slug': {
+      id: '/ru/guides/$slug'
+      path: '/ru/guides/$slug'
+      fullPath: '/ru/guides/$slug'
+      preLoaderRoute: typeof RuGuidesSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/german/$courseId/manage': {
+      id: '/admin/german/$courseId/manage'
+      path: '/manage'
+      fullPath: '/admin/german/$courseId/manage'
+      preLoaderRoute: typeof AdminGermanCourseIdManageRouteImport
+      parentRoute: typeof AdminGermanCourseIdRoute
+    }
+    '/api/public/payments/webhook': {
+      id: '/api/public/payments/webhook'
+      path: '/api/public/payments/webhook'
+      fullPath: '/api/public/payments/webhook'
+      preLoaderRoute: typeof ApiPublicPaymentsWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/german/$courseId/review/': {
+      id: '/german/$courseId/review/'
+      path: '/'
+      fullPath: '/german/$courseId/review/'
+      preLoaderRoute: typeof GermanCourseIdReviewIndexRouteImport
+      parentRoute: typeof GermanCourseIdReviewRoute
+    }
+    '/german/$courseId/review/run': {
+      id: '/german/$courseId/review/run'
+      path: '/run'
+      fullPath: '/german/$courseId/review/run'
+      preLoaderRoute: typeof GermanCourseIdReviewRunRouteImport
+      parentRoute: typeof GermanCourseIdReviewRoute
+    }
+    '/lectures/$courseId/quiz/$quizId': {
+      id: '/lectures/$courseId/quiz/$quizId'
+      path: '/quiz/$quizId'
+      fullPath: '/lectures/$courseId/quiz/$quizId'
+      preLoaderRoute: typeof LecturesCourseIdQuizQuizIdRouteImport
+      parentRoute: typeof LecturesCourseIdRoute
+    }
+    '/lovable/email/auth/preview': {
+      id: '/lovable/email/auth/preview'
+      path: '/lovable/email/auth/preview'
+      fullPath: '/lovable/email/auth/preview'
+      preLoaderRoute: typeof LovableEmailAuthPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lovable/email/auth/webhook': {
+      id: '/lovable/email/auth/webhook'
+      path: '/lovable/email/auth/webhook'
+      fullPath: '/lovable/email/auth/webhook'
+      preLoaderRoute: typeof LovableEmailAuthWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
+interface CommitteeYearRouteChildren {
+  CommitteeYearSubjectRoute: typeof CommitteeYearSubjectRoute
+  CommitteeYearIndexRoute: typeof CommitteeYearIndexRoute
+}
+
+const CommitteeYearRouteChildren: CommitteeYearRouteChildren = {
+  CommitteeYearSubjectRoute: CommitteeYearSubjectRoute,
+  CommitteeYearIndexRoute: CommitteeYearIndexRoute,
+}
+
+const CommitteeYearRouteWithChildren = CommitteeYearRoute._addFileChildren(
+  CommitteeYearRouteChildren,
+)
+
+interface CommitteeRouteChildren {
+  CommitteeYearRoute: typeof CommitteeYearRouteWithChildren
+  CommitteeStudyPlanRoute: typeof CommitteeStudyPlanRoute
+  CommitteeIndexRoute: typeof CommitteeIndexRoute
+}
+
+const CommitteeRouteChildren: CommitteeRouteChildren = {
+  CommitteeYearRoute: CommitteeYearRouteWithChildren,
+  CommitteeStudyPlanRoute: CommitteeStudyPlanRoute,
+  CommitteeIndexRoute: CommitteeIndexRoute,
+}
+
+const CommitteeRouteWithChildren = CommitteeRoute._addFileChildren(
+  CommitteeRouteChildren,
+)
+
+interface CoursesCourseIdRouteChildren {
+  CoursesCourseIdCheckoutRoute: typeof CoursesCourseIdCheckoutRoute
+  CoursesCourseIdRunRoute: typeof CoursesCourseIdRunRoute
+  CoursesCourseIdIndexRoute: typeof CoursesCourseIdIndexRoute
+}
+
+const CoursesCourseIdRouteChildren: CoursesCourseIdRouteChildren = {
+  CoursesCourseIdCheckoutRoute: CoursesCourseIdCheckoutRoute,
+  CoursesCourseIdRunRoute: CoursesCourseIdRunRoute,
+  CoursesCourseIdIndexRoute: CoursesCourseIdIndexRoute,
+}
+
+const CoursesCourseIdRouteWithChildren = CoursesCourseIdRoute._addFileChildren(
+  CoursesCourseIdRouteChildren,
+)
+
+interface CoursesRouteChildren {
+  CoursesCourseIdRoute: typeof CoursesCourseIdRouteWithChildren
+  CoursesIndexRoute: typeof CoursesIndexRoute
+}
+
+const CoursesRouteChildren: CoursesRouteChildren = {
+  CoursesCourseIdRoute: CoursesCourseIdRouteWithChildren,
+  CoursesIndexRoute: CoursesIndexRoute,
+}
+
+const CoursesRouteWithChildren =
+  CoursesRoute._addFileChildren(CoursesRouteChildren)
+
+interface LecturesCourseIdRouteChildren {
+  LecturesCourseIdIndexRoute: typeof LecturesCourseIdIndexRoute
+  LecturesCourseIdQuizQuizIdRoute: typeof LecturesCourseIdQuizQuizIdRoute
+}
+
+const LecturesCourseIdRouteChildren: LecturesCourseIdRouteChildren = {
+  LecturesCourseIdIndexRoute: LecturesCourseIdIndexRoute,
+  LecturesCourseIdQuizQuizIdRoute: LecturesCourseIdQuizQuizIdRoute,
+}
+
+const LecturesCourseIdRouteWithChildren =
+  LecturesCourseIdRoute._addFileChildren(LecturesCourseIdRouteChildren)
+
+interface LecturesRouteChildren {
+  LecturesCourseIdRoute: typeof LecturesCourseIdRouteWithChildren
+  LecturesIndexRoute: typeof LecturesIndexRoute
+}
+
+const LecturesRouteChildren: LecturesRouteChildren = {
+  LecturesCourseIdRoute: LecturesCourseIdRouteWithChildren,
+  LecturesIndexRoute: LecturesIndexRoute,
+}
+
+const LecturesRouteWithChildren = LecturesRoute._addFileChildren(
+  LecturesRouteChildren,
+)
+
+interface StudyHubRouteChildren {
+  StudyHubExamsRoute: typeof StudyHubExamsRoute
+  StudyHubFocusRoute: typeof StudyHubFocusRoute
+  StudyHubTodoRoute: typeof StudyHubTodoRoute
+  StudyHubIndexRoute: typeof StudyHubIndexRoute
+}
+
+const StudyHubRouteChildren: StudyHubRouteChildren = {
+  StudyHubExamsRoute: StudyHubExamsRoute,
+  StudyHubFocusRoute: StudyHubFocusRoute,
+  StudyHubTodoRoute: StudyHubTodoRoute,
+  StudyHubIndexRoute: StudyHubIndexRoute,
+}
+
+const StudyHubRouteWithChildren = StudyHubRoute._addFileChildren(
+  StudyHubRouteChildren,
+)
+
+interface AdminGermanCourseIdRouteChildren {
+  AdminGermanCourseIdManageRoute: typeof AdminGermanCourseIdManageRoute
+}
+
+const AdminGermanCourseIdRouteChildren: AdminGermanCourseIdRouteChildren = {
+  AdminGermanCourseIdManageRoute: AdminGermanCourseIdManageRoute,
+}
+
+const AdminGermanCourseIdRouteWithChildren =
+  AdminGermanCourseIdRoute._addFileChildren(AdminGermanCourseIdRouteChildren)
+
+interface AdminGermanRouteChildren {
+  AdminGermanCourseIdRoute: typeof AdminGermanCourseIdRouteWithChildren
+  AdminGermanIndexRoute: typeof AdminGermanIndexRoute
+}
+
+const AdminGermanRouteChildren: AdminGermanRouteChildren = {
+  AdminGermanCourseIdRoute: AdminGermanCourseIdRouteWithChildren,
+  AdminGermanIndexRoute: AdminGermanIndexRoute,
+}
+
+const AdminGermanRouteWithChildren = AdminGermanRoute._addFileChildren(
+  AdminGermanRouteChildren,
+)
+
+interface GermanCourseIdReviewRouteChildren {
+  GermanCourseIdReviewRunRoute: typeof GermanCourseIdReviewRunRoute
+  GermanCourseIdReviewIndexRoute: typeof GermanCourseIdReviewIndexRoute
+}
+
+const GermanCourseIdReviewRouteChildren: GermanCourseIdReviewRouteChildren = {
+  GermanCourseIdReviewRunRoute: GermanCourseIdReviewRunRoute,
+  GermanCourseIdReviewIndexRoute: GermanCourseIdReviewIndexRoute,
+}
+
+const GermanCourseIdReviewRouteWithChildren =
+  GermanCourseIdReviewRoute._addFileChildren(GermanCourseIdReviewRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AboutRoute: AboutRoute,
+  CommitteeRoute: CommitteeRouteWithChildren,
+  CoursesRoute: CoursesRouteWithChildren,
+  ForgotPasswordRoute: ForgotPasswordRoute,
+  LecturesRoute: LecturesRouteWithChildren,
+  LockedRoute: LockedRoute,
+  LoginRoute: LoginRoute,
+  McpRoute: McpRoute,
+  NotesRoute: NotesRoute,
+  PrivacyRoute: PrivacyRoute,
+  ProfileRoute: ProfileRoute,
+  RefundPolicyRoute: RefundPolicyRoute,
+  RegisterRoute: RegisterRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
+  StudyHubRoute: StudyHubRouteWithChildren,
+  SupportRoute: SupportRoute,
+  TermsRoute: TermsRoute,
+  UniversitiesRoute: UniversitiesRoute,
+  Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
+  Char91DotwellKnownChar93OauthProtectedResourceRoute:
+    Char91DotwellKnownChar93OauthProtectedResourceRoute,
+  AdminAboutRoute: AdminAboutRoute,
+  AdminAiKeysRoute: AdminAiKeysRoute,
+  AdminBackupsRoute: AdminBackupsRoute,
+  AdminCommitteeRoute: AdminCommitteeRoute,
+  AdminCommitteeLogRoute: AdminCommitteeLogRoute,
+  AdminContentRoute: AdminContentRoute,
+  AdminContentProtectionRoute: AdminContentProtectionRoute,
+  AdminCouponsRoute: AdminCouponsRoute,
+  AdminCoursesRoute: AdminCoursesRoute,
+  AdminDatabaseRoute: AdminDatabaseRoute,
+  AdminDevicesRoute: AdminDevicesRoute,
+  AdminGeminiKeysRoute: AdminGeminiKeysRoute,
+  AdminGermanRoute: AdminGermanRouteWithChildren,
+  AdminGroupsRoute: AdminGroupsRoute,
+  AdminJarvisBatchRoute: AdminJarvisBatchRoute,
+  AdminJarvisBatchGermanIpadRoute: AdminJarvisBatchGermanIpadRoute,
+  AdminJarvisBatchV2Route: AdminJarvisBatchV2Route,
+  AdminJarvisBatchV2IpadRoute: AdminJarvisBatchV2IpadRoute,
+  AdminLecturesRoute: AdminLecturesRoute,
+  AdminLegalRoute: AdminLegalRoute,
+  AdminMarketingRoute: AdminMarketingRoute,
+  AdminMentorRoute: AdminMentorRoute,
+  AdminNavigationRoute: AdminNavigationRoute,
+  AdminPackagesRoute: AdminPackagesRoute,
+  AdminPdfSlicerRoute: AdminPdfSlicerRoute,
+  AdminPeopleRoute: AdminPeopleRoute,
+  AdminQuestionBankRoute: AdminQuestionBankRoute,
+  AdminQuestionGeneratorRoute: AdminQuestionGeneratorRoute,
+  AdminQuestionsRoute: AdminQuestionsRoute,
+  AdminRolesRoute: AdminRolesRoute,
+  AdminServersRoute: AdminServersRoute,
+  AdminSiteSettingsRoute: AdminSiteSettingsRoute,
+  AdminSonicRoute: AdminSonicRoute,
+  AdminStudyHubRoute: AdminStudyHubRoute,
+  AdminSupportRoute: AdminSupportRoute,
+  AdminThemeRoute: AdminThemeRoute,
+  AdminTransferRoute: AdminTransferRoute,
+  AdminUniversitiesRoute: AdminUniversitiesRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminVisionProBatchRoute: AdminVisionProBatchRoute,
+  ApiCommitteeDriveUploadRoute: ApiCommitteeDriveUploadRoute,
+  CheckoutSuccessRoute: CheckoutSuccessRoute,
+  GuidesSlugRoute: GuidesSlugRoute,
+  MyCoursesRoute: MyCoursesRoute,
+  MyLecturesRoute: MyLecturesRoute,
+  PSlugRoute: PSlugRoute,
+  SummariesSummaryIdRoute: SummariesSummaryIdRoute,
+  SummariesNewRoute: SummariesNewRoute,
+  UUniSlugRoute: UUniSlugRoute,
+  AdminIndexRoute: AdminIndexRoute,
+  GuidesIndexRoute: GuidesIndexRoute,
+  PackagesIndexRoute: PackagesIndexRoute,
+  SummariesIndexRoute: SummariesIndexRoute,
+  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
+  Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
+  AdminPagesPageIdRoute: AdminPagesPageIdRoute,
+  AdminUniTilesUniIdRoute: AdminUniTilesUniIdRoute,
+  ApiGermanTtsRoute: ApiGermanTtsRoute,
+  GermanCourseIdExamRoute: GermanCourseIdExamRoute,
+  GermanCourseIdMatchRoute: GermanCourseIdMatchRoute,
+  GermanCourseIdReviewRoute: GermanCourseIdReviewRouteWithChildren,
+  GermanCourseIdRunRoute: GermanCourseIdRunRoute,
+  GermanCourseIdTapRoute: GermanCourseIdTapRoute,
+  HyGuidesSlugRoute: HyGuidesSlugRoute,
+  RuGuidesSlugRoute: RuGuidesSlugRoute,
+  AdminPagesIndexRoute: AdminPagesIndexRoute,
+  GermanCourseIdIndexRoute: GermanCourseIdIndexRoute,
+  HyGuidesIndexRoute: HyGuidesIndexRoute,
+  RuGuidesIndexRoute: RuGuidesIndexRoute,
+  ApiPublicPaymentsWebhookRoute: ApiPublicPaymentsWebhookRoute,
+  LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
+  LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

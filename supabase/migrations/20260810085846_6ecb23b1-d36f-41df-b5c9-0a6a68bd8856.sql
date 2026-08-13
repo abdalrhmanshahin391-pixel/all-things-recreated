@@ -1,0 +1,3 @@
+update public.site_settings set tagline = 'The medical question bank platform — AquaQBank Platform', site_name = 'AquaQBank', brand_style = 'platform-lock';
+update public.site_content set value_en = 'Your medical question bank, all in one place.', value_ar = 'بنك أسئلتك الطبية كاملاً في مكان واحد.' where key = 'cms.home.hero.title';
+update public.site_content set value_en = 'AquaQBank Platform', value_ar = 'منصة AquaQBank' where key = 'cms.home.hero.badge';

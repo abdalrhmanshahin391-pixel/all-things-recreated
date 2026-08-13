@@ -1,0 +1,1 @@
+ALTER TABLE public.site_nav_items ADD COLUMN IF NOT EXISTS coming_soon boolean NOT NULL DEFAULT false;
