@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as CommitteeRouteImport } from './routes/committee'
+import { Route as CompleteProfileRouteImport } from './routes/complete-profile'
 import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LecturesRouteImport } from './routes/lectures'
@@ -142,6 +143,11 @@ const AboutRoute = AboutRouteImport.update({
 const CommitteeRoute = CommitteeRouteImport.update({
   id: '/committee',
   path: '/committee',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompleteProfileRoute = CompleteProfileRouteImport.update({
+  id: '/complete-profile',
+  path: '/complete-profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CoursesRoute = CoursesRouteImport.update({
@@ -737,6 +743,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/committee': typeof CommitteeRouteWithChildren
+  '/complete-profile': typeof CompleteProfileRoute
   '/courses': typeof CoursesRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/lectures': typeof LecturesRouteWithChildren
@@ -857,6 +864,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/complete-profile': typeof CompleteProfileRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/locked': typeof LockedRoute
   '/login': typeof LoginRoute
@@ -971,6 +979,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/committee': typeof CommitteeRouteWithChildren
+  '/complete-profile': typeof CompleteProfileRoute
   '/courses': typeof CoursesRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/lectures': typeof LecturesRouteWithChildren
@@ -1094,6 +1103,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/committee'
+    | '/complete-profile'
     | '/courses'
     | '/forgot-password'
     | '/lectures'
@@ -1214,6 +1224,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about'
+    | '/complete-profile'
     | '/forgot-password'
     | '/locked'
     | '/login'
@@ -1327,6 +1338,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/committee'
+    | '/complete-profile'
     | '/courses'
     | '/forgot-password'
     | '/lectures'
@@ -1449,6 +1461,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   CommitteeRoute: typeof CommitteeRouteWithChildren
+  CompleteProfileRoute: typeof CompleteProfileRoute
   CoursesRoute: typeof CoursesRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LecturesRoute: typeof LecturesRouteWithChildren
@@ -1565,6 +1578,13 @@ declare module '@tanstack/react-router' {
       path: '/committee'
       fullPath: '/committee'
       preLoaderRoute: typeof CommitteeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/complete-profile': {
+      id: '/complete-profile'
+      path: '/complete-profile'
+      fullPath: '/complete-profile'
+      preLoaderRoute: typeof CompleteProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/courses': {
@@ -2528,6 +2548,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   CommitteeRoute: CommitteeRouteWithChildren,
+  CompleteProfileRoute: CompleteProfileRoute,
   CoursesRoute: CoursesRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LecturesRoute: LecturesRouteWithChildren,
