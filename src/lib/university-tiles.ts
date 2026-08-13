@@ -55,6 +55,27 @@ export function lockChip(color?: string | null) {
   return LOCK_COLORS[color ?? "amber"] ?? LOCK_COLORS.amber!;
 }
 
+/**
+ * Soft colour wash used behind a hub card. Keeps the card readable on the dark
+ * hero background while still carrying the tile's accent colour.
+ */
+export const TILE_WASHES: Record<string, string> = {
+  amber:
+    "border-amber-400/30 bg-[linear-gradient(150deg,rgba(251,191,36,0.22),rgba(180,83,9,0.10)_60%,transparent)] hover:border-amber-400/60",
+  teal:
+    "border-teal-400/30 bg-[linear-gradient(150deg,rgba(45,212,191,0.20),rgba(13,148,136,0.10)_60%,transparent)] hover:border-teal-400/60",
+  rose:
+    "border-rose-400/30 bg-[linear-gradient(150deg,rgba(251,113,133,0.20),rgba(190,18,60,0.10)_60%,transparent)] hover:border-rose-400/60",
+  indigo:
+    "border-indigo-400/30 bg-[linear-gradient(150deg,rgba(129,140,248,0.20),rgba(67,56,202,0.10)_60%,transparent)] hover:border-indigo-400/60",
+  slate:
+    "border-slate-400/25 bg-[linear-gradient(150deg,rgba(148,163,184,0.18),rgba(51,65,85,0.10)_60%,transparent)] hover:border-slate-300/50",
+};
+
+export function tileWash(color?: string | null) {
+  return TILE_WASHES[color ?? "slate"] ?? TILE_WASHES.slate!;
+}
+
 
 export const TILE_ICONS: Record<string, LucideIcon> = {
   BookOpen,
