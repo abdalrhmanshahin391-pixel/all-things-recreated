@@ -545,6 +545,16 @@
 .dark .hover\:bg-black\/5:hover { background-color: rgba(255, 255, 255, 0.06) !important; }
 .dark .hover\:bg-black\/10:hover { background-color: rgba(255, 255, 255, 0.10) !important; }
 
+/* Golden hub tiles opt out of the dark remap: their chips must stay white. */
+.dark .tile-gold .bg-white,
+.dark .tile-gold .bg-white\/95,
+.dark .tile-gold .bg-white\/90 {
+  background-color: #ffffff !important;
+}
+.dark .tile-gold .text-amber-700 { color: #b45309 !important; }
+.dark .tile-gold .text-amber-800,
+.dark .tile-gold .text-amber-900 { color: #92400e !important; }
+
 /* Text */
 .dark .text-black,
 .dark .text-slate-900,
