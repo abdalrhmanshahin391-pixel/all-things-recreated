@@ -35,6 +35,7 @@ import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } fr
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAboutRouteImport } from './routes/admin.about'
 import { Route as AdminAiKeysRouteImport } from './routes/admin.ai-keys'
+import { Route as AdminAquavisionxRouteImport } from './routes/admin.aquavisionx'
 import { Route as AdminBackupsRouteImport } from './routes/admin.backups'
 import { Route as AdminCommitteeRouteImport } from './routes/admin.committee'
 import { Route as AdminCommitteeLogRouteImport } from './routes/admin.committee-log'
@@ -257,6 +258,11 @@ const AdminAboutRoute = AdminAboutRouteImport.update({
 const AdminAiKeysRoute = AdminAiKeysRouteImport.update({
   id: '/admin/ai-keys',
   path: '/admin/ai-keys',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAquavisionxRoute = AdminAquavisionxRouteImport.update({
+  id: '/admin/aquavisionx',
+  path: '/admin/aquavisionx',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminBackupsRoute = AdminBackupsRouteImport.update({
@@ -747,6 +753,7 @@ export interface FileRoutesByFullPath {
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/about': typeof AdminAboutRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
+  '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
   '/admin/committee': typeof AdminCommitteeRoute
   '/admin/committee-log': typeof AdminCommitteeLogRoute
@@ -862,6 +869,7 @@ export interface FileRoutesByTo {
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/about': typeof AdminAboutRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
+  '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
   '/admin/committee': typeof AdminCommitteeRoute
   '/admin/committee-log': typeof AdminCommitteeLogRoute
@@ -977,6 +985,7 @@ export interface FileRoutesById {
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/about': typeof AdminAboutRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
+  '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
   '/admin/committee': typeof AdminCommitteeRoute
   '/admin/committee-log': typeof AdminCommitteeLogRoute
@@ -1098,6 +1107,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/admin/about'
     | '/admin/ai-keys'
+    | '/admin/aquavisionx'
     | '/admin/backups'
     | '/admin/committee'
     | '/admin/committee-log'
@@ -1213,6 +1223,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/admin/about'
     | '/admin/ai-keys'
+    | '/admin/aquavisionx'
     | '/admin/backups'
     | '/admin/committee'
     | '/admin/committee-log'
@@ -1327,6 +1338,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/admin/about'
     | '/admin/ai-keys'
+    | '/admin/aquavisionx'
     | '/admin/backups'
     | '/admin/committee'
     | '/admin/committee-log'
@@ -1447,6 +1459,7 @@ export interface RootRouteChildren {
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   AdminAboutRoute: typeof AdminAboutRoute
   AdminAiKeysRoute: typeof AdminAiKeysRoute
+  AdminAquavisionxRoute: typeof AdminAquavisionxRoute
   AdminBackupsRoute: typeof AdminBackupsRoute
   AdminCommitteeRoute: typeof AdminCommitteeRoute
   AdminCommitteeLogRoute: typeof AdminCommitteeLogRoute
@@ -1700,6 +1713,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/ai-keys'
       fullPath: '/admin/ai-keys'
       preLoaderRoute: typeof AdminAiKeysRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/aquavisionx': {
+      id: '/admin/aquavisionx'
+      path: '/admin/aquavisionx'
+      fullPath: '/admin/aquavisionx'
+      preLoaderRoute: typeof AdminAquavisionxRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/backups': {
@@ -2511,6 +2531,7 @@ const rootRouteChildren: RootRouteChildren = {
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   AdminAboutRoute: AdminAboutRoute,
   AdminAiKeysRoute: AdminAiKeysRoute,
+  AdminAquavisionxRoute: AdminAquavisionxRoute,
   AdminBackupsRoute: AdminBackupsRoute,
   AdminCommitteeRoute: AdminCommitteeRoute,
   AdminCommitteeLogRoute: AdminCommitteeLogRoute,
