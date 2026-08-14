@@ -48,6 +48,16 @@ type Course = {
 
 const YEAR_ICONS = [GraduationCap, Video, PlayCircle, Mic, Clapperboard, Film];
 
+/** A discount only counts while it is switched on, cheaper, and not expired. */
+function offerLive(course: Course) {
+  const was = Number(course.compare_at_price ?? 0);
+  return (
+    !!course.discount_active &&
+    was > Number(course.price ?? 0) &&
+    (!course.discount_ends_at || new Date(course.discount_ends_at).getTime() > Date.now())
+  );
+}
+
 function LecturesPage() {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
