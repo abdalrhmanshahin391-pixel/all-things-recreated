@@ -226,9 +226,7 @@ function normalize(list: any[]): GeneratedQuestion[] {
             (typeof o?.is_correct === "string" &&
               o.is_correct.trim().toUpperCase().startsWith(letterKeys[i] ?? letters[i] ?? "~")),
       wrong_reason: String(
-        o?.wrong_reason ??
-          (wrongMap ? (wrongMap[letterKeys[i] ?? letters[i] ?? ""] ?? "") : "") ??
-          "",
+        o?.wrong_reason ?? (wrongMap ? (wrongMap[letterKeys[i] ?? letters[i] ?? ""] ?? "") : ""),
       ).trim(),
     }));
     if (options.some((o) => !o.body)) continue;
