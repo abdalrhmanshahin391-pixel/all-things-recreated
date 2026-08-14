@@ -16,7 +16,9 @@ import {
   createJobV2Ipad, extractBookendsV2Ipad, submitChunkV2Ipad, markChunkV2Ipad, retryChunkV2Ipad,
   pollChunkV2Ipad, importChunkV2Ipad, listJobsV2Ipad, getJobV2Ipad, deleteJobV2Ipad,
   getGeminiKeyStatusV2Ipad, extractPagesTextV2Ipad,
+  setJarvisReferenceBook,
 } from "@/lib/jarvis-batch-v2-ipad.functions";
+import { ReferenceBookCard } from "@/components/admin/ReferenceBookCard";
 import {
   createImageJobIpad, cutPageImageIpad, submitImageChunkIpad, importImageChunkIpad,
 } from "@/lib/jarvis-image-ipad.functions";
@@ -194,6 +196,7 @@ function JarvisBatchV2Ipad() {
   const deleteJobFn = useServerFn(deleteJobV2Ipad);
   const keyStatusFn = useServerFn(getGeminiKeyStatusV2Ipad);
   const extractPagesFn = useServerFn(extractPagesTextV2Ipad);
+  const setBookFn = useServerFn(setJarvisReferenceBook);
   const createImageJobFn = useServerFn(createImageJobIpad);
   const cutPageFn = useServerFn(cutPageImageIpad);
   const submitImageChunkFn = useServerFn(submitImageChunkIpad);
@@ -1150,9 +1153,9 @@ function JarvisBatchV2Ipad() {
                     <div className="mt-3 space-y-2">
                       <ReferenceBookCard
                         saved={j.reference_book ?? null}
-                        onSave={async (book) => {
+                        onSave={async (book: string | null) => {
                           await setBookFn({ data: { jobId: j.id, book } });
-                          await loadJobs();
+                          await refreshJobs();
                         }}
                       />
                       {chunks.length > 0 && (() => {
