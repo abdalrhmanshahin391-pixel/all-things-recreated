@@ -26,6 +26,10 @@ type Course = {
   image_url: string | null;
   university_id: string;
   category: string | null;
+  currency?: string | null;
+  compare_at_price?: number | null;
+  discount_active?: boolean | null;
+  discount_ends_at?: string | null;
 };
 
 type Counts = Record<string, { subjects: number; questions: number }>;
@@ -78,7 +82,9 @@ function MyCoursesPage() {
 
       let q = supabase
         .from("courses")
-        .select("id,title,year,price,image_url,university_id,category,badge,badge_color,badge_expires_at")
+        .select(
+          "id,title,year,price,image_url,university_id,category,badge,badge_color,badge_expires_at,currency,compare_at_price,discount_active,discount_ends_at",
+        )
         .eq("kind", "questions")
         .eq("published", true);
       if (courseIds) q = q.in("id", courseIds);

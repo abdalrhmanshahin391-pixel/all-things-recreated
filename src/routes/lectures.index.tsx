@@ -39,12 +39,27 @@ type Course = {
   kind: string;
   image_url: string | null;
   published: boolean;
+  currency?: string | null;
+  compare_at_price?: number | null;
+  discount_active?: boolean | null;
+  discount_ends_at?: string | null;
+  admin_only?: boolean | null;
 };
 
 const YEAR_ICONS = [GraduationCap, Video, PlayCircle, Mic, Clapperboard, Film];
 
+/** A discount only counts while it is switched on, cheaper, and not expired. */
+function offerLive(course: Course) {
+  const was = Number(course.compare_at_price ?? 0);
+  return (
+    !!course.discount_active &&
+    was > Number(course.price ?? 0) &&
+    (!course.discount_ends_at || new Date(course.discount_ends_at).getTime() > Date.now())
+  );
+}
+
 function LecturesPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, isAdmin, loading: authLoading } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -53,12 +68,15 @@ function LecturesPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("courses")
-        .select("id,title,year,price,kind,image_url,published")
+        .select(
+          "id,title,year,price,kind,image_url,published,currency,compare_at_price,discount_active,discount_ends_at,admin_only",
+        )
         .eq("published", true)
-        .eq("kind", "lectures")
-        .order("created_at", { ascending: true });
+        .eq("kind", "lectures");
+      if (!isAdmin) query = query.eq("admin_only", false);
+      const { data, error } = await query.order("created_at", { ascending: true });
       if (cancelled) return;
       if (error) {
         setErrorMsg("Couldn't load lectures. Please refresh.");
@@ -71,7 +89,7 @@ function LecturesPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     let cancelled = false;
@@ -252,13 +270,23 @@ function LectureCard({ course, active }: { course: Course; active: boolean }) {
             Open lectures <ArrowRight size={14} />
           </Link>
         ) : (
-          <Link
-            to="/lectures/$courseId"
-            params={{ courseId: course.id }}
-            className="mt-auto inline-flex items-center justify-center gap-1.5 text-sm font-semibold tracking-wide px-4 py-2.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-          >
-            Subscribe · ${Number(course.price).toFixed(0)} <ArrowRight size={14} />
-          </Link>
+          <div className="mt-auto flex flex-col gap-1.5">
+            {offerLive(course) && (
+              <span className="text-center text-xs text-muted-foreground">
+                was <s>${Number(course.compare_at_price).toFixed(0)}</s>
+              </span>
+            )}
+            <Link
+              to="/lectures/$courseId"
+              params={{ courseId: course.id }}
+              className="inline-flex items-center justify-center gap-1.5 text-sm font-semibold tracking-wide px-4 py-2.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              {Number(course.price) > 0
+                ? `Subscribe · $${Number(course.price).toFixed(0)}`
+                : "Subscribe · FREE"}{" "}
+              <ArrowRight size={14} />
+            </Link>
+          </div>
         )}
       </div>
     </div>

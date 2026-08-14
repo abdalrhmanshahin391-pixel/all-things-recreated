@@ -1,0 +1,1134 @@
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import {
+  Search, Plus, Trash2, BookOpen, Users as UsersIcon, X, Check, Pencil, Upload,
+  Eye, EyeOff, Save, Home, Lock, Tag, BadgeCheck, Loader2, SlidersHorizontal,
+} from "lucide-react";
+import { guardRedirect } from "@/lib/guard-redirect";
+import { supabase } from "@/integrations/supabase/client";
+import { compressImage } from "@/lib/image-compress";
+import { useAuth, type Profile } from "@/hooks/useAuth";
+import { SiteHeader } from "@/components/SiteHeader";
+import { resolveCourseImageUrl } from "@/lib/course-image";
+import { useCourseOptions } from "@/lib/course-options";
+import { CourseOptionsManager } from "@/components/admin/CourseOptionsManager";
+import { BADGE_PRESETS } from "@/components/common/CourseBadge";
+
+export const Route = createFileRoute("/admin/courses-hub")({
+  head: () => ({
+    meta: [
+      { title: "CoursesHub — AquaQBank" },
+      { name: "description", content: "Create courses, control price, discounts, badges and visibility, and manage student access — all in one place." },
+      { property: "og:title", content: "CoursesHub — AquaQBank" },
+      { property: "og:description", content: "Create courses, control price, discounts, badges and visibility, and manage student access." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+  component: CoursesHubPage,
+});
+
+type Course = {
+  id: string;
+  title: string;
+  year: number;
+  price: number;
+  paddle_price_id?: string | null;
+  category: string;
+  exam_type: string;
+  image_url: string | null;
+  subjects_count: number;
+  questions_count_mid: number;
+  questions_count_final: number;
+  published: boolean;
+  created_at: string;
+  kind: "questions" | "lectures";
+  university_id: string | null;
+  currency: string | null;
+  badge: string | null;
+  badge_color: string | null;
+  badge_expires_at: string | null;
+  compare_at_price: number | null;
+  discount_active: boolean;
+  discount_ends_at: string | null;
+  show_on_home: boolean;
+  admin_only: boolean;
+};
+
+type University = { id: string; name: string; short_name: string | null };
+type Enrollment = { id: string; user_id: string; course_id: string };
+type KindFilter = "all" | "questions" | "lectures";
+type Tab = "courses" | "control" | "access";
+
+const CURRENCIES = ["usd", "eur", "gbp", "jod", "sar"];
+
+function toLocalInput(iso: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+function fromLocalInput(v: string) {
+  return v ? new Date(v).toISOString() : null;
+}
+
+function CourseThumb({ value, className }: { value: string | null; className?: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    resolveCourseImageUrl(value).then((u) => {
+      if (!cancelled) setUrl(u);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [value]);
+  if (!url) return null;
+  return <img src={url} alt="" className={className} />;
+}
+
+function CoursesHubPage() {
+  const { user, isAdmin, loading } = useAuth();
+  const navigate = useNavigate();
+  const options = useCourseOptions();
+
+  const [tab, setTab] = useState<Tab>("courses");
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [users, setUsers] = useState<Profile[]>([]);
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [universities, setUniversities] = useState<University[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [fetching, setFetching] = useState(true);
+
+  const [courseQuery, setCourseQuery] = useState("");
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
+  const [uniFilter, setUniFilter] = useState("all");
+  const [userQuery, setUserQuery] = useState("");
+  const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+
+  // new course form
+  const [title, setTitle] = useState("");
+  const [year, setYear] = useState<number>(1);
+  const [price, setPrice] = useState("");
+  const [paddlePriceId, setPaddlePriceId] = useState("");
+  const [category, setCategory] = useState("major");
+  const [examType, setExamType] = useState("MINI-OSCE");
+  const [kind, setKind] = useState<"questions" | "lectures">("questions");
+  const [universityId, setUniversityId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // control tab state
+  const [dirty, setDirty] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!loading && !user) navigate({ to: "/login" });
+    else if (!loading && user && !isAdmin) guardRedirect(navigate);
+  }, [loading, user, isAdmin, navigate]);
+
+  async function refresh() {
+    setFetching(true);
+    const [c, u, e, un] = await Promise.all([
+      supabase.from("courses").select("*").order("created_at", { ascending: false }),
+      supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+      supabase.from("user_courses").select("id,user_id,course_id"),
+      supabase.from("universities").select("id,name,short_name").eq("is_active", true).order("sort_order"),
+    ]);
+    if (c.error) setError(c.error.message);
+    else setCourses((c.data as Course[]) ?? []);
+    if (!u.error) setUsers((u.data as Profile[]) ?? []);
+    if (!e.error) setEnrollments((e.data as Enrollment[]) ?? []);
+    if (!un.error) {
+      const list = (un.data as University[]) ?? [];
+      setUniversities(list);
+      setUniversityId((prev) => prev || list[0]?.id || "");
+    }
+    setDirty({});
+    setFetching(false);
+  }
+
+  useEffect(() => {
+    if (isAdmin) refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (options.category[0] && !options.category.some((o) => o.value === category)) setCategory(options.category[0].value);
+    if (options.exam_type[0] && !options.exam_type.some((o) => o.value === examType)) setExamType(options.exam_type[0].value);
+    if (options.year[0] && !options.year.some((o) => Number(o.value) === year)) setYear(Number(options.year[0].value) || 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options]);
+
+  const filteredCourses = useMemo(() => {
+    const q = courseQuery.trim().toLowerCase();
+    let list = courses;
+    if (kindFilter !== "all") list = list.filter((c) => (c.kind ?? "questions") === kindFilter);
+    if (uniFilter !== "all") list = list.filter((c) => (c.university_id ?? "none") === uniFilter);
+    if (!q) return list;
+    return list.filter((c) => c.title.toLowerCase().includes(q) || String(c.year).includes(q));
+  }, [courses, courseQuery, kindFilter, uniFilter]);
+
+  const filteredUsers = useMemo(() => {
+    const q = userQuery.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter(
+      (u) =>
+        u.full_name?.toLowerCase().includes(q) ||
+        u.username?.toLowerCase().includes(q) ||
+        u.email?.toLowerCase().includes(q),
+    );
+  }, [users, userQuery]);
+
+  function enrollmentsFor(uid: string) {
+    return enrollments.filter((e) => e.user_id === uid);
+  }
+
+  async function addCourse(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) return;
+    if (!universityId) {
+      setError("Pick a university for this course.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    const { error } = await (supabase.from("courses") as any).insert({
+      title: title.trim(),
+      year,
+      price: Number(price) || 0,
+      paddle_price_id: paddlePriceId.trim() || null,
+      category,
+      exam_type: kind === "lectures" ? "LECTURES" : examType,
+      kind,
+      university_id: universityId,
+      created_by: user!.id,
+    });
+    setSubmitting(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setTitle("");
+    setPrice("");
+    setPaddlePriceId("");
+    toast.success("Course added");
+    refresh();
+  }
+
+  async function deleteCourse(id: string) {
+    if (!confirm("Delete this course? It will also remove all user access to it.")) return;
+    const { error } = await supabase.from("courses").delete().eq("id", id);
+    if (error) setError(error.message);
+    else {
+      if (editingCourse?.id === id) setEditingCourse(null);
+      refresh();
+    }
+  }
+
+  async function grantCourse(uid: string, cid: string) {
+    const { error } = await supabase.from("user_courses").insert({ user_id: uid, course_id: cid, granted_by: user!.id });
+    if (error) setError(error.message);
+    else refresh();
+  }
+
+  async function revokeCourse(uid: string, cid: string) {
+    const { error } = await supabase.from("user_courses").delete().eq("user_id", uid).eq("course_id", cid);
+    if (error) setError(error.message);
+    else refresh();
+  }
+
+  function patch(id: string, next: Partial<Course>) {
+    setCourses((p) => p.map((r) => (r.id === id ? { ...r, ...next } : r)));
+    setDirty((d) => ({ ...d, [id]: true }));
+  }
+
+  async function saveControl(row: Course) {
+    setSaving(row.id);
+    const { error } = await supabase
+      .from("courses")
+      .update({
+        published: row.published,
+        price: Number(row.price ?? 0),
+        currency: row.currency ?? "usd",
+        compare_at_price:
+          row.compare_at_price === null || row.compare_at_price === undefined || Number.isNaN(Number(row.compare_at_price))
+            ? null
+            : Number(row.compare_at_price),
+        discount_active: row.discount_active,
+        discount_ends_at: row.discount_ends_at,
+        badge: row.badge?.trim() ? row.badge.trim() : null,
+        badge_color: row.badge?.trim() ? row.badge_color || "#f43f5e" : null,
+        badge_expires_at: row.badge?.trim() ? row.badge_expires_at : null,
+        show_on_home: row.show_on_home,
+        admin_only: row.admin_only,
+      })
+      .eq("id", row.id);
+    setSaving(null);
+    if (error) toast.error(error.message);
+    else {
+      setDirty((d) => ({ ...d, [row.id]: false }));
+      toast.success(`Saved — ${row.title}`);
+    }
+  }
+
+  if (loading || !user || !isAdmin) return <div className="min-h-screen bg-black" />;
+
+  const TABS: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
+    { id: "courses", label: "Courses", icon: <BookOpen size={15} /> },
+    { id: "control", label: "Control", icon: <SlidersHorizontal size={15} /> },
+    { id: "access", label: "Access", icon: <UsersIcon size={15} /> },
+  ];
+
+  return (
+    <div className="min-h-screen bg-black text-white">
+      <SiteHeader />
+      <main className="mx-auto max-w-6xl px-6 pt-32 pb-20">
+        <div className="mb-6">
+          <h1 className="font-serif text-4xl md:text-5xl font-bold mb-2">CoursesHub</h1>
+          <p className="text-white/60">
+            Create courses, control price · discount · badges · visibility, and manage who can study them — all here.
+          </p>
+        </div>
+
+        <div className="mb-8 inline-flex rounded-xl border border-white/15 bg-white/[0.03] p-1">
+          {TABS.map((tb) => (
+            <button
+              key={tb.id}
+              onClick={() => setTab(tb.id)}
+              className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors ${
+                tab === tb.id ? "bg-amber-400 text-black" : "text-white/60 hover:text-white"
+              }`}
+            >
+              {tb.icon} {tb.label}
+            </button>
+          ))}
+        </div>
+
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300 flex items-start justify-between gap-3">
+            <span>{error}</span>
+            <button onClick={() => setError(null)} className="text-red-300/70 hover:text-red-200">
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
+        {fetching && (
+          <div className="mb-6 inline-flex items-center gap-2 text-sm text-white/50">
+            <Loader2 size={15} className="animate-spin" /> Loading…
+          </div>
+        )}
+
+        {tab === "courses" && (
+          <>
+            <CourseOptionsManager setError={setError} />
+
+            <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.01] p-6 mb-10">
+              <div className="flex items-center gap-2 mb-4">
+                <Plus size={18} className="text-emerald-400" />
+                <h2 className="font-semibold text-lg">Add New Course</h2>
+              </div>
+              <div className="mb-4 inline-flex rounded-lg border border-white/15 bg-black/30 p-1">
+                <button
+                  type="button"
+                  onClick={() => setKind("questions")}
+                  className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-md transition-colors ${
+                    kind === "questions" ? "bg-indigo-500 text-white" : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  Questions course
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setKind("lectures")}
+                  className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-md transition-colors ${
+                    kind === "lectures" ? "bg-emerald-500 text-black" : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  Lectures course
+                </button>
+              </div>
+              <p className="text-xs text-white/50 mb-3">
+                {kind === "questions"
+                  ? "Appears on the Courses page. Has subjects, mid/final question counts, and exam type."
+                  : "Appears on the Lectures page. Title, year, price and image."}
+              </p>
+              <form onSubmit={addCourse} className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                <select
+                  value={universityId}
+                  onChange={(e) => setUniversityId(e.target.value)}
+                  className="md:col-span-12 rounded-lg border border-amber-400/40 bg-black/40 px-3 py-3 text-sm outline-none focus:border-amber-400"
+                  required
+                >
+                  <option value="">— Pick a university —</option>
+                  {universities.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Course title (e.g. Anatomy I)"
+                  className="md:col-span-4 rounded-lg border border-white/15 bg-black/40 px-4 py-3 text-sm placeholder:text-white/30 outline-none focus:border-white/50"
+                  required
+                />
+                {kind === "questions" && (
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="md:col-span-2 rounded-lg border border-white/15 bg-black/40 px-3 py-3 text-sm outline-none focus:border-white/50"
+                  >
+                    {options.category.map((o) => (
+                      <option key={o.id} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                )}
+                <select
+                  value={year}
+                  onChange={(e) => setYear(Number(e.target.value))}
+                  className="md:col-span-2 rounded-lg border border-white/15 bg-black/40 px-3 py-3 text-sm outline-none focus:border-white/50"
+                >
+                  {options.year.map((o) => (
+                    <option key={o.id} value={Number(o.value)}>{o.label}</option>
+                  ))}
+                </select>
+                {kind === "questions" && (
+                  <select
+                    value={examType}
+                    onChange={(e) => setExamType(e.target.value)}
+                    className="md:col-span-2 rounded-lg border border-white/15 bg-black/40 px-3 py-3 text-sm outline-none focus:border-white/50"
+                  >
+                    {options.exam_type.map((o) => (
+                      <option key={o.id} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                )}
+                <div className="md:col-span-2 relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full rounded-lg border border-white/15 bg-black/40 pl-7 pr-3 py-3 text-sm placeholder:text-white/30 outline-none focus:border-white/50"
+                    required
+                  />
+                </div>
+                <input
+                  value={paddlePriceId}
+                  onChange={(e) => setPaddlePriceId(e.target.value)}
+                  placeholder="Payment price ID (required for paid courses)"
+                  className="md:col-span-4 rounded-lg border border-white/15 bg-black/40 px-3 py-3 text-sm placeholder:text-white/30 outline-none focus:border-white/50"
+                />
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="md:col-span-12 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-semibold text-sm py-3 transition-colors"
+                >
+                  {submitting ? "Adding…" : "Add Course"}
+                </button>
+              </form>
+            </section>
+          </>
+        )}
+
+        {(tab === "courses" || tab === "control") && (
+          <section className="mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <BookOpen size={18} className="text-amber-400" />
+              <h2 className="font-semibold text-lg">
+                {tab === "control" ? "Course settings" : "All Courses"} ({filteredCourses.length})
+              </h2>
+            </div>
+            <div className="mb-3 inline-flex rounded-lg border border-white/15 bg-black/30 p-1 text-[11px] font-bold uppercase tracking-wider">
+              {(["all", "questions", "lectures"] as KindFilter[]).map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setKindFilter(k)}
+                  className={`px-3 py-1.5 rounded-md transition-colors ${
+                    kindFilter === k
+                      ? k === "lectures"
+                        ? "bg-emerald-500 text-black"
+                        : k === "questions"
+                        ? "bg-indigo-500 text-white"
+                        : "bg-white/15 text-white"
+                      : "text-white/55 hover:text-white"
+                  }`}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+            <div className="mb-3 flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">University</span>
+              <select
+                value={uniFilter}
+                onChange={(e) => setUniFilter(e.target.value)}
+                className="rounded-lg border border-white/15 bg-black/30 px-2.5 py-1.5 text-xs outline-none focus:border-white/40"
+              >
+                <option value="all">All</option>
+                <option value="none">No university</option>
+                {universities.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="relative mb-4">
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
+              <input
+                value={courseQuery}
+                onChange={(e) => setCourseQuery(e.target.value)}
+                placeholder="Search courses by title or year…"
+                className="w-full rounded-xl border border-white/15 bg-white/[0.03] pl-11 pr-4 py-3 text-sm placeholder:text-white/30 outline-none focus:border-white/50"
+              />
+            </div>
+
+            {filteredCourses.length === 0 ? (
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-8 text-center text-sm text-white/50">
+                No courses match.
+              </div>
+            ) : tab === "courses" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {filteredCourses.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setEditingCourse(c)}
+                    className="group text-left rounded-xl border border-white/10 bg-white/[0.03] p-4 hover:border-white/30 transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="h-14 w-14 rounded-lg bg-white/5 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                        {c.image_url ? (
+                          <CourseThumb value={c.image_url} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="text-white/30"><BookOpen size={20} /></div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="font-semibold leading-snug truncate">{c.title}</div>
+                          {c.published ? (
+                            <Eye size={14} className="text-emerald-400 shrink-0" />
+                          ) : (
+                            <EyeOff size={14} className="text-white/30 shrink-0" />
+                          )}
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+                          {(c.kind ?? "questions") === "lectures" ? (
+                            <span className="rounded-full bg-emerald-500/20 text-emerald-300 px-2 py-0.5 font-bold uppercase tracking-wider">▶ Lectures</span>
+                          ) : (
+                            <span className="rounded-full bg-indigo-500/20 text-indigo-300 px-2 py-0.5 font-bold uppercase tracking-wider">Questions</span>
+                          )}
+                          <span className="rounded-full bg-blue-500/15 text-blue-300 px-2 py-0.5 font-medium">Y{c.year}</span>
+                          <span className="rounded-full bg-emerald-500/15 text-emerald-300 px-2 py-0.5 font-medium">
+                            ${Number(c.price).toFixed(2)}
+                          </span>
+                          {c.admin_only && (
+                            <span className="rounded-full bg-rose-500/15 text-rose-300 px-2 py-0.5 font-medium">Admin only</span>
+                          )}
+                        </div>
+                      </div>
+                      <Pencil size={14} className="text-white/40 group-hover:text-white shrink-0" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredCourses.map((r) => (
+                  <ControlRow
+                    key={r.id}
+                    row={r}
+                    dirty={!!dirty[r.id]}
+                    saving={saving === r.id}
+                    onPatch={(next) => patch(r.id, next)}
+                    onSave={() => saveControl(r)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {tab === "access" && (
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <UsersIcon size={18} className="text-blue-400" />
+              <h2 className="font-semibold text-lg">User Access</h2>
+            </div>
+            <div className="relative mb-4">
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
+              <input
+                value={userQuery}
+                onChange={(e) => setUserQuery(e.target.value)}
+                placeholder="Search users by name, username or email…"
+                className="w-full rounded-xl border border-white/15 bg-white/[0.03] pl-11 pr-4 py-3 text-sm placeholder:text-white/30 outline-none focus:border-white/50"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+              <div className="lg:col-span-2 rounded-xl border border-white/10 bg-white/[0.03] max-h-[480px] overflow-y-auto">
+                {filteredUsers.length === 0 ? (
+                  <div className="p-6 text-center text-sm text-white/50">No users found.</div>
+                ) : (
+                  <ul className="divide-y divide-white/10">
+                    {filteredUsers.map((u) => {
+                      const count = enrollmentsFor(u.id).length;
+                      const active = selectedUser?.id === u.id;
+                      return (
+                        <li key={u.id}>
+                          <button
+                            onClick={() => setSelectedUser(u)}
+                            className={`w-full text-left px-4 py-3 flex items-center justify-between gap-2 transition-colors ${
+                              active ? "bg-white/10" : "hover:bg-white/[0.04]"
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <div className="font-medium text-sm truncate">{u.full_name || u.username}</div>
+                              <div className="text-xs text-white/50 truncate">@{u.username}</div>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-white/10 text-white/80 px-2 py-0.5 text-xs">{count}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              <div className="lg:col-span-3 rounded-xl border border-white/10 bg-white/[0.03] p-5 min-h-[480px]">
+                {!selectedUser ? (
+                  <div className="h-full flex items-center justify-center text-sm text-white/50">
+                    Select a user to manage their course access.
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-5 flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs uppercase tracking-wider text-white/40">Managing access for</div>
+                        <div className="text-lg font-semibold">{selectedUser.full_name || selectedUser.username}</div>
+                        <div className="text-xs text-white/50">{selectedUser.email}</div>
+                      </div>
+                      <button onClick={() => setSelectedUser(null)} className="text-white/40 hover:text-white/80">
+                        <X size={18} />
+                      </button>
+                    </div>
+                    <div className="text-xs uppercase tracking-wider text-white/40 mb-2">
+                      Courses ({enrollmentsFor(selectedUser.id).length} granted)
+                    </div>
+                    <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
+                      {courses.length === 0 ? (
+                        <div className="text-sm text-white/50">No courses to assign yet.</div>
+                      ) : (
+                        courses.map((c) => {
+                          const has = enrollmentsFor(selectedUser.id).some((e) => e.course_id === c.id);
+                          return (
+                            <div
+                              key={c.id}
+                              className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+                                has ? "border-emerald-500/30 bg-emerald-500/5" : "border-white/10 bg-black/30"
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium truncate flex items-center gap-2">
+                                  {has && <Check size={14} className="text-emerald-400 shrink-0" />}
+                                  {c.title}
+                                </div>
+                                <div className="text-xs text-white/50 mt-0.5">
+                                  Year {c.year} · ${Number(c.price).toFixed(2)}
+                                </div>
+                              </div>
+                              {has ? (
+                                <button
+                                  onClick={() => revokeCourse(selectedUser.id, c.id)}
+                                  className="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-red-500 hover:bg-red-400 text-white text-xs font-semibold px-3 py-1.5 transition-colors"
+                                >
+                                  <Trash2 size={13} /> Remove
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => grantCourse(selectedUser.id, c.id)}
+                                  className="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-semibold px-3 py-1.5 transition-colors"
+                                >
+                                  <Plus size={13} /> Add
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        <div className="mt-12 text-center">
+          <Link to="/admin" className="text-sm text-white/60 hover:text-white">← Back to admin</Link>
+        </div>
+      </main>
+
+      {editingCourse && (
+        <EditCourseModal
+          course={editingCourse}
+          onClose={() => setEditingCourse(null)}
+          onSaved={() => {
+            setEditingCourse(null);
+            refresh();
+          }}
+          onDelete={() => deleteCourse(editingCourse.id)}
+          setError={setError}
+        />
+      )}
+    </div>
+  );
+}
+
+function ControlRow({
+  row,
+  dirty,
+  saving,
+  onPatch,
+  onSave,
+}: {
+  row: Course;
+  dirty: boolean;
+  saving: boolean;
+  onPatch: (next: Partial<Course>) => void;
+  onSave: () => void;
+}) {
+  const was = Number(row.compare_at_price ?? 0);
+  const now = Number(row.price ?? 0);
+  const cur = (row.currency ?? "usd").toUpperCase();
+  const offerLive =
+    row.discount_active && was > now && (!row.discount_ends_at || new Date(row.discount_ends_at).getTime() > Date.now());
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-5">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <h3 className="font-bold text-lg me-auto">{row.title}</h3>
+        <span className="text-[11px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-white/10 text-white/70">
+          Year {row.year ?? "—"} · {row.kind ?? "questions"}
+        </span>
+        {offerLive && (
+          <span className="text-[11px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-amber-400 text-black">
+            offer live
+          </span>
+        )}
+      </div>
+
+      <div className="grid md:grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <div className="text-[11px] font-black uppercase tracking-widest text-white/40">Visibility</div>
+          <Toggle
+            on={row.published}
+            onChange={(v) => onPatch({ published: v })}
+            icon={row.published ? <Eye size={14} /> : <EyeOff size={14} />}
+            label={row.published ? "Published (live)" : "Draft (hidden)"}
+          />
+          <Toggle
+            on={row.show_on_home}
+            onChange={(v) => onPatch({ show_on_home: v })}
+            icon={<Home size={14} />}
+            label={row.show_on_home ? "Shows on home page" : "University pages only"}
+          />
+          <Toggle
+            on={row.admin_only}
+            onChange={(v) => onPatch({ admin_only: v })}
+            icon={<Lock size={14} />}
+            label={row.admin_only ? "Admin only (nobody else sees it)" : "Everyone can see it"}
+            danger
+          />
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-[11px] font-black uppercase tracking-widest text-white/40">Price</div>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={row.price ?? 0}
+              onChange={(e) => onPatch({ price: e.target.value === "" ? 0 : Number(e.target.value) })}
+              className="w-28 px-3 py-2 rounded-lg border border-white/15 bg-black/40 text-sm outline-none focus:border-white/50"
+            />
+            <select
+              value={(row.currency ?? "usd").toLowerCase()}
+              onChange={(e) => onPatch({ currency: e.target.value })}
+              className="px-2 py-2 rounded-lg border border-white/15 bg-black/40 text-sm uppercase outline-none focus:border-white/50"
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>{c.toUpperCase()}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => onPatch({ price: 0 })}
+              className="px-3 py-2 rounded-lg border border-white/15 text-xs font-bold text-white/70 hover:bg-white/10"
+            >
+              Free
+            </button>
+          </div>
+          <Toggle
+            on={row.discount_active}
+            onChange={(v) => onPatch({ discount_active: v })}
+            icon={<Tag size={14} />}
+            label={row.discount_active ? "Discount running" : "No discount"}
+          />
+          <label className="block text-xs font-bold text-white/50">
+            Was (original price)
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={row.compare_at_price ?? ""}
+              onChange={(e) => onPatch({ compare_at_price: e.target.value === "" ? null : Number(e.target.value) })}
+              placeholder="e.g. 20"
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-white/15 bg-black/40 text-sm font-normal text-white outline-none focus:border-white/50"
+            />
+          </label>
+          <label className="block text-xs font-bold text-white/50">
+            Offer ends (optional)
+            <input
+              type="datetime-local"
+              value={toLocalInput(row.discount_ends_at)}
+              onChange={(e) => onPatch({ discount_ends_at: fromLocalInput(e.target.value) })}
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-white/15 bg-black/40 text-sm font-normal text-white outline-none focus:border-white/50"
+            />
+          </label>
+          {row.discount_active && was > now && (
+            <p className="text-xs text-white/60">
+              Students see <s>{was.toFixed(0)} {cur}</s>{" "}
+              <b className="text-white">{now > 0 ? `${now.toFixed(0)} ${cur}` : "FREE"}</b>
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-[11px] font-black uppercase tracking-widest text-white/40">Badge</div>
+          <div className="flex flex-wrap gap-1.5">
+            {BADGE_PRESETS.map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => onPatch({ badge: p.label, badge_color: p.color })}
+                className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full text-white"
+                style={{ background: p.color, opacity: row.badge === p.label ? 1 : 0.5 }}
+              >
+                {p.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => onPatch({ badge: null, badge_color: null, badge_expires_at: null })}
+              className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border border-white/20 text-white/60"
+            >
+              None
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={row.badge ?? ""}
+              onChange={(e) => onPatch({ badge: e.target.value })}
+              placeholder="Custom text"
+              className="flex-1 px-3 py-2 rounded-lg border border-white/15 bg-black/40 text-sm outline-none focus:border-white/50"
+            />
+            <input
+              type="color"
+              value={row.badge_color ?? "#f43f5e"}
+              onChange={(e) => onPatch({ badge_color: e.target.value })}
+              className="w-11 h-10 rounded-lg border border-white/15 bg-black/40"
+            />
+          </div>
+          <label className="block text-xs font-bold text-white/50">
+            Badge expires (optional)
+            <input
+              type="datetime-local"
+              value={toLocalInput(row.badge_expires_at)}
+              onChange={(e) => onPatch({ badge_expires_at: fromLocalInput(e.target.value) })}
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-white/15 bg-black/40 text-sm font-normal text-white outline-none focus:border-white/50"
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center gap-2">
+        <button
+          onClick={onSave}
+          disabled={saving || !dirty}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-400 text-black text-sm font-bold disabled:opacity-40"
+        >
+          {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save
+        </button>
+        {dirty ? (
+          <span className="text-xs font-bold text-amber-400">Unsaved changes</span>
+        ) : (
+          <span className="text-xs font-bold text-emerald-400 inline-flex items-center gap-1">
+            <BadgeCheck size={13} /> Saved
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Toggle({
+  on,
+  onChange,
+  label,
+  icon,
+  danger,
+}: {
+  on: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  icon?: React.ReactNode;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!on)}
+      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold text-start transition-colors ${
+        on
+          ? danger
+            ? "border-red-500/40 bg-red-500/10 text-red-300"
+            : "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+          : "border-white/15 bg-black/30 text-white/60"
+      }`}
+    >
+      <span
+        className="inline-flex w-9 h-5 rounded-full p-0.5 shrink-0 transition-colors"
+        style={{ background: on ? (danger ? "#ef4444" : "#22c55e") : "rgba(255,255,255,0.25)" }}
+      >
+        <span className="w-4 h-4 rounded-full bg-white transition-transform" style={{ transform: on ? "translateX(16px)" : "none" }} />
+      </span>
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function EditCourseModal({
+  course,
+  onClose,
+  onSaved,
+  onDelete,
+  setError,
+}: {
+  course: Course;
+  onClose: () => void;
+  onSaved: () => void;
+  onDelete: () => void;
+  setError: (m: string | null) => void;
+}) {
+  const options = useCourseOptions();
+  const [title, setTitle] = useState(course.title);
+  const [price, setPrice] = useState(String(course.price));
+  const [paddlePriceId, setPaddlePriceId] = useState(course.paddle_price_id ?? "");
+  const [year, setYear] = useState(course.year);
+  const [category, setCategory] = useState<string>(course.category ?? "major");
+  const [examType, setExamType] = useState(course.exam_type);
+  const [subjects, setSubjects] = useState(String(course.subjects_count));
+  const [qMid, setQMid] = useState(String(course.questions_count_mid));
+  const [qFinal, setQFinal] = useState(String(course.questions_count_final));
+  const [imageUrl, setImageUrl] = useState(course.image_url);
+  const [published, setPublished] = useState(course.published);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function uploadImage(file: File) {
+    setUploading(true);
+    setError(null);
+    const img = await compressImage(file, { maxEdge: 1600 });
+    const path = `${course.id}/${Date.now()}.${img.ext}`;
+    const { error: upErr } = await supabase.storage
+      .from("course-images")
+      .upload(path, img.file, { upsert: true, contentType: img.contentType });
+    if (upErr) {
+      setError(upErr.message);
+      setUploading(false);
+      return;
+    }
+    setImageUrl(path);
+    setUploading(false);
+  }
+
+  async function save(nextPublished?: boolean) {
+    setSaving(true);
+    setError(null);
+    const { error } = await supabase
+      .from("courses")
+      .update({
+        title: title.trim(),
+        price: Number(price) || 0,
+        paddle_price_id: paddlePriceId.trim() || null,
+        year,
+        category,
+        exam_type: examType,
+        subjects_count: Number(subjects) || 0,
+        questions_count_mid: Number(qMid) || 0,
+        questions_count_final: Number(qFinal) || 0,
+        image_url: imageUrl,
+        published: nextPublished ?? published,
+      })
+      .eq("id", course.id);
+    setSaving(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    toast.success("Course saved");
+    onSaved();
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-zinc-950 border border-white/10 rounded-2xl w-full max-w-2xl my-8 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-white/10">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-white/40">Editing course</div>
+            <h3 className="text-lg font-bold">{course.title}</h3>
+          </div>
+          <button onClick={onClose} className="text-white/50 hover:text-white"><X size={20} /></button>
+        </div>
+
+        <div className="p-5 space-y-5 max-h-[70vh] overflow-y-auto">
+          <div>
+            <label className="text-xs uppercase tracking-wider text-white/50 mb-2 block">Cover image</label>
+            <div className="flex items-center gap-4">
+              <div className="h-24 w-32 rounded-lg bg-white/5 overflow-hidden flex items-center justify-center border border-white/10">
+                {imageUrl ? <CourseThumb value={imageUrl} className="h-full w-full object-cover" /> : <span className="text-xs text-white/30">No image</span>}
+              </div>
+              <div className="flex flex-col gap-2">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadImage(f);
+                  }}
+                />
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  className="inline-flex items-center gap-2 rounded-md bg-white/10 hover:bg-white/15 disabled:opacity-50 text-white text-sm px-4 py-2 transition-colors"
+                >
+                  <Upload size={14} /> {uploading ? "Uploading…" : "Upload image"}
+                </button>
+                {imageUrl && (
+                  <button onClick={() => setImageUrl(null)} className="text-xs text-red-400 hover:text-red-300 text-left">
+                    Remove image
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Title">
+              <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50" />
+            </Field>
+            <Field label="Price ($)">
+              <input type="number" min="0" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50" />
+            </Field>
+            <Field label="Payment price ID">
+              <input
+                value={paddlePriceId}
+                onChange={(e) => setPaddlePriceId(e.target.value)}
+                placeholder="Leave empty for free courses"
+                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50"
+              />
+              {Number(price) > 0 && !paddlePriceId.trim() && (
+                <p className="mt-1 text-[11px] text-amber-400">Paid course without a payment price ID — checkout will fail.</p>
+              )}
+            </Field>
+            <Field label="Category">
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50">
+                {options.category.some((o) => o.value === category) ? null : <option value={category}>{category}</option>}
+                {options.category.map((o) => (
+                  <option key={o.id} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Year">
+              <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50">
+                {options.year.some((o) => Number(o.value) === year) ? null : <option value={year}>Year {year}</option>}
+                {options.year.map((o) => (
+                  <option key={o.id} value={Number(o.value)}>{o.label}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Exam type / badge">
+              <select value={examType} onChange={(e) => setExamType(e.target.value)} className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50">
+                {options.exam_type.some((o) => o.value === examType) ? null : <option value={examType}>{examType}</option>}
+                {options.exam_type.map((o) => (
+                  <option key={o.id} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Subjects">
+              <input type="number" min="0" value={subjects} onChange={(e) => setSubjects(e.target.value)} className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50" />
+            </Field>
+            <Field label="Mid questions">
+              <input type="number" min="0" value={qMid} onChange={(e) => setQMid(e.target.value)} className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50" />
+            </Field>
+            <Field label="Final questions">
+              <input type="number" min="0" value={qFinal} onChange={(e) => setQFinal(e.target.value)} className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50" />
+            </Field>
+          </div>
+        </div>
+
+        <div className="border-t border-white/10 p-5 flex flex-wrap items-center justify-between gap-3">
+          <button onClick={onDelete} className="inline-flex items-center gap-2 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-semibold px-4 py-2 transition-colors">
+            <Trash2 size={14} /> Delete course
+          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => save()} disabled={saving || uploading} className="inline-flex items-center gap-2 rounded-md bg-white/10 hover:bg-white/20 text-white text-sm font-semibold px-4 py-2 transition-colors disabled:opacity-50">
+              <Save size={14} /> Save
+            </button>
+            {published ? (
+              <button
+                onClick={() => {
+                  setPublished(false);
+                  save(false);
+                }}
+                disabled={saving || uploading}
+                className="inline-flex items-center gap-2 rounded-md bg-red-500 hover:bg-red-400 text-white text-sm font-semibold px-4 py-2 transition-colors disabled:opacity-50"
+              >
+                <EyeOff size={14} /> Unpublish
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setPublished(true);
+                  save(true);
+                }}
+                disabled={saving || uploading}
+                className="inline-flex items-center gap-2 rounded-md bg-emerald-500 hover:bg-emerald-400 text-black text-sm font-semibold px-4 py-2 transition-colors disabled:opacity-50"
+              >
+                <Eye size={14} /> Publish
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="text-xs uppercase tracking-wider text-white/50 mb-1.5 block">{label}</span>
+      {children}
+    </label>
+  );
+}

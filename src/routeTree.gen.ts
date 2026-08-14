@@ -45,6 +45,7 @@ import { Route as AdminContentProtectionRouteImport } from './routes/admin.conte
 import { Route as AdminCouponsRouteImport } from './routes/admin.coupons'
 import { Route as AdminCourseControlRouteImport } from './routes/admin.course-control'
 import { Route as AdminCoursesRouteImport } from './routes/admin.courses'
+import { Route as AdminCoursesHubRouteImport } from './routes/admin.courses-hub'
 import { Route as AdminDatabaseRouteImport } from './routes/admin.database'
 import { Route as AdminDevicesRouteImport } from './routes/admin.devices'
 import { Route as AdminGeminiKeysRouteImport } from './routes/admin.gemini-keys'
@@ -312,6 +313,11 @@ const AdminCourseControlRoute = AdminCourseControlRouteImport.update({
 const AdminCoursesRoute = AdminCoursesRouteImport.update({
   id: '/admin/courses',
   path: '/admin/courses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCoursesHubRoute = AdminCoursesHubRouteImport.update({
+  id: '/admin/courses-hub',
+  path: '/admin/courses-hub',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminDatabaseRoute = AdminDatabaseRouteImport.update({
@@ -787,6 +793,7 @@ export interface FileRoutesByFullPath {
   '/admin/coupons': typeof AdminCouponsRoute
   '/admin/course-control': typeof AdminCourseControlRoute
   '/admin/courses': typeof AdminCoursesRoute
+  '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
@@ -907,6 +914,7 @@ export interface FileRoutesByTo {
   '/admin/coupons': typeof AdminCouponsRoute
   '/admin/course-control': typeof AdminCourseControlRoute
   '/admin/courses': typeof AdminCoursesRoute
+  '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
@@ -1027,6 +1035,7 @@ export interface FileRoutesById {
   '/admin/coupons': typeof AdminCouponsRoute
   '/admin/course-control': typeof AdminCourseControlRoute
   '/admin/courses': typeof AdminCoursesRoute
+  '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
@@ -1153,6 +1162,7 @@ export interface FileRouteTypes {
     | '/admin/coupons'
     | '/admin/course-control'
     | '/admin/courses'
+    | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
     | '/admin/gemini-keys'
@@ -1273,6 +1283,7 @@ export interface FileRouteTypes {
     | '/admin/coupons'
     | '/admin/course-control'
     | '/admin/courses'
+    | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
     | '/admin/gemini-keys'
@@ -1392,6 +1403,7 @@ export interface FileRouteTypes {
     | '/admin/coupons'
     | '/admin/course-control'
     | '/admin/courses'
+    | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
     | '/admin/gemini-keys'
@@ -1517,6 +1529,7 @@ export interface RootRouteChildren {
   AdminCouponsRoute: typeof AdminCouponsRoute
   AdminCourseControlRoute: typeof AdminCourseControlRoute
   AdminCoursesRoute: typeof AdminCoursesRoute
+  AdminCoursesHubRoute: typeof AdminCoursesHubRoute
   AdminDatabaseRoute: typeof AdminDatabaseRoute
   AdminDevicesRoute: typeof AdminDevicesRoute
   AdminGeminiKeysRoute: typeof AdminGeminiKeysRoute
@@ -1835,6 +1848,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/courses'
       fullPath: '/admin/courses'
       preLoaderRoute: typeof AdminCoursesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/courses-hub': {
+      id: '/admin/courses-hub'
+      path: '/admin/courses-hub'
+      fullPath: '/admin/courses-hub'
+      preLoaderRoute: typeof AdminCoursesHubRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/database': {
@@ -2621,6 +2641,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminCouponsRoute: AdminCouponsRoute,
   AdminCourseControlRoute: AdminCourseControlRoute,
   AdminCoursesRoute: AdminCoursesRoute,
+  AdminCoursesHubRoute: AdminCoursesHubRoute,
   AdminDatabaseRoute: AdminDatabaseRoute,
   AdminDevicesRoute: AdminDevicesRoute,
   AdminGeminiKeysRoute: AdminGeminiKeysRoute,

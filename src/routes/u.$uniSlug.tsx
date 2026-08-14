@@ -143,7 +143,7 @@ function UniversityHubPage() {
     queryFn: async () => {
       if (!uni) return { courses: 0, lectures: 0, committee: 0 };
       const [{ count: courses }, { count: lectures }, { count: committee }] = await Promise.all([
-        supabase.from("courses").select("id", { count: "exact", head: true }).eq("university_id", uni.id).eq("published", true).eq("kind", "questions"),
+        supabase.from("courses").select("id", { count: "exact", head: true }).eq("university_id", uni.id).eq("published", true).eq("kind", "questions").eq("admin_only", false),
         supabase.from("lecture_subjects").select("id", { count: "exact", head: true }).eq("university_id", uni.id),
         supabase.from("committee_years").select("id", { count: "exact", head: true }).eq("university_id", uni.id),
       ]);

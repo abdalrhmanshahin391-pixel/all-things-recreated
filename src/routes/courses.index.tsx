@@ -70,7 +70,7 @@ const YEAR_ICONS = [Stethoscope, Heart, Pill, Microscope, Activity, Syringe];
 
 function CoursesPage() {
   const { t } = useTranslation();
-  const { user, loading: authLoading } = useAuth();
+  const { user, isAdmin, loading: authLoading } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -80,12 +80,14 @@ function CoursesPage() {
     let cancelled = false;
     (async () => {
       setErrorMsg(null);
-      const { data, error } = await supabase
+      let query = supabase
         .from("courses")
         .select("*")
         .eq("published", true)
-        .eq("kind", "questions")
-        .order("created_at", { ascending: true });
+        .eq("kind", "questions");
+      // Courses flagged "admin only" in CoursesHub stay hidden from students.
+      if (!isAdmin) query = query.eq("admin_only", false);
+      const { data, error } = await query.order("created_at", { ascending: true });
       if (cancelled) return;
       if (error) {
         setErrorMsg("load-error");
@@ -123,7 +125,7 @@ function CoursesPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     let cancelled = false;
