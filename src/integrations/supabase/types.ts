@@ -313,6 +313,7 @@ export type Database = {
           imported_count: number
           pdf_name: string
           read_batch_id: string | null
+          reference_book: string | null
           stage: string
           status: string
           subject_id: string | null
@@ -330,6 +331,7 @@ export type Database = {
           imported_count?: number
           pdf_name: string
           read_batch_id?: string | null
+          reference_book?: string | null
           stage?: string
           status?: string
           subject_id?: string | null
@@ -347,6 +349,7 @@ export type Database = {
           imported_count?: number
           pdf_name?: string
           read_batch_id?: string | null
+          reference_book?: string | null
           stage?: string
           status?: string
           subject_id?: string | null
@@ -2823,6 +2826,7 @@ export type Database = {
           imported_count: number
           pdf_name: string
           phase: string
+          reference_book: string | null
           solve_batch_ids: Json
           subject_candidates: Json
           subject_id: string | null
@@ -2840,6 +2844,7 @@ export type Database = {
           imported_count?: number
           pdf_name: string
           phase?: string
+          reference_book?: string | null
           solve_batch_ids?: Json
           subject_candidates?: Json
           subject_id?: string | null
@@ -2857,6 +2862,7 @@ export type Database = {
           imported_count?: number
           pdf_name?: string
           phase?: string
+          reference_book?: string | null
           solve_batch_ids?: Json
           subject_candidates?: Json
           subject_id?: string | null
