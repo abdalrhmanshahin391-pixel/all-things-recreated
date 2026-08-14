@@ -190,13 +190,46 @@ function normalize(list: any[]): GeneratedQuestion[] {
   const out: GeneratedQuestion[] = [];
   for (const q of list) {
     const stem = String(q?.stem ?? "").trim();
-    const rawOptions = Array.isArray(q?.options) ? q.options : [];
+    // Models sometimes answer with an object map ({ "A": "text", ... }) or with
+    // the answer given as a letter — accept those shapes instead of dropping the question.
+    const letterKeys: string[] = [];
+    let rawOptions: any[] = [];
+    if (Array.isArray(q?.options)) {
+      rawOptions = q.options;
+    } else if (q?.options && typeof q.options === "object") {
+      for (const [k, v] of Object.entries(q.options as Record<string, any>)) {
+        letterKeys.push(k.trim().toUpperCase().replace(/[^A-Z0-9]/g, ""));
+        rawOptions.push(typeof v === "string" ? { body: v } : v);
+      }
+    }
     if (!stem || rawOptions.length < 2) continue;
+
+    const answerLetters = new Set(
+      [q?.is_correct, q?.correct, q?.correct_option, q?.answer, q?.correct_answer]
+        .flatMap((v) => (Array.isArray(v) ? v : [v]))
+        .filter((v) => typeof v === "string")
+        .map((v: string) => v.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 1))
+        .filter(Boolean),
+    );
+    const wrongMap =
+      q?.wrong_reason && typeof q.wrong_reason === "object" && !Array.isArray(q.wrong_reason)
+        ? (q.wrong_reason as Record<string, any>)
+        : null;
+
     const options: GeneratedOption[] = rawOptions.slice(0, 6).map((o: any, i: number) => ({
       letter: letters[i] ?? String(i + 1),
-      body: String(o?.body ?? o?.text ?? "").trim(),
-      is_correct: !!o?.is_correct,
-      wrong_reason: String(o?.wrong_reason ?? "").trim(),
+      body: String(typeof o === "string" ? o : (o?.body ?? o?.text ?? o?.option ?? "")).trim(),
+      is_correct:
+        typeof o?.is_correct === "boolean"
+          ? o.is_correct
+          : answerLetters.has((letterKeys[i] ?? letters[i] ?? "").slice(0, 1)) ||
+            (typeof o?.is_correct === "string" &&
+              o.is_correct.trim().toUpperCase().startsWith(letterKeys[i] ?? letters[i] ?? "~")),
+      wrong_reason: String(
+        o?.wrong_reason ??
+          (wrongMap ? (wrongMap[letterKeys[i] ?? letters[i] ?? ""] ?? "") : "") ??
+          "",
+      ).trim(),
     }));
     if (options.some((o) => !o.body)) continue;
     if (!options.some((o) => o.is_correct)) options[0].is_correct = true;
