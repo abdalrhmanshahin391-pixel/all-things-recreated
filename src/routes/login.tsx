@@ -201,9 +201,7 @@ function LoginPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {error && <ErrorBox message={error} />}
-      </form>
+      {error && <ErrorBox message={error} />}
 
       <GoogleButton next={next || undefined} onError={setError} />
       <AuthDivider />
