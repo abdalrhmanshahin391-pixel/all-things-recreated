@@ -193,7 +193,7 @@ function PatchIpadProX() {
         const crops: { path: string; label: string }[] = [];
         for (let i = 0; i < regions.length; i++) {
           let b64: string;
-          try { b64 = cropRegionToJpegBase64(canvas, regions[i], { padding: 14, quality: 0.8 }); } catch { continue; }
+          try { b64 = cropRegionToJpegBase64(canvas, regions[i], { padding: 22, quality: 0.82 }); } catch { continue; }
           const path = `${id}/p${p.page_number}-q${i + 1}-${Date.now()}.jpg`;
           const up = await supabase.storage.from(BUCKET)
             .upload(path, base64ToBlob(b64), { contentType: "image/jpeg", upsert: true });
