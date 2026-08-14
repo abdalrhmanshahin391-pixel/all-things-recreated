@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { lovable } from "@/integrations/lovable/index";
 
 function GoogleMark({ size = 18 }: { size?: number }) {
@@ -38,6 +39,7 @@ export function GoogleButton({
   onError?: (message: string) => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   async function handleClick() {
     setLoading(true);
@@ -56,8 +58,9 @@ export function GoogleButton({
         return;
       }
       if (result.redirected) return;
-      // Tokens came back in-page (popup flow): the session is already set.
-      window.location.replace("/auth/callback");
+      // Tokens came back in-page (popup flow): the session is already set, so
+      // hand off inside the app instead of reloading the whole bundle.
+      void navigate({ to: "/auth/callback", replace: true });
     } catch {
       onError?.("Google sign-in didn't complete. Please try again.");
       setLoading(false);

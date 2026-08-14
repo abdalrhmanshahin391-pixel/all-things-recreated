@@ -304,6 +304,7 @@ const ONBOARDING_EXEMPT = [
 function OnboardingGate() {
   const { user, profile, loading } = useAuth();
   const location = useRouterState({ select: (s) => s.location });
+  const router = useRouter();
 
   useEffect(() => {
     if (loading || !user) return;
@@ -312,8 +313,9 @@ function OnboardingGate() {
     if (!needsOnboarding(user.id, profile)) return;
     const next = pathname + (location.searchStr ?? "");
     const q = next && next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
-    window.location.replace(`/welcome${q}`);
-  }, [loading, user, profile, location]);
+    // Navigate in-app: a hard reload here threw away the freshly booted app.
+    void router.navigate({ href: `/welcome${q}`, replace: true });
+  }, [loading, user, profile, location, router]);
 
   return null;
 }
