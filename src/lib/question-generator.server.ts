@@ -384,12 +384,43 @@ function geminiText(json: any): string {
   return parts.map((p: any) => String(p?.text ?? "")).join("").trim();
 }
 
+/** True when the failure is "this model id can't be used", so the next one should be tried. */
+function isModelUnavailable(message: string): boolean {
+  return (
+    /\b404\b/.test(message) ||
+    /not found|is not supported|not supported for|unsupported|does not exist/i.test(message)
+  );
+}
+
+/** Human-readable reason for an empty Gemini reply. */
+function emptyReplyReason(json: any): string {
+  const cand = json?.candidates?.[0];
+  const finish = String(cand?.finishReason ?? "");
+  const block = String(json?.promptFeedback?.blockReason ?? "");
+  if (block) return `the request was blocked by Gemini's safety filter (${block})`;
+  if (finish === "SAFETY" || finish === "PROHIBITED_CONTENT" || finish === "RECITATION") {
+    return `Gemini stopped the reply (${finish})`;
+  }
+  if (finish === "MAX_TOKENS") return "the reply hit the output limit before any question was written";
+  if (!cand) return "Gemini returned no candidate at all (usually a quota or key problem)";
+  return `Gemini returned an empty reply${finish ? ` (finish: ${finish})` : ""}`;
+}
+
 export async function pingGemini(apiKey: string, model: string) {
-  const json = await geminiFetch(apiKey, model, {
-    contents: [{ role: "user", parts: [{ text: "Reply with the single word: ok" }] }],
-    generationConfig: { maxOutputTokens: 16 },
-  });
-  return { ok: true, model, reply: geminiText(json).slice(0, 40) || "ok" };
+  let lastError = "";
+  for (const candidate of geminiCandidates(model)) {
+    try {
+      const json = await geminiFetch(apiKey, candidate, {
+        contents: [{ role: "user", parts: [{ text: "Reply with the single word: ok" }] }],
+        generationConfig: { maxOutputTokens: 16 },
+      });
+      return { ok: true, model: candidate, reply: geminiText(json).slice(0, 40) || "ok" };
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e);
+      if (!isModelUnavailable(lastError)) throw e;
+    }
+  }
+  throw new Error(lastError || "No usable Gemini model for this key.");
 }
 
 export async function callGeminiQuestions(
