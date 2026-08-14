@@ -1,0 +1,1 @@
+ALTER TABLE public.jarvis_batch_v2_ipad_jobs ADD COLUMN IF NOT EXISTS reference_book TEXT;

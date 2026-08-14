@@ -252,14 +252,18 @@ function PatchIpadProX() {
 
   const stats = useMemo(() => {
     const cutDone = pages.filter((p) => p.status === "cropped" || p.status === "empty").length;
-    const solved = items.filter((i) => i.status === "solved" || i.status === "imported").length;
+    const solved = items.filter((i) => i.status === "solved" || i.status === "imported" || i.status === "duplicate").length;
     const failedItems = items.filter((i) => i.status === "failed").length;
+    const duplicates = items.filter((i) => i.status === "duplicate").length;
+    const readyToImport = items.filter((i) => i.status === "solved").length;
     return {
       pages: pages.length,
       cutDone,
       crops: items.length,
       solved,
       failedItems,
+      duplicates,
+      readyToImport,
       phase1Done: pages.length > 0 && cutDone === pages.length,
       phase2Done: items.length > 0 && solved === items.length,
     };
@@ -268,7 +272,7 @@ function PatchIpadProX() {
   const waitingForCut = job?.phase === "cut_submitted";
   const waitingForSolve = job?.phase === "solve_submitted";
   const pendingItems = items.filter((i) => i.status === "pending" || i.status === "failed");
-  const canImport = Boolean(jobId && job?.phase !== "imported" && stats.crops > 0 && stats.solved === stats.crops);
+  const canImport = Boolean(jobId && stats.readyToImport > 0 && stats.crops > 0 && stats.solved === stats.crops);
 
   // ---------- start: one job per PDF, queued ----------
   async function startAll() {
@@ -373,14 +377,14 @@ function PatchIpadProX() {
     }
   }
 
-  async function runImport() {
+  async function runImport(allowDuplicates = false) {
     if (!jobId) return;
     setBusy(true); busyRef.current = true;
     try {
-      const r: any = await importFn({ data: { jobId } });
+      const r: any = await importFn({ data: { jobId, allowDuplicates } });
       await loadJob(jobId);
       await refreshJobs();
-      setProgress(`Imported ${r.inserted} question(s) · ${r.skipped} duplicate(s) · ${r.failed} failed.`);
+      setProgress(`${r.inserted} imported · ${r.duplicates ?? r.skipped ?? 0} already existed · ${r.failed} failed.`);
       toast.success(`Imported ${r.inserted} question(s)`);
       if (r.errors?.length) addLog(r.errors.join(" · "));
     } catch (e: any) {
@@ -400,7 +404,11 @@ function PatchIpadProX() {
     if (pages.some((p) => p.status === "cut_ready")) return {
       label: "Cutting the question pictures…", disabled: true, action: () => {}, icon: <Loader2 className="animate-spin" size={16} />,
     };
-    if (canImport) return { label: `Import ${stats.solved} questions`, disabled: false, action: runImport, icon: <Download size={16} /> };
+    if (canImport) return { label: `Import ${stats.readyToImport} questions`, disabled: false, action: () => runImport(false), icon: <Download size={16} /> };
+    if (stats.duplicates && job?.phase === "imported") return {
+      label: `Import ${stats.duplicates} duplicate(s) anyway`,
+      disabled: false, action: () => runImport(true), icon: <Download size={16} />,
+    };
     if (pendingItems.length) return {
       label: stats.failedItems ? `Retry ${pendingItems.length} question(s)` : `Solve ${pendingItems.length} questions`,
       disabled: false, action: runPhase2, icon: <PlayCircle size={16} />,
@@ -569,15 +577,21 @@ function PatchIpadProX() {
             {items.length > 0 && (
               <>
                 <p className="text-xs font-black uppercase tracking-wider text-muted-foreground mt-4 mb-2">Questions</p>
+                {stats.duplicates > 0 && (
+                  <p className="mb-2 text-xs font-bold text-violet-600 dark:text-violet-400">
+                    {stats.duplicates} question(s) are already in this subject. Use “Import duplicate(s) anyway” to add them again.
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {items.map((it) => (
-                    <span key={it.id} title={it.error || it.status}
+                    <span key={it.id} title={it.status === "duplicate" ? "already in this subject" : (it.error || it.status)}
                       className={`px-2 py-1 rounded-lg text-[11px] font-bold ${
                         it.status === "imported" ? "bg-emerald-500/15 text-emerald-600"
                           : it.status === "solved" ? "bg-sky-500/15 text-sky-600"
                           : it.status === "failed" ? "bg-rose-500/15 text-rose-600"
+                          : it.status === "duplicate" ? "bg-violet-500/15 text-violet-600"
                           : "bg-amber-500/15 text-amber-600"}`}>
-                      p{it.page_number}q{it.item_index + 1}{it.correct_letter ? ` · ${it.correct_letter}` : ""}
+                      p{it.page_number}q{it.item_index + 1}{it.correct_letter ? ` · ${it.correct_letter}` : ""}{it.status === "duplicate" ? " · already there" : ""}
                     </span>
                   ))}
                 </div>
