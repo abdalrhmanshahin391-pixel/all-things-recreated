@@ -279,6 +279,42 @@ function PresenceTracker() {
 }
 
 /**
+ * Accounts created through a social provider land without a username, real
+ * name or phone. Send them through /welcome once, from anywhere in the app,
+ * so the state can never linger half-finished.
+ */
+const ONBOARDING_EXEMPT = [
+  "/welcome",
+  "/auth",
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/locked",
+  "/terms",
+  "/privacy",
+  "/refund-policy",
+  "/.lovable",
+];
+
+function OnboardingGate() {
+  const { user, profile, loading } = useAuth();
+  const location = useRouterState({ select: (s) => s.location });
+
+  useEffect(() => {
+    if (loading || !user) return;
+    const pathname = location.pathname;
+    if (ONBOARDING_EXEMPT.some((p) => pathname === p || pathname.startsWith(p + "/"))) return;
+    if (!needsOnboarding(user.id, profile)) return;
+    const next = pathname + (location.searchStr ?? "");
+    const q = next && next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
+    window.location.replace(`/welcome${q}`);
+  }, [loading, user, profile, location]);
+
+  return null;
+}
+
+/**
  * The site directory footer on every page except full-screen working
  * surfaces (admin, quiz/study players, auth-blocked screens) where it
  * would only get in the way.
