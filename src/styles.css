@@ -4,9 +4,9 @@
 
 
 @theme {
-  --font-sans: "Nunito", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-serif: "Nunito", system-ui, sans-serif;
-  --font-display: "Nunito", system-ui, sans-serif;
+  --font-sans: "Nunito", "Manrope", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Nunito", "Manrope", system-ui, sans-serif;
+  --font-display: "Nunito", "Manrope", system-ui, sans-serif;
 }
 
 /* Mascot float animation — gentle up/down loop */

@@ -130,10 +130,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        // Only the families and weights the design actually renders. Manrope
-        // and Reem Kufi were downloaded on every page load without ever being
-        // used, and the unused mid weights cost extra font files.
-        href: "https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Tajawal:wght@400;700&family=Aref+Ruqaa:wght@400;700&family=Cinzel+Decorative:wght@700&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Manrope:wght@400;500;600;700&family=Tajawal:wght@400;500;700;800;900&family=Reem+Kufi:wght@500;600;700&family=Aref+Ruqaa:wght@400;700&family=Cinzel+Decorative:wght@700&display=swap",
       },
       { rel: "icon", type: "image/png", href: "/favicon.png" },
       { rel: "apple-touch-icon", href: "/favicon.png" },

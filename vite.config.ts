@@ -23,24 +23,6 @@ export default defineConfig({
   // mhchem extension (\ce{...} chemistry) would be loaded into a different
   // instance than the one that renders the math.
   vite: {
-    build: {
-      rollupOptions: {
-        output: {
-          // Keep the big, rarely-changing libraries in their own cached files
-          // so a content update doesn't force everyone to re-download React,
-          // the backend client and the UI primitives again.
-          manualChunks(id: string) {
-            if (!id.includes("node_modules")) return undefined;
-            if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return "vendor-react";
-            if (id.includes("@supabase")) return "vendor-supabase";
-            if (id.includes("@tanstack")) return "vendor-tanstack";
-            if (id.includes("i18next")) return "vendor-i18n";
-            if (id.includes("@radix-ui") || id.includes("lucide-react")) return "vendor-ui";
-            return undefined;
-          },
-        },
-      },
-    },
     resolve: {
       dedupe: ["katex"],
       alias: [
