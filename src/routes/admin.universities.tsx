@@ -148,7 +148,7 @@ function AdminUniversities() {
   }
 
   async function updateHome(u: University, patch: Record<string, unknown>) {
-    const { error } = await supabase.from("universities").update(patch).eq("id", u.id);
+    const { error } = await supabase.from("universities").update(patch as never).eq("id", u.id);
     if (error) return toast.error(error.message);
     invalidate();
   }
