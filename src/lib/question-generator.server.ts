@@ -447,32 +447,59 @@ export async function callGeminiQuestions(
 
   let json: any;
   let note = "";
-  try {
-    json = await geminiFetch(apiKey, model, body);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "error";
-    if (!/\b(400|404)\b/.test(msg)) throw e;
-    note = `First attempt rejected (${msg}); retried in plain JSON mode.`;
-    json = await geminiFetch(apiKey, model, {
-      ...body,
-      systemInstruction: {
-        parts: [{ text: `${system}\nRespond with a single JSON object: {"questions": [...]}.` }],
-      },
-      generationConfig: { temperature: 0.2, maxOutputTokens: MAX_OUT },
-    });
+  let modelUsed = "";
+  let lastError = "";
+
+  for (const candidate of geminiCandidates(model)) {
+    try {
+      json = await geminiFetch(apiKey, candidate, body);
+      modelUsed = candidate;
+      break;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "error";
+      lastError = msg;
+      if (isModelUnavailable(msg)) {
+        note = `${note} "${candidate}" is not available for this key — tried the next model.`.trim();
+        continue;
+      }
+      if (!/\b400\b/.test(msg)) throw e;
+      // Some models reject JSON mime / system instructions — retry plainly, same model.
+      note = `${note} First attempt rejected (${msg}); retried in plain JSON mode.`.trim();
+      json = await geminiFetch(apiKey, candidate, {
+        ...body,
+        systemInstruction: {
+          parts: [{ text: `${system}\nRespond with a single JSON object: {"questions": [...]}.` }],
+        },
+        generationConfig: { temperature: 0.2, maxOutputTokens: MAX_OUT },
+      });
+      modelUsed = candidate;
+      break;
+    }
+  }
+
+  if (!json) {
+    throw new Error(
+      `No usable Gemini model for this key (tried ${geminiCandidates(model).join(", ")}). Last error: ${lastError || "unknown"}`,
+    );
   }
 
   const content = geminiText(json);
   const finish = json?.candidates?.[0]?.finishReason ?? "";
-  const { questions, parsed, salvaged } = extractQuestions(content || "{}");
+  if (!content) {
+    // Empty reply is a real failure — never pretend it was "cut off" and keep splitting.
+    throw new Error(`${modelUsed}: ${emptyReplyReason(json)}.`);
+  }
+  const { questions, parsed, salvaged } = extractQuestions(content);
   const cut = finish === "MAX_TOKENS" || salvaged;
   if (!parsed && !cut) {
-    throw new Error(`Gemini did not return valid JSON${finish ? ` (finish: ${finish})` : ""}.`);
+    throw new Error(
+      `${modelUsed} did not return valid JSON${finish ? ` (finish: ${finish})` : ""}. Reply started with: ${content.slice(0, 160)}`,
+    );
   }
   if (cut) {
     note = `${note} Reply was cut off — kept ${questions.length} complete question(s); the rest of this part will be split and retried.`.trim();
   }
-  return { questions, note, rawPreview: content.slice(0, 600), truncated: cut };
+  return { questions, note, rawPreview: content.slice(0, 600), truncated: cut, modelUsed };
 }
 
 
