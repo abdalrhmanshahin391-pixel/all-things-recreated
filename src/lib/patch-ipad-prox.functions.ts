@@ -385,7 +385,8 @@ export const pollSolveBatchProX = createServerFn({ method: "POST" })
 
 export const importProxJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ jobId: z.string().uuid() }).parse(d))
+  .inputValidator((d: unknown) =>
+    z.object({ jobId: z.string().uuid(), allowDuplicates: z.boolean().optional() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureProxAdmin(context);
     const { data: job, error } = await supabase.from(PROX_JOBS)
@@ -400,8 +401,10 @@ export const importProxJob = createServerFn({ method: "POST" })
     if (!all.length) throw new Error("Nothing to import yet.");
     // Import everything that IS solved. A few unusable pictures must not block
     // the whole run — they are reported back so they can be retried.
-    const incomplete = all.filter((i: any) => i.status !== "solved" && i.status !== "imported");
-    if (!all.some((i: any) => i.status === "solved")) {
+    const importable = (i: any) => i.status === "solved" || (data.allowDuplicates && i.status === "duplicate");
+    const incomplete = all.filter((i: any) => !importable(i) && i.status !== "imported" && i.status !== "duplicate");
+    if (!all.some((i: any) => importable(i))) {
+      if (data.allowDuplicates) throw new Error("No duplicate question left to re-import.");
       throw new Error("No question has a usable Gemini answer yet — run phase 2 or retry the failed pictures first.");
     }
 
@@ -413,12 +416,12 @@ export const importProxJob = createServerFn({ method: "POST" })
       idToUse = candidates.map((n) => byLower.get(String(n).trim().toLowerCase()) ?? null);
     }
 
-    let inserted = 0, skipped = 0, failed = 0;
+    let inserted = 0, skipped = 0, failed = 0, duplicates = 0;
     const errors: string[] = [];
     if (incomplete.length) errors.push(`${incomplete.length} question(s) had no usable Gemini answer and were skipped`);
 
     for (const it of all) {
-      if (it.status !== "solved") { failed++; continue; }
+      if (!importable(it)) continue;
       try {
         let targetSubject: string | null = job.subject_id ?? null;
         if (!targetSubject) {
@@ -436,7 +439,13 @@ export const importProxJob = createServerFn({ method: "POST" })
         const { count } = await supabase.from("questions")
           .select("id", { count: "exact", head: true }).eq("subject_id", targetSubject);
 
-        const stem = String(it.stem || `Question ${it.item_index + 1} (page ${it.page_number})`).slice(0, 300);
+        let stem = String(it.stem || `Question ${it.item_index + 1} (page ${it.page_number})`).slice(0, 300);
+        // Re-import on request: make the text unique so the per-subject
+        // duplicate guard lets the second copy through.
+        if (data.allowDuplicates) {
+          const suffix = ` (p${it.page_number}q${it.item_index + 1})`;
+          if (!stem.endsWith(suffix)) stem = `${stem.slice(0, 300 - suffix.length)}${suffix}`;
+        }
         const { data: q, error: qErr } = await supabase.from("questions").upsert(
           {
             subject_id: targetSubject,
@@ -448,7 +457,12 @@ export const importProxJob = createServerFn({ method: "POST" })
           { onConflict: "subject_id,stem_hash", ignoreDuplicates: true },
         ).select("id").maybeSingle();
         if (qErr) throw qErr;
-        if (!q?.id) { skipped++; continue; }
+        if (!q?.id) {
+          // The exact same question text already exists in this subject.
+          duplicates++;
+          await supabase.from(PROX_ITEMS).update({ status: "duplicate" }).eq("id", it.id);
+          continue;
+        }
 
         const rows = letters.map((l, j) => ({
           question_id: q.id, label: l, text: null as string | null,
@@ -465,12 +479,18 @@ export const importProxJob = createServerFn({ method: "POST" })
       }
     }
 
+    if (duplicates) errors.push(`${duplicates} question(s) already existed in the subject`);
+
+    const { count: alreadyImported } = await supabase.from(PROX_ITEMS)
+      .select("id", { count: "exact", head: true }).eq("job_id", data.jobId).eq("status", "imported");
+
     await supabase.from(PROX_JOBS).update({
-      phase: "imported", imported_count: inserted, updated_at: new Date().toISOString(),
+      phase: "imported", imported_count: alreadyImported ?? inserted, updated_at: new Date().toISOString(),
       error: errors.length ? errors.slice(0, 5).join("; ").slice(0, 500) : null,
     }).eq("id", data.jobId);
 
-    return { inserted, skipped, failed, errors: errors.slice(0, 10) };
+    skipped = duplicates;
+    return { inserted, skipped, duplicates, failed, errors: errors.slice(0, 10) };
   });
 
 // ---------------- 8. listing / detail / delete ----------------

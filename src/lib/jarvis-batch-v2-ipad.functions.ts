@@ -6,10 +6,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { buildReferenceBlock } from "@/lib/patch-ipad-prox.server";
 
 const MODEL = "gemini-2.5-flash-lite";
 const CHUNK_PAGES = 2;
 const JOBS_TABLE = "jarvis_batch_v2_ipad_jobs";
+
 const CHUNKS_TABLE = "jarvis_batch_v2_ipad_chunks";
 
 async function ensureAdmin(context: any) {
@@ -344,10 +346,10 @@ export const submitChunkV2Ipad = createServerFn({ method: "POST" })
       .from(CHUNKS_TABLE).select("id, job_id, chunk_index, status, results").eq("id", data.chunkId).single();
     if (cErr) throw cErr;
     const { data: job, error: jErr } = await supabase
-      .from(JOBS_TABLE).select("id, subject_candidates").eq("id", chunk.job_id).single();
+      .from(JOBS_TABLE).select("id, subject_candidates, reference_book").eq("id", chunk.job_id).single();
     if (jErr) throw jErr;
     const candidates: string[] = Array.isArray(job.subject_candidates) ? job.subject_candidates : [];
-    const subjectsBlock = buildSubjectsBlock(candidates);
+    const subjectsBlock = buildReferenceBlock(job.reference_book) + buildSubjectsBlock(candidates);
 
     // Defensive dedupe: identical / near-identical blocks land here when the
     // upstream extractor returns duplicate page text. Collapse them so we
@@ -591,10 +593,25 @@ export const listJobsV2Ipad = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const { supabase } = await ensureAdmin(context);
     const { data, error } = await supabase.from(JOBS_TABLE)
-      .select("id, pdf_name, total_pages, subject_id, status, created_at")
+      .select("id, pdf_name, total_pages, subject_id, status, reference_book, created_at")
       .order("created_at", { ascending: false }).limit(30);
     if (error) throw error;
     return { rows: data ?? [] };
+  });
+
+export const setJarvisReferenceBook = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    jobId: z.string().uuid(),
+    book: z.string().max(200).nullable(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const book = (data.book ?? "").trim();
+    const { error } = await supabase.from(JOBS_TABLE)
+      .update({ reference_book: book || null }).eq("id", data.jobId);
+    if (error) throw error;
+    return { book: book || null };
   });
 
 const JobInput = z.object({ jobId: z.string().uuid() });

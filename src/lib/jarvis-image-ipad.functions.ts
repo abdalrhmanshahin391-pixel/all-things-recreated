@@ -10,6 +10,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { buildReferenceBlock } from "@/lib/patch-ipad-prox.server";
 
 const CUT_MODEL = "gemini-2.5-flash";
 const SOLVE_MODEL = "gemini-2.5-flash";
@@ -394,9 +395,10 @@ export const submitImageChunkIpad = createServerFn({ method: "POST" })
       .from(CHUNKS_TABLE).select("id, job_id, chunk_index").eq("id", data.chunkId).single();
     if (cErr) throw cErr;
     const { data: job, error: jErr } = await supabase
-      .from(JOBS_TABLE).select("id, subject_candidates").eq("id", chunk.job_id).single();
+      .from(JOBS_TABLE).select("id, subject_candidates, reference_book").eq("id", chunk.job_id).single();
     if (jErr) throw jErr;
-    const subjectsBlock = buildSubjectsBlock(Array.isArray(job.subject_candidates) ? job.subject_candidates : []);
+    const subjectsBlock = buildReferenceBlock(job.reference_book)
+      + buildSubjectsBlock(Array.isArray(job.subject_candidates) ? job.subject_candidates : []);
 
     const paths = data.crops.map((c) => c.path);
     const previews = data.crops.map((c, i) => c.label || `Q${i + 1} (image)`);
@@ -467,7 +469,7 @@ export const importImageChunkIpad = createServerFn({ method: "POST" })
     if (error) throw error;
     if (!chunk.batch_id) throw new Error("Chunk has no batch");
     const { data: job, error: jErr } = await supabase
-      .from(JOBS_TABLE).select("id, subject_id, subject_candidates, group_id").eq("id", chunk.job_id).single();
+      .from(JOBS_TABLE).select("id, subject_id, subject_candidates, group_id, reference_book").eq("id", chunk.job_id).single();
     if (jErr) throw jErr;
 
     const apiKey = await getGeminiKey(supabase);
@@ -477,7 +479,7 @@ export const importImageChunkIpad = createServerFn({ method: "POST" })
 
     const paths: string[] = Array.isArray(chunk.question_blocks) ? chunk.question_blocks : [];
     const candidates: string[] = Array.isArray(job.subject_candidates) ? job.subject_candidates : [];
-    const subjectsBlock = buildSubjectsBlock(candidates);
+    const subjectsBlock = buildReferenceBlock(job.reference_book) + buildSubjectsBlock(candidates);
 
     if (paths.length && items.length === 0) {
       const msg = `Gemini returned no solved answers for ${paths.length} uploaded question image${paths.length === 1 ? "" : "s"}. The pictures are still stored; use check/import again, or retry this page if it repeats.`;

@@ -2033,6 +2033,7 @@ export type Database = {
           id: string
           pdf_name: string
           queue_order: number
+          reference_book: string | null
           status: string
           subject_candidates: Json
           subject_id: string | null
@@ -2047,6 +2048,7 @@ export type Database = {
           id?: string
           pdf_name: string
           queue_order?: number
+          reference_book?: string | null
           status?: string
           subject_candidates?: Json
           subject_id?: string | null
@@ -2061,6 +2063,7 @@ export type Database = {
           id?: string
           pdf_name?: string
           queue_order?: number
+          reference_book?: string | null
           status?: string
           subject_candidates?: Json
           subject_id?: string | null
