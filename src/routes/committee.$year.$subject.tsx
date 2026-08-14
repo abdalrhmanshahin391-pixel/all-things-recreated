@@ -1040,13 +1040,18 @@ function ResourceAction({ resource }: { resource: Resource }) {
     ) : null;
 
   if (resource.kind === "pdf" && resource.drive_download_link) {
+    const driveHref = fastDriveLink(resource.drive_download_link);
     return (
       <div className="flex gap-1 shrink-0">
         {viewButton}
         <a
-          href={resource.drive_download_link}
-          target="_blank"
+          href={driveHref}
           rel="noopener noreferrer"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            triggerDownload(driveHref, `${resource.title}.pdf`);
+          }}
           className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full text-white hover:opacity-90 shrink-0 min-w-[74px] justify-center"
           style={{ background: "linear-gradient(135deg,#F43F5E 0%,#DC2626 100%)" }}
           aria-label="Save PDF"
