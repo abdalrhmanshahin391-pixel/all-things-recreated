@@ -395,8 +395,12 @@ export const importProxJob = createServerFn({ method: "POST" })
     if (iErr) throw iErr;
     const all = items ?? [];
     if (!all.length) throw new Error("Nothing to import yet.");
+    // Import everything that IS solved. A few unusable pictures must not block
+    // the whole run — they are reported back so they can be retried.
     const incomplete = all.filter((i: any) => i.status !== "solved" && i.status !== "imported");
-    if (incomplete.length) throw new Error(`Phase 2 is not complete — ${incomplete.length} question(s) still need a usable Gemini answer.`);
+    if (!all.some((i: any) => i.status === "solved")) {
+      throw new Error("No question has a usable Gemini answer yet — run phase 2 or retry the failed pictures first.");
+    }
 
     const candidates: string[] = Array.isArray(job.subject_candidates) ? job.subject_candidates : [];
     let idToUse: (string | null)[] = [];
