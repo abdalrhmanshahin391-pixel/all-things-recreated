@@ -152,7 +152,9 @@ export async function driveMakePublic(fileId: string) {
     name: meta.name,
     size: meta.size ? Number(meta.size) : null,
     webViewLink: meta.webViewLink ?? `https://drive.google.com/file/d/${meta.id}/view`,
-    downloadLink: `https://drive.usercontent.google.com/download?id=${meta.id}&export=download`,
+    // `confirm=t` skips Google's "can't scan for viruses" interstitial so the
+    // file starts streaming on the first click.
+    downloadLink: `https://drive.usercontent.google.com/download?id=${meta.id}&export=download&confirm=t`,
   };
 }
 

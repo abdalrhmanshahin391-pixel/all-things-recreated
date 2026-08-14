@@ -128,6 +128,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      { rel: "preconnect", href: "https://drive.usercontent.google.com", crossOrigin: "anonymous" },
+      { rel: "dns-prefetch", href: "https://drive.usercontent.google.com" },
+      { rel: "preconnect", href: "https://drive.google.com" },
+      { rel: "dns-prefetch", href: "https://drive.google.com" },
       {
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Manrope:wght@400;500;600;700&family=Tajawal:wght@400;500;700;800;900&family=Reem+Kufi:wght@500;600;700&family=Aref+Ruqaa:wght@400;700&family=Cinzel+Decorative:wght@700&display=swap",
