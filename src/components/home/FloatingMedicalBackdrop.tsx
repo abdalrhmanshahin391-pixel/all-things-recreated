@@ -47,13 +47,21 @@ const GLYPHS: Glyph[] = [
  * icons floating gently in place. Pure CSS, no JS animation loop.
  * Hidden on small screens to avoid visual noise on mobile.
  */
-export function FloatingMedicalBackdrop({ density = "hero" }: { density?: "hero" | "page" }) {
+export function FloatingMedicalBackdrop({
+  density = "hero",
+  tone = "pastel",
+}: {
+  density?: "hero" | "page";
+  /** "gold" keeps every glyph on the brand gold/slate palette (auth screens). */
+  tone?: "pastel" | "gold";
+}) {
   const items = density === "page" ? GLYPHS.slice(0, 8) : GLYPHS;
+  const gold = tone === "gold";
   return (
     <div
       aria-hidden
       className="pointer-events-none absolute inset-0 overflow-hidden hidden md:block"
-      style={{ opacity: density === "page" ? 0.55 : 1 }}
+      style={{ opacity: gold ? 0.9 : density === "page" ? 0.55 : 1 }}
     >
       {items.map((g, i) => {
         const { Icon } = g;
@@ -68,10 +76,19 @@ export function FloatingMedicalBackdrop({ density = "hero" }: { density?: "hero"
               bottom: g.bottom,
               width: g.size,
               height: g.size,
-              background: g.bg,
-              color: g.color,
+              background: gold
+                ? i % 3 === 0
+                  ? "color-mix(in oklab, var(--primary) 22%, transparent)"
+                  : "color-mix(in oklab, var(--foreground) 7%, transparent)"
+                : g.bg,
+              color: gold
+                ? i % 3 === 0
+                  ? "var(--primary)"
+                  : "color-mix(in oklab, var(--foreground) 55%, transparent)"
+                : g.color,
+              border: gold ? "1px solid color-mix(in oklab, var(--primary) 22%, transparent)" : undefined,
               transform: `rotate(${g.rotate}deg)`,
-              boxShadow: "0 4px 0 rgba(15,23,42,0.06)",
+              boxShadow: gold ? "none" : "0 4px 0 rgba(15,23,42,0.06)",
               animationDelay: g.delay,
               animationDuration: g.duration,
             }}

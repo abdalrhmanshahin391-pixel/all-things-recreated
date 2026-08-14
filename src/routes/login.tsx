@@ -15,6 +15,7 @@ import {
   buttonClass,
   ErrorBox,
 } from "@/components/AuthShell";
+import { GoogleButton, AuthDivider } from "@/components/auth/GoogleButton";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -54,7 +55,6 @@ function LoginPage() {
     const saved = loadRememberedLogin();
     if (!saved) return;
     setIdentifier(saved.email);
-    setPassword(saved.password);
     setRemember(true);
     setHasSaved(true);
   }, []);
@@ -62,7 +62,6 @@ function LoginPage() {
   function clearSaved() {
     clearRememberedLogin();
     setIdentifier("");
-    setPassword("");
     setHasSaved(false);
   }
 
@@ -138,7 +137,7 @@ function LoginPage() {
         }
       }
 
-      if (remember) saveRememberedLogin({ email, password });
+      if (remember) saveRememberedLogin({ email });
       else clearRememberedLogin();
 
       if (next) {
@@ -202,8 +201,12 @@ function LoginPage() {
         </div>
       )}
 
+      {error && <ErrorBox message={error} />}
+
+      <GoogleButton next={next || undefined} onError={setError} />
+      <AuthDivider />
+
       <form onSubmit={handleSubmit} className="space-y-5">
-        {error && <ErrorBox message={error} />}
 
         <FormField label={t("cms.login.emailLabel")}>
           <input
@@ -258,7 +261,7 @@ function LoginPage() {
               }}
               className="h-4 w-4 rounded border-2 border-border accent-[var(--primary)]"
             />
-            save my info on this device
+            keep me signed in on this device
           </label>
           {hasSaved && (
             <button
@@ -266,7 +269,7 @@ function LoginPage() {
               onClick={clearSaved}
               className="text-xs font-bold text-muted-foreground hover:text-foreground underline"
             >
-              not you? clear saved info
+              not you? use another email
             </button>
           )}
         </div>

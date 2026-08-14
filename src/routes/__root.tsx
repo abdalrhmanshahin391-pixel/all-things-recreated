@@ -23,6 +23,8 @@ import { SeasonalTheme } from "@/components/SeasonalTheme";
 import { ThemeDecor } from "@/components/ThemeDecor";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { SiteFooter } from "@/components/SiteFooter";
+import { useAuth } from "@/hooks/useAuth";
+import { needsOnboarding } from "@/lib/onboarding";
 import "@/i18n";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -258,6 +260,7 @@ function RootComponent() {
           <ThemeDecor />
           <PresenceTracker />
           <DeviceTracker />
+          <OnboardingGate />
           <PaymentTestModeBanner />
           <AnnouncementBar />
           {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
@@ -272,6 +275,42 @@ function RootComponent() {
 
 function PresenceTracker() {
   usePresence();
+  return null;
+}
+
+/**
+ * Accounts created through a social provider land without a username, real
+ * name or phone. Send them through /welcome once, from anywhere in the app,
+ * so the state can never linger half-finished.
+ */
+const ONBOARDING_EXEMPT = [
+  "/welcome",
+  "/auth",
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/locked",
+  "/terms",
+  "/privacy",
+  "/refund-policy",
+  "/.lovable",
+];
+
+function OnboardingGate() {
+  const { user, profile, loading } = useAuth();
+  const location = useRouterState({ select: (s) => s.location });
+
+  useEffect(() => {
+    if (loading || !user) return;
+    const pathname = location.pathname;
+    if (ONBOARDING_EXEMPT.some((p) => pathname === p || pathname.startsWith(p + "/"))) return;
+    if (!needsOnboarding(user.id, profile)) return;
+    const next = pathname + (location.searchStr ?? "");
+    const q = next && next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
+    window.location.replace(`/welcome${q}`);
+  }, [loading, user, profile, location]);
+
   return null;
 }
 

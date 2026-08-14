@@ -30,6 +30,7 @@ import { Route as StudyHubRouteImport } from './routes/study-hub'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as UniversitiesRouteImport } from './routes/universities'
+import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
@@ -76,6 +77,7 @@ import { Route as AdminUniversitiesRouteImport } from './routes/admin.universiti
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminVisionProBatchRouteImport } from './routes/admin.vision-pro-batch'
 import { Route as ApiCommitteeDriveUploadRouteImport } from './routes/api/committee-drive-upload'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
 import { Route as CommitteeIndexRouteImport } from './routes/committee.index'
 import { Route as CommitteeYearRouteImport } from './routes/committee.$year'
@@ -233,6 +235,11 @@ const TermsRoute = TermsRouteImport.update({
 const UniversitiesRoute = UniversitiesRouteImport.update({
   id: '/universities',
   path: '/universities',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WelcomeRoute = WelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
   getParentRoute: () => rootRouteImport,
 } as any)
 const Char91DotmcpChar93ListToolsRoute =
@@ -466,6 +473,11 @@ const AdminVisionProBatchRoute = AdminVisionProBatchRouteImport.update({
 const ApiCommitteeDriveUploadRoute = ApiCommitteeDriveUploadRouteImport.update({
   id: '/api/committee-drive-upload',
   path: '/api/committee-drive-upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CheckoutSuccessRoute = CheckoutSuccessRouteImport.update({
@@ -761,6 +773,7 @@ export interface FileRoutesByFullPath {
   '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/universities': typeof UniversitiesRoute
+  '/welcome': typeof WelcomeRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/about': typeof AdminAboutRoute
@@ -806,6 +819,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRoute
   '/admin/vision-pro-batch': typeof AdminVisionProBatchRoute
   '/api/committee-drive-upload': typeof ApiCommitteeDriveUploadRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/$year': typeof CommitteeYearRouteWithChildren
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
@@ -879,6 +893,7 @@ export interface FileRoutesByTo {
   '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/universities': typeof UniversitiesRoute
+  '/welcome': typeof WelcomeRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/about': typeof AdminAboutRoute
@@ -923,6 +938,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRoute
   '/admin/vision-pro-batch': typeof AdminVisionProBatchRoute
   '/api/committee-drive-upload': typeof ApiCommitteeDriveUploadRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
   '/guides/$slug': typeof GuidesSlugRoute
@@ -997,6 +1013,7 @@ export interface FileRoutesById {
   '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/universities': typeof UniversitiesRoute
+  '/welcome': typeof WelcomeRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/about': typeof AdminAboutRoute
@@ -1042,6 +1059,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRoute
   '/admin/vision-pro-batch': typeof AdminVisionProBatchRoute
   '/api/committee-drive-upload': typeof ApiCommitteeDriveUploadRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/$year': typeof CommitteeYearRouteWithChildren
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
@@ -1121,6 +1139,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/terms'
     | '/universities'
+    | '/welcome'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/admin/about'
@@ -1166,6 +1185,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/vision-pro-batch'
     | '/api/committee-drive-upload'
+    | '/auth/callback'
     | '/checkout/success'
     | '/committee/$year'
     | '/committee/study-plan'
@@ -1239,6 +1259,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/terms'
     | '/universities'
+    | '/welcome'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/admin/about'
@@ -1283,6 +1304,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/vision-pro-batch'
     | '/api/committee-drive-upload'
+    | '/auth/callback'
     | '/checkout/success'
     | '/committee/study-plan'
     | '/guides/$slug'
@@ -1356,6 +1378,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/terms'
     | '/universities'
+    | '/welcome'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/admin/about'
@@ -1401,6 +1424,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/vision-pro-batch'
     | '/api/committee-drive-upload'
+    | '/auth/callback'
     | '/checkout/success'
     | '/committee/$year'
     | '/committee/study-plan'
@@ -1479,6 +1503,7 @@ export interface RootRouteChildren {
   SupportRoute: typeof SupportRoute
   TermsRoute: typeof TermsRoute
   UniversitiesRoute: typeof UniversitiesRoute
+  WelcomeRoute: typeof WelcomeRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   AdminAboutRoute: typeof AdminAboutRoute
@@ -1524,6 +1549,7 @@ export interface RootRouteChildren {
   AdminUsersRoute: typeof AdminUsersRoute
   AdminVisionProBatchRoute: typeof AdminVisionProBatchRoute
   ApiCommitteeDriveUploadRoute: typeof ApiCommitteeDriveUploadRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   CheckoutSuccessRoute: typeof CheckoutSuccessRoute
   GuidesSlugRoute: typeof GuidesSlugRoute
   MyCoursesRoute: typeof MyCoursesRoute
@@ -1704,6 +1730,13 @@ declare module '@tanstack/react-router' {
       path: '/universities'
       fullPath: '/universities'
       preLoaderRoute: typeof UniversitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/welcome': {
+      id: '/welcome'
+      path: '/welcome'
+      fullPath: '/welcome'
+      preLoaderRoute: typeof WelcomeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/.mcp/list-tools': {
@@ -2026,6 +2059,13 @@ declare module '@tanstack/react-router' {
       path: '/api/committee-drive-upload'
       fullPath: '/api/committee-drive-upload'
       preLoaderRoute: typeof ApiCommitteeDriveUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/checkout/success': {
@@ -2566,6 +2606,7 @@ const rootRouteChildren: RootRouteChildren = {
   SupportRoute: SupportRoute,
   TermsRoute: TermsRoute,
   UniversitiesRoute: UniversitiesRoute,
+  WelcomeRoute: WelcomeRoute,
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
@@ -2612,6 +2653,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminUsersRoute: AdminUsersRoute,
   AdminVisionProBatchRoute: AdminVisionProBatchRoute,
   ApiCommitteeDriveUploadRoute: ApiCommitteeDriveUploadRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   CheckoutSuccessRoute: CheckoutSuccessRoute,
   GuidesSlugRoute: GuidesSlugRoute,
   MyCoursesRoute: MyCoursesRoute,

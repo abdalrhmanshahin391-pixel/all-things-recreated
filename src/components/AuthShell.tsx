@@ -66,15 +66,30 @@ export function AuthShell({
         </main>
       </div>
 
-      {/* Right: medical aesthetic panel */}
+      {/* Right: brand panel — navy surface + gold glow, all from theme tokens */}
       <aside
-        className="hidden lg:flex relative overflow-hidden"
+        className="hidden lg:flex relative overflow-hidden border-s border-border"
         style={{
           background:
-            "linear-gradient(160deg, #f0fdf4 0%, #ecfdf5 40%, #e0f2fe 100%)",
+            "radial-gradient(120% 90% at 85% 0%, color-mix(in oklab, var(--primary) 16%, transparent) 0%, transparent 55%)," +
+            "radial-gradient(90% 70% at 10% 100%, color-mix(in oklab, var(--primary) 10%, transparent) 0%, transparent 60%)," +
+            "linear-gradient(160deg, var(--card) 0%, var(--background) 100%)",
         }}
       >
-        <FloatingMedicalBackdrop />
+        {/* faint gold grid */}
+        <div
+          aria-hidden
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, color-mix(in oklab, var(--primary) 10%, transparent) 1px, transparent 1px)," +
+              "linear-gradient(to bottom, color-mix(in oklab, var(--primary) 10%, transparent) 1px, transparent 1px)",
+            backgroundSize: "56px 56px",
+            maskImage: "radial-gradient(85% 75% at 50% 40%, black 40%, transparent 100%)",
+            WebkitMaskImage: "radial-gradient(85% 75% at 50% 40%, black 40%, transparent 100%)",
+          }}
+        />
+        <FloatingMedicalBackdrop tone="gold" />
 
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           <div className="flex items-center gap-2">
@@ -96,7 +111,7 @@ export function AuthShell({
                 ? "welcome back to your study desk."
                 : "built for the rigor of medical school."}
             </h2>
-            <p className="mt-5 text-sm md:text-base text-muted-foreground leading-relaxed">
+          <p className="mt-5 text-sm md:text-base text-foreground/70 leading-relaxed">
               {isLogin
                 ? "your courses, lectures, and committee summaries are exactly where you left them."
                 : "curated question banks, structured review, and lecture libraries — designed for students who want clarity, not noise."}

@@ -11,6 +11,7 @@ import {
   buttonClass,
   ErrorBox,
 } from "@/components/AuthShell";
+import { GoogleButton, AuthDivider } from "@/components/auth/GoogleButton";
 
 export const Route = createFileRoute("/register")({
   head: () => ({
@@ -199,9 +200,12 @@ function RegisterPage() {
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {error && <ErrorBox message={error} />}
+      {error && <ErrorBox message={error} />}
 
+      <GoogleButton label="Sign up with Google" onError={setError} />
+      <AuthDivider label="or sign up with email" />
+
+      <form onSubmit={handleSubmit} className="space-y-5">
         <FormField label={t("cms.register.fullName")} required>
           <input
             type="text"
