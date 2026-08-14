@@ -4326,6 +4326,8 @@ export type Database = {
       universities: {
         Row: {
           city: string | null
+          closed_note_ar: string | null
+          closed_note_en: string | null
           country: string | null
           cover_path: string | null
           created_at: string
@@ -4336,6 +4338,7 @@ export type Database = {
           home_visible: boolean
           id: string
           is_active: boolean
+          is_closed: boolean
           is_visible: boolean
           lectures_visible: boolean
           logo_url: string
@@ -4344,10 +4347,13 @@ export type Database = {
           slug: string
           sort_order: number
           storage_path: string | null
+          tags: Json
           updated_at: string
         }
         Insert: {
           city?: string | null
+          closed_note_ar?: string | null
+          closed_note_en?: string | null
           country?: string | null
           cover_path?: string | null
           created_at?: string
@@ -4358,6 +4364,7 @@ export type Database = {
           home_visible?: boolean
           id?: string
           is_active?: boolean
+          is_closed?: boolean
           is_visible?: boolean
           lectures_visible?: boolean
           logo_url: string
@@ -4366,10 +4373,13 @@ export type Database = {
           slug: string
           sort_order?: number
           storage_path?: string | null
+          tags?: Json
           updated_at?: string
         }
         Update: {
           city?: string | null
+          closed_note_ar?: string | null
+          closed_note_en?: string | null
           country?: string | null
           cover_path?: string | null
           created_at?: string
@@ -4380,6 +4390,7 @@ export type Database = {
           home_visible?: boolean
           id?: string
           is_active?: boolean
+          is_closed?: boolean
           is_visible?: boolean
           lectures_visible?: boolean
           logo_url?: string
@@ -4388,6 +4399,7 @@ export type Database = {
           slug?: string
           sort_order?: number
           storage_path?: string | null
+          tags?: Json
           updated_at?: string
         }
         Relationships: []
