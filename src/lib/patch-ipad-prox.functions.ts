@@ -14,6 +14,7 @@ import {
   PROX_CUT_MODEL, PROX_SOLVE_MODEL, PROX_JOBS, PROX_PAGES, PROX_ITEMS,
   ensureProxAdmin, getProxGeminiKey, submitProxBatch,
   CUTTER_SYSTEM, IMAGE_SOLVER_SYSTEM, buildSubjectsBlock, decideCorrectLetter,
+  buildReferenceBlock,
   extractJson, fetchBatch, downloadResponses, getBatchState, mapBatchStatus,
   responseText, normalizeLetter, normalizeProxRegions, solveSingleProxImage,
 } from "@/lib/patch-ipad-prox.server";
@@ -229,7 +230,7 @@ export const submitSolveBatchProX = createServerFn({ method: "POST" })
     const apiKey = await getProxGeminiKey(supabase);
 
     const { data: job, error } = await supabase.from(PROX_JOBS)
-      .select("id, phase, subject_candidates, solve_batch_ids").eq("id", data.jobId).single();
+      .select("id, phase, subject_candidates, solve_batch_ids, reference_book").eq("id", data.jobId).single();
     if (error) throw error;
 
     // gate: phase 1 must be finished
@@ -237,7 +238,8 @@ export const submitSolveBatchProX = createServerFn({ method: "POST" })
     const unfinished = (pages ?? []).filter((p: any) => p.status !== "cropped" && p.status !== "empty");
     if (unfinished.length) throw new Error(`Phase 1 is not finished yet — ${unfinished.length} page(s) still pending.`);
 
-    const subjectsBlock = buildSubjectsBlock(Array.isArray(job.subject_candidates) ? job.subject_candidates : []);
+    const subjectsBlock = buildReferenceBlock(job.reference_book)
+      + buildSubjectsBlock(Array.isArray(job.subject_candidates) ? job.subject_candidates : []);
     const requests = data.items.map((it) => ({
       request: {
         systemInstruction: { parts: [{ text: IMAGE_SOLVER_SYSTEM }] },
@@ -272,12 +274,13 @@ export const pollSolveBatchProX = createServerFn({ method: "POST" })
     const { supabase } = await ensureProxAdmin(context);
     const apiKey = await getProxGeminiKey(supabase);
     const { data: job, error } = await supabase.from(PROX_JOBS)
-      .select("id, solve_batch_ids, subject_candidates").eq("id", data.jobId).single();
+      .select("id, solve_batch_ids, subject_candidates, reference_book").eq("id", data.jobId).single();
     if (error) throw error;
     const batches: string[] = Array.isArray(job.solve_batch_ids) ? job.solve_batch_ids : [];
     if (!batches.length) return { done: false, states: [] as string[] };
 
-    const subjectsBlock = buildSubjectsBlock(Array.isArray(job.subject_candidates) ? job.subject_candidates : []);
+    const subjectsBlock = buildReferenceBlock(job.reference_book)
+      + buildSubjectsBlock(Array.isArray(job.subject_candidates) ? job.subject_candidates : []);
 
     // A batch item can come back empty or malformed. Re-solve that ONE picture
     // on its own before writing it off — the same repair pass the v2 image tool
