@@ -1,16 +1,19 @@
-const KEY = "aqua-remember-login";
+// Only the email address is ever remembered. Passwords are never stored:
+// staying signed in is handled by the auth session itself, which persists
+// and auto-refreshes.
+const KEY = "aqua-remember-email";
+const LEGACY_KEY = "aqua-remember-login";
 
-export type RememberedLogin = { email: string; password: string };
+export type RememberedLogin = { email: string };
 
 export function loadRememberedLogin(): RememberedLogin | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return null;
-    const json = decodeURIComponent(escape(atob(raw)));
-    const parsed = JSON.parse(json) as RememberedLogin;
-    if (!parsed?.email) return null;
-    return { email: parsed.email, password: parsed.password ?? "" };
+    // Wipe the old base64 email+password blob if it is still around.
+    window.localStorage.removeItem(LEGACY_KEY);
+    const email = window.localStorage.getItem(KEY);
+    if (!email) return null;
+    return { email };
   } catch {
     return null;
   }
@@ -19,8 +22,7 @@ export function loadRememberedLogin(): RememberedLogin | null {
 export function saveRememberedLogin(value: RememberedLogin) {
   if (typeof window === "undefined") return;
   try {
-    const json = JSON.stringify(value);
-    window.localStorage.setItem(KEY, btoa(unescape(encodeURIComponent(json))));
+    window.localStorage.setItem(KEY, value.email);
   } catch {
     /* storage unavailable */
   }
@@ -30,6 +32,7 @@ export function clearRememberedLogin() {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(KEY);
+    window.localStorage.removeItem(LEGACY_KEY);
   } catch {
     /* storage unavailable */
   }
