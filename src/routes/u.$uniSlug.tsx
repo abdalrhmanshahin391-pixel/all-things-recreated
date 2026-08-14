@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useLang } from "@/components/LanguageProvider";
+import { UniversityTags } from "@/components/common/UniversityTags";
 import {
   TILE_DEFAULTS,
   lockChip,
@@ -88,6 +89,10 @@ type University = {
   storage_path: string | null;
   cover_path: string | null;
   lectures_visible: boolean;
+  is_closed: boolean;
+  closed_note_en: string | null;
+  closed_note_ar: string | null;
+  tags: unknown;
 };
 
 function UniversityHubPage() {
@@ -103,7 +108,7 @@ function UniversityHubPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("universities")
-        .select("id,name,slug,short_name,description,city,country,logo_url,storage_path,cover_path,lectures_visible")
+        .select("id,name,slug,short_name,description,city,country,logo_url,storage_path,cover_path,lectures_visible,is_closed,closed_note_en,closed_note_ar,tags")
         .eq("slug", uniSlug)
         .eq("is_active", true)
         .maybeSingle();
@@ -152,7 +157,7 @@ function UniversityHubPage() {
   });
 
   const { data: tiles, isPending: tilesPending } = useQuery({
-    enabled: !!uni,
+    enabled: !!uni && (!uni.is_closed || isAdmin),
     queryKey: ["university-tiles", uni?.id],
     queryFn: async () => {
       if (!uni) return [] as UniversityTile[];
@@ -184,7 +189,7 @@ function UniversityHubPage() {
     qc.invalidateQueries({ queryKey: ["university-tiles", uni.id] });
   }
 
-  if (isLoading || authLoading || (!!uni && tilesPending)) {
+  if (isLoading || authLoading || (!!uni && (!uni.is_closed || isAdmin) && tilesPending)) {
     return (
       <div className="min-h-screen bg-background">
         <SiteHeader />
@@ -211,6 +216,31 @@ function UniversityHubPage() {
   }
 
   const location = [uni.city, uni.country].filter(Boolean).join(", ");
+  const closedNote = (lang === "ar" ? uni.closed_note_ar || uni.closed_note_en : uni.closed_note_en) ?? null;
+
+  if (uni.is_closed && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <SiteHeader />
+        <main className="pt-32 pb-24 mx-auto max-w-3xl px-6 text-center">
+          <span className="inline-flex items-center gap-2 rounded-full border-2 border-border bg-card px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.18em]">
+            <Lock size={12} /> {lang === "ar" ? "قريبًا" : "Coming soon"}
+          </span>
+          <h1 className="mt-6 text-3xl md:text-5xl font-semibold tracking-tight">{uni.name}</h1>
+          <p className="mt-4 text-base text-muted-foreground">
+            {closedNote ??
+              (lang === "ar"
+                ? "هذه الجامعة ليست متاحة بعد. ترقّبوا فتحها قريبًا."
+                : "This university isn't open yet. Check back soon.")}
+          </p>
+          <UniversityTags tags={uni.tags} lang={lang} className="mt-5 justify-center" size="md" />
+          <Link to="/universities" className="mt-8 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline">
+            <ArrowLeft size={14} /> {lang === "ar" ? "كل الجامعات" : "All universities"}
+          </Link>
+        </main>
+      </div>
+    );
+  }
 
   // Fall back to the built-in three cards if this university has no rows yet.
   const fallbackTiles: UniversityTile[] = (["courses", "lectures", "resources"] as const).map(
@@ -265,6 +295,12 @@ function UniversityHubPage() {
               )}
               <div className="min-w-0">
                 <h1 className="text-3xl md:text-5xl font-semibold tracking-tight text-foreground">{uni.name}</h1>
+                <UniversityTags tags={uni.tags} lang={lang} className="mt-3" size="md" />
+                {uni.is_closed && isAdmin && (
+                  <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-amber-600">
+                    <Lock size={12} /> Closed for users (admin preview)
+                  </p>
+                )}
                 {location && (
                   <p className="mt-2 text-sm text-muted-foreground inline-flex items-center gap-1.5">
                     <MapPin size={13} /> {location}

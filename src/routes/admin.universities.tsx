@@ -9,6 +9,7 @@ import { UniversityImage } from "@/components/common/UniversityImage";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { compressImage } from "@/lib/image-compress";
+import { parseTags, tagStyle, TAG_COLOR_NAMES, type UniversityTag } from "@/lib/university-tags";
 
 export const Route = createFileRoute("/admin/universities")({
   component: AdminUniversities,
@@ -31,6 +32,10 @@ type University = {
   home_badge: "NEW" | "POPULAR" | "COMING_SOON" | null;
   home_order: number;
   home_tagline: string | null;
+  is_closed: boolean;
+  closed_note_en: string | null;
+  closed_note_ar: string | null;
+  tags: unknown;
 };
 
 type Settings = {
@@ -142,8 +147,8 @@ function AdminUniversities() {
     invalidate();
   }
 
-  async function updateHome(u: University, patch: Partial<Pick<University, "home_visible" | "home_badge" | "home_order" | "home_tagline">>) {
-    const { error } = await supabase.from("universities").update(patch).eq("id", u.id);
+  async function updateHome(u: University, patch: Record<string, unknown>) {
+    const { error } = await supabase.from("universities").update(patch as never).eq("id", u.id);
     if (error) return toast.error(error.message);
     invalidate();
   }
@@ -266,7 +271,7 @@ function UniversityRow({
   onMove: (u: University, dir: -1 | 1) => void;
   onToggleVisible: (u: University) => void;
   onDelete: (u: University) => void;
-  onUpdateHome: (u: University, patch: Partial<Pick<University, "home_visible" | "home_badge" | "home_order" | "home_tagline">>) => void;
+  onUpdateHome: (u: University, patch: Record<string, unknown>) => void;
   onSaved: () => void;
 }) {
   const coverRef = useRef<HTMLInputElement>(null);
@@ -415,6 +420,9 @@ function UniversityRow({
       </div>
 
       <EditPanel u={u} onSaved={onSaved} />
+
+      <AvailabilityPanel u={u} onUpdate={onUpdateHome} />
+      <TagsPanel u={u} onUpdate={onUpdateHome} />
 
       <div className="px-4 pb-4">
         <Link
@@ -611,6 +619,148 @@ function EditPanel({ u, onSaved }: { u: University; onSaved: () => void }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Close a university and show "Coming soon" to users. */
+function AvailabilityPanel({
+  u,
+  onUpdate,
+}: {
+  u: University;
+  onUpdate: (u: University, patch: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="px-4 py-3 bg-amber-50/60 border-t border-amber-100">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-amber-700 mb-2">Availability</div>
+      <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-800">
+        <input
+          type="checkbox"
+          checked={!!u.is_closed}
+          onChange={(e) => onUpdate(u, { is_closed: e.target.checked })}
+        />
+        Closed — show “Coming soon” and block students from opening this university
+      </label>
+      {u.is_closed && (
+        <div className="mt-3 grid md:grid-cols-2 gap-3">
+          <label className="block">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Note (English)</span>
+            <input
+              type="text"
+              defaultValue={u.closed_note_en ?? ""}
+              onBlur={(e) => {
+                const v = e.target.value.trim() || null;
+                if (v !== (u.closed_note_en ?? null)) onUpdate(u, { closed_note_en: v });
+              }}
+              placeholder="e.g. Opening September 2026"
+              className="mt-0.5 w-full px-2 py-1.5 border border-slate-200 rounded-md text-xs bg-white"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Note (Arabic)</span>
+            <input
+              type="text"
+              dir="rtl"
+              defaultValue={u.closed_note_ar ?? ""}
+              onBlur={(e) => {
+                const v = e.target.value.trim() || null;
+                if (v !== (u.closed_note_ar ?? null)) onUpdate(u, { closed_note_ar: v });
+              }}
+              placeholder="مثال: الافتتاح في سبتمبر ٢٠٢٦"
+              className="mt-0.5 w-full px-2 py-1.5 border border-slate-200 rounded-md text-xs bg-white"
+            />
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Small labels (NEW, 2026 intake…) shown on the university cards. */
+function TagsPanel({
+  u,
+  onUpdate,
+}: {
+  u: University;
+  onUpdate: (u: University, patch: Record<string, unknown>) => void;
+}) {
+  const tags = parseTags(u.tags);
+  const [labelEn, setLabelEn] = useState("");
+  const [labelAr, setLabelAr] = useState("");
+  const [color, setColor] = useState("emerald");
+
+  function save(next: UniversityTag[]) {
+    onUpdate(u, { tags: next });
+  }
+
+  function add() {
+    const label = labelEn.trim();
+    if (!label) return toast.error("Type a tag first");
+    save([...tags, { label_en: label, label_ar: labelAr.trim(), color }]);
+    setLabelEn("");
+    setLabelAr("");
+  }
+
+  return (
+    <div className="px-4 py-3 bg-slate-50/60 border-t border-slate-100">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Tags (decorative only)</div>
+      {tags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          {tags.map((tag, i) => (
+            <span
+              key={`${tag.label_en}-${i}`}
+              className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wider"
+              style={tagStyle(tag.color)}
+            >
+              {tag.label_en}
+              {tag.label_ar ? <span className="opacity-70 font-bold normal-case">/ {tag.label_ar}</span> : null}
+              <button
+                type="button"
+                onClick={() => save(tags.filter((_, j) => j !== i))}
+                className="opacity-60 hover:opacity-100"
+                title="Remove tag"
+              >
+                <Trash2 size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-col md:flex-row gap-2">
+        <input
+          type="text"
+          value={labelEn}
+          onChange={(e) => setLabelEn(e.target.value)}
+          placeholder="Tag in English (e.g. NEW)"
+          className="flex-1 px-2 py-1.5 border border-slate-200 rounded-md text-xs bg-white"
+        />
+        <input
+          type="text"
+          dir="rtl"
+          value={labelAr}
+          onChange={(e) => setLabelAr(e.target.value)}
+          placeholder="بالعربية (اختياري)"
+          className="flex-1 px-2 py-1.5 border border-slate-200 rounded-md text-xs bg-white"
+        />
+        <select
+          value={color}
+          onChange={(e) => setColor(e.target.value)}
+          className="px-2 py-1.5 border border-slate-200 rounded-md text-xs bg-white"
+        >
+          {TAG_COLOR_NAMES.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={add}
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 text-white font-bold text-xs hover:bg-slate-700"
+        >
+          <Plus size={12} /> Add tag
+        </button>
+      </div>
     </div>
   );
 }

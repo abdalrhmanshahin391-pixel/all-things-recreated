@@ -11,6 +11,10 @@ export type HomeUniversity = {
   home_badge: "NEW" | "POPULAR" | "COMING_SOON" | null;
   home_tagline: string | null;
   home_order: number;
+  is_closed: boolean;
+  closed_note_en: string | null;
+  closed_note_ar: string | null;
+  tags: unknown;
 };
 
 /**
@@ -22,7 +26,7 @@ export const homeUniversitiesQuery = queryOptions({
   queryFn: async (): Promise<HomeUniversity[]> => {
       const { data } = await supabase
         .from("universities")
-        .select("id, slug, name, short_name, city, country, home_badge, home_tagline, home_order")
+        .select("id, slug, name, short_name, city, country, home_badge, home_tagline, home_order, is_closed, closed_note_en, closed_note_ar, tags")
         .eq("is_active", true)
         .eq("home_visible", true)
         .order("home_order", { ascending: true })
