@@ -48,7 +48,7 @@ type ChunkRow = {
   status: string; batch_id: string | null; imported_count: number; error: string | null;
   results: any; question_blocks?: string[] | null; chunk_text?: string | null;
 };
-type JobRow = { id: string; pdf_name: string; total_pages: number; subject_id: string | null; status: string; created_at: string };
+type JobRow = { id: string; pdf_name: string; total_pages: number; subject_id: string | null; status: string; created_at: string; reference_book?: string | null };
 
 type LocalStage = "queued" | "text" | "bookends" | "slicing" | "submitting" | "done" | "skipped" | "error";
 type LocalStatus = {
@@ -1148,6 +1148,13 @@ function JarvisBatchV2Ipad() {
                   </div>
                   {isOpen && (
                     <div className="mt-3 space-y-2">
+                      <ReferenceBookCard
+                        saved={j.reference_book ?? null}
+                        onSave={async (book) => {
+                          await setBookFn({ data: { jobId: j.id, book } });
+                          await loadJobs();
+                        }}
+                      />
                       {chunks.length > 0 && (() => {
                         const allImported = (stats.imported + stats.noQuestions) === chunks.length && chunks.length > 0;
                         const pagesRead = chunks.length - chunks.filter((c) => c.status === "pending" || c.status === "text" || c.status === "text_failed").length;
