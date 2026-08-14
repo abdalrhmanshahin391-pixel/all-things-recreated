@@ -88,6 +88,19 @@ const RESPONSE_SCHEMA = {
   required: ["questions"],
 } as const;
 
+/** Gemini accepts an OpenAPI subset — it rejects `additionalProperties`. */
+function toGeminiSchema(node: any): any {
+  if (Array.isArray(node)) return node.map(toGeminiSchema);
+  if (!node || typeof node !== "object") return node;
+  const out: any = {};
+  for (const [k, v] of Object.entries(node)) {
+    if (k === "additionalProperties") continue;
+    out[k] = toGeminiSchema(v);
+  }
+  return out;
+}
+const GEMINI_RESPONSE_SCHEMA = toGeminiSchema(RESPONSE_SCHEMA);
+
 
 const BASE_RULES = `You are a medical exam question editor.
 Return STRICT JSON matching the provided schema. Rules for every question:
