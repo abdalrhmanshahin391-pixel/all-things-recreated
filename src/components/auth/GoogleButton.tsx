@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { lovable } from "@/integrations/lovable/index";
+import { supabase } from "@/integrations/supabase/client";
 
 function GoogleMark({ size = 18 }: { size?: number }) {
   return (
@@ -47,16 +47,17 @@ export function GoogleButton({
       } else {
         sessionStorage.removeItem("aqua-auth-next");
       }
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: `${window.location.origin}/auth/callback`,
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
       });
-      if (result.error) {
+      if (error) {
         onError?.("Google sign-in didn't complete. Please try again.");
         setLoading(false);
         return;
       }
-      if (result.redirected) return;
-      window.location.href = "/auth/callback";
     } catch {
       onError?.("Google sign-in didn't complete. Please try again.");
       setLoading(false);

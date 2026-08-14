@@ -47,11 +47,6 @@ const schema = z.object({
     .regex(/^[0-9+\-\s()]{6,20}$/, "Please enter a valid phone number."),
 });
 
-function suggestUsername(seed: string) {
-  const base = seed.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20);
-  return base.length >= 3 ? base : "";
-}
-
 function WelcomePage() {
   const navigate = useNavigate();
   const { next } = Route.useSearch();
@@ -76,17 +71,10 @@ function WelcomePage() {
         .eq("id", user.id)
         .maybeSingle();
       if (cancelled) return;
-      const meta = (user.user_metadata ?? {}) as Record<string, string | undefined>;
-      const fullName =
-        (prof?.full_name ?? "").trim() || meta['full_name'] || meta['name'] || "";
-      const currentUsername = (prof?.username ?? "").trim();
       setEmail(user.email ?? "");
       setForm({
-        full_name: fullName,
-        username:
-          currentUsername && currentUsername !== user.id
-            ? currentUsername
-            : suggestUsername((user.email ?? "").split("@")[0] ?? ""),
+        full_name: "",
+        username: "",
         phone: prof?.phone ?? "",
       });
       setReady(true);
