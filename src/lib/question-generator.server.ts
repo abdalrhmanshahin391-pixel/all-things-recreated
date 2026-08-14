@@ -18,6 +18,13 @@ function geminiCandidates(preferred?: string): string[] {
   return out;
 }
 
+/** The model that will really be used for a provider, given the saved preference. */
+export function resolveModelFor(provider: AiProvider, preferred: string | null): string {
+  const p = (preferred ?? "").trim();
+  if (provider === "gemini") return geminiCandidates(p)[0]!;
+  return p || DEFAULT_OPENAI_MODEL;
+}
+
 export const AI_PROVIDERS = ["openai", "gemini"] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 
