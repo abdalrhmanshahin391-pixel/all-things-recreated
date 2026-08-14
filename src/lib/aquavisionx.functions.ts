@@ -556,7 +556,7 @@ export const getAqvJob = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
     const [{ data: job, error: e1 }, { data: pages, error: e2 }, { data: items, error: e3 }] = await Promise.all([
-      supabase.from(JOBS).select("id, pdf_name, total_pages, stage, status, imported_count, error, course_id, group_id, subject_id, created_at").eq("id", data.jobId).single(),
+      supabase.from(JOBS).select("id, pdf_name, total_pages, stage, status, imported_count, error, course_id, group_id, subject_id, reference_book, created_at").eq("id", data.jobId).single(),
       supabase.from(PAGES).select("id, page_number, status, question_count, error").eq("job_id", data.jobId).order("page_number"),
       supabase.from(ITEMS).select("id, item_index, number, stem, options, answer_letter, concept, explanation, summary_table, solved, imported, status, error").eq("job_id", data.jobId).order("item_index"),
     ]);
@@ -572,4 +572,19 @@ export const deleteAqvJob = createServerFn({ method: "POST" })
     const { error } = await supabase.from(JOBS).delete().eq("id", data.jobId);
     if (error) throw error;
     return { ok: true };
+  });
+
+export const setAqvReferenceBook = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    jobId: z.string().uuid(),
+    book: z.string().max(200).nullable(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const book = (data.book ?? "").trim();
+    const { error } = await supabase.from(JOBS)
+      .update({ reference_book: book || null }).eq("id", data.jobId);
+    if (error) throw error;
+    return { book: book || null };
   });
