@@ -7,6 +7,7 @@ import {
   callGeminiQuestions,
   callOpenAiQuestions,
   defaultModelFor,
+  resolveModelFor,
   pingGemini,
   pingOpenAi,
   QUESTION_MODES,
@@ -89,7 +90,7 @@ export const getApiKeyStatus = createServerFn({ method: "POST" })
       provider: data.provider,
       saved: key.length > 10,
       masked: key ? `${key.slice(0, 6)}…${key.slice(-4)}` : "",
-      model: (row?.preferred_model || defaultModelFor(data.provider)) as string,
+      model: resolveModelFor(data.provider, row?.preferred_model ?? null),
       updatedAt: (row?.updated_at ?? null) as string | null,
     };
   });
