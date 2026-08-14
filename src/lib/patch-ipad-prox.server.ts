@@ -290,6 +290,20 @@ export function buildSubjectsBlock(candidates: string[]): string {
   return `SUBJECTS (pick exactly one index, or 0 if none fit):\n${candidates.map((c, i) => ` ${i + 1}. ${c}`).join("\n")}\n\n`;
 }
 
+/**
+ * Optional "answer according to this textbook" instruction. Returns an empty
+ * string when no book is set, so the prompt is byte-identical to before.
+ */
+export function buildReferenceBlock(book: any): string {
+  const name = String(book ?? "").trim();
+  if (!name) return "";
+  return `REFERENCE TEXTBOOK — "${name}".
+Answer and explain STRICTLY according to this textbook:
+- use its terminology, classifications, staging and cut-off values;
+- name the book once inside the **Concept** section;
+- if the printed answer key disagrees with the textbook, choose the option the textbook supports.\n\n`;
+}
+
 export const CUTTER_SYSTEM = `You are given ONE full page image of a printed exam paper (equations, fractions, symbols and sometimes diagrams).
 
 Your only job is to locate every distinct FULL QUESTION BLOCK on the page. A question block starts at the QUESTION NUMBER and includes the stem, every equation line, every diagram/graph/figure that belongs to it, and ALL printed answer choices (a, b, c, d). It ends right before the next question number begins.
