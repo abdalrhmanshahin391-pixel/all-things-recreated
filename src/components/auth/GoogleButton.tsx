@@ -1,5 +1,44 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
+import { needsOnboarding } from "@/lib/onboarding";
+
+function safeNext(): string {
+  try {
+    const v = sessionStorage.getItem("aqua-auth-next");
+    if (v && v.startsWith("/") && !v.startsWith("//")) return v;
+  } catch {
+    /* ignore */
+  }
+  return "/";
+}
+
+/** Popup sign-in already has the session: route to /welcome or the saved page. */
+async function goAfterSignIn() {
+  const { data } = await supabase.auth.getSession();
+  const user = data.session?.user;
+  const next = safeNext();
+  if (!user) {
+    window.location.replace("/auth/callback");
+    return;
+  }
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("full_name, username, phone")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (needsOnboarding(user.id, prof)) {
+    const q = next && next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
+    window.location.replace(`/welcome${q}`);
+    return;
+  }
+  try {
+    sessionStorage.removeItem("aqua-auth-next");
+  } catch {
+    /* ignore */
+  }
+  window.location.replace(next);
+}
 
 function GoogleMark({ size = 18 }: { size?: number }) {
   return (
@@ -47,17 +86,19 @@ export function GoogleButton({
       } else {
         sessionStorage.removeItem("aqua-auth-next");
       }
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: `${window.location.origin}/auth/callback`,
+        extraParams: { prompt: "select_account" },
       });
-      if (error) {
+      if (result.error) {
         onError?.("Google sign-in didn't complete. Please try again.");
         setLoading(false);
         return;
       }
+      // Full-page flow: the browser is already navigating to Google.
+      if (result.redirected) return;
+      // Popup flow: the session is set, so finish here.
+      await goAfterSignIn();
     } catch {
       onError?.("Google sign-in didn't complete. Please try again.");
       setLoading(false);
