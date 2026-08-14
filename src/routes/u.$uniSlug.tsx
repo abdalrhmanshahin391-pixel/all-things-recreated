@@ -156,7 +156,7 @@ function UniversityHubPage() {
   });
 
   const { data: tiles, isPending: tilesPending } = useQuery({
-    enabled: !!uni,
+    enabled: !!uni && (!uni.is_closed || isAdmin),
     queryKey: ["university-tiles", uni?.id],
     queryFn: async () => {
       if (!uni) return [] as UniversityTile[];
@@ -188,7 +188,7 @@ function UniversityHubPage() {
     qc.invalidateQueries({ queryKey: ["university-tiles", uni.id] });
   }
 
-  if (isLoading || authLoading || (!!uni && tilesPending)) {
+  if (isLoading || authLoading || (!!uni && (!uni.is_closed || isAdmin) && tilesPending)) {
     return (
       <div className="min-h-screen bg-background">
         <SiteHeader />
