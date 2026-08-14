@@ -76,6 +76,7 @@ import { Route as AdminUniversitiesRouteImport } from './routes/admin.universiti
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminVisionProBatchRouteImport } from './routes/admin.vision-pro-batch'
 import { Route as ApiCommitteeDriveUploadRouteImport } from './routes/api/committee-drive-upload'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
 import { Route as CommitteeIndexRouteImport } from './routes/committee.index'
 import { Route as CommitteeYearRouteImport } from './routes/committee.$year'
@@ -468,6 +469,11 @@ const ApiCommitteeDriveUploadRoute = ApiCommitteeDriveUploadRouteImport.update({
   path: '/api/committee-drive-upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CheckoutSuccessRoute = CheckoutSuccessRouteImport.update({
   id: '/checkout/success',
   path: '/checkout/success',
@@ -806,6 +812,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRoute
   '/admin/vision-pro-batch': typeof AdminVisionProBatchRoute
   '/api/committee-drive-upload': typeof ApiCommitteeDriveUploadRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/$year': typeof CommitteeYearRouteWithChildren
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
@@ -923,6 +930,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRoute
   '/admin/vision-pro-batch': typeof AdminVisionProBatchRoute
   '/api/committee-drive-upload': typeof ApiCommitteeDriveUploadRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
   '/guides/$slug': typeof GuidesSlugRoute
@@ -1042,6 +1050,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRoute
   '/admin/vision-pro-batch': typeof AdminVisionProBatchRoute
   '/api/committee-drive-upload': typeof ApiCommitteeDriveUploadRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/$year': typeof CommitteeYearRouteWithChildren
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
@@ -1166,6 +1175,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/vision-pro-batch'
     | '/api/committee-drive-upload'
+    | '/auth/callback'
     | '/checkout/success'
     | '/committee/$year'
     | '/committee/study-plan'
@@ -1283,6 +1293,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/vision-pro-batch'
     | '/api/committee-drive-upload'
+    | '/auth/callback'
     | '/checkout/success'
     | '/committee/study-plan'
     | '/guides/$slug'
@@ -1401,6 +1412,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/vision-pro-batch'
     | '/api/committee-drive-upload'
+    | '/auth/callback'
     | '/checkout/success'
     | '/committee/$year'
     | '/committee/study-plan'
@@ -1524,6 +1536,7 @@ export interface RootRouteChildren {
   AdminUsersRoute: typeof AdminUsersRoute
   AdminVisionProBatchRoute: typeof AdminVisionProBatchRoute
   ApiCommitteeDriveUploadRoute: typeof ApiCommitteeDriveUploadRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   CheckoutSuccessRoute: typeof CheckoutSuccessRoute
   GuidesSlugRoute: typeof GuidesSlugRoute
   MyCoursesRoute: typeof MyCoursesRoute
@@ -2026,6 +2039,13 @@ declare module '@tanstack/react-router' {
       path: '/api/committee-drive-upload'
       fullPath: '/api/committee-drive-upload'
       preLoaderRoute: typeof ApiCommitteeDriveUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/checkout/success': {
@@ -2612,6 +2632,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminUsersRoute: AdminUsersRoute,
   AdminVisionProBatchRoute: AdminVisionProBatchRoute,
   ApiCommitteeDriveUploadRoute: ApiCommitteeDriveUploadRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   CheckoutSuccessRoute: CheckoutSuccessRoute,
   GuidesSlugRoute: GuidesSlugRoute,
   MyCoursesRoute: MyCoursesRoute,
