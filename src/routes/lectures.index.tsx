@@ -39,12 +39,17 @@ type Course = {
   kind: string;
   image_url: string | null;
   published: boolean;
+  currency?: string | null;
+  compare_at_price?: number | null;
+  discount_active?: boolean | null;
+  discount_ends_at?: string | null;
+  admin_only?: boolean | null;
 };
 
 const YEAR_ICONS = [GraduationCap, Video, PlayCircle, Mic, Clapperboard, Film];
 
 function LecturesPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, isAdmin, loading: authLoading } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -53,12 +58,15 @@ function LecturesPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("courses")
-        .select("id,title,year,price,kind,image_url,published")
+        .select(
+          "id,title,year,price,kind,image_url,published,currency,compare_at_price,discount_active,discount_ends_at,admin_only",
+        )
         .eq("published", true)
-        .eq("kind", "lectures")
-        .order("created_at", { ascending: true });
+        .eq("kind", "lectures");
+      if (!isAdmin) query = query.eq("admin_only", false);
+      const { data, error } = await query.order("created_at", { ascending: true });
       if (cancelled) return;
       if (error) {
         setErrorMsg("Couldn't load lectures. Please refresh.");
@@ -71,7 +79,7 @@ function LecturesPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     let cancelled = false;
