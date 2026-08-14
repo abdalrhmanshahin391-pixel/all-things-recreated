@@ -371,6 +371,9 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
     if (!todo.length) throw new Error("Every question is already solved.");
 
     const apiKey = await getGeminiKey(supabase);
+    const { data: jobRow } = await supabase.from(JOBS)
+      .select("reference_book").eq("id", data.jobId).maybeSingle();
+    const refBlock = buildReferenceBlock(jobRow?.reference_book);
     const requests = todo.map((it: any) => {
       const opts = Array.isArray(it.options) ? it.options : [];
       const optText = opts.length
@@ -379,7 +382,7 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
       return {
         request: {
           systemInstruction: { parts: [{ text: SOLVE_SYSTEM }] },
-          contents: [{ role: "user", parts: [{ text: `--- QUESTION ---\n${it.stem}\n\n${optText}\n--- END ---` }] }],
+          contents: [{ role: "user", parts: [{ text: `${refBlock}--- QUESTION ---\n${it.stem}\n\n${optText}\n--- END ---` }] }],
           generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json" },
         },
         metadata: { key: `i-${it.id}` },
