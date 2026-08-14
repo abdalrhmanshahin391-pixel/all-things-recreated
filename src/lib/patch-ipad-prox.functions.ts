@@ -61,6 +61,7 @@ export const submitCutBatchProX = createServerFn({ method: "POST" })
     pages: z.array(z.object({
       pageNumber: z.number().int().min(1).max(2000),
       base64: z.string().min(100).max(8_000_000),
+      imagePath: z.string().min(3).max(300).optional(),
     })).min(1).max(10),
   }).parse(d))
   .handler(async ({ data, context }) => {
@@ -87,8 +88,12 @@ export const submitCutBatchProX = createServerFn({ method: "POST" })
     const batchName = await submitProxBatch(apiKey, PROX_CUT_MODEL, `prox-cut-${data.jobId.slice(0, 8)}-${Date.now()}`, requests);
     const ids = [...(Array.isArray(job.cut_batch_ids) ? job.cut_batch_ids : []), batchName];
     await supabase.from(PROX_JOBS).update({ cut_batch_ids: ids, phase: "cut_submitted", error: null, updated_at: new Date().toISOString() }).eq("id", data.jobId);
-    await supabase.from(PROX_PAGES).update({ status: "cut_submitted" })
-      .eq("job_id", data.jobId).in("page_number", data.pages.map((p) => p.pageNumber));
+    for (const p of data.pages) {
+      const patch: Record<string, unknown> = { status: "cut_submitted", error: null };
+      if (p.imagePath) patch.page_image_path = p.imagePath;
+      await supabase.from(PROX_PAGES).update(patch)
+        .eq("job_id", data.jobId).eq("page_number", p.pageNumber);
+    }
 
     return { batchId: batchName, pages: data.pages.length };
   });
@@ -465,7 +470,7 @@ export const getProxJob = createServerFn({ method: "POST" })
     const { data: job, error } = await supabase.from(PROX_JOBS).select("*").eq("id", data.jobId).single();
     if (error) throw error;
     const { data: pages } = await supabase.from(PROX_PAGES)
-      .select("id, page_number, status, regions, crops, error").eq("job_id", data.jobId).order("page_number");
+      .select("id, page_number, status, regions, crops, error, page_image_path").eq("job_id", data.jobId).order("page_number");
     const { data: items } = await supabase.from(PROX_ITEMS)
       .select("id, page_number, item_index, image_path, status, correct_letter, error")
       .eq("job_id", data.jobId).order("page_number").order("item_index");

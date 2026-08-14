@@ -1,0 +1,1 @@
+ALTER TABLE public.patch_prox_pages ADD COLUMN IF NOT EXISTS page_image_path text;
