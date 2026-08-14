@@ -15,7 +15,7 @@ import {
   ensureProxAdmin, getProxGeminiKey, submitProxBatch,
   CUTTER_SYSTEM, IMAGE_SOLVER_SYSTEM, buildSubjectsBlock, decideCorrectLetter,
   extractJson, fetchBatch, downloadResponses, getBatchState, mapBatchStatus,
-  responseText, normalizeLetter,
+  responseText, normalizeLetter, normalizeProxRegions, solveSingleProxImage,
 } from "@/lib/patch-ipad-prox.server";
 
 // ---------------- 1. create job ----------------
@@ -144,16 +144,7 @@ export const pollCutBatchProX = createServerFn({ method: "POST" })
         const pageNumber = Number(m[1]);
         const parsed = it?.error ? null : extractJson(responseText(it));
         const raw: any[] = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.questions) ? parsed.questions : [];
-        const regions = raw
-          .map((r: any, idx: number) => ({
-            n: Number(r?.n ?? idx + 1),
-            label: String(r?.label ?? `Q${idx + 1}`).slice(0, 40),
-            y_top: Number(r?.y_top ?? 0),
-            y_bottom: Number(r?.y_bottom ?? 0),
-            x_left: Number(r?.x_left ?? 0),
-            x_right: Number(r?.x_right ?? 1000),
-          }))
-          .filter((r) => Number.isFinite(r.y_top) && Number.isFinite(r.y_bottom) && r.y_bottom - r.y_top >= 15);
+        const regions = normalizeProxRegions(raw);
         await supabase.from(PROX_PAGES).update({
           regions,
           status: regions.length ? "cut_ready" : "empty",
@@ -280,10 +271,32 @@ export const pollSolveBatchProX = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureProxAdmin(context);
     const apiKey = await getProxGeminiKey(supabase);
-    const { data: job, error } = await supabase.from(PROX_JOBS).select("id, solve_batch_ids").eq("id", data.jobId).single();
+    const { data: job, error } = await supabase.from(PROX_JOBS)
+      .select("id, solve_batch_ids, subject_candidates").eq("id", data.jobId).single();
     if (error) throw error;
     const batches: string[] = Array.isArray(job.solve_batch_ids) ? job.solve_batch_ids : [];
     if (!batches.length) return { done: false, states: [] as string[] };
+
+    const subjectsBlock = buildSubjectsBlock(Array.isArray(job.subject_candidates) ? job.subject_candidates : []);
+
+    // A batch item can come back empty or malformed. Re-solve that ONE picture
+    // on its own before writing it off — the same repair pass the v2 image tool
+    // uses, which is why v2 rarely reports "no usable answer".
+    async function repairOne(pageNumber: number, itemIndex: number): Promise<any | null> {
+      const { data: row } = await supabase.from(PROX_ITEMS)
+        .select("image_path").eq("job_id", data.jobId)
+        .eq("page_number", pageNumber).eq("item_index", itemIndex).maybeSingle();
+      const path = row?.image_path;
+      if (!path) return null;
+      const { data: blob, error: dErr } = await supabase.storage.from("question-images").download(path);
+      if (dErr || !blob) return null;
+      const buf = Buffer.from(await blob.arrayBuffer());
+      try {
+        return await solveSingleProxImage(apiKey, buf.toString("base64"), subjectsBlock);
+      } catch {
+        return null;
+      }
+    }
 
     const states: string[] = [];
     let allDone = true;
@@ -317,7 +330,10 @@ export const pollSolveBatchProX = createServerFn({ method: "POST" })
         if (!m) continue;
         const pageNumber = Number(m[1]);
         const itemIndex = Number(m[2]);
-        const parsed = it?.error ? null : extractJson(responseText(it));
+        let parsed = it?.error ? null : extractJson(responseText(it));
+        if (!parsed?.correct_letter && !parsed?.explanation) {
+          parsed = await repairOne(pageNumber, itemIndex);
+        }
         if (!parsed?.correct_letter && !parsed?.explanation) {
           await supabase.from(PROX_ITEMS).update({
             status: "failed",
@@ -379,8 +395,12 @@ export const importProxJob = createServerFn({ method: "POST" })
     if (iErr) throw iErr;
     const all = items ?? [];
     if (!all.length) throw new Error("Nothing to import yet.");
+    // Import everything that IS solved. A few unusable pictures must not block
+    // the whole run — they are reported back so they can be retried.
     const incomplete = all.filter((i: any) => i.status !== "solved" && i.status !== "imported");
-    if (incomplete.length) throw new Error(`Phase 2 is not complete — ${incomplete.length} question(s) still need a usable Gemini answer.`);
+    if (!all.some((i: any) => i.status === "solved")) {
+      throw new Error("No question has a usable Gemini answer yet — run phase 2 or retry the failed pictures first.");
+    }
 
     const candidates: string[] = Array.isArray(job.subject_candidates) ? job.subject_candidates : [];
     let idToUse: (string | null)[] = [];
@@ -392,6 +412,7 @@ export const importProxJob = createServerFn({ method: "POST" })
 
     let inserted = 0, skipped = 0, failed = 0;
     const errors: string[] = [];
+    if (incomplete.length) errors.push(`${incomplete.length} question(s) had no usable Gemini answer and were skipped`);
 
     for (const it of all) {
       if (it.status !== "solved") { failed++; continue; }

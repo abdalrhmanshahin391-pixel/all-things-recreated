@@ -47,6 +47,93 @@ export function extractJson(text: string): any | null {
   return null;
 }
 
+export type ProxRegion = {
+  n: number; label: string;
+  y_top: number; y_bottom: number; x_left: number; x_right: number;
+};
+
+/**
+ * Gemini returns raw bands. Left as-is they overlap, run into the next
+ * question, or slice one in half — which is what produces unreadable crops.
+ * Clean them per column: clamp, sort, de-overlap, snap each bottom to the next
+ * top, and drop slivers that cannot be a whole question.
+ */
+export function normalizeProxRegions(raw: any[]): ProxRegion[] {
+  const clamp = (v: number) => Math.max(0, Math.min(1000, v));
+  const parsed = raw
+    .map((r: any, idx: number) => {
+      const yTop = clamp(Number(r?.y_top ?? 0));
+      const yBottom = clamp(Number(r?.y_bottom ?? 0));
+      const xLeft = clamp(Number(r?.x_left ?? 0));
+      const xRight = clamp(Number(r?.x_right ?? 1000));
+      return {
+        n: Number(r?.n ?? idx + 1),
+        label: String(r?.label ?? `Q${idx + 1}`).slice(0, 40),
+        y_top: Math.min(yTop, yBottom),
+        y_bottom: Math.max(yTop, yBottom),
+        x_left: Math.min(xLeft, xRight),
+        x_right: Math.max(xLeft, xRight),
+      };
+    })
+    .filter((r) => Number.isFinite(r.y_top) && Number.isFinite(r.y_bottom) && r.x_right - r.x_left >= 80);
+
+  // Group by column so a two-column page never snaps a left band to a right one.
+  const columns = new Map<string, ProxRegion[]>();
+  for (const r of parsed) {
+    const key = `${Math.round(r.x_left / 100)}-${Math.round(r.x_right / 100)}`;
+    const list = columns.get(key) ?? [];
+    list.push(r);
+    columns.set(key, list);
+  }
+
+  const out: ProxRegion[] = [];
+  for (const list of columns.values()) {
+    list.sort((a, b) => a.y_top - b.y_top);
+    for (let i = 0; i < list.length; i++) {
+      const cur = list[i]!;
+      const next = list[i + 1];
+      if (next) {
+        // never let a band run past the start of the next question…
+        if (cur.y_bottom > next.y_top) cur.y_bottom = next.y_top;
+        // …and never leave a gap that swallows the top of the next one
+        if (next.y_top < cur.y_bottom) next.y_top = cur.y_bottom;
+      }
+      if (cur.y_bottom - cur.y_top >= 40) out.push(cur);
+    }
+  }
+
+  out.sort((a, b) => (a.x_left - b.x_left) || (a.y_top - b.y_top));
+  return out.map((r, i) => ({ ...r, n: i + 1, label: r.label || `Q${i + 1}` }));
+}
+
+/** Re-solve ONE question picture outside the batch (used to repair failures). */
+export async function solveSingleProxImage(
+  apiKey: string, base64: string, subjectsBlock: string,
+): Promise<any | null> {
+  const body = {
+    systemInstruction: { parts: [{ text: IMAGE_SOLVER_SYSTEM }] },
+    contents: [{
+      role: "user",
+      parts: [
+        { inlineData: { mimeType: "image/jpeg", data: base64 } },
+        { text: `${subjectsBlock}Solve this single question image and return JSON per the system prompt.` },
+      ],
+    }],
+    generationConfig: { temperature: 0.2, maxOutputTokens: 8192, responseMimeType: "application/json" },
+  };
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${PROX_SOLVE_MODEL}:generateContent`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) return null;
+  const json = await res.json().catch(() => null as any);
+  return extractJson(json?.candidates?.[0]?.content?.parts?.[0]?.text || "");
+}
+
 export function responseText(item: any): string {
   return item?.response?.candidates?.[0]?.content?.parts?.[0]?.text
     || item?.response?.body?.candidates?.[0]?.content?.parts?.[0]?.text
