@@ -96,7 +96,22 @@ function start() {
 
   void (async () => {
     const { data } = await supabase.auth.getSession();
-    const s = data.session ?? null;
+    let s = data.session ?? null;
+    // A stored session whose access token has expired while the app was closed
+    // must be renewed, not treated as "signed out". getSession() only refreshes
+    // when the client is already running, so ask for it explicitly on boot and
+    // give the network one retry before giving up.
+    if (!s?.user) {
+      for (let attempt = 0; attempt < 2 && !s?.user; attempt++) {
+        try {
+          const { data: r } = await supabase.auth.refreshSession();
+          s = r.session ?? null;
+        } catch {
+          /* offline / transient — retry once */
+        }
+        if (!s?.user && attempt === 0) await new Promise((res) => setTimeout(res, 800));
+      }
+    }
     if (!s?.user) {
       emit({ session: null, user: null, loading: false });
       return;
