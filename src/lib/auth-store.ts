@@ -97,19 +97,17 @@ function start() {
   void (async () => {
     const { data } = await supabase.auth.getSession();
     let s = data.session ?? null;
-    // A stored session whose access token has expired while the app was closed
-    // must be renewed, not treated as "signed out". getSession() only refreshes
-    // when the client is already running, so ask for it explicitly on boot and
-    // give the network one retry before giving up.
-    if (!s?.user) {
-      for (let attempt = 0; attempt < 2 && !s?.user; attempt++) {
-        try {
-          const { data: r } = await supabase.auth.refreshSession();
-          s = r.session ?? null;
-        } catch {
-          /* offline / transient — retry once */
-        }
-        if (!s?.user && attempt === 0) await new Promise((res) => setTimeout(res, 800));
+    // A stored session whose access token expired while the app was closed must
+    // be renewed, not treated as "signed out". But a visitor who was never
+    // signed in has nothing to renew — asking anyway used to cost every
+    // first-time visitor a network round trip plus an 800ms sleep before the
+    // app could settle. So only attempt the renew when a stored token exists.
+    if (!s?.user && hasStoredSession()) {
+      try {
+        const { data: r } = await supabase.auth.refreshSession();
+        s = r.session ?? null;
+      } catch {
+        /* offline / transient — the auth listener will pick it up later */
       }
     }
     if (!s?.user) {
@@ -119,6 +117,43 @@ function start() {
     emit({ session: s, user: s.user, loading: !extrasLoaded.has(s.user.id) });
     await loadExtras(s.user.id);
   })();
+}
+
+/** True when this browser has a Supabase auth token stored from a past visit. */
+function hasStoredSession(): boolean {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("sb-") && key.endsWith("-auth-token")) return true;
+    }
+  } catch {
+    /* storage blocked */
+  }
+  return false;
+}
+
+/**
+ * Resolve as soon as the shared auth store knows who the visitor is (session
+ * *and* profile/roles). Used by the OAuth callback so it can hand off the
+ * instant the session lands instead of polling on a fixed cadence.
+ */
+export function waitForAuthSettled(timeoutMs = 8000): Promise<AuthSnapshot> {
+  start();
+  if (!snapshot.loading) return Promise.resolve(snapshot);
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      unsub();
+      resolve(snapshot);
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    const unsub = subscribeAuth(() => {
+      if (!snapshot.loading) finish();
+    });
+  });
 }
 
 export function subscribeAuth(cb: () => void) {

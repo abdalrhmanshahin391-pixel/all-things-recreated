@@ -154,10 +154,10 @@ function WelcomePage() {
         /* ignore */
       }
       if (next) {
-        window.location.href = next;
+        void navigate({ to: next as string, replace: true });
         return;
       }
-      navigate({ to: "/" });
+      void navigate({ to: "/", replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setSaving(false);

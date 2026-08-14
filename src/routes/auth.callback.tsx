@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { subscribeAuth, getAuthSnapshot } from "@/lib/auth-store";
 import { needsOnboarding } from "@/lib/onboarding";
 
 export const Route = createFileRoute("/auth/callback")({
@@ -27,46 +27,70 @@ function safeNext(): string {
 
 function AuthCallback() {
   const [failed, setFailed] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    let cancelled = false;
+    let done = false;
+    let settledEmptyAt = 0;
 
-    async function finish() {
-      // The session can land a beat after the redirect; give it a few tries.
-      for (let i = 0; i < 25; i++) {
-        const { data } = await supabase.auth.getSession();
-        const user = data.session?.user;
-        if (user) {
-          const { data: prof } = await supabase
-            .from("profiles")
-            .select("full_name, username, phone")
-            .eq("id", user.id)
-            .maybeSingle();
-          if (cancelled) return;
-          const next = safeNext();
-          if (needsOnboarding(user.id, prof)) {
-            const q = next && next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
-            window.location.replace(`/welcome${q}`);
-          } else {
-            try {
-              sessionStorage.removeItem("aqua-auth-next");
-            } catch {
-              /* ignore */
-            }
-            window.location.replace(next);
-          }
-          return;
-        }
-        await new Promise((r) => setTimeout(r, 200));
+    // The shared auth store already listens for the session and loads the
+    // profile/roles once. Hand off the instant it knows the user instead of
+    // polling, and navigate inside the app instead of reloading it.
+    function tryFinish() {
+      if (done) return;
+      const { user, profile, loading } = getAuthSnapshot();
+      if (loading) return;
+      if (!user) {
+        // Session settled with nobody signed in. The provider redirect can
+        // still be a beat behind, so allow a short grace window before giving
+        // up instead of leaving the spinner running for the full timeout.
+        if (!settledEmptyAt) settledEmptyAt = Date.now();
+        setTimeout(() => {
+          if (done) return;
+          if (getAuthSnapshot().user) return;
+          done = true;
+          clearTimeout(timer);
+          unsub();
+          setFailed(true);
+        }, 2500);
+        return;
       }
-      if (!cancelled) setFailed(true);
+      done = true;
+      clearTimeout(timer);
+      unsub();
+      const next = safeNext();
+      if (needsOnboarding(user.id, profile)) {
+        void navigate({
+          to: "/welcome",
+          search: next && next !== "/" ? { next } : {},
+          replace: true,
+        });
+        return;
+      }
+      try {
+        sessionStorage.removeItem("aqua-auth-next");
+      } catch {
+        /* ignore */
+      }
+      void navigate({ to: next, replace: true });
     }
 
-    void finish();
+    const timer = setTimeout(() => {
+      if (!done) {
+        done = true;
+        unsub();
+        setFailed(true);
+      }
+    }, 12_000);
+    const unsub = subscribeAuth(tryFinish);
+    tryFinish();
+
     return () => {
-      cancelled = true;
+      done = true;
+      clearTimeout(timer);
+      unsub();
     };
-  }, []);
+  }, [navigate]);
 
   return (
     <div className="min-h-screen grid place-items-center bg-background px-6 text-center">
