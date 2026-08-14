@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { guardRedirect } from "@/lib/guard-redirect";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Upload, Loader2, ScanEye, Trash2, CheckCircle2, PlayCircle, Download, Clock3, AlertTriangle } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -8,7 +8,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { loadPdfForRenderPreferWorker, clearPdfRenderCache } from "@/lib/pdf-page-render";
-import { renderPageToCanvas, canvasToJpegBase64, cropRegionToJpegBase64, base64ToBlob, type CutRegion } from "@/lib/pdf-page-image";
+import {
+  renderPageToCanvas, canvasToJpegBase64, cropRegionToJpegBase64,
+  base64ToBlob, imageBlobToCanvas, type CutRegion,
+} from "@/lib/pdf-page-image";
 import { splitPdfInto2PageBlobs, miniPdfAsFile, type MiniPdf } from "@/lib/pdf-split";
 import {
   createProxJob, submitCutBatchProX, pollCutBatchProX, saveCropsProX,
@@ -37,7 +40,7 @@ export const Route = createFileRoute("/admin/patch-ipad-prox")({
 type Course = { id: string; title: string; year?: number | null };
 type Group = { id: string; name: string; course_id: string };
 type Subject = { id: string; name: string; group_id: string };
-type PageRow = { id: string; page_number: number; status: string; regions: any[]; crops: any[]; error: string | null };
+type PageRow = { id: string; page_number: number; status: string; regions: any[]; crops: any[]; error: string | null; page_image_path: string | null };
 type ItemRow = { id: string; page_number: number; item_index: number; image_path: string; status: string; correct_letter: string | null; error: string | null };
 type JobRow = { id: string; pdf_name: string; total_pages: number; phase: string; imported_count: number; error: string | null; created_at: string };
 
@@ -46,6 +49,14 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
     const t = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms);
     p.then((v) => { clearTimeout(t); resolve(v); }).catch((e) => { clearTimeout(t); reject(e); });
   });
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < buf.length; i += chunk) binary += String.fromCharCode(...buf.subarray(i, i + chunk));
+  return btoa(binary);
 }
 
 /** Widen the Gemini bands a little so stems + all options land inside one crop. */
@@ -84,7 +95,7 @@ function PatchIpadProX() {
   const [groupId, setGroupId] = useState("");
   const [subjectId, setSubjectId] = useState("__auto__");
 
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [log, setLog] = useState<string[]>([]);
@@ -97,8 +108,9 @@ function PatchIpadProX() {
   const [pages, setPages] = useState<PageRow[]>([]);
   const [items, setItems] = useState<ItemRow[]>([]);
 
-  const miniByPage = useRef<Record<number, File>>({});
-  const pollingRef = useRef(false);
+  const busyRef = useRef(false);
+  const tickRef = useRef(false);
+  const croppingRef = useRef<Set<string>>(new Set());
 
   const createJobFn = useServerFn(createProxJob);
   const submitCutFn = useServerFn(submitCutBatchProX);
@@ -111,23 +123,22 @@ function PatchIpadProX() {
   const getFn = useServerFn(getProxJob);
   const delFn = useServerFn(deleteProxJob);
 
-  function addLog(m: string) { setLog((p) => [`${new Date().toLocaleTimeString()} · ${m}`, ...p].slice(0, 40)); }
+  function addLog(m: string) { setLog((p) => [`${new Date().toLocaleTimeString()} · ${m}`, ...p].slice(0, 60)); }
 
-  async function refreshJobs() {
+  const refreshJobs = useCallback(async () => {
     try {
       const r: any = await listFn();
       const rows = (r?.rows ?? []) as JobRow[];
       setJobs(rows);
       return rows;
-    } catch {
-      return [] as JobRow[];
-    }
-  }
-  async function loadJob(id: string) {
+    } catch { return [] as JobRow[]; }
+  }, [listFn]);
+
+  const loadJob = useCallback(async (id: string) => {
     const r: any = await getFn({ data: { jobId: id } });
     setJob(r.job); setPages(r.pages as PageRow[]); setItems(r.items as ItemRow[]);
     return r;
-  }
+  }, [getFn]);
 
   useEffect(() => {
     (async () => {
@@ -138,12 +149,9 @@ function PatchIpadProX() {
     void (async () => {
       const rows = await refreshJobs();
       const active = rows.find((row) => row.phase !== "imported") ?? rows[0];
-      if (active) {
-        setJobId(active.id);
-        await loadJob(active.id).catch(() => {});
-      }
+      if (active) { setJobId(active.id); await loadJob(active.id).catch(() => {}); }
     })();
-  }, []);
+  }, [refreshJobs, loadJob]);
 
   useEffect(() => {
     if (!courseId) { setGroups([]); setGroupId(""); return; }
@@ -163,50 +171,82 @@ function PatchIpadProX() {
     })();
   }, [groupId]);
 
-  useEffect(() => {
-    if (!jobId) return;
-    const t = setInterval(() => { loadJob(jobId).catch(() => {}); }, 10_000);
-    return () => clearInterval(t);
-  }, [jobId]);
-
-  useEffect(() => {
-    if (!jobId || busy) return;
-    const waitingForCut = job?.phase === "cut_submitted";
-    const waitingForSolve = job?.phase === "solve_submitted";
-    if (!waitingForCut && !waitingForSolve) return;
-
-    const check = async () => {
-      if (pollingRef.current) return;
-      pollingRef.current = true;
-      try {
-        const r: any = waitingForCut
-          ? await pollCutFn({ data: { jobId } })
-          : await pollSolveFn({ data: { jobId } });
-        setLastChecked(new Date().toLocaleTimeString());
-        setPollError(r?.error ?? null);
-        await loadJob(jobId);
-        if (r?.terminal) {
-          setProgress(r.error || "The Gemini batch failed. Only the failed work needs retrying.");
-        } else if (r?.done && waitingForCut) {
-          if (Object.keys(miniByPage.current).length) await cropAndUpload(jobId);
-          else setProgress("Gemini found the question borders. Select the same PDF once to create the question pictures.");
-        } else if (r?.done) {
-          setProgress("All Gemini answers are saved. The questions are ready to import.");
-        } else {
-          const states = (r?.states ?? []).join(", ") || "queued";
-          setProgress(`Gemini batch is ${states}. This page is checking automatically.`);
+  // ---------- cutting straight from the stored page pictures ----------
+  const cropStoredPages = useCallback(async (id: string) => {
+    if (croppingRef.current.has(id)) return;
+    croppingRef.current.add(id);
+    try {
+      const r: any = await getFn({ data: { jobId: id } });
+      const rows = (r.pages as PageRow[]).filter((p) => p.status === "cut_ready");
+      let uploaded = 0;
+      for (const p of rows) {
+        if (!p.page_image_path) {
+          await saveCropsFn({ data: { jobId: id, pageNumber: p.page_number, crops: [] } });
+          addLog(`⚠ page ${p.page_number}: no stored picture — skipped`);
+          continue;
         }
-      } catch (e: any) {
-        setPollError(e?.message || "Could not check Gemini");
+        setProgress(`Cutting question pictures out of page ${p.page_number}…`);
+        const { data: blob, error } = await supabase.storage.from(BUCKET).download(p.page_image_path);
+        if (error || !blob) { addLog(`⚠ page ${p.page_number}: ${error?.message || "picture missing"}`); continue; }
+        const canvas = await imageBlobToCanvas(blob);
+        const regions = expandRegions((p.regions ?? []) as CutRegion[]);
+        const crops: { path: string; label: string }[] = [];
+        for (let i = 0; i < regions.length; i++) {
+          let b64: string;
+          try { b64 = cropRegionToJpegBase64(canvas, regions[i], { padding: 14, quality: 0.8 }); } catch { continue; }
+          const path = `${id}/p${p.page_number}-q${i + 1}-${Date.now()}.jpg`;
+          const up = await supabase.storage.from(BUCKET)
+            .upload(path, base64ToBlob(b64), { contentType: "image/jpeg", upsert: true });
+          if (up.error) { addLog(`⚠ page ${p.page_number} picture ${i + 1}: ${up.error.message}`); continue; }
+          crops.push({ path, label: String(regions[i].label || `Q${i + 1}`).slice(0, 120) });
+          uploaded++;
+        }
+        canvas.width = 0; canvas.height = 0;
+        await saveCropsFn({ data: { jobId: id, pageNumber: p.page_number, crops } });
+        addLog(`page ${p.page_number}: ${crops.length} question picture(s) ready`);
+      }
+      if (uploaded) setProgress(`${uploaded} question picture(s) ready. You can solve them now.`);
+      await loadJob(id).catch(() => {});
+      await refreshJobs();
+    } finally {
+      croppingRef.current.delete(id);
+    }
+  }, [getFn, saveCropsFn, loadJob, refreshJobs]);
+
+  // ---------- background checking for every unfinished run ----------
+  useEffect(() => {
+    const tick = async () => {
+      if (tickRef.current || busyRef.current) return;
+      tickRef.current = true;
+      try {
+        const rows = await refreshJobs();
+        const active = rows.filter((j) => j.phase === "cut_submitted" || j.phase === "solve_submitted");
+        for (const j of active) {
+          try {
+            const r: any = j.phase === "cut_submitted"
+              ? await pollCutFn({ data: { jobId: j.id } })
+              : await pollSolveFn({ data: { jobId: j.id } });
+            setLastChecked(new Date().toLocaleTimeString());
+            if (j.id === jobId) setPollError(r?.error ?? null);
+            if (r?.done && j.phase === "cut_submitted") await cropStoredPages(j.id);
+          } catch (e: any) {
+            if (j.id === jobId) setPollError(e?.message || "Could not check Gemini");
+          }
+        }
+        // pages whose borders are saved but never cut (older runs / interrupted tab)
+        if (jobId && !active.some((j) => j.id === jobId)) {
+          const cur = rows.find((j) => j.id === jobId);
+          if (cur && cur.phase === "cut_ready") await cropStoredPages(jobId);
+        }
+        if (jobId) await loadJob(jobId).catch(() => {});
       } finally {
-        pollingRef.current = false;
+        tickRef.current = false;
       }
     };
-
-    void check();
-    const timer = setInterval(check, 12_000);
-    return () => clearInterval(timer);
-  }, [jobId, job?.phase, busy]);
+    void tick();
+    const t = setInterval(() => { void tick(); }, 12_000);
+    return () => clearInterval(t);
+  }, [jobId, refreshJobs, pollCutFn, pollSolveFn, cropStoredPages, loadJob]);
 
   const stats = useMemo(() => {
     const cutDone = pages.filter((p) => p.status === "cropped" || p.status === "empty").length;
@@ -223,252 +263,117 @@ function PatchIpadProX() {
     };
   }, [pages, items]);
 
-  const canStartPhase1 = Boolean(courseId && groupId && file && !busy);
-  const canStartPhase2 = Boolean(jobId && stats.phase1Done && items.length > 0 && !busy
-    && items.every((i) => i.status === "pending" || i.status === "failed"));
-  const canImport = Boolean(jobId && job?.phase !== "imported" && stats.phase2Done && stats.solved > 0 && !busy);
-  const cutReadyPages = pages.filter((p) => p.status === "cut_ready");
-  const failedPages = pages.filter((p) => p.status.includes("failed"));
   const waitingForCut = job?.phase === "cut_submitted";
   const waitingForSolve = job?.phase === "solve_submitted";
+  const pendingItems = items.filter((i) => i.status === "pending" || i.status === "failed");
+  const canImport = Boolean(jobId && job?.phase !== "imported" && stats.crops > 0 && stats.solved === stats.crops);
 
-  async function prepareExistingPdfAndCrop() {
-    if (!file || !jobId || !job) return;
-    setBusy(true);
-    setPollError(null);
-    miniByPage.current = {};
-    clearPdfRenderCache();
+  // ---------- start: one job per PDF, queued ----------
+  async function startAll() {
+    if (!files.length || !courseId || !groupId) return;
+    setBusy(true); busyRef.current = true; setLog([]); setPollError(null);
     try {
-      if (file.name !== job.pdf_name) throw new Error(`Choose the same PDF used for this run: ${job.pdf_name}`);
-      setProgress(`Opening ${file.name} to finish the saved Gemini borders…`);
-      const mini = await withTimeout(
-        splitPdfInto2PageBlobs(file, (done, total) => setProgress(`Preparing PDF: ${done}/${total} pages`), 1),
-        180_000,
-        "PDF preparation",
-      );
-      if (mini.length !== job.total_pages) throw new Error(`This PDF has ${mini.length} pages; the selected run expects ${job.total_pages}.`);
-      for (const m of mini) miniByPage.current[m.pageFrom] = miniPdfAsFile(m, file.name);
-      await cropAndUpload(jobId);
-    } catch (e: any) {
-      const message = e?.message || "Could not finish cutting the PDF";
-      setPollError(message);
-      toast.error(message);
-    } finally {
-      setBusy(false);
-      await loadJob(jobId).catch(() => {});
-    }
-  }
+      for (let f = 0; f < files.length; f++) {
+        const file = files[f];
+        const tag = files.length > 1 ? `(${f + 1}/${files.length}) ` : "";
+        clearPdfRenderCache();
+        setProgress(`${tag}Splitting ${file.name}…`);
+        const mini: MiniPdf[] = await withTimeout(
+          splitPdfInto2PageBlobs(file, (done, total) => setProgress(`${tag}Splitting ${file.name}: ${done}/${total} pages`), 1),
+          180_000, "PDF split",
+        );
+        if (!mini.length) { addLog(`✗ ${file.name}: PDF appears empty`); continue; }
 
-  // ---------- PHASE 1 ----------
-  async function runPhase1() {
-    if (!file || !courseId || !groupId) return;
-    setBusy(true); setLog([]); miniByPage.current = {}; clearPdfRenderCache();
-    try {
-      setProgress(`Splitting ${file.name}…`);
-      const mini: MiniPdf[] = await withTimeout(
-        splitPdfInto2PageBlobs(file, (done, total) => setProgress(`Splitting: ${done}/${total} pages`), 1),
-        180_000, "PDF split",
-      );
-      if (!mini.length) throw new Error("PDF appears empty after splitting.");
-      for (const m of mini) miniByPage.current[m.pageFrom] = miniPdfAsFile(m, file.name);
-      const totalPages = mini.length;
+        const subjectCandidates = subjectId === "__auto__" ? subjects.map((s) => s.name) : [];
+        const created: any = await createJobFn({
+          data: {
+            courseId, groupId,
+            subjectId: subjectId === "__auto__" ? null : subjectId,
+            pdfName: file.name, totalPages: mini.length, subjectCandidates,
+          },
+        });
+        const id = created.jobId as string;
+        setJobId(id);
+        await refreshJobs();
+        await loadJob(id).catch(() => {});
+        addLog(`${file.name}: run created · ${mini.length} page(s)`);
 
-      const subjectCandidates = subjectId === "__auto__" ? subjects.map((s) => s.name) : [];
-      const created: any = await createJobFn({
-        data: {
-          courseId, groupId,
-          subjectId: subjectId === "__auto__" ? null : subjectId,
-          pdfName: file.name, totalPages, subjectCandidates,
-        },
-      });
-      const id = created.jobId as string;
-      setJobId(id);
-      await refreshJobs();
-      await loadJob(id);
-      addLog(`job created · ${totalPages} page(s)`);
-
-      // render every page, send them to the cut batch in slices
-      let slice: { pageNumber: number; base64: string }[] = [];
-      for (const m of mini) {
-        setProgress(`Rendering page ${m.pageFrom}/${totalPages}…`);
-        const doc = await withTimeout(loadPdfForRenderPreferWorker(miniByPage.current[m.pageFrom]), 60_000, `page ${m.pageFrom} open`);
-        const canvas = await withTimeout(renderPageToCanvas(doc, 1, 1200), 60_000, `page ${m.pageFrom} render`);
-        slice.push({ pageNumber: m.pageFrom, base64: canvasToJpegBase64(canvas, 0.68) });
-        canvas.width = 0; canvas.height = 0;
-        if (slice.length >= CUT_PAGES_PER_BATCH) {
+        let slice: { pageNumber: number; base64: string; imagePath?: string }[] = [];
+        const flush = async () => {
+          if (!slice.length) return;
           await submitCutFn({ data: { jobId: id, pages: slice } });
-          addLog(`sent ${slice.length} page(s) to the 50%-off border batch`);
+          addLog(`${file.name}: sent ${slice.length} page(s) to the 50%-off border batch`);
           slice = [];
+        };
+        for (const m of mini) {
+          setProgress(`${tag}Reading page ${m.pageFrom}/${mini.length} of ${file.name}…`);
+          const pdfFile = miniPdfAsFile(m, file.name);
+          const doc = await withTimeout(loadPdfForRenderPreferWorker(pdfFile), 60_000, `page ${m.pageFrom} open`);
+          const canvas = await withTimeout(renderPageToCanvas(doc, 1, 1200), 60_000, `page ${m.pageFrom} render`);
+          const base64 = canvasToJpegBase64(canvas, 0.68);
+          canvas.width = 0; canvas.height = 0;
+
+          // store the page picture so cutting never needs the PDF again
+          let imagePath: string | undefined = `${id}/page-${m.pageFrom}.jpg`;
+          const up = await supabase.storage.from(BUCKET)
+            .upload(imagePath, base64ToBlob(base64), { contentType: "image/jpeg", upsert: true });
+          if (up.error) { imagePath = undefined; addLog(`⚠ page ${m.pageFrom}: could not save the page picture (${up.error.message})`); }
+
+          slice.push({ pageNumber: m.pageFrom, base64, imagePath });
+          if (slice.length >= CUT_PAGES_PER_BATCH) await flush();
         }
+        await flush();
+        await loadJob(id).catch(() => {});
+        addLog(`${file.name}: phase 1 submitted — you can leave this page, it keeps working`);
       }
-      if (slice.length) {
-        await submitCutFn({ data: { jobId: id, pages: slice } });
-        addLog(`sent ${slice.length} page(s) to the 50%-off border batch`);
-      }
-      await loadJob(id);
-
-      // wait for the cut batches
-      setProgress("Phase 1: waiting for Gemini to return the question borders (batch, 50% off)…");
-      let done = false;
-      for (let i = 0; i < 240 && !done; i++) {
-        await new Promise((r) => setTimeout(r, 10_000));
-        try {
-          const r: any = await pollCutFn({ data: { jobId: id } });
-          done = Boolean(r?.done);
-          setProgress(`Phase 1: batch state ${(r?.states ?? []).join(", ") || "pending"}…`);
-        } catch (e: any) { setPollError(e?.message || "Could not check Gemini"); }
-      }
-      if (!done) throw new Error("Gemini is still working on the borders. Press “Resume phase 1” later.");
-
-      await cropAndUpload(id);
+      setFiles([]);
+      setProgress("Gemini is reading the pages. This page checks automatically — nothing else to do.");
+      toast.success("Started");
     } catch (e: any) {
-      toast.error(e?.message || "Phase 1 failed");
+      toast.error(e?.message || "Could not start");
       addLog(`✗ ${e?.message || e}`);
     } finally {
-      setBusy(false);
-      if (jobId) await loadJob(jobId).catch(() => {});
+      setBusy(false); busyRef.current = false;
       await refreshJobs();
+      if (jobId) await loadJob(jobId).catch(() => {});
     }
-  }
-
-  async function cropAndUpload(id: string) {
-    const r = await loadJob(id);
-    const rows = (r.pages as PageRow[]).filter((p) => p.status === "cut_ready");
-    let uploaded = 0;
-    for (const p of rows) {
-      const mini = miniByPage.current[p.page_number];
-      if (!mini) { addLog(`⚠ page ${p.page_number}: re-select the PDF to cut it`); continue; }
-      setProgress(`Phase 1: cutting question pictures out of page ${p.page_number}…`);
-      const doc = await loadPdfForRenderPreferWorker(mini);
-      const canvas = await renderPageToCanvas(doc, 1, 1200);
-      const regions = expandRegions((p.regions ?? []) as CutRegion[]);
-      const crops: { path: string; label: string }[] = [];
-      for (let i = 0; i < regions.length; i++) {
-        let b64: string;
-        try { b64 = cropRegionToJpegBase64(canvas, regions[i], { padding: 14, quality: 0.8 }); } catch { continue; }
-        const path = `${id}/p${p.page_number}-q${i + 1}-${Date.now()}.jpg`;
-        const { error } = await supabase.storage.from(BUCKET)
-          .upload(path, base64ToBlob(b64), { contentType: "image/jpeg", upsert: true });
-        if (error) { addLog(`⚠ page ${p.page_number} picture ${i + 1}: ${error.message}`); continue; }
-        crops.push({ path, label: String(regions[i].label || `Q${i + 1}`).slice(0, 120) });
-        uploaded++;
-      }
-      canvas.width = 0; canvas.height = 0;
-      await saveCropsFn({ data: { jobId: id, pageNumber: p.page_number, crops } });
-      addLog(`page ${p.page_number}: ${crops.length} question picture(s) ready`);
-    }
-    await loadJob(id);
-    setProgress(`Phase 1 finished · ${uploaded} question picture(s) ready. You can start phase 2.`);
-    toast.success("Phase 1 done");
   }
 
   // ---------- PHASE 2 ----------
   async function runPhase2() {
     if (!jobId) return;
-    setBusy(true);
+    setBusy(true); busyRef.current = true;
     try {
       const pending = items.filter((i) => i.status === "pending" || i.status === "failed");
-      setProgress(`Phase 2: sending ${pending.length} question picture(s) to the 50%-off solve batch…`);
+      setProgress(`Sending ${pending.length} question picture(s) to the 50%-off answer batch…`);
       let slice: { pageNumber: number; itemIndex: number; base64: string }[] = [];
+      const flush = async () => {
+        if (!slice.length) return;
+        await submitSolveFn({ data: { jobId, items: slice } });
+        addLog(`sent ${slice.length} question(s) to the answer batch`);
+        slice = [];
+      };
       for (const it of pending) {
         const { data: blob, error } = await supabase.storage.from(BUCKET).download(it.image_path);
         if (error || !blob) { addLog(`⚠ could not read ${it.image_path}`); continue; }
-        const base64 = await blobToBase64(blob);
-        slice.push({ pageNumber: it.page_number, itemIndex: it.item_index, base64 });
-        if (slice.length >= SOLVE_ITEMS_PER_BATCH) {
-          await submitSolveFn({ data: { jobId, items: slice } });
-          addLog(`sent ${slice.length} question(s) to the 50%-off solve batch`);
-          slice = [];
-        }
+        slice.push({ pageNumber: it.page_number, itemIndex: it.item_index, base64: await blobToBase64(blob) });
+        if (slice.length >= SOLVE_ITEMS_PER_BATCH) await flush();
       }
-      if (slice.length) {
-        await submitSolveFn({ data: { jobId, items: slice } });
-        addLog(`sent ${slice.length} question(s) to the 50%-off solve batch`);
-      }
+      await flush();
       await loadJob(jobId);
-
-      setProgress("Phase 2: waiting for Gemini answers (batch, 50% off)…");
-      let done = false;
-      for (let i = 0; i < 240 && !done; i++) {
-        await new Promise((r) => setTimeout(r, 10_000));
-        try {
-          const r: any = await pollSolveFn({ data: { jobId } });
-          done = Boolean(r?.done);
-          setProgress(`Phase 2: batch state ${(r?.states ?? []).join(", ") || "pending"}…`);
-        } catch (e: any) { setPollError(e?.message || "Could not check Gemini"); }
-        await loadJob(jobId).catch(() => {});
-      }
-      setProgress(done ? "Phase 2 finished. You can import now." : "Gemini is still answering — press “Check phase 2” later.");
-      if (done) toast.success("Phase 2 done");
+      setProgress("Gemini is answering the questions. This page checks automatically.");
     } catch (e: any) {
-      toast.error(e?.message || "Phase 2 failed");
+      toast.error(e?.message || "Could not start the answers");
       addLog(`✗ ${e?.message || e}`);
     } finally {
-      setBusy(false);
+      setBusy(false); busyRef.current = false;
       if (jobId) await loadJob(jobId).catch(() => {});
     }
   }
 
-  const primaryControl = (() => {
-    if (!jobId) return {
-      label: "Choose PDF and start",
-      disabled: !canStartPhase1,
-      action: runPhase1,
-      icon: <PlayCircle size={16} />,
-    };
-    if (waitingForCut) return {
-      label: "Waiting for Gemini — checking automatically",
-      disabled: true,
-      action: () => {},
-      icon: <Loader2 className="animate-spin" size={16} />,
-    };
-    if (cutReadyPages.length > 0) return {
-      label: file ? `Finish cutting ${cutReadyPages.length} page(s)` : "Select the same PDF to finish cutting",
-      disabled: !file || busy,
-      action: prepareExistingPdfAndCrop,
-      icon: file ? <PlayCircle size={16} /> : <Upload size={16} />,
-    };
-    if (failedPages.length > 0 || job?.phase === "cut_failed") return {
-      label: "Phase 1 failed — start a new run with the PDF",
-      disabled: !canStartPhase1,
-      action: runPhase1,
-      icon: <AlertTriangle size={16} />,
-    };
-    if (waitingForSolve) return {
-      label: "Waiting for Gemini answers — checking automatically",
-      disabled: true,
-      action: () => {},
-      icon: <Loader2 className="animate-spin" size={16} />,
-    };
-    if (job?.phase === "imported") return {
-      label: `${job.imported_count || stats.solved} questions imported`,
-      disabled: true,
-      action: () => {},
-      icon: <CheckCircle2 size={16} />,
-    };
-    if (canImport) return {
-      label: `Import ${stats.solved} questions`,
-      disabled: false,
-      action: runImport,
-      icon: <Download size={16} />,
-    };
-    if (job?.phase === "solve_failed" || stats.failedItems > 0) return {
-      label: `${stats.failedItems} answer(s) failed — retry failed questions`,
-      disabled: busy,
-      action: runPhase2,
-      icon: <AlertTriangle size={16} />,
-    };
-    return {
-      label: `Start solving ${items.length} questions`,
-      disabled: !canStartPhase2,
-      action: runPhase2,
-      icon: <PlayCircle size={16} />,
-    };
-  })();
-
   async function runImport() {
     if (!jobId) return;
-    setBusy(true);
+    setBusy(true); busyRef.current = true;
     try {
       const r: any = await importFn({ data: { jobId } });
       await loadJob(jobId);
@@ -478,8 +383,47 @@ function PatchIpadProX() {
       if (r.errors?.length) addLog(r.errors.join(" · "));
     } catch (e: any) {
       toast.error(e?.message || "Import failed");
-    } finally { setBusy(false); }
+    } finally { setBusy(false); busyRef.current = false; }
   }
+
+  const primaryControl = (() => {
+    if (busy) return { label: "Working…", disabled: true, action: () => {}, icon: <Loader2 className="animate-spin" size={16} /> };
+    if (!jobId || job?.phase === "imported") return {
+      label: files.length > 1 ? `Start ${files.length} PDFs` : "Start",
+      disabled: !(files.length && courseId && groupId),
+      action: startAll, icon: <PlayCircle size={16} />,
+    };
+    if (waitingForCut) return { label: "Gemini is reading the pages — checking automatically", disabled: true, action: () => {}, icon: <Loader2 className="animate-spin" size={16} /> };
+    if (waitingForSolve) return { label: "Gemini is answering — checking automatically", disabled: true, action: () => {}, icon: <Loader2 className="animate-spin" size={16} /> };
+    if (pages.some((p) => p.status === "cut_ready")) return {
+      label: "Cutting the question pictures…", disabled: true, action: () => {}, icon: <Loader2 className="animate-spin" size={16} />,
+    };
+    if (canImport) return { label: `Import ${stats.solved} questions`, disabled: false, action: runImport, icon: <Download size={16} /> };
+    if (pendingItems.length) return {
+      label: stats.failedItems ? `Retry ${pendingItems.length} question(s)` : `Solve ${pendingItems.length} questions`,
+      disabled: false, action: runPhase2, icon: <PlayCircle size={16} />,
+    };
+    if (job?.phase === "cut_failed" || pages.some((p) => p.status === "cut_failed")) return {
+      label: files.length ? "Start again with the selected PDF" : "This run failed — choose the PDF again above",
+      disabled: !(files.length && courseId && groupId), action: startAll, icon: <AlertTriangle size={16} />,
+    };
+    return {
+      label: files.length ? `Start ${files.length} PDF(s)` : "Nothing to do for this run",
+      disabled: !(files.length && courseId && groupId), action: startAll, icon: <PlayCircle size={16} />,
+    };
+  })();
+
+  const statusLine = (() => {
+    if (progress) return progress;
+    if (pollError || job?.error) return pollError || job?.error;
+    if (!jobId) return "Choose where to save, then pick one or more exam PDFs.";
+    if (waitingForCut) return "Gemini is reading the pages. You can close this page and come back.";
+    if (waitingForSolve) return "Gemini is answering the questions. You can close this page and come back.";
+    if (canImport) return "All answers are ready. You can import now.";
+    if (pendingItems.length) return `${pendingItems.length} question picture(s) are waiting to be solved.`;
+    if (job?.phase === "imported") return `${job.imported_count || stats.solved} question(s) imported.`;
+    return "Run selected.";
+  })();
 
   if (loading || !user || !isAdmin) return null;
 
@@ -494,7 +438,7 @@ function PatchIpadProX() {
           <ScanEye className="text-primary" size={22} /> Patch iPad ProX
         </h1>
         <p className="text-sm text-muted-foreground mt-1 mb-6">
-          Both steps run through the Gemini batch API at half price: phase 1 finds the question borders, phase 2 solves every question picture. Import unlocks only when both are finished.
+          Pick one or more exam PDFs. Every page picture is saved first, so the run keeps working even if you refresh or close the page.
         </p>
 
         {/* setup */}
@@ -516,18 +460,24 @@ function PatchIpadProX() {
           </div>
           <label className="mt-4 block cursor-pointer rounded-2xl border-2 border-dashed border-border p-6 text-center hover:border-primary">
             <Upload className="mx-auto text-muted-foreground" />
-            <p className="mt-2 text-sm font-bold">{file ? file.name : "Click to choose the exam PDF"}</p>
-            <input type="file" accept="application/pdf" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <p className="mt-2 text-sm font-bold">
+              {files.length === 0 ? "Click to choose one or more exam PDFs"
+                : files.length === 1 ? files[0].name
+                : `${files.length} PDFs selected`}
+            </p>
+            {files.length > 1 && (
+              <p className="mt-1 text-xs text-muted-foreground">{files.map((f) => f.name).join(" · ")}</p>
+            )}
+            <input type="file" accept="application/pdf" multiple className="hidden"
+              onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
           </label>
         </section>
 
-        <section className={`border p-5 mb-5 ${pollError || job?.error ? "border-destructive/50 bg-destructive/5" : "border-primary/40 bg-primary/5"}`}>
+        <section className={`rounded-2xl border p-5 mb-5 ${pollError || job?.error ? "border-destructive/50 bg-destructive/5" : "border-primary/40 bg-primary/5"}`}>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-black uppercase text-muted-foreground">Current status</p>
-              <p className="mt-1 text-base font-bold">
-                {pollError || job?.error || progress || (jobId ? "Run selected" : "Choose where to save and select a PDF")}
-              </p>
+              <p className="mt-1 text-base font-bold">{statusLine}</p>
               {lastChecked && (
                 <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock3 size={12} /> Last checked {lastChecked}
@@ -536,10 +486,10 @@ function PatchIpadProX() {
             </div>
             <button
               onClick={primaryControl.action}
-              disabled={primaryControl.disabled || busy}
-              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 bg-primary px-4 py-2 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={primaryControl.disabled}
+              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {busy ? <Loader2 className="animate-spin" size={16} /> : primaryControl.icon}
+              {primaryControl.icon}
               {primaryControl.label}
             </button>
           </div>
@@ -548,23 +498,20 @@ function PatchIpadProX() {
         {/* phases */}
         <section className="grid md:grid-cols-3 gap-4 mb-5">
           <PhaseCard
-            step="Phase 1"
-            title="Read the pages"
+            step="Phase 1" title="Read the pages"
             detail={stats.pages ? `${stats.cutDone}/${stats.pages} pages cut · ${stats.crops} question pictures` : "not started"}
             done={stats.phase1Done}
-            action={<span className="text-xs font-bold text-muted-foreground">{waitingForCut ? "Gemini is processing" : cutReadyPages.length ? "Borders received; PDF needed" : stats.phase1Done ? "Complete" : "Not started"}</span>}
+            action={<span className="text-xs font-bold text-muted-foreground">{waitingForCut ? "Gemini is processing" : stats.phase1Done ? "Complete" : stats.pages ? "Cutting" : "Not started"}</span>}
           />
           <PhaseCard
-            step="Phase 2"
-            title="Solve the questions"
+            step="Phase 2" title="Solve the questions"
             detail={stats.crops ? `${stats.solved}/${stats.crops} solved${stats.failedItems ? ` · ${stats.failedItems} failed` : ""}` : "waiting for phase 1"}
             done={stats.phase2Done}
             action={<span className="text-xs font-bold text-muted-foreground">{waitingForSolve ? "Gemini is processing" : stats.phase2Done ? "Complete" : stats.phase1Done ? "Ready when you are" : "Locked"}</span>}
           />
           <PhaseCard
-            step="Import"
-            title="Save into the subject"
-            detail={job?.imported_count ? `${job.imported_count} imported` : stats.phase2Done ? "ready to import" : "locked until phase 2 is done"}
+            step="Import" title="Save into the subject"
+            detail={job?.imported_count ? `${job.imported_count} imported` : canImport ? "ready to import" : "locked until phase 2 is done"}
             done={Boolean(job?.imported_count)}
             action={<span className="text-xs font-bold text-muted-foreground">{canImport ? "Ready" : "Locked"}</span>}
           />
@@ -589,7 +536,7 @@ function PatchIpadProX() {
                       : p.status.includes("failed") ? "bg-rose-500/15 text-rose-600"
                       : "bg-amber-500/15 text-amber-600"}`}>
                   Page {p.page_number} · {p.status === "cut_ready"
-                    ? `${Array.isArray(p.regions) ? p.regions.length : 0} borders found · needs cutting`
+                    ? `${Array.isArray(p.regions) ? p.regions.length : 0} borders · cutting`
                     : p.status === "cropped"
                       ? `${Array.isArray(p.crops) ? p.crops.length : 0} pictures ready`
                       : p.status === "cut_submitted"
@@ -626,12 +573,18 @@ function PatchIpadProX() {
           {jobs.length === 0 ? <p className="text-sm text-muted-foreground">No runs yet.</p> : (
             <ul className="space-y-2">
               {jobs.map((j) => (
-                <li key={j.id} className="flex items-center gap-3 rounded-xl border border-border px-3 py-2">
-                  <button onClick={() => { setJobId(j.id); loadJob(j.id); }} className="flex-1 text-left min-w-0">
+                <li key={j.id} className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${j.id === jobId ? "border-primary" : "border-border"}`}>
+                  <button onClick={() => { setJobId(j.id); setProgress(""); setPollError(null); loadJob(j.id).catch(() => {}); }} className="flex-1 text-left min-w-0">
                     <div className="text-sm font-bold truncate">{j.pdf_name}</div>
-                    <div className="text-[11px] text-muted-foreground">{j.phase} · {j.total_pages} pages · {j.imported_count} imported</div>
+                    <div className="text-[11px] text-muted-foreground">{humanPhase(j.phase)} · {j.total_pages} pages · {j.imported_count} imported</div>
                   </button>
-                  <button onClick={async () => { await delFn({ data: { jobId: j.id } }); if (jobId === j.id) { setJobId(null); setPages([]); setItems([]); } refreshJobs(); }}
+                  {j.imported_count > 0 && <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />}
+                  <button
+                    onClick={async () => {
+                      await delFn({ data: { jobId: j.id } });
+                      if (jobId === j.id) { setJobId(null); setJob(null); setPages([]); setItems([]); }
+                      refreshJobs();
+                    }}
                     className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Trash2 size={14} /></button>
                 </li>
               ))}
@@ -643,23 +596,30 @@ function PatchIpadProX() {
   );
 }
 
+function humanPhase(phase: string) {
+  switch (phase) {
+    case "created": return "just created";
+    case "cut_submitted": return "reading the pages";
+    case "cut_ready": return "cutting pictures";
+    case "cut_complete": return "ready to solve";
+    case "cut_failed": return "page reading failed";
+    case "solve_submitted": return "solving";
+    case "solve_ready": return "ready to import";
+    case "solve_failed": return "some answers failed";
+    case "imported": return "imported";
+    default: return phase;
+  }
+}
+
 function PhaseCard({ step, title, detail, done, action }: { step: string; title: string; detail: string; done: boolean; action: React.ReactNode }) {
   return (
     <div className={`rounded-2xl border p-4 ${done ? "border-emerald-500/40 bg-emerald-500/5" : "border-border bg-card"}`}>
-      <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-muted-foreground">
-        {step} {done && <CheckCircle2 size={14} className="text-emerald-600" />}
-      </div>
-      <div className="text-sm font-bold mt-1">{title}</div>
-      <div className="text-xs text-muted-foreground mt-0.5 mb-3">{detail}</div>
-      {action}
+      <p className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">{step}</p>
+      <p className="mt-1 text-sm font-black flex items-center gap-1.5">
+        {done && <CheckCircle2 size={14} className="text-emerald-600" />} {title}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+      <div className="mt-3">{action}</div>
     </div>
   );
-}
-
-async function blobToBase64(blob: Blob): Promise<string> {
-  const buf = new Uint8Array(await blob.arrayBuffer());
-  let binary = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < buf.length; i += chunk) binary += String.fromCharCode(...buf.subarray(i, i + chunk));
-  return btoa(binary);
 }

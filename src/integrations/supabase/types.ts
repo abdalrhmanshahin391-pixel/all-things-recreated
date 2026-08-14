@@ -2873,6 +2873,7 @@ export type Database = {
           error: string | null
           id: string
           job_id: string
+          page_image_path: string | null
           page_number: number
           regions: Json
           status: string
@@ -2883,6 +2884,7 @@ export type Database = {
           error?: string | null
           id?: string
           job_id: string
+          page_image_path?: string | null
           page_number: number
           regions?: Json
           status?: string
@@ -2893,6 +2895,7 @@ export type Database = {
           error?: string | null
           id?: string
           job_id?: string
+          page_image_path?: string | null
           page_number?: number
           regions?: Json
           status?: string
