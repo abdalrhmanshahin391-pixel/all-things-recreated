@@ -23,6 +23,8 @@ import { SeasonalTheme } from "@/components/SeasonalTheme";
 import { ThemeDecor } from "@/components/ThemeDecor";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { SiteFooter } from "@/components/SiteFooter";
+import { useAuth } from "@/hooks/useAuth";
+import { needsOnboarding } from "@/lib/onboarding";
 import "@/i18n";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -258,6 +260,7 @@ function RootComponent() {
           <ThemeDecor />
           <PresenceTracker />
           <DeviceTracker />
+          <OnboardingGate />
           <PaymentTestModeBanner />
           <AnnouncementBar />
           {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
