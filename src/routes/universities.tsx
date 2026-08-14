@@ -6,6 +6,9 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { UniversityImage } from "@/components/common/UniversityImage";
 import { MedicalPageBackdrop } from "@/components/common/MedicalPageBackdrop";
+import { UniversityTags } from "@/components/common/UniversityTags";
+import { ComingSoonOverlay } from "@/components/common/ComingSoonOverlay";
+import { useLang } from "@/components/LanguageProvider";
 
 type NextHub = "courses" | "lectures" | "committee";
 
@@ -20,6 +23,10 @@ type University = {
   logo_url: string | null;
   storage_path: string | null;
   cover_path: string | null;
+  is_closed: boolean;
+  closed_note_en: string | null;
+  closed_note_ar: string | null;
+  tags: unknown;
 };
 
 const universitiesQuery = queryOptions({
@@ -27,7 +34,7 @@ const universitiesQuery = queryOptions({
   queryFn: async (): Promise<University[]> => {
     const { data, error } = await supabase
       .from("universities")
-      .select("id,name,slug,short_name,description,city,country,logo_url,storage_path,cover_path")
+      .select("id,name,slug,short_name,description,city,country,logo_url,storage_path,cover_path,is_closed,closed_note_en,closed_note_ar,tags")
       .eq("is_active", true)
       .order("sort_order");
     if (error) throw error;
@@ -131,15 +138,11 @@ function UniversitiesPage() {
 
 function UniversityCard({ u, next }: { u: University; next?: NextHub }) {
   const location = [u.city, u.country].filter(Boolean).join(", ");
+  const { lang } = useLang();
+  const cardClass = "group relative block rounded-3xl border-2 border-[#e5e5e5] bg-white overflow-hidden transition-transform";
 
-  return (
-    <Link
-      to="/u/$uniSlug"
-      params={{ uniSlug: u.slug }}
-      search={next ? { next } : undefined}
-      className="group block rounded-3xl border-2 border-[#e5e5e5] bg-white overflow-hidden hover:-translate-y-1 transition-transform"
-      style={{ boxShadow: "0 4px 0 #e5e5e5" }}
-    >
+  const body = (
+    <>
       <div className="relative aspect-[4/3] overflow-hidden bg-muted">
         <UniversityImage
           cover={u.cover_path}
@@ -158,12 +161,40 @@ function UniversityCard({ u, next }: { u: University; next?: NextHub }) {
               </p>
             )}
           </div>
-          <ArrowRight size={18} className="text-muted-foreground group-hover:text-[var(--primary)] group-hover:translate-x-0.5 transition-all shrink-0 mt-0.5" />
+          {!u.is_closed && (
+            <ArrowRight size={18} className="text-muted-foreground group-hover:text-[var(--primary)] group-hover:translate-x-0.5 transition-all shrink-0 mt-0.5" />
+          )}
         </div>
+        <UniversityTags tags={u.tags} lang={lang} className="mt-2" />
         {u.description && (
           <p className="mt-3 text-sm text-muted-foreground line-clamp-2">{u.description}</p>
         )}
       </div>
+    </>
+  );
+
+  if (u.is_closed) {
+    return (
+      <div
+        aria-disabled="true"
+        className={`${cardClass} cursor-not-allowed`}
+        style={{ boxShadow: "0 4px 0 #e5e5e5" }}
+      >
+        {body}
+        <ComingSoonOverlay note={lang === "ar" ? (u.closed_note_ar || u.closed_note_en) : u.closed_note_en} lang={lang} />
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to="/u/$uniSlug"
+      params={{ uniSlug: u.slug }}
+      search={next ? { next } : undefined}
+      className={`${cardClass} hover:-translate-y-1`}
+      style={{ boxShadow: "0 4px 0 #e5e5e5" }}
+    >
+      {body}
     </Link>
   );
 }
