@@ -295,6 +295,12 @@ function UniversityHubPage() {
               )}
               <div className="min-w-0">
                 <h1 className="text-3xl md:text-5xl font-semibold tracking-tight text-foreground">{uni.name}</h1>
+                <UniversityTags tags={uni.tags} lang={lang} className="mt-3" size="md" />
+                {uni.is_closed && isAdmin && (
+                  <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-amber-600">
+                    <Lock size={12} /> Closed for users (admin preview)
+                  </p>
+                )}
                 {location && (
                   <p className="mt-2 text-sm text-muted-foreground inline-flex items-center gap-1.5">
                     <MapPin size={13} /> {location}
