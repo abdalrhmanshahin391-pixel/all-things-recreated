@@ -260,13 +260,23 @@ function LectureCard({ course, active }: { course: Course; active: boolean }) {
             Open lectures <ArrowRight size={14} />
           </Link>
         ) : (
-          <Link
-            to="/lectures/$courseId"
-            params={{ courseId: course.id }}
-            className="mt-auto inline-flex items-center justify-center gap-1.5 text-sm font-semibold tracking-wide px-4 py-2.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-          >
-            Subscribe · ${Number(course.price).toFixed(0)} <ArrowRight size={14} />
-          </Link>
+          <div className="mt-auto flex flex-col gap-1.5">
+            {offerLive(course) && (
+              <span className="text-center text-xs text-muted-foreground">
+                was <s>${Number(course.compare_at_price).toFixed(0)}</s>
+              </span>
+            )}
+            <Link
+              to="/lectures/$courseId"
+              params={{ courseId: course.id }}
+              className="inline-flex items-center justify-center gap-1.5 text-sm font-semibold tracking-wide px-4 py-2.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              {Number(course.price) > 0
+                ? `Subscribe · $${Number(course.price).toFixed(0)}`
+                : "Subscribe · FREE"}{" "}
+              <ArrowRight size={14} />
+            </Link>
+          </div>
         )}
       </div>
     </div>
