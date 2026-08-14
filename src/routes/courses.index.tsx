@@ -33,6 +33,7 @@ export const Route = createFileRoute("/courses/")({
           "All AquaQBank Academy question bank courses for medical students, organized year by year with midterm and final question sets.",
       },
       { property: "og:url", content: "https://aquaqbank.com/courses" },
+      { name: "robots", content: "noindex, nofollow" },
     ],
     links: [{ rel: "canonical", href: "https://aquaqbank.com/courses" }],
     scripts: [

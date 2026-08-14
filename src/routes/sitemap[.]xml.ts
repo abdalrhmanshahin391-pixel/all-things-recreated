@@ -16,7 +16,6 @@ const guidePrefix = (lang: (typeof GUIDE_LANGS)[number]) => (lang === "en" ? "" 
 const STATIC_ENTRIES: SitemapEntry[] = [
   { path: "/", changefreq: "weekly", priority: "1.0" },
   { path: "/universities", changefreq: "weekly", priority: "0.9" },
-  { path: "/courses", changefreq: "weekly", priority: "0.9" },
   { path: "/lectures", changefreq: "weekly", priority: "0.7" },
   { path: "/committee", changefreq: "weekly", priority: "0.7" },
   { path: "/packages", changefreq: "monthly", priority: "0.6" },
@@ -46,17 +45,6 @@ async function dynamicEntries(): Promise<SitemapEntry[]> {
     }
   } catch {
     // ignore — sitemap still serves static routes
-  }
-  try {
-    const { data: courses } = await supabase
-      .from("courses")
-      .select("id")
-      .eq("published", true);
-    for (const c of courses ?? []) {
-      if (c?.id) entries.push({ path: `/courses/${c.id}`, changefreq: "weekly", priority: "0.7" });
-    }
-  } catch {
-    // ignore
   }
   try {
     const { data: guides } = await (supabase.from as any)("guides")
