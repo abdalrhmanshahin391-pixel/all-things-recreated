@@ -134,16 +134,6 @@ export async function solveSingleProxImage(
   return extractJson(json?.candidates?.[0]?.content?.parts?.[0]?.text || "");
 }
 
-function legacyExtractJson(text: string): any | null {
-  const cleaned = String(text || "").trim();
-  if (!cleaned) return null;
-  try { return JSON.parse(cleaned); } catch { /* keep trying */ }
-  const lb = cleaned.search(/[[{]/);
-  const rb = Math.max(cleaned.lastIndexOf("]"), cleaned.lastIndexOf("}"));
-  if (lb !== -1 && rb > lb) { try { return JSON.parse(cleaned.slice(lb, rb + 1)); } catch { /* give up */ } }
-  return null;
-}
-
 export function responseText(item: any): string {
   return item?.response?.candidates?.[0]?.content?.parts?.[0]?.text
     || item?.response?.body?.candidates?.[0]?.content?.parts?.[0]?.text
