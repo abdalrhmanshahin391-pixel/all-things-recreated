@@ -496,6 +496,7 @@ export async function callGeminiQuestions(
     contents: [{ role: "user", parts }],
     generationConfig: {
       responseMimeType: "application/json",
+      responseSchema: GEMINI_RESPONSE_SCHEMA,
       temperature: 0.2,
       maxOutputTokens: MAX_OUT,
     },
