@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useLang } from "@/components/LanguageProvider";
+import { UniversityTags } from "@/components/common/UniversityTags";
 import {
   TILE_DEFAULTS,
   lockChip,
@@ -215,6 +216,31 @@ function UniversityHubPage() {
   }
 
   const location = [uni.city, uni.country].filter(Boolean).join(", ");
+  const closedNote = (lang === "ar" ? uni.closed_note_ar || uni.closed_note_en : uni.closed_note_en) ?? null;
+
+  if (uni.is_closed && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <SiteHeader />
+        <main className="pt-32 pb-24 mx-auto max-w-3xl px-6 text-center">
+          <span className="inline-flex items-center gap-2 rounded-full border-2 border-border bg-card px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.18em]">
+            <Lock size={12} /> {lang === "ar" ? "قريبًا" : "Coming soon"}
+          </span>
+          <h1 className="mt-6 text-3xl md:text-5xl font-semibold tracking-tight">{uni.name}</h1>
+          <p className="mt-4 text-base text-muted-foreground">
+            {closedNote ??
+              (lang === "ar"
+                ? "هذه الجامعة ليست متاحة بعد. ترقّبوا فتحها قريبًا."
+                : "This university isn't open yet. Check back soon.")}
+          </p>
+          <UniversityTags tags={uni.tags} lang={lang} className="mt-5 justify-center" size="md" />
+          <Link to="/universities" className="mt-8 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline">
+            <ArrowLeft size={14} /> {lang === "ar" ? "كل الجامعات" : "All universities"}
+          </Link>
+        </main>
+      </div>
+    );
+  }
 
   // Fall back to the built-in three cards if this university has no rows yet.
   const fallbackTiles: UniversityTile[] = (["courses", "lectures", "resources"] as const).map(
