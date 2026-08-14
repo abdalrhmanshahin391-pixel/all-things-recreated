@@ -590,14 +590,13 @@ export const importChunkV2Ipad = createServerFn({ method: "POST" })
 
 export const listJobsV2Ipad = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({}).passthrough().optional().parse(d))
   .handler(async ({ context }) => {
     const { supabase } = await ensureAdmin(context);
     const { data, error } = await supabase.from(JOBS_TABLE)
       .select("id, pdf_name, total_pages, subject_id, status, reference_book, created_at")
       .order("created_at", { ascending: false }).limit(30);
     if (error) throw error;
-    return { jobs: data ?? [] };
+    return { rows: data ?? [] };
   });
 
 export const setJarvisReferenceBook = createServerFn({ method: "POST" })
@@ -613,17 +612,6 @@ export const setJarvisReferenceBook = createServerFn({ method: "POST" })
       .update({ reference_book: book || null }).eq("id", data.jobId);
     if (error) throw error;
     return { book: book || null };
-  });
-
-const listJobsV2IpadLegacy = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabase } = await ensureAdmin(context);
-    const { data, error } = await supabase.from(JOBS_TABLE)
-      .select("id, pdf_name, total_pages, subject_id, status, created_at")
-      .order("created_at", { ascending: false }).limit(30);
-    if (error) throw error;
-    return { rows: data ?? [] };
   });
 
 const JobInput = z.object({ jobId: z.string().uuid() });
