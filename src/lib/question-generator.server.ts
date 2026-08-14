@@ -287,6 +287,7 @@ export type QuestionCallResult = {
   note: string;
   rawPreview: string;
   truncated?: boolean;
+  modelUsed?: string;
 };
 
 
