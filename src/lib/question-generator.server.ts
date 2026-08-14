@@ -2,7 +2,21 @@
 // Calls the admin's own OpenAI / Gemini account (keys stored in admin_ai_keys).
 
 export const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
-export const DEFAULT_GEMINI_MODEL = "gemini-flash-lite-latest";
+export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
+
+/** Concrete model ids that are known to work with the keys saved on this site. */
+export const GEMINI_MODEL_CHAIN = ["gemini-2.5-flash-lite", "gemini-2.5-flash"] as const;
+
+/** Aliases that have proven unreliable — never used on their own. */
+const GEMINI_ALIASES = new Set(["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-pro-latest"]);
+
+function geminiCandidates(preferred?: string): string[] {
+  const out: string[] = [];
+  const p = (preferred ?? "").trim();
+  if (p && !GEMINI_ALIASES.has(p)) out.push(p);
+  for (const m of GEMINI_MODEL_CHAIN) if (!out.includes(m)) out.push(m);
+  return out;
+}
 
 export const AI_PROVIDERS = ["openai", "gemini"] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
