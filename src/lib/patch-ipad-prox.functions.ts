@@ -510,3 +510,18 @@ export const deleteProxJob = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true };
   });
+
+export const setProxReferenceBook = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    jobId: z.string().uuid(),
+    book: z.string().max(200).nullable(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureProxAdmin(context);
+    const book = (data.book ?? "").trim();
+    const { error } = await supabase.from(PROX_JOBS)
+      .update({ reference_book: book || null }).eq("id", data.jobId);
+    if (error) throw error;
+    return { book: book || null };
+  });
