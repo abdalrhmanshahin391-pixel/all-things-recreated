@@ -19,7 +19,9 @@ import {
   listAqvJobs,
   getAqvJob,
   deleteAqvJob,
+  setAqvReferenceBook,
 } from "@/lib/aquavisionx.functions";
+import { ReferenceBookCard } from "@/components/admin/ReferenceBookCard";
 
 export const Route = createFileRoute("/admin/aquavisionx")({
   head: () => ({
@@ -88,6 +90,7 @@ function Page() {
   const importFn = useServerFn(importAqvJob);
   const getFn = useServerFn(getAqvJob);
   const delFn = useServerFn(deleteAqvJob);
+  const setBook = useServerFn(setAqvReferenceBook);
 
   const say = (m: string) => setLog((p) => [`${new Date().toLocaleTimeString()} · ${m}`, ...p].slice(0, 120));
 
@@ -304,6 +307,21 @@ function Page() {
                 {pages.filter((p) => p.status === "empty").length} page(s) returned no questions — check them before importing.
               </div>
             )}
+
+            <div className="mt-4">
+              <ReferenceBookCard
+                saved={(job as any).reference_book ?? null}
+                onSave={async (book) => {
+                  try {
+                    const res = await setBook({ data: { jobId: job.id, book } });
+                    setJob((j: any) => (j ? { ...j, reference_book: res.book } : j));
+                    toast.success(res.book ? `Answers will follow ${res.book}` : "Reference book removed");
+                  } catch (e: any) {
+                    toast.error(e?.message || "Could not save the book");
+                  }
+                }}
+              />
+            </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button onClick={handleSolve} disabled={!canSolve}

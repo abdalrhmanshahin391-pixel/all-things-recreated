@@ -11,6 +11,7 @@ On both pages, above the solve/answer step:
 - After saving, a green confirmation line: "Answers will follow: Robbins & Cotran Pathologic Basis of Disease" so you know it took effect.
 - The book is stored with the job, so it survives refresh and applies to every question of that job (including retries and repair passes).
 - Toggling off (or clearing the book) instantly returns to the current behaviour.
+- Also if I want to remove the book that is save a button for that that look obvious
 
 ## What it changes in the AI request
 
