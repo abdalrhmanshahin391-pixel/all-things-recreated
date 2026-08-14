@@ -16,7 +16,7 @@ import { splitPdfInto2PageBlobs, miniPdfAsFile, type MiniPdf } from "@/lib/pdf-s
 import {
   createProxJob, submitCutBatchProX, pollCutBatchProX, saveCropsProX,
   submitSolveBatchProX, pollSolveBatchProX, importProxJob,
-  listProxJobs, getProxJob, deleteProxJob,
+  listProxJobs, getProxJob, deleteProxJob, setProxReferenceBook,
 } from "@/lib/patch-ipad-prox.functions";
 
 const BUCKET = "question-images";
@@ -122,6 +122,7 @@ function PatchIpadProX() {
   const listFn = useServerFn(listProxJobs);
   const getFn = useServerFn(getProxJob);
   const delFn = useServerFn(deleteProxJob);
+  const setBook = useServerFn(setProxReferenceBook);
 
   function addLog(m: string) { setLog((p) => [`${new Date().toLocaleTimeString()} · ${m}`, ...p].slice(0, 60)); }
 
@@ -496,6 +497,23 @@ function PatchIpadProX() {
         </section>
 
         {/* phases */}
+        {job && (
+          <section className="mb-5">
+            <ReferenceBookCard
+              saved={(job as any).reference_book ?? null}
+              onSave={async (book) => {
+                try {
+                  const res = await setBook({ data: { jobId: job.id, book } });
+                  setJob((j: any) => (j ? { ...j, reference_book: res.book } : j));
+                  toast.success(res.book ? `Answers will follow ${res.book}` : "Reference book removed");
+                } catch (e: any) {
+                  toast.error(e?.message || "Could not save the book");
+                }
+              }}
+            />
+          </section>
+        )}
+
         <section className="grid md:grid-cols-3 gap-4 mb-5">
           <PhaseCard
             step="Phase 1" title="Read the pages"
