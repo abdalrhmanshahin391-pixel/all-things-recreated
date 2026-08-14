@@ -580,6 +580,9 @@ function QuestionGeneratorPage() {
           },
         });
         if (res?.note) logLine(`${b.label}: ${res.note}`, "info");
+        if (res?.model && res.model !== status.model) {
+          logLine(`${b.label}: answered by ${res.model}.`, "info");
+        }
         const mapped: Item[] = (res.questions ?? []).map((q: any, n: number) => ({
           key: `${Date.now()}-${done}-${n}`,
           stem: q.stem,
@@ -613,6 +616,19 @@ function QuestionGeneratorPage() {
         }
       } catch (e) {
         const msg = errText(e);
+        // Key / model / quota problems will fail exactly the same way for every
+        // smaller piece — stop the whole run instead of splitting forever.
+        const fatal =
+          /no usable gemini model|no (gemini|openai) key|forbidden|api key not valid|invalid[_ ]api[_ ]key|permission denied|quota|429|rate limit/i.test(
+            msg,
+          );
+        if (fatal) {
+          stillFailed.push(b, ...queue.splice(0, queue.length));
+          logLine(`Run stopped: ${msg}`, "error");
+          done += 1;
+          setProgress((p) => ({ ...p, done }));
+          break;
+        }
         const parts = splitBatch(b);
         if (parts.length) {
           queue.unshift(...parts);
