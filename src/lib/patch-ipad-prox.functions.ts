@@ -271,10 +271,32 @@ export const pollSolveBatchProX = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureProxAdmin(context);
     const apiKey = await getProxGeminiKey(supabase);
-    const { data: job, error } = await supabase.from(PROX_JOBS).select("id, solve_batch_ids").eq("id", data.jobId).single();
+    const { data: job, error } = await supabase.from(PROX_JOBS)
+      .select("id, solve_batch_ids, subject_candidates").eq("id", data.jobId).single();
     if (error) throw error;
     const batches: string[] = Array.isArray(job.solve_batch_ids) ? job.solve_batch_ids : [];
     if (!batches.length) return { done: false, states: [] as string[] };
+
+    const subjectsBlock = buildSubjectsBlock(Array.isArray(job.subject_candidates) ? job.subject_candidates : []);
+
+    // A batch item can come back empty or malformed. Re-solve that ONE picture
+    // on its own before writing it off — the same repair pass the v2 image tool
+    // uses, which is why v2 rarely reports "no usable answer".
+    async function repairOne(pageNumber: number, itemIndex: number): Promise<any | null> {
+      const { data: row } = await supabase.from(PROX_ITEMS)
+        .select("image_path").eq("job_id", data.jobId)
+        .eq("page_number", pageNumber).eq("item_index", itemIndex).maybeSingle();
+      const path = row?.image_path;
+      if (!path) return null;
+      const { data: blob, error: dErr } = await supabase.storage.from("question-images").download(path);
+      if (dErr || !blob) return null;
+      const buf = Buffer.from(await blob.arrayBuffer());
+      try {
+        return await solveSingleProxImage(apiKey, buf.toString("base64"), subjectsBlock);
+      } catch {
+        return null;
+      }
+    }
 
     const states: string[] = [];
     let allDone = true;
@@ -308,7 +330,10 @@ export const pollSolveBatchProX = createServerFn({ method: "POST" })
         if (!m) continue;
         const pageNumber = Number(m[1]);
         const itemIndex = Number(m[2]);
-        const parsed = it?.error ? null : extractJson(responseText(it));
+        let parsed = it?.error ? null : extractJson(responseText(it));
+        if (!parsed?.correct_letter && !parsed?.explanation) {
+          parsed = await repairOne(pageNumber, itemIndex);
+        }
         if (!parsed?.correct_letter && !parsed?.explanation) {
           await supabase.from(PROX_ITEMS).update({
             status: "failed",
