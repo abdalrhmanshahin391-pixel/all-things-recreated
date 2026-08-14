@@ -893,6 +893,26 @@ function safeHost(u: string) {
   try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; }
 }
 
+/**
+ * Drive links saved before the speed fix lack `confirm=t`, so Google served an
+ * interstitial page first. Normalise at read time — no data migration needed.
+ */
+function fastDriveLink(link: string) {
+  if (!/drive\.usercontent\.google\.com/.test(link)) return link;
+  return /[?&]confirm=/.test(link) ? link : `${link}${link.includes("?") ? "&" : "?"}confirm=t`;
+}
+
+/** Starts the download in place instead of opening a Drive tab. */
+function triggerDownload(url: string, filename: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename.replace(/[/\\?%*:|"<>]/g, "-");
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 /** Downloads a signed URL while reporting progress (0-100, or null when size is unknown). */
 async function downloadWithProgress(
   url: string,
