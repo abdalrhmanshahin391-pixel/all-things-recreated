@@ -30,6 +30,7 @@ import { Route as StudyHubRouteImport } from './routes/study-hub'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as UniversitiesRouteImport } from './routes/universities'
+import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
@@ -234,6 +235,11 @@ const TermsRoute = TermsRouteImport.update({
 const UniversitiesRoute = UniversitiesRouteImport.update({
   id: '/universities',
   path: '/universities',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WelcomeRoute = WelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
   getParentRoute: () => rootRouteImport,
 } as any)
 const Char91DotmcpChar93ListToolsRoute =
@@ -767,6 +773,7 @@ export interface FileRoutesByFullPath {
   '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/universities': typeof UniversitiesRoute
+  '/welcome': typeof WelcomeRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/about': typeof AdminAboutRoute
@@ -886,6 +893,7 @@ export interface FileRoutesByTo {
   '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/universities': typeof UniversitiesRoute
+  '/welcome': typeof WelcomeRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/about': typeof AdminAboutRoute
@@ -1005,6 +1013,7 @@ export interface FileRoutesById {
   '/support': typeof SupportRoute
   '/terms': typeof TermsRoute
   '/universities': typeof UniversitiesRoute
+  '/welcome': typeof WelcomeRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/about': typeof AdminAboutRoute
@@ -1130,6 +1139,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/terms'
     | '/universities'
+    | '/welcome'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/admin/about'
@@ -1249,6 +1259,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/terms'
     | '/universities'
+    | '/welcome'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/admin/about'
@@ -1367,6 +1378,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/terms'
     | '/universities'
+    | '/welcome'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/admin/about'
@@ -1491,6 +1503,7 @@ export interface RootRouteChildren {
   SupportRoute: typeof SupportRoute
   TermsRoute: typeof TermsRoute
   UniversitiesRoute: typeof UniversitiesRoute
+  WelcomeRoute: typeof WelcomeRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   AdminAboutRoute: typeof AdminAboutRoute
@@ -1717,6 +1730,13 @@ declare module '@tanstack/react-router' {
       path: '/universities'
       fullPath: '/universities'
       preLoaderRoute: typeof UniversitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/welcome': {
+      id: '/welcome'
+      path: '/welcome'
+      fullPath: '/welcome'
+      preLoaderRoute: typeof WelcomeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/.mcp/list-tools': {
@@ -2586,6 +2606,7 @@ const rootRouteChildren: RootRouteChildren = {
   SupportRoute: SupportRoute,
   TermsRoute: TermsRoute,
   UniversitiesRoute: UniversitiesRoute,
+  WelcomeRoute: WelcomeRoute,
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
