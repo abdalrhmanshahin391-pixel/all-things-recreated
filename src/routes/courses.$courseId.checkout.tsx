@@ -29,6 +29,7 @@ export const Route = createFileRoute("/courses/$courseId/checkout")({
       { property: "og:description", content: "Complete your AquaQBank course purchase securely." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
+      { name: "robots", content: "noindex, nofollow" },
     ],
   }),
   component: CheckoutPage,

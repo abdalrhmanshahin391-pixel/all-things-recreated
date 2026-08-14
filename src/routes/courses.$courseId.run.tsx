@@ -33,7 +33,12 @@ export const Route = createFileRoute("/courses/$courseId/run")({
     duration: Math.max(0, Math.min(600, Number(search.duration) || 0)),
     pool: (search.pool === "flagged" || search.pool === "incorrect" ? search.pool : "all") as Pool,
   }),
-  head: () => ({ meta: [{ title: "Study — AquaQBank" }] }),
+  head: () => ({
+    meta: [
+      { title: "Study — AquaQBank" },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
   component: RunPage,
 });
 

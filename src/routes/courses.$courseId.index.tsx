@@ -53,6 +53,7 @@ export const Route = createFileRoute("/courses/$courseId/")({
         { property: "og:title", content: title },
         { property: "og:description", content: description },
         { property: "og:url", content: url },
+        { name: "robots", content: "noindex, nofollow" },
       ],
       links: [{ rel: "canonical", href: url }],
       scripts: [
