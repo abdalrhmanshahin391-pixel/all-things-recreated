@@ -22,6 +22,19 @@ async function ensureAdmin(context: any) {
   return { supabase, userId } as { supabase: any; userId: string };
 }
 
+/** Optional "answer according to this textbook" block; empty when unset. */
+function buildReferenceBlock(book: any): string {
+  const name = String(book ?? "").trim();
+  if (!name) return "";
+  return `REFERENCE TEXTBOOK — "${name}".
+Answer and explain STRICTLY according to this textbook:
+- use its terminology, classifications, staging and cut-off values;
+- name the book once inside the Concept section;
+- if the printed answer key disagrees with the textbook, choose the option the textbook supports.
+
+`;
+}
+
 async function getGeminiKey(supabase: any): Promise<string> {
   const { data, error } = await supabase
     .from("admin_ai_keys").select("api_key, slot").eq("provider", "gemini")
