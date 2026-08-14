@@ -271,7 +271,7 @@ function UniversityRow({
   onMove: (u: University, dir: -1 | 1) => void;
   onToggleVisible: (u: University) => void;
   onDelete: (u: University) => void;
-  onUpdateHome: (u: University, patch: Partial<Pick<University, "home_visible" | "home_badge" | "home_order" | "home_tagline">>) => void;
+  onUpdateHome: (u: University, patch: Record<string, unknown>) => void;
   onSaved: () => void;
 }) {
   const coverRef = useRef<HTMLInputElement>(null);
@@ -420,6 +420,9 @@ function UniversityRow({
       </div>
 
       <EditPanel u={u} onSaved={onSaved} />
+
+      <AvailabilityPanel u={u} onUpdate={onUpdateHome} />
+      <TagsPanel u={u} onUpdate={onUpdateHome} />
 
       <div className="px-4 pb-4">
         <Link
