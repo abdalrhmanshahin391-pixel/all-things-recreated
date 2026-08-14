@@ -7,6 +7,7 @@ import {
   callGeminiQuestions,
   callOpenAiQuestions,
   defaultModelFor,
+  resolveModelFor,
   pingGemini,
   pingOpenAi,
   QUESTION_MODES,
@@ -25,19 +26,20 @@ async function assertAdmin(context: { supabase: any; userId: string }) {
 async function readKey(context: { supabase: any }, provider: AiProvider) {
   const { data, error } = await context.supabase
     .from("admin_ai_keys")
-    .select("api_key, preferred_model")
+    .select("api_key, preferred_model, slot")
     .eq("provider", provider)
     .order("slot", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .limit(5);
   if (error) throw error;
-  const key = (data?.api_key ?? "").trim();
+  const rows = (data ?? []) as { api_key: string | null; preferred_model: string | null }[];
+  const row = rows.find((r) => (r.api_key ?? "").trim().length > 10);
+  const key = (row?.api_key ?? "").trim();
   if (!key) {
     throw new Error(
-      `No ${provider === "gemini" ? "Gemini" : "OpenAI"} key saved yet. Add your key at the top of this page.`,
+      `No ${provider === "gemini" ? "Gemini" : "OpenAI"} key saved yet. Add your key at the top of this page${provider === "gemini" ? " or on the Gemini keys page" : ""}.`,
     );
   }
-  return { key, model: (data?.preferred_model || defaultModelFor(provider)) as string };
+  return { key, model: (row?.preferred_model || defaultModelFor(provider)) as string };
 }
 
 const ProviderInput = z.object({ provider: z.enum(AI_PROVIDERS).default("openai") });
@@ -88,7 +90,7 @@ export const getApiKeyStatus = createServerFn({ method: "POST" })
       provider: data.provider,
       saved: key.length > 10,
       masked: key ? `${key.slice(0, 6)}…${key.slice(-4)}` : "",
-      model: (row?.preferred_model || defaultModelFor(data.provider)) as string,
+      model: resolveModelFor(data.provider, row?.preferred_model ?? null),
       updatedAt: (row?.updated_at ?? null) as string | null,
     };
   });
@@ -137,7 +139,7 @@ export const runQuestionJob = createServerFn({ method: "POST" })
         : await callOpenAiQuestions(key, model, prompt.system, prompt.user, images);
     return {
       provider: data.provider,
-      model,
+      model: result.modelUsed || model,
       questions: result.questions,
       note: result.note,
       truncated: !!result.truncated,

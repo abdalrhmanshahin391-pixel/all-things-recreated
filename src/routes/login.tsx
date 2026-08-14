@@ -103,7 +103,7 @@ function LoginPage() {
         const msg = (signInError.message ?? "").toLowerCase();
         if (msg.includes("confirm") || msg.includes("verif")) {
           setError(
-            "Your email isn't verified yet. Please open the verification link we sent to your inbox, then sign in again.",
+            "Your email isn't verified yet. Please open the verification link we sent you, then sign in again. If it isn't in your inbox, check your spam / junk folder.",
           );
         } else {
           setError(t("cms.login.errInvalid"));

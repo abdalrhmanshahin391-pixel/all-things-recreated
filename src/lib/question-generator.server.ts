@@ -2,7 +2,28 @@
 // Calls the admin's own OpenAI / Gemini account (keys stored in admin_ai_keys).
 
 export const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
-export const DEFAULT_GEMINI_MODEL = "gemini-flash-lite-latest";
+export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
+
+/** Concrete model ids that are known to work with the keys saved on this site. */
+export const GEMINI_MODEL_CHAIN = ["gemini-2.5-flash-lite", "gemini-2.5-flash"] as const;
+
+/** Aliases that have proven unreliable — never used on their own. */
+const GEMINI_ALIASES = new Set(["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-pro-latest"]);
+
+function geminiCandidates(preferred?: string): string[] {
+  const out: string[] = [];
+  const p = (preferred ?? "").trim();
+  if (p && !GEMINI_ALIASES.has(p)) out.push(p);
+  for (const m of GEMINI_MODEL_CHAIN) if (!out.includes(m)) out.push(m);
+  return out;
+}
+
+/** The model that will really be used for a provider, given the saved preference. */
+export function resolveModelFor(provider: AiProvider, preferred: string | null): string {
+  const p = (preferred ?? "").trim();
+  if (provider === "gemini") return geminiCandidates(p)[0]!;
+  return p || DEFAULT_OPENAI_MODEL;
+}
 
 export const AI_PROVIDERS = ["openai", "gemini"] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
@@ -273,6 +294,7 @@ export type QuestionCallResult = {
   note: string;
   rawPreview: string;
   truncated?: boolean;
+  modelUsed?: string;
 };
 
 
@@ -325,6 +347,11 @@ export async function callOpenAiQuestions(
 
   const content = String(json?.choices?.[0]?.message?.content ?? "");
   const finish = json?.choices?.[0]?.finish_reason ?? "";
+  if (!content.trim()) {
+    throw new Error(
+      `${model} returned an empty reply${finish ? ` (finish_reason: ${finish})` : ""}.`,
+    );
+  }
   const { questions, parsed, salvaged } = extractQuestions(content || "{}");
   const cut = finish === "length" || salvaged;
   if (!parsed && !cut) {
@@ -333,7 +360,7 @@ export async function callOpenAiQuestions(
   if (cut) {
     note = `${note} Reply was cut off — kept ${questions.length} complete question(s); the rest of this part will be split and retried.`.trim();
   }
-  return { questions, note, rawPreview: content.slice(0, 600), truncated: cut };
+  return { questions, note, rawPreview: content.slice(0, 600), truncated: cut, modelUsed: model };
 }
 
 
@@ -369,12 +396,43 @@ function geminiText(json: any): string {
   return parts.map((p: any) => String(p?.text ?? "")).join("").trim();
 }
 
+/** True when the failure is "this model id can't be used", so the next one should be tried. */
+function isModelUnavailable(message: string): boolean {
+  return (
+    /\b404\b/.test(message) ||
+    /not found|is not supported|not supported for|unsupported|does not exist/i.test(message)
+  );
+}
+
+/** Human-readable reason for an empty Gemini reply. */
+function emptyReplyReason(json: any): string {
+  const cand = json?.candidates?.[0];
+  const finish = String(cand?.finishReason ?? "");
+  const block = String(json?.promptFeedback?.blockReason ?? "");
+  if (block) return `the request was blocked by Gemini's safety filter (${block})`;
+  if (finish === "SAFETY" || finish === "PROHIBITED_CONTENT" || finish === "RECITATION") {
+    return `Gemini stopped the reply (${finish})`;
+  }
+  if (finish === "MAX_TOKENS") return "the reply hit the output limit before any question was written";
+  if (!cand) return "Gemini returned no candidate at all (usually a quota or key problem)";
+  return `Gemini returned an empty reply${finish ? ` (finish: ${finish})` : ""}`;
+}
+
 export async function pingGemini(apiKey: string, model: string) {
-  const json = await geminiFetch(apiKey, model, {
-    contents: [{ role: "user", parts: [{ text: "Reply with the single word: ok" }] }],
-    generationConfig: { maxOutputTokens: 16 },
-  });
-  return { ok: true, model, reply: geminiText(json).slice(0, 40) || "ok" };
+  let lastError = "";
+  for (const candidate of geminiCandidates(model)) {
+    try {
+      const json = await geminiFetch(apiKey, candidate, {
+        contents: [{ role: "user", parts: [{ text: "Reply with the single word: ok" }] }],
+        generationConfig: { maxOutputTokens: 16 },
+      });
+      return { ok: true, model: candidate, reply: geminiText(json).slice(0, 40) || "ok" };
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e);
+      if (!isModelUnavailable(lastError)) throw e;
+    }
+  }
+  throw new Error(lastError || "No usable Gemini model for this key.");
 }
 
 export async function callGeminiQuestions(
@@ -401,32 +459,59 @@ export async function callGeminiQuestions(
 
   let json: any;
   let note = "";
-  try {
-    json = await geminiFetch(apiKey, model, body);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "error";
-    if (!/\b(400|404)\b/.test(msg)) throw e;
-    note = `First attempt rejected (${msg}); retried in plain JSON mode.`;
-    json = await geminiFetch(apiKey, model, {
-      ...body,
-      systemInstruction: {
-        parts: [{ text: `${system}\nRespond with a single JSON object: {"questions": [...]}.` }],
-      },
-      generationConfig: { temperature: 0.2, maxOutputTokens: MAX_OUT },
-    });
+  let modelUsed = "";
+  let lastError = "";
+
+  for (const candidate of geminiCandidates(model)) {
+    try {
+      json = await geminiFetch(apiKey, candidate, body);
+      modelUsed = candidate;
+      break;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "error";
+      lastError = msg;
+      if (isModelUnavailable(msg)) {
+        note = `${note} "${candidate}" is not available for this key — tried the next model.`.trim();
+        continue;
+      }
+      if (!/\b400\b/.test(msg)) throw e;
+      // Some models reject JSON mime / system instructions — retry plainly, same model.
+      note = `${note} First attempt rejected (${msg}); retried in plain JSON mode.`.trim();
+      json = await geminiFetch(apiKey, candidate, {
+        ...body,
+        systemInstruction: {
+          parts: [{ text: `${system}\nRespond with a single JSON object: {"questions": [...]}.` }],
+        },
+        generationConfig: { temperature: 0.2, maxOutputTokens: MAX_OUT },
+      });
+      modelUsed = candidate;
+      break;
+    }
+  }
+
+  if (!json) {
+    throw new Error(
+      `No usable Gemini model for this key (tried ${geminiCandidates(model).join(", ")}). Last error: ${lastError || "unknown"}`,
+    );
   }
 
   const content = geminiText(json);
   const finish = json?.candidates?.[0]?.finishReason ?? "";
-  const { questions, parsed, salvaged } = extractQuestions(content || "{}");
+  if (!content) {
+    // Empty reply is a real failure — never pretend it was "cut off" and keep splitting.
+    throw new Error(`${modelUsed}: ${emptyReplyReason(json)}.`);
+  }
+  const { questions, parsed, salvaged } = extractQuestions(content);
   const cut = finish === "MAX_TOKENS" || salvaged;
   if (!parsed && !cut) {
-    throw new Error(`Gemini did not return valid JSON${finish ? ` (finish: ${finish})` : ""}.`);
+    throw new Error(
+      `${modelUsed} did not return valid JSON${finish ? ` (finish: ${finish})` : ""}. Reply started with: ${content.slice(0, 160)}`,
+    );
   }
   if (cut) {
     note = `${note} Reply was cut off — kept ${questions.length} complete question(s); the rest of this part will be split and retried.`.trim();
   }
-  return { questions, note, rawPreview: content.slice(0, 600), truncated: cut };
+  return { questions, note, rawPreview: content.slice(0, 600), truncated: cut, modelUsed };
 }
 
 

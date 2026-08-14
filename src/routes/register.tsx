@@ -175,8 +175,11 @@ function RegisterPage() {
           </p>
           <p className="text-sm text-muted-foreground">
             Open that email and click the link to activate your account. You won't be able to sign
-            in until your email is verified. Check your spam folder if it doesn't arrive within a
-            few minutes.
+            in until your email is verified.
+          </p>
+          <p className="rounded-xl border-2 border-border bg-muted/40 px-4 py-3 text-sm font-bold text-foreground">
+            Please check your spam / junk folder — the verification email often lands there. Mark it
+            as “Not spam” so future emails reach your inbox.
           </p>
           <Link to="/login" className={buttonClass + " block text-center"}>
             Go to sign in
