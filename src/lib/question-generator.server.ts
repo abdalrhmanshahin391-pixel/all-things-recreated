@@ -340,6 +340,11 @@ export async function callOpenAiQuestions(
 
   const content = String(json?.choices?.[0]?.message?.content ?? "");
   const finish = json?.choices?.[0]?.finish_reason ?? "";
+  if (!content.trim()) {
+    throw new Error(
+      `${model} returned an empty reply${finish ? ` (finish_reason: ${finish})` : ""}.`,
+    );
+  }
   const { questions, parsed, salvaged } = extractQuestions(content || "{}");
   const cut = finish === "length" || salvaged;
   if (!parsed && !cut) {
@@ -348,7 +353,7 @@ export async function callOpenAiQuestions(
   if (cut) {
     note = `${note} Reply was cut off — kept ${questions.length} complete question(s); the rest of this part will be split and retried.`.trim();
   }
-  return { questions, note, rawPreview: content.slice(0, 600), truncated: cut };
+  return { questions, note, rawPreview: content.slice(0, 600), truncated: cut, modelUsed: model };
 }
 
 
