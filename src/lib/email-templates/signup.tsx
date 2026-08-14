@@ -61,6 +61,10 @@ export const SignupEmail = ({
             {confirmationUrl}
           </Link>
         </Text>
+        <Text style={{ ...text, margin: '18px 0 0', fontSize: '13px' }}>
+          Don&apos;t see this email in your inbox next time? Please check your spam or junk
+          folder and mark it as &quot;Not spam&quot; so our emails reach you.
+        </Text>
         <Hr style={hr} />
         <Text style={footer}>
           If you didn&apos;t create an account, you can safely ignore this email.
