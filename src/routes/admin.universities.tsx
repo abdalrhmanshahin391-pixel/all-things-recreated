@@ -9,6 +9,7 @@ import { UniversityImage } from "@/components/common/UniversityImage";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { compressImage } from "@/lib/image-compress";
+import { parseTags, tagStyle, TAG_COLOR_NAMES, type UniversityTag } from "@/lib/university-tags";
 
 export const Route = createFileRoute("/admin/universities")({
   component: AdminUniversities,
@@ -31,6 +32,10 @@ type University = {
   home_badge: "NEW" | "POPULAR" | "COMING_SOON" | null;
   home_order: number;
   home_tagline: string | null;
+  is_closed: boolean;
+  closed_note_en: string | null;
+  closed_note_ar: string | null;
+  tags: unknown;
 };
 
 type Settings = {
@@ -142,7 +147,7 @@ function AdminUniversities() {
     invalidate();
   }
 
-  async function updateHome(u: University, patch: Partial<Pick<University, "home_visible" | "home_badge" | "home_order" | "home_tagline">>) {
+  async function updateHome(u: University, patch: Record<string, unknown>) {
     const { error } = await supabase.from("universities").update(patch).eq("id", u.id);
     if (error) return toast.error(error.message);
     invalidate();
