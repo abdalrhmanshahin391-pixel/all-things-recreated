@@ -44,7 +44,8 @@ function AuthCallback() {
         // Session settled with nobody signed in. The provider redirect can
         // still be a beat behind, so allow a short grace window before giving
         // up instead of leaving the spinner running for the full timeout.
-        if (!settledEmptyAt) settledEmptyAt = Date.now();
+        if (settledEmptyAt) return;
+        settledEmptyAt = Date.now();
         setTimeout(() => {
           if (done) return;
           if (getAuthSnapshot().user) return;
