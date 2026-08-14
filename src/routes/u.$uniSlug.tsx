@@ -94,7 +94,7 @@ function UniversityHubPage() {
   const { uniSlug } = Route.useParams();
   const { next } = Route.useSearch();
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, loading: authLoading } = useAuth();
   const qc = useQueryClient();
   const { lang } = useLang();
 
@@ -151,7 +151,7 @@ function UniversityHubPage() {
     },
   });
 
-  const { data: tiles } = useQuery({
+  const { data: tiles, isPending: tilesPending } = useQuery({
     enabled: !!uni,
     queryKey: ["university-tiles", uni?.id],
     queryFn: async () => {
@@ -184,7 +184,7 @@ function UniversityHubPage() {
     qc.invalidateQueries({ queryKey: ["university-tiles", uni.id] });
   }
 
-  if (isLoading) {
+  if (isLoading || authLoading || (!!uni && tilesPending)) {
     return (
       <div className="min-h-screen bg-background">
         <SiteHeader />
