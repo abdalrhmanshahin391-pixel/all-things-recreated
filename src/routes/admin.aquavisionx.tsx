@@ -90,6 +90,7 @@ function Page() {
   const importFn = useServerFn(importAqvJob);
   const getFn = useServerFn(getAqvJob);
   const delFn = useServerFn(deleteAqvJob);
+  const setBook = useServerFn(setAqvReferenceBook);
 
   const say = (m: string) => setLog((p) => [`${new Date().toLocaleTimeString()} · ${m}`, ...p].slice(0, 120));
 
