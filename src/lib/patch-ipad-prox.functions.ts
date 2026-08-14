@@ -412,6 +412,7 @@ export const importProxJob = createServerFn({ method: "POST" })
 
     let inserted = 0, skipped = 0, failed = 0;
     const errors: string[] = [];
+    if (incomplete.length) errors.push(`${incomplete.length} question(s) had no usable Gemini answer and were skipped`);
 
     for (const it of all) {
       if (it.status !== "solved") { failed++; continue; }
