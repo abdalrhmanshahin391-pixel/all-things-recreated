@@ -88,6 +88,10 @@ type University = {
   storage_path: string | null;
   cover_path: string | null;
   lectures_visible: boolean;
+  is_closed: boolean;
+  closed_note_en: string | null;
+  closed_note_ar: string | null;
+  tags: unknown;
 };
 
 function UniversityHubPage() {
@@ -103,7 +107,7 @@ function UniversityHubPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("universities")
-        .select("id,name,slug,short_name,description,city,country,logo_url,storage_path,cover_path,lectures_visible")
+        .select("id,name,slug,short_name,description,city,country,logo_url,storage_path,cover_path,lectures_visible,is_closed,closed_note_en,closed_note_ar,tags")
         .eq("slug", uniSlug)
         .eq("is_active", true)
         .maybeSingle();
