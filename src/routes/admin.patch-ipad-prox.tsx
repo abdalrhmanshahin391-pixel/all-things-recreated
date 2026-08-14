@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Upload, Loader2, ScanEye, Trash2, CheckCircle2, PlayCircle, Download, Clock3, AlertTriangle } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
+import { ReferenceBookCard } from "@/components/admin/ReferenceBookCard";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
