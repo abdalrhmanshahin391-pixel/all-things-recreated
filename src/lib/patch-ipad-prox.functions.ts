@@ -15,7 +15,7 @@ import {
   ensureProxAdmin, getProxGeminiKey, submitProxBatch,
   CUTTER_SYSTEM, IMAGE_SOLVER_SYSTEM, buildSubjectsBlock, decideCorrectLetter,
   extractJson, fetchBatch, downloadResponses, getBatchState, mapBatchStatus,
-  responseText, normalizeLetter,
+  responseText, normalizeLetter, normalizeProxRegions, solveSingleProxImage,
 } from "@/lib/patch-ipad-prox.server";
 
 // ---------------- 1. create job ----------------
@@ -144,16 +144,7 @@ export const pollCutBatchProX = createServerFn({ method: "POST" })
         const pageNumber = Number(m[1]);
         const parsed = it?.error ? null : extractJson(responseText(it));
         const raw: any[] = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.questions) ? parsed.questions : [];
-        const regions = raw
-          .map((r: any, idx: number) => ({
-            n: Number(r?.n ?? idx + 1),
-            label: String(r?.label ?? `Q${idx + 1}`).slice(0, 40),
-            y_top: Number(r?.y_top ?? 0),
-            y_bottom: Number(r?.y_bottom ?? 0),
-            x_left: Number(r?.x_left ?? 0),
-            x_right: Number(r?.x_right ?? 1000),
-          }))
-          .filter((r) => Number.isFinite(r.y_top) && Number.isFinite(r.y_bottom) && r.y_bottom - r.y_top >= 15);
+        const regions = normalizeProxRegions(raw);
         await supabase.from(PROX_PAGES).update({
           regions,
           status: regions.length ? "cut_ready" : "empty",
