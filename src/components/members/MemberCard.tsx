@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Pencil, Trash2, ArrowLeft, ArrowRight } from "lucide-react";
+import { GoldenBadge } from "@/components/GoldenBadge";
 import {
   countryName,
   flagOf,
@@ -110,7 +111,14 @@ export function MemberCard({
           />
           {countryName(member.country_code, member.country_label, ar)}
         </p>
-        <h3 className="mt-1.5 font-display text-xl md:text-2xl font-black leading-tight">{name}</h3>
+        <h3
+          className={`mt-1.5 flex flex-wrap items-center gap-2 font-display text-xl md:text-2xl font-black leading-tight ${
+            centered ? "justify-center" : ""
+          }`}
+        >
+          {name}
+          {member.is_golden && <GoldenBadge />}
+        </h3>
         <div
           className={`mt-1 flex flex-wrap items-center gap-2 ${centered ? "justify-center" : ""}`}
         >
