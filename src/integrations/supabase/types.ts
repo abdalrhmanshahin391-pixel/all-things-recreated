@@ -510,6 +510,60 @@ export type Database = {
           },
         ]
       }
+      committee_members: {
+        Row: {
+          accent: number
+          country_code: string
+          country_label: string
+          created_at: string
+          description_ar: string
+          description_en: string
+          id: string
+          is_founder: boolean
+          name_ar: string
+          name_en: string
+          photo_url: string
+          role_label: string
+          sort_order: number
+          updated_at: string
+          year_label: string
+        }
+        Insert: {
+          accent?: number
+          country_code?: string
+          country_label?: string
+          created_at?: string
+          description_ar?: string
+          description_en?: string
+          id?: string
+          is_founder?: boolean
+          name_ar?: string
+          name_en?: string
+          photo_url?: string
+          role_label?: string
+          sort_order?: number
+          updated_at?: string
+          year_label?: string
+        }
+        Update: {
+          accent?: number
+          country_code?: string
+          country_label?: string
+          created_at?: string
+          description_ar?: string
+          description_en?: string
+          id?: string
+          is_founder?: boolean
+          name_ar?: string
+          name_en?: string
+          photo_url?: string
+          role_label?: string
+          sort_order?: number
+          updated_at?: string
+          year_label?: string
+        }
+        Relationships: []
+      }
       committee_modules: {
         Row: {
           closed_color: string

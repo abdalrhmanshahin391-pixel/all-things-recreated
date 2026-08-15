@@ -115,6 +115,25 @@ function CommitteePage() {
               <BackupButtons />
             </div>
           )}
+
+          <div className="mt-7 flex justify-center">
+            <Link
+              to="/committee/team"
+              className="inline-flex flex-col items-center rounded-2xl border border-border bg-card px-6 py-3 leading-tight shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
+            >
+              <span className="text-xs font-black uppercase tracking-[0.2em] text-primary">
+                Staff Team
+              </span>
+              <span
+                dir="rtl"
+                lang="ar"
+                className="mt-0.5 text-base font-bold text-foreground"
+                style={{ fontFamily: "'Tajawal','Inter',system-ui,sans-serif" }}
+              >
+                لجنة الطب والجراحة
+              </span>
+            </Link>
+          </div>
         </header>
 
 
