@@ -82,6 +82,7 @@ export function MemberForm({
 
   return (
     <CommitteeDialog title={member ? "Edit member" : founder ? "Add founder" : "Add member"} onClose={onClose}>
+      {form.photo_fit !== "none" && (
       <Field label="Photo">
         <div className="flex items-center gap-3">
           <button
@@ -118,12 +119,14 @@ export function MemberForm({
           />
         </div>
       </Field>
+      )}
 
       <Field label="Photo framing">
         <div className="flex gap-2">
           {[
             { v: "cover", label: "Fill (crop to square)" },
             { v: "contain", label: "Fit (show whole image)" },
+            { v: "none", label: "No photo" },
           ].map((o) => (
             <button
               key={o.v}
