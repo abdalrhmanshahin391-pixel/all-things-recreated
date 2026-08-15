@@ -36,6 +36,7 @@ export function useAuth() {
     profile: auth.profile,
     isAdmin: auth.isRealAdmin && adminMode,
     isRealAdmin: auth.isRealAdmin,
+    isGolden: auth.isGolden,
     adminMode,
     setAdminMode,
     loading: auth.loading,
