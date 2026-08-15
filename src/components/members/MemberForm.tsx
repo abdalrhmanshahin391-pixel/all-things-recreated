@@ -41,6 +41,7 @@ export function MemberForm({
     photo_url: member?.photo_url ?? "",
     photo_fit: member?.photo_fit ?? "cover",
     accent: member?.accent ?? ((nextSort % 5) + 1),
+    is_golden: member?.is_golden ?? false,
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
