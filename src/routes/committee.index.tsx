@@ -134,6 +134,8 @@ function CommitteePage() {
               </span>
             </Link>
           </div>
+
+          <JoinTeamNote />
         </header>
 
 
