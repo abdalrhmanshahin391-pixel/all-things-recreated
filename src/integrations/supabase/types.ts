@@ -520,6 +520,7 @@ export type Database = {
           description_en: string
           id: string
           is_founder: boolean
+          is_golden: boolean
           name_ar: string
           name_en: string
           photo_fit: string
@@ -538,6 +539,7 @@ export type Database = {
           description_en?: string
           id?: string
           is_founder?: boolean
+          is_golden?: boolean
           name_ar?: string
           name_en?: string
           photo_fit?: string
@@ -556,6 +558,7 @@ export type Database = {
           description_en?: string
           id?: string
           is_founder?: boolean
+          is_golden?: boolean
           name_ar?: string
           name_en?: string
           photo_fit?: string

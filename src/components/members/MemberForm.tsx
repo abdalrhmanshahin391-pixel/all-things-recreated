@@ -41,6 +41,7 @@ export function MemberForm({
     photo_url: member?.photo_url ?? "",
     photo_fit: member?.photo_fit ?? "cover",
     accent: member?.accent ?? ((nextSort % 5) + 1),
+    is_golden: member?.is_golden ?? false,
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -146,6 +147,20 @@ export function MemberForm({
 
       <Field label="Name (English)">
         <input className={inputCls} value={form.name_en} onChange={(e) => set({ name_en: e.target.value })} />
+      </Field>
+
+      <Field label="Golden member">
+        <button
+          type="button"
+          onClick={() => set({ is_golden: !form.is_golden })}
+          className={`rounded-lg border px-3 py-2 text-xs font-bold ${
+            form.is_golden
+              ? "golden-chip"
+              : "border-border text-muted-foreground hover:bg-muted"
+          }`}
+        >
+          {form.is_golden ? "Golden badge shown" : "Show golden badge"}
+        </button>
       </Field>
       <Field label="الاسم بالعربية">
         <input dir="rtl" className={inputCls} value={form.name_ar} onChange={(e) => set({ name_ar: e.target.value })} />

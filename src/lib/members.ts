@@ -16,6 +16,7 @@ export type Member = {
   accent: number;
   is_founder: boolean;
   sort_order: number;
+  is_golden?: boolean;
 };
 
 export const MEMBERS_BUCKET = "member-photos";
