@@ -20,6 +20,7 @@ export function MemberPhoto({ member, rounded }: { member: Member; rounded?: str
   }, [member.photo_url]);
 
   const tone = memberTone(member.accent);
+  const contain = member.photo_fit === "contain";
   return (
     <div
       className={`relative aspect-square w-full overflow-hidden ${rounded ?? "rounded-2xl"}`}
@@ -30,7 +31,7 @@ export function MemberPhoto({ member, rounded }: { member: Member; rounded?: str
           src={url}
           alt={member.name_en || member.name_ar}
           loading="lazy"
-          className="h-full w-full object-cover"
+          className={`h-full w-full ${contain ? "object-contain p-3" : "object-cover"}`}
         />
       ) : (
         <span
