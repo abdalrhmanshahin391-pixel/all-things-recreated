@@ -84,6 +84,7 @@ import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
 import { Route as CommitteeIndexRouteImport } from './routes/committee.index'
 import { Route as CommitteeYearRouteImport } from './routes/committee.$year'
 import { Route as CommitteeStudyPlanRouteImport } from './routes/committee.study-plan'
+import { Route as CommitteeTeamRouteImport } from './routes/committee.team'
 import { Route as CoursesIndexRouteImport } from './routes/courses.index'
 import { Route as CoursesCourseIdRouteImport } from './routes/courses.$courseId'
 import { Route as GuidesIndexRouteImport } from './routes/guides.index'
@@ -512,6 +513,11 @@ const CommitteeStudyPlanRoute = CommitteeStudyPlanRouteImport.update({
   path: '/study-plan',
   getParentRoute: () => CommitteeRoute,
 } as any)
+const CommitteeTeamRoute = CommitteeTeamRouteImport.update({
+  id: '/team',
+  path: '/team',
+  getParentRoute: () => CommitteeRoute,
+} as any)
 const CoursesIndexRoute = CoursesIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -837,6 +843,7 @@ export interface FileRoutesByFullPath {
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/$year': typeof CommitteeYearRouteWithChildren
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
+  '/committee/team': typeof CommitteeTeamRoute
   '/courses/$courseId': typeof CoursesCourseIdRouteWithChildren
   '/guides/$slug': typeof GuidesSlugRoute
   '/lectures/$courseId': typeof LecturesCourseIdRouteWithChildren
@@ -957,6 +964,7 @@ export interface FileRoutesByTo {
   '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
+  '/committee/team': typeof CommitteeTeamRoute
   '/guides/$slug': typeof GuidesSlugRoute
   '/my/courses': typeof MyCoursesRoute
   '/my/lectures': typeof MyLecturesRoute
@@ -1081,6 +1089,7 @@ export interface FileRoutesById {
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/$year': typeof CommitteeYearRouteWithChildren
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
+  '/committee/team': typeof CommitteeTeamRoute
   '/courses/$courseId': typeof CoursesCourseIdRouteWithChildren
   '/guides/$slug': typeof GuidesSlugRoute
   '/lectures/$courseId': typeof LecturesCourseIdRouteWithChildren
@@ -1209,6 +1218,7 @@ export interface FileRouteTypes {
     | '/checkout/success'
     | '/committee/$year'
     | '/committee/study-plan'
+    | '/committee/team'
     | '/courses/$courseId'
     | '/guides/$slug'
     | '/lectures/$courseId'
@@ -1329,6 +1339,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/checkout/success'
     | '/committee/study-plan'
+    | '/committee/team'
     | '/guides/$slug'
     | '/my/courses'
     | '/my/lectures'
@@ -1452,6 +1463,7 @@ export interface FileRouteTypes {
     | '/checkout/success'
     | '/committee/$year'
     | '/committee/study-plan'
+    | '/committee/team'
     | '/courses/$courseId'
     | '/guides/$slug'
     | '/lectures/$courseId'
@@ -2136,6 +2148,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CommitteeStudyPlanRouteImport
       parentRoute: typeof CommitteeRoute
     }
+    '/committee/team': {
+      id: '/committee/team'
+      path: '/team'
+      fullPath: '/committee/team'
+      preLoaderRoute: typeof CommitteeTeamRouteImport
+      parentRoute: typeof CommitteeRoute
+    }
     '/courses/': {
       id: '/courses/'
       path: '/'
@@ -2499,12 +2518,14 @@ const CommitteeYearRouteWithChildren = CommitteeYearRoute._addFileChildren(
 interface CommitteeRouteChildren {
   CommitteeYearRoute: typeof CommitteeYearRouteWithChildren
   CommitteeStudyPlanRoute: typeof CommitteeStudyPlanRoute
+  CommitteeTeamRoute: typeof CommitteeTeamRoute
   CommitteeIndexRoute: typeof CommitteeIndexRoute
 }
 
 const CommitteeRouteChildren: CommitteeRouteChildren = {
   CommitteeYearRoute: CommitteeYearRouteWithChildren,
   CommitteeStudyPlanRoute: CommitteeStudyPlanRoute,
+  CommitteeTeamRoute: CommitteeTeamRoute,
   CommitteeIndexRoute: CommitteeIndexRoute,
 }
 

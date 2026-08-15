@@ -1,7 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
+import { toast } from "sonner";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useLang } from "@/components/LanguageProvider";
 import { EthicsBands } from "@/components/about/EthicsBands";
+import { supabase } from "@/integrations/supabase/client";
+import { useCommitteeRole } from "@/hooks/useCommitteeRole";
+import { MemberCard } from "@/components/members/MemberCard";
+import { MemberForm } from "@/components/members/MemberForm";
+import { membersQuery, type Member } from "@/lib/members";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -140,6 +149,73 @@ function Chip({ label, n }: { label: string; n: number }) {
 }
 
 function QuoteCard({ p, lang, i }: { p: (typeof PHYSICIANS)[number]; lang: string; i: number }) {
+  return <QuoteCardInner p={p} lang={lang} i={i} />;
+}
+
+function Founders({ ar }: { ar: boolean }) {
+  const { canManage } = useCommitteeRole();
+  const qc = useQueryClient();
+  const { data } = useQuery(membersQuery(true));
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Member | null>(null);
+  const list = data ?? [];
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ["committee-members"] });
+
+  async function del(m: Member) {
+    if (!confirm(`Remove ${m.name_en || m.name_ar}?`)) return;
+    const { error } = await (supabase.from as any)("committee_members").delete().eq("id", m.id);
+    if (error) return toast.error(error.message);
+    refresh();
+  }
+
+  if (list.length === 0 && !canManage) return null;
+
+  return (
+    <div className="mt-8">
+      <div className="mx-auto grid max-w-2xl gap-8 sm:grid-cols-2">
+        {list.map((m) => (
+          <MemberCard
+            key={m.id}
+            member={m}
+            ar={ar}
+            centered
+            canManage={canManage}
+            onEdit={() => setEditing(m)}
+            onDelete={() => del(m)}
+          />
+        ))}
+      </div>
+      {canManage && (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="mt-6 inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-black hover:bg-muted"
+        >
+          <Plus size={15} /> Add founder card
+        </button>
+      )}
+      {(adding || editing) && (
+        <MemberForm
+          member={editing}
+          founder
+          nextSort={editing ? editing.sort_order : list.length}
+          onClose={() => {
+            setAdding(false);
+            setEditing(null);
+          }}
+          onSaved={() => {
+            setAdding(false);
+            setEditing(null);
+            refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function QuoteCardInner({ p, lang, i }: { p: (typeof PHYSICIANS)[number]; lang: string; i: number }) {
   const wide = i === 4;
   return (
     <article
@@ -202,11 +278,9 @@ function AboutPage() {
               className="mt-4 font-display font-black leading-[1.05]"
               style={{ fontSize: "clamp(2.1rem, 6vw, 3.6rem)" }}
             >
-              {T(lang, {
-                en: "AquaQBank, by Abdalrhman & Laith Shaheen.",
-                ar: "أكوا كيو بانك، من عبدالرحمن وليث شاهين.",
-              })}
+              {T(lang, { en: "Made by", ar: "من صنع" })}
             </h1>
+            <Founders ar={ar} />
             <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
               {T(lang, {
                 en: "Two brothers in medicine building the study companion we wished we had: you practise by answering, you get corrected, and the correction sticks. That's the whole method.",
