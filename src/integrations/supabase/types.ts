@@ -62,6 +62,39 @@ export type Database = {
         }
         Relationships: []
       }
+      ad_creatives: {
+        Row: {
+          created_at: string
+          design: Json
+          id: string
+          owner: string
+          preview_path: string | null
+          template: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          design?: Json
+          id?: string
+          owner: string
+          preview_path?: string | null
+          template?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          design?: Json
+          id?: string
+          owner?: string
+          preview_path?: string | null
+          template?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       admin_ai_keys: {
         Row: {
           api_key: string
