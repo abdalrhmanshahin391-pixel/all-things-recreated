@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { GoldenBadge, GoldenBadgeResponsive } from "@/components/GoldenBadge";
 import { useLang } from "@/components/LanguageProvider";
 import { RaziWordmark } from "@/components/brand/RaziWordmark";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -40,7 +41,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
   const [open, setOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useTranslation();
-  const { user, profile, isAdmin, isRealAdmin, adminMode, setAdminMode, loading: authLoading } = useAuth();
+  const { user, profile, isAdmin, isRealAdmin, isGolden, adminMode, setAdminMode, loading: authLoading } = useAuth();
   const { lang, toggle: toggleLang } = useLang();
   const settings = useSiteSettings();
   const skin = resolveHeaderSkin(settings.header_style);
@@ -191,6 +192,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                 >
                   {initial}
                 </span>
+                {isGolden && <GoldenBadgeResponsive />}
                 <ChevronDown size={14} className="text-muted-foreground" />
               </button>
               {open && (
@@ -199,9 +201,16 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                 >
 
                   <div className="px-4 py-3 border-b border-border shrink-0">
-                    <p className="font-semibold text-sm truncate">{profile?.full_name || displayName}</p>
+                    <p className="flex items-center gap-2 font-semibold text-sm">
+                      <span className="truncate">{profile?.full_name || displayName}</span>
+                      {isGolden && <GoldenBadge />}
+                    </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {isAdmin ? t("cms.header.roleAdmin") : t("cms.header.roleUser")}
+                      {isAdmin
+                        ? t("cms.header.roleAdmin")
+                        : isGolden
+                          ? "Golden member"
+                          : t("cms.header.roleUser")}
                     </p>
                   </div>
                   <div className="py-1 overflow-y-auto overscroll-contain flex-1 min-h-0">
