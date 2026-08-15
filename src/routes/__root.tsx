@@ -20,6 +20,7 @@ import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { LanguageProvider } from "@/components/LanguageProvider";
 import { SeasonalTheme } from "@/components/SeasonalTheme";
+import { GoldenTheme } from "@/components/GoldenTheme";
 import { ThemeDecor } from "@/components/ThemeDecor";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -261,6 +262,7 @@ function RootComponent() {
       <ThemeProvider>
         <LanguageProvider>
           <SeasonalTheme />
+          <GoldenTheme />
           <ThemeDecor />
           <PresenceTracker />
           <DeviceTracker />
