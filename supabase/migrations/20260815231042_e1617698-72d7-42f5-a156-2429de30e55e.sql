@@ -1,0 +1,1 @@
+ALTER TABLE public.committee_members ADD COLUMN IF NOT EXISTS is_golden boolean NOT NULL DEFAULT false;
