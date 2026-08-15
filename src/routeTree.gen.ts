@@ -35,6 +35,7 @@ import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAboutRouteImport } from './routes/admin.about'
+import { Route as AdminAdStudioRouteImport } from './routes/admin.ad-studio'
 import { Route as AdminAiKeysRouteImport } from './routes/admin.ai-keys'
 import { Route as AdminAquavisionxRouteImport } from './routes/admin.aquavisionx'
 import { Route as AdminBackupsRouteImport } from './routes/admin.backups'
@@ -263,6 +264,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const AdminAboutRoute = AdminAboutRouteImport.update({
   id: '/admin/about',
   path: '/admin/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAdStudioRoute = AdminAdStudioRouteImport.update({
+  id: '/admin/ad-studio',
+  path: '/admin/ad-studio',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminAiKeysRoute = AdminAiKeysRouteImport.update({
@@ -783,6 +789,7 @@ export interface FileRoutesByFullPath {
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/about': typeof AdminAboutRoute
+  '/admin/ad-studio': typeof AdminAdStudioRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
   '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
@@ -904,6 +911,7 @@ export interface FileRoutesByTo {
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/about': typeof AdminAboutRoute
+  '/admin/ad-studio': typeof AdminAdStudioRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
   '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
@@ -1025,6 +1033,7 @@ export interface FileRoutesById {
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/about': typeof AdminAboutRoute
+  '/admin/ad-studio': typeof AdminAdStudioRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
   '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
@@ -1152,6 +1161,7 @@ export interface FileRouteTypes {
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/admin/about'
+    | '/admin/ad-studio'
     | '/admin/ai-keys'
     | '/admin/aquavisionx'
     | '/admin/backups'
@@ -1273,6 +1283,7 @@ export interface FileRouteTypes {
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/admin/about'
+    | '/admin/ad-studio'
     | '/admin/ai-keys'
     | '/admin/aquavisionx'
     | '/admin/backups'
@@ -1393,6 +1404,7 @@ export interface FileRouteTypes {
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/admin/about'
+    | '/admin/ad-studio'
     | '/admin/ai-keys'
     | '/admin/aquavisionx'
     | '/admin/backups'
@@ -1519,6 +1531,7 @@ export interface RootRouteChildren {
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   AdminAboutRoute: typeof AdminAboutRoute
+  AdminAdStudioRoute: typeof AdminAdStudioRoute
   AdminAiKeysRoute: typeof AdminAiKeysRoute
   AdminAquavisionxRoute: typeof AdminAquavisionxRoute
   AdminBackupsRoute: typeof AdminBackupsRoute
@@ -1778,6 +1791,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/about'
       fullPath: '/admin/about'
       preLoaderRoute: typeof AdminAboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/ad-studio': {
+      id: '/admin/ad-studio'
+      path: '/admin/ad-studio'
+      fullPath: '/admin/ad-studio'
+      preLoaderRoute: typeof AdminAdStudioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/ai-keys': {
@@ -2631,6 +2651,7 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   AdminAboutRoute: AdminAboutRoute,
+  AdminAdStudioRoute: AdminAdStudioRoute,
   AdminAiKeysRoute: AdminAiKeysRoute,
   AdminAquavisionxRoute: AdminAquavisionxRoute,
   AdminBackupsRoute: AdminBackupsRoute,
