@@ -314,8 +314,7 @@ export const TEMPLATES: AdTemplate[] = [
       headline: { ...d.headline, size: 128, letterSpacing: -2 },
       bg: { ...d.bg, type: "gradient", from: g(3).from, to: g(3).to, angle: 150, pattern: "none" },
       eyebrow: { ...d.eyebrow, color: BRAND.navy },
-      headline_placeholder: undefined,
-    }) as AdDesign,
+    }),
   },
 ];
 
