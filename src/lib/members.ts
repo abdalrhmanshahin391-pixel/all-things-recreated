@@ -12,6 +12,7 @@ export type Member = {
   description_en: string;
   description_ar: string;
   photo_url: string;
+  photo_fit: string;
   accent: number;
   is_founder: boolean;
   sort_order: number;
