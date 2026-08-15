@@ -38,36 +38,22 @@ type Year = {
 
 function JoinTeamNote() {
   return (
-    <aside className="mt-8 lg:mt-0 lg:absolute lg:end-0 lg:bottom-0 lg:w-[19rem] text-start">
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-card/80 p-5 shadow-sm backdrop-blur">
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -top-10 -end-10 h-24 w-24 rounded-full"
-          style={{ background: "color-mix(in oklab, var(--primary) 18%, transparent)" }}
-        />
-        <p className="relative text-[10px] font-black uppercase tracking-[0.22em] text-primary">
+    <div className="mt-6 flex justify-center" dir="ltr">
+      <div className="flex max-w-xl flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-border/60 bg-card/60 px-4 py-2 text-center">
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">
           Join the team
-        </p>
-        <p className="relative mt-2 text-sm leading-relaxed text-muted-foreground">
-          Want to help other students by sharing resources? Become part of the staff team behind
-          لجنة الطب والجراحة.
-        </p>
-        <p
-          dir="rtl"
-          lang="ar"
-          className="relative mt-2 text-sm leading-relaxed text-muted-foreground"
-          style={{ fontFamily: "'Tajawal','Inter',system-ui,sans-serif" }}
-        >
-          إن أردت مساعدة زملائك بالمصادر والانضمام إلى فريق اللجنة، تواصل معنا — وشكرًا لكل من يشارك.
-        </p>
+        </span>
+        <span className="text-sm text-muted-foreground">
+          Want to help other students by sharing resources? Join the staff team.
+        </span>
         <Link
           to="/support"
-          className="relative mt-3 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-black text-primary-foreground hover:opacity-90"
+          className="inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline"
         >
           Contact us <ArrowRight size={13} />
         </Link>
       </div>
-    </aside>
+    </div>
   );
 }
 
