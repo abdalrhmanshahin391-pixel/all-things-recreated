@@ -17,6 +17,7 @@ import {
   Ban,
   MailCheck,
   MailWarning,
+  Crown,
 
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -48,12 +49,13 @@ export const Route = createFileRoute("/admin/users")({
   component: AdminUsersPage,
 });
 
-type RoleKey = "admin" | "committee";
-type Filter = "all" | "admin" | "committee" | "none" | "unverified";
+type RoleKey = "admin" | "committee" | "golden";
+type Filter = "all" | "admin" | "committee" | "golden" | "none" | "unverified";
 
 const ROLE_LABEL: Record<RoleKey, string> = {
   admin: "Admin",
   committee: "لجنة الطب والجراحة",
+  golden: "Golden account",
 };
 
 function AdminUsersPage() {
@@ -99,6 +101,7 @@ function AdminUsersPage() {
     return users.filter((u) => {
       if (filter === "admin" && !u.roles.includes("admin")) return false;
       if (filter === "committee" && !u.roles.includes("committee")) return false;
+      if (filter === "golden" && !u.roles.includes("golden")) return false;
       if (filter === "none" && u.roles.length > 0) return false;
       if (filter === "unverified" && u.email_confirmed_at) return false;
       if (!q) return true;
@@ -116,6 +119,7 @@ function AdminUsersPage() {
       total: users.length,
       admins: users.filter((u) => u.roles.includes("admin")).length,
       committee: users.filter((u) => u.roles.includes("committee")).length,
+      golden: users.filter((u) => u.roles.includes("golden")).length,
     }),
     [users],
   );
@@ -233,6 +237,7 @@ function AdminUsersPage() {
           <Stat label="Users" value={counts.total} />
           <Stat label="Admins" value={counts.admins} />
           <Stat label="لجنة الطب والجراحة" value={counts.committee} />
+          <Stat label="Golden accounts" value={counts.golden} />
         </div>
 
         <div className="mb-6 rounded-2xl border border-border bg-card p-4 flex gap-3">
@@ -244,6 +249,9 @@ function AdminUsersPage() {
             <span className="font-semibold text-foreground">لجنة الطب والجراحة</span> can only add,
             edit and upload years, semesters, subjects and resources inside the Committee section —
             nothing else.
+            {" "}
+            <span className="font-semibold text-foreground">Golden account</span> is a normal member
+            who gets every paid course and lecture for free — no admin access.
           </div>
         </div>
 
@@ -265,6 +273,7 @@ function AdminUsersPage() {
             ["all", "All"],
             ["admin", "Admins"],
             ["committee", "لجنة الطب والجراحة"],
+            ["golden", "Golden accounts"],
             ["none", "No role"],
             ["unverified", "Not verified"],
           ] as [Filter, string][]).map(([key, label]) => (
@@ -419,6 +428,13 @@ function AdminUsersPage() {
                         active={u.roles.includes("committee")}
                         busy={busyRole === `${u.id}:committee`}
                         onClick={() => toggleRole(u, "committee")}
+                      />
+                      <RoleChip
+                        label={ROLE_LABEL.golden}
+                        icon={<Crown size={13} />}
+                        active={u.roles.includes("golden")}
+                        busy={busyRole === `${u.id}:golden`}
+                        onClick={() => toggleRole(u, "golden")}
                       />
                       <span className="text-xs text-muted-foreground ms-auto">Phone:</span>
                       {isEditing ? (

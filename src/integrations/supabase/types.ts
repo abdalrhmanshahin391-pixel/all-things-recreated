@@ -4600,6 +4600,7 @@ export type Database = {
           course_id: string
           created_at: string
           granted_by: string | null
+          granted_reason: string | null
           id: string
           user_id: string
         }
@@ -4607,6 +4608,7 @@ export type Database = {
           course_id: string
           created_at?: string
           granted_by?: string | null
+          granted_reason?: string | null
           id?: string
           user_id: string
         }
@@ -4614,6 +4616,7 @@ export type Database = {
           course_id?: string
           created_at?: string
           granted_by?: string | null
+          granted_reason?: string | null
           id?: string
           user_id?: string
         }
@@ -4741,16 +4744,19 @@ export type Database = {
         Row: {
           course_id: string
           granted_at: string
+          granted_reason: string | null
           user_id: string
         }
         Insert: {
           course_id: string
           granted_at?: string
+          granted_reason?: string | null
           user_id: string
         }
         Update: {
           course_id?: string
           granted_at?: string
+          granted_reason?: string | null
           user_id?: string
         }
         Relationships: [
@@ -5041,6 +5047,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      revoke_golden_user: { Args: { _user_id: string }; Returns: undefined }
       search_users_for_group: {
         Args: { _exclude: string; _query: string }
         Returns: {
@@ -5050,6 +5057,7 @@ export type Database = {
           username: string
         }[]
       }
+      sync_golden_user: { Args: { _user_id: string }; Returns: undefined }
       university_id_by_slug: { Args: { _slug: string }; Returns: string }
       user_in_group: {
         Args: { _group_id: string; _user_id: string }
@@ -5069,7 +5077,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "user" | "committee"
+      app_role: "admin" | "user" | "committee" | "golden"
       coupon_discount_type: "percent" | "fixed"
       package_type: "individual" | "group"
       subject_access: "paid" | "free_logged_in" | "free_public"
@@ -5200,7 +5208,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user", "committee"],
+      app_role: ["admin", "user", "committee", "golden"],
       coupon_discount_type: ["percent", "fixed"],
       package_type: ["individual", "group"],
       subject_access: ["paid", "free_logged_in", "free_public"],
