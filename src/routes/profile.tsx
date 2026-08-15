@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
+import { GoldenBadge } from "@/components/GoldenBadge";
 import {
   AlertCircle,
   CheckCircle2,
@@ -33,7 +34,7 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, isGolden, loading } = useAuth();
   const navigate = useNavigate();
 
   const [fullName, setFullName] = useState("");
@@ -231,17 +232,33 @@ function ProfilePage() {
         </header>
 
         {/* Identity card */}
-        <div className="mb-8 flex items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-primary text-xl font-black text-primary-foreground">
+        <div
+          className={`mb-8 flex items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm ${
+            isGolden ? "golden-card" : ""
+          }`}
+        >
+          <div
+            className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-primary text-xl font-black text-primary-foreground ${
+              isGolden ? "golden-ring" : ""
+            }`}
+          >
             {initial}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-lg font-bold">{fullName || username || "Student"}</div>
+            <div className="flex flex-wrap items-center gap-2 text-lg font-bold">
+              <span className="truncate">{fullName || username || "Student"}</span>
+              {isGolden && <GoldenBadge size="md" />}
+            </div>
             <div className="truncate text-sm text-muted-foreground">
               {username ? `@${username}` : ""}
               {username && email ? " · " : ""}
               {email}
             </div>
+            {isGolden && (
+              <div className="mt-1 text-xs font-semibold text-primary">
+                Golden member — all courses and lectures included.
+              </div>
+            )}
           </div>
         </div>
 
