@@ -102,3 +102,8 @@ export function initialsOf(name: string): string {
     .join("")
     .toUpperCase();
 }
+
+/** Whether a member card should render a photo area at all. */
+export function hasPhoto(member: { photo_fit?: string | null }): boolean {
+  return member.photo_fit !== "none";
+}

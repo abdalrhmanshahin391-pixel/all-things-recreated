@@ -3,6 +3,7 @@ import { Pencil, Trash2, ArrowLeft, ArrowRight } from "lucide-react";
 import {
   countryName,
   flagOf,
+  hasPhoto,
   initialsOf,
   memberTone,
   resolveMemberPhoto,
@@ -65,10 +66,12 @@ export function MemberCard({
   const tone = memberTone(member.accent);
   const name = (ar ? member.name_ar : member.name_en) || member.name_en || member.name_ar;
   const desc = (ar ? member.description_ar : member.description_en) || "";
+  const photo = hasPhoto(member);
 
   return (
     <article className={`group relative ${centered ? "text-center" : "text-start"}`}>
-      <div
+      {photo ? (
+        <div
         className="rounded-[1.4rem] p-2 transition-transform duration-200 group-hover:-translate-y-1"
         style={{
           background: `linear-gradient(150deg, color-mix(in oklab, ${tone} 16%, var(--card)) 0%, var(--card) 70%)`,
@@ -77,8 +80,16 @@ export function MemberCard({
       >
         <MemberPhoto member={member} rounded="rounded-[1rem]" />
       </div>
+      ) : (
+        <div
+          className="h-2 w-full rounded-full transition-transform duration-200 group-hover:-translate-y-1"
+          style={{
+            background: `linear-gradient(90deg, ${tone} 0%, color-mix(in oklab, ${tone} 25%, var(--card)) 100%)`,
+          }}
+        />
+      )}
 
-      <div className={`mt-4 px-1 ${centered ? "flex flex-col items-center" : ""}`}>
+      <div className={`${photo ? "mt-4" : "mt-3"} px-1 ${centered ? "flex flex-col items-center" : ""}`}>
         <p
           className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em]"
           style={{ color: tone }}
