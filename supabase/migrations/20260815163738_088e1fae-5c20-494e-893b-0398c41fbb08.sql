@@ -1,0 +1,1 @@
+ALTER TABLE public.committee_members ADD COLUMN IF NOT EXISTS photo_fit text NOT NULL DEFAULT 'cover';

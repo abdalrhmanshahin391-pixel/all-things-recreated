@@ -522,6 +522,7 @@ export type Database = {
           is_founder: boolean
           name_ar: string
           name_en: string
+          photo_fit: string
           photo_url: string
           role_label: string
           sort_order: number
@@ -539,6 +540,7 @@ export type Database = {
           is_founder?: boolean
           name_ar?: string
           name_en?: string
+          photo_fit?: string
           photo_url?: string
           role_label?: string
           sort_order?: number
@@ -556,6 +558,7 @@ export type Database = {
           is_founder?: boolean
           name_ar?: string
           name_en?: string
+          photo_fit?: string
           photo_url?: string
           role_label?: string
           sort_order?: number

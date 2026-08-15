@@ -39,6 +39,7 @@ export function MemberForm({
     description_en: member?.description_en ?? "",
     description_ar: member?.description_ar ?? "",
     photo_url: member?.photo_url ?? "",
+    photo_fit: member?.photo_fit ?? "cover",
     accent: member?.accent ?? ((nextSort % 5) + 1),
   });
   const [saving, setSaving] = useState(false);
@@ -93,7 +94,16 @@ export function MemberForm({
             {form.photo_url ? "Replace photo" : "Upload photo"}
           </button>
           {form.photo_url && (
-            <span className="truncate text-xs text-muted-foreground">{form.photo_url.split("/").pop()}</span>
+            <>
+              <span className="truncate text-xs text-muted-foreground">{form.photo_url.split("/").pop()}</span>
+              <button
+                type="button"
+                onClick={() => set({ photo_url: "" })}
+                className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-bold text-muted-foreground hover:text-destructive"
+              >
+                Remove photo
+              </button>
+            </>
           )}
           <input
             ref={fileRef}
@@ -106,6 +116,28 @@ export function MemberForm({
               e.target.value = "";
             }}
           />
+        </div>
+      </Field>
+
+      <Field label="Photo framing">
+        <div className="flex gap-2">
+          {[
+            { v: "cover", label: "Fill (crop to square)" },
+            { v: "contain", label: "Fit (show whole image)" },
+          ].map((o) => (
+            <button
+              key={o.v}
+              type="button"
+              onClick={() => set({ photo_fit: o.v })}
+              className={`rounded-lg border px-3 py-2 text-xs font-bold ${
+                form.photo_fit === o.v
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-border text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
       </Field>
 
