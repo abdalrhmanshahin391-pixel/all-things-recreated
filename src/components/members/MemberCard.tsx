@@ -124,14 +124,14 @@ export function MemberCard({
       </div>
 
       {canManage && (
-        <div className="absolute top-3 end-3 z-10 flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-3 end-3 z-10 flex gap-1 rounded-lg border border-border bg-background/90 p-1 shadow-sm backdrop-blur">
           {onMove && (
             <>
               <button
                 type="button"
                 aria-label="Move earlier"
                 onClick={() => onMove(-1)}
-                className="grid h-8 w-8 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:text-foreground"
+                className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <ArrowLeft size={14} />
               </button>
@@ -139,7 +139,7 @@ export function MemberCard({
                 type="button"
                 aria-label="Move later"
                 onClick={() => onMove(1)}
-                className="grid h-8 w-8 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:text-foreground"
+                className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <ArrowRight size={14} />
               </button>
@@ -150,7 +150,7 @@ export function MemberCard({
               type="button"
               aria-label="Edit member"
               onClick={onEdit}
-              className="grid h-8 w-8 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:text-foreground"
+              className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <Pencil size={14} />
             </button>
@@ -160,7 +160,7 @@ export function MemberCard({
               type="button"
               aria-label="Delete member"
               onClick={onDelete}
-              className="grid h-8 w-8 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:text-destructive"
+              className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-destructive"
             >
               <Trash2 size={14} />
             </button>
