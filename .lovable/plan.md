@@ -1,27 +1,29 @@
-# Committee theme: red accent + لجنة الطب والجراحة badge
+# Committee red theme + fix the header overflowing on phone and iPad
 
-Members with the committee role get a visible identity of their own, mirroring how Golden accounts work today — but in red instead of gold.
+Two things: finish the committee identity, and stop the page from being wider than the screen so the header sits fully in view without scrolling sideways.
 
-## What a committee member sees
+## 1. Header no longer overflows sideways
 
-- A red badge reading **لجنة الطب والجراحة** next to their avatar in the header and in the account menu, on phone, iPad and desktop.
-- Their profile identity card gets the red treatment: red-tinted gradient card, red avatar ring, badge next to the name.
-- Site-wide red accent while they are signed in: buttons, highlights, focus rings and header accents shift to the red palette.
-- Purely cosmetic — access rules are unchanged.
+On phone and iPad the page is currently wider than the screen: the header's right cluster (avatar + "GOLDEN" badge + chevron) pushes past the edge, so the header is cut off until you scroll or zoom out.
 
-## Rules when someone has both roles
+- The badge shows its full pill only where there is room; on narrow screens it collapses to a compact crown/shield chip, so the avatar row always fits.
+- The brand, nav and right cluster are allowed to shrink and truncate instead of forcing the page wider.
+- A site-wide guard prevents any horizontal page scroll, so zooming out no longer reveals empty space beside the layout.
+- Verified at 390px (phone) and 820px (iPad) widths before and after, checking the document is no wider than the viewport.
 
-- Golden wins: a member who is both Golden and committee keeps the gold theme, and both badges show next to the name (gold first, then the committee badge).
-- Admins browsing with admin mode off keep their normal look, matching how the committee role already behaves elsewhere.
+## 2. Committee theme (red) — remaining work
 
-## Responsive behaviour
+The badge and theme components are already written; what remains is wiring and styling.
 
-- Full Arabic badge on tablet and up; under the small breakpoint it collapses to a compact red shield icon with the same tooltip, so the header never wraps on a phone.
+- Red badge reading **لجنة الطب والجراحة** next to the avatar in the header, in the account menu and on the profile identity card.
+- Site-wide red accent (buttons, highlights, focus rings) while a committee member is signed in.
+- Golden wins when someone holds both roles; the committee badge still shows next to the gold one.
+- Same responsive rule as above: full Arabic pill on wider screens, compact red shield on phones.
 
 ## Technical notes
 
-- The auth store already exposes `isCommittee`; no new query or database change is needed.
-- New `CommitteeBadge` component modelled on `GoldenBadge` (sm / md sizes plus a dot variant), rendered with `dir="rtl"` around the Arabic label so it always reads correctly in the English UI.
-- New `CommitteeTheme` component next to `GoldenTheme` in `src/routes/__root.tsx` that toggles a `committee` class on `<html>`, skipping it when `isGolden` is true.
-- `src/styles.css` gains a `.committee` scope that re-points the same semantic tokens the `.golden` scope uses (`--primary`, `--primary-soft`, `--primary-deep`, `--accent`, `--ring`, sidebar tokens, `--shadow-brand`, `--gradient-brand`) to a deep red palette, plus `.committee-chip`, `.committee-card` and `.committee-ring` helpers. No hardcoded colours in components.
-- Badge placements: `SiteHeader` (avatar button + account menu) and the profile identity card in `src/routes/profile.tsx`, reusing the existing Golden slots.
+- `SiteHeader`: add `min-w-0` to the brand/nav containers and `shrink-0` to the avatar cluster; render badges through the responsive variants so the phone layout uses the dot form. Cap the right cluster so it cannot expand the row.
+- `src/styles.css`: add `html, body { max-width: 100%; overflow-x: hidden; }` alongside the existing base rules, and add the `.committee` token scope (deep red re-point of `--primary`, `--primary-soft`, `--primary-deep`, `--accent`, `--ring`, sidebar tokens, `--shadow-brand`, `--gradient-brand`) plus `.committee-chip`, `.committee-card`, `.committee-ring`, mirroring the existing `.golden` block. No hardcoded colours in components.
+- `CommitteeBadge.tsx` and `CommitteeTheme.tsx` (already drafted) get mounted: `CommitteeTheme` next to `GoldenTheme` in `src/routes/__root.tsx`, badges in `SiteHeader` and `src/routes/profile.tsx`.
+- `useAuth` already exposes `isCommittee` and `isGolden`; no database or query change needed.
+- Check with Playwright at 390px and 820px that `document.documentElement.scrollWidth === clientWidth` and the header's right edge is inside the viewport.
