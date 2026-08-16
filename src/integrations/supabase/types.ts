@@ -1314,6 +1314,213 @@ export type Database = {
         }
         Relationships: []
       }
+      event_contacts: {
+        Row: {
+          button_label: string
+          created_at: string
+          event_id: string
+          id: string
+          kind: string
+          link: string
+          note_ar: string
+          note_en: string
+          qr_url: string
+          sort_order: number
+          title_ar: string
+          title_en: string
+        }
+        Insert: {
+          button_label?: string
+          created_at?: string
+          event_id: string
+          id?: string
+          kind?: string
+          link?: string
+          note_ar?: string
+          note_en?: string
+          qr_url?: string
+          sort_order?: number
+          title_ar?: string
+          title_en?: string
+        }
+        Update: {
+          button_label?: string
+          created_at?: string
+          event_id?: string
+          id?: string
+          kind?: string
+          link?: string
+          note_ar?: string
+          note_en?: string
+          qr_url?: string
+          sort_order?: number
+          title_ar?: string
+          title_en?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_contacts_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_members: {
+        Row: {
+          accent: number
+          created_at: string
+          description_ar: string
+          description_en: string
+          event_id: string
+          id: string
+          is_head: boolean
+          name_ar: string
+          name_en: string
+          photo_fit: string
+          photo_url: string
+          role_label: string
+          sort_order: number
+        }
+        Insert: {
+          accent?: number
+          created_at?: string
+          description_ar?: string
+          description_en?: string
+          event_id: string
+          id?: string
+          is_head?: boolean
+          name_ar?: string
+          name_en?: string
+          photo_fit?: string
+          photo_url?: string
+          role_label?: string
+          sort_order?: number
+        }
+        Update: {
+          accent?: number
+          created_at?: string
+          description_ar?: string
+          description_en?: string
+          event_id?: string
+          id?: string
+          is_head?: boolean
+          name_ar?: string
+          name_en?: string
+          photo_fit?: string
+          photo_url?: string
+          role_label?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_members_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_sections: {
+        Row: {
+          body_ar: string
+          body_en: string
+          created_at: string
+          event_id: string
+          id: string
+          sort_order: number
+          title_ar: string
+          title_en: string
+          visible: boolean
+        }
+        Insert: {
+          body_ar?: string
+          body_en?: string
+          created_at?: string
+          event_id: string
+          id?: string
+          sort_order?: number
+          title_ar?: string
+          title_en?: string
+          visible?: boolean
+        }
+        Update: {
+          body_ar?: string
+          body_en?: string
+          created_at?: string
+          event_id?: string
+          id?: string
+          sort_order?: number
+          title_ar?: string
+          title_en?: string
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_sections_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          accent: string
+          button_placement: string
+          button_style: string
+          cover_url: string | null
+          created_at: string
+          enabled: boolean
+          id: string
+          slug: string
+          sort_order: number
+          subtitle_ar: string
+          subtitle_en: string
+          title_ar: string
+          title_en: string
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          accent?: string
+          button_placement?: string
+          button_style?: string
+          cover_url?: string | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          slug: string
+          sort_order?: number
+          subtitle_ar?: string
+          subtitle_en?: string
+          title_ar?: string
+          title_en?: string
+          updated_at?: string
+          visibility?: string
+        }
+        Update: {
+          accent?: string
+          button_placement?: string
+          button_style?: string
+          cover_url?: string | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          slug?: string
+          sort_order?: number
+          subtitle_ar?: string
+          subtitle_en?: string
+          title_ar?: string
+          title_en?: string
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: []
+      }
       german_attempts: {
         Row: {
           created_at: string
@@ -5003,6 +5210,8 @@ export type Database = {
         Returns: boolean
       }
       can_manage_committee: { Args: { _user_id: string }; Returns: boolean }
+      can_manage_events: { Args: never; Returns: boolean }
+      event_visible: { Args: { _event_id: string }; Returns: boolean }
       get_course_real_counts: {
         Args: { _course_ids: string[] }
         Returns: {
@@ -5025,6 +5234,28 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      head_list_committee_members: {
+        Args: never
+        Returns: {
+          email: string
+          full_name: string
+          user_id: string
+          username: string
+        }[]
+      }
+      head_search_users: {
+        Args: { _query: string }
+        Returns: {
+          email: string
+          full_name: string
+          id: string
+          username: string
+        }[]
+      }
+      head_set_committee_role: {
+        Args: { _grant: boolean; _user_id: string }
+        Returns: undefined
       }
       identity_taken: {
         Args: { _phone: string; _username: string }
