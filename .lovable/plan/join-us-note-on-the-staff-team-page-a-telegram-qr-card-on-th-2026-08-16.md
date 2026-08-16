@@ -6,8 +6,8 @@ The small "Join the team" line currently sits on the committee home page. It mov
 
 Wording (English only, same meaning, rewritten):
 
-> **Open to students everywhere**
-> لجنة الطب والجراحة is not only for Jordanian students. If you have resources to share and you carry honesty and a real wish to help other students, you are welcome to join — and your own country's flag will sit on your card beside the rest.
+> **Open to students everywhere**  
+> Our staff team is not only for Jordanian students. If you have resources to share and you carry honesty and a real wish to help other students, you are welcome to join — and your own country's flag will sit on your card beside the rest.  
 > [Contact us]
 
 - Styling uses theme tokens, so on the red committee theme it reads as a clean accented panel (thin primary border, soft primary tint, primary heading) — no clashing colours, no absolute positioning.
