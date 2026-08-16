@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { EventEntryButtons } from "@/components/events/EventButtons";
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
 import { useLang } from "@/components/LanguageProvider";
@@ -269,6 +270,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
 
         {/* Center nav */}
         <nav className={skin.navWrap}>
+          <EventEntryButtons place="header" />
           {navLinks.map((l) => (
             <NavEntry key={l.id} item={l} />
           ))}
@@ -337,6 +339,9 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
         <div className={skin.mobileSheet}>
 
           <nav className="flex flex-col px-4 py-3">
+            <div className="mb-2 flex flex-wrap gap-2">
+              <EventEntryButtons place="header" />
+            </div>
             {navLinks.map((l) => (
               <NavEntry key={l.id} item={l} mobile />
             ))}
