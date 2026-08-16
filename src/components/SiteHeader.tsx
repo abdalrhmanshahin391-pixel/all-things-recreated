@@ -258,8 +258,13 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
         }`}
       >
         {/* Brand */}
-        <Link to="/" className={`${skin.brandWrap} min-w-0 max-w-[55%] overflow-hidden sm:max-w-none`}>
-          <RaziWordmark size={skin.brandSize} />
+        <Link to="/" className={`${skin.brandWrap} min-w-0 max-w-[calc(100%-5rem)] overflow-hidden sm:max-w-none`}>
+          <span className="sm:hidden">
+            <RaziWordmark size={Math.max(20, Math.round(skin.brandSize * 0.72))} />
+          </span>
+          <span className="hidden sm:inline">
+            <RaziWordmark size={skin.brandSize} />
+          </span>
         </Link>
 
         {/* Center nav */}
