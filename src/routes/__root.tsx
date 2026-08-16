@@ -21,6 +21,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { LanguageProvider } from "@/components/LanguageProvider";
 import { SeasonalTheme } from "@/components/SeasonalTheme";
 import { GoldenTheme } from "@/components/GoldenTheme";
+import { CommitteeTheme } from "@/components/CommitteeTheme";
 import { ThemeDecor } from "@/components/ThemeDecor";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -263,6 +264,7 @@ function RootComponent() {
         <LanguageProvider>
           <SeasonalTheme />
           <GoldenTheme />
+          <CommitteeTheme />
           <ThemeDecor />
           <PresenceTracker />
           <DeviceTracker />
