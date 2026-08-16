@@ -83,10 +83,12 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
 import { Route as CommitteeIndexRouteImport } from './routes/committee.index'
 import { Route as CommitteeYearRouteImport } from './routes/committee.$year'
+import { Route as CommitteeManageTeamRouteImport } from './routes/committee.manage-team'
 import { Route as CommitteeStudyPlanRouteImport } from './routes/committee.study-plan'
 import { Route as CommitteeTeamRouteImport } from './routes/committee.team'
 import { Route as CoursesIndexRouteImport } from './routes/courses.index'
 import { Route as CoursesCourseIdRouteImport } from './routes/courses.$courseId'
+import { Route as EventsSlugRouteImport } from './routes/events.$slug'
 import { Route as GuidesIndexRouteImport } from './routes/guides.index'
 import { Route as GuidesSlugRouteImport } from './routes/guides.$slug'
 import { Route as LecturesIndexRouteImport } from './routes/lectures.index'
@@ -105,6 +107,8 @@ import { Route as SummariesNewRouteImport } from './routes/summaries.new'
 import { Route as UUniSlugRouteImport } from './routes/u.$uniSlug'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
+import { Route as AdminEventsIndexRouteImport } from './routes/admin.events.index'
+import { Route as AdminEventsEventIdRouteImport } from './routes/admin.events.$eventId'
 import { Route as AdminGermanIndexRouteImport } from './routes/admin.german.index'
 import { Route as AdminGermanCourseIdRouteImport } from './routes/admin.german.$courseId'
 import { Route as AdminPagesIndexRouteImport } from './routes/admin.pages.index'
@@ -508,6 +512,11 @@ const CommitteeYearRoute = CommitteeYearRouteImport.update({
   path: '/$year',
   getParentRoute: () => CommitteeRoute,
 } as any)
+const CommitteeManageTeamRoute = CommitteeManageTeamRouteImport.update({
+  id: '/manage-team',
+  path: '/manage-team',
+  getParentRoute: () => CommitteeRoute,
+} as any)
 const CommitteeStudyPlanRoute = CommitteeStudyPlanRouteImport.update({
   id: '/study-plan',
   path: '/study-plan',
@@ -527,6 +536,11 @@ const CoursesCourseIdRoute = CoursesCourseIdRouteImport.update({
   id: '/$courseId',
   path: '/$courseId',
   getParentRoute: () => CoursesRoute,
+} as any)
+const EventsSlugRoute = EventsSlugRouteImport.update({
+  id: '/events/$slug',
+  path: '/events/$slug',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const GuidesIndexRoute = GuidesIndexRouteImport.update({
   id: '/guides/',
@@ -619,6 +633,16 @@ const Char91DotmcpChar93InvokeToolToolRoute =
     path: '/.mcp/invoke-tool/$tool',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminEventsIndexRoute = AdminEventsIndexRouteImport.update({
+  id: '/admin/events/',
+  path: '/admin/events/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminEventsEventIdRoute = AdminEventsEventIdRouteImport.update({
+  id: '/admin/events/$eventId',
+  path: '/admin/events/$eventId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminGermanIndexRoute = AdminGermanIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -842,9 +866,11 @@ export interface FileRoutesByFullPath {
   '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/$year': typeof CommitteeYearRouteWithChildren
+  '/committee/manage-team': typeof CommitteeManageTeamRoute
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
   '/committee/team': typeof CommitteeTeamRoute
   '/courses/$courseId': typeof CoursesCourseIdRouteWithChildren
+  '/events/$slug': typeof EventsSlugRoute
   '/guides/$slug': typeof GuidesSlugRoute
   '/lectures/$courseId': typeof LecturesCourseIdRouteWithChildren
   '/my/courses': typeof MyCoursesRoute
@@ -866,6 +892,7 @@ export interface FileRoutesByFullPath {
   '/summaries/': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
@@ -880,6 +907,7 @@ export interface FileRoutesByFullPath {
   '/german/$courseId/tap': typeof GermanCourseIdTapRoute
   '/hy/guides/$slug': typeof HyGuidesSlugRoute
   '/ru/guides/$slug': typeof RuGuidesSlugRoute
+  '/admin/events/': typeof AdminEventsIndexRoute
   '/admin/german/': typeof AdminGermanIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/committee/$year/': typeof CommitteeYearIndexRoute
@@ -963,8 +991,10 @@ export interface FileRoutesByTo {
   '/api/committee-drive-upload': typeof ApiCommitteeDriveUploadRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
+  '/committee/manage-team': typeof CommitteeManageTeamRoute
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
   '/committee/team': typeof CommitteeTeamRoute
+  '/events/$slug': typeof EventsSlugRoute
   '/guides/$slug': typeof GuidesSlugRoute
   '/my/courses': typeof MyCoursesRoute
   '/my/lectures': typeof MyLecturesRoute
@@ -985,6 +1015,7 @@ export interface FileRoutesByTo {
   '/summaries': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
@@ -998,6 +1029,7 @@ export interface FileRoutesByTo {
   '/german/$courseId/tap': typeof GermanCourseIdTapRoute
   '/hy/guides/$slug': typeof HyGuidesSlugRoute
   '/ru/guides/$slug': typeof RuGuidesSlugRoute
+  '/admin/events': typeof AdminEventsIndexRoute
   '/admin/german': typeof AdminGermanIndexRoute
   '/admin/pages': typeof AdminPagesIndexRoute
   '/committee/$year': typeof CommitteeYearIndexRoute
@@ -1088,9 +1120,11 @@ export interface FileRoutesById {
   '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/$year': typeof CommitteeYearRouteWithChildren
+  '/committee/manage-team': typeof CommitteeManageTeamRoute
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
   '/committee/team': typeof CommitteeTeamRoute
   '/courses/$courseId': typeof CoursesCourseIdRouteWithChildren
+  '/events/$slug': typeof EventsSlugRoute
   '/guides/$slug': typeof GuidesSlugRoute
   '/lectures/$courseId': typeof LecturesCourseIdRouteWithChildren
   '/my/courses': typeof MyCoursesRoute
@@ -1112,6 +1146,7 @@ export interface FileRoutesById {
   '/summaries/': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
@@ -1126,6 +1161,7 @@ export interface FileRoutesById {
   '/german/$courseId/tap': typeof GermanCourseIdTapRoute
   '/hy/guides/$slug': typeof HyGuidesSlugRoute
   '/ru/guides/$slug': typeof RuGuidesSlugRoute
+  '/admin/events/': typeof AdminEventsIndexRoute
   '/admin/german/': typeof AdminGermanIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/committee/$year/': typeof CommitteeYearIndexRoute
@@ -1217,9 +1253,11 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/checkout/success'
     | '/committee/$year'
+    | '/committee/manage-team'
     | '/committee/study-plan'
     | '/committee/team'
     | '/courses/$courseId'
+    | '/events/$slug'
     | '/guides/$slug'
     | '/lectures/$courseId'
     | '/my/courses'
@@ -1241,6 +1279,7 @@ export interface FileRouteTypes {
     | '/summaries/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/admin/events/$eventId'
     | '/admin/german/$courseId'
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
@@ -1255,6 +1294,7 @@ export interface FileRouteTypes {
     | '/german/$courseId/tap'
     | '/hy/guides/$slug'
     | '/ru/guides/$slug'
+    | '/admin/events/'
     | '/admin/german/'
     | '/admin/pages/'
     | '/committee/$year/'
@@ -1338,8 +1378,10 @@ export interface FileRouteTypes {
     | '/api/committee-drive-upload'
     | '/auth/callback'
     | '/checkout/success'
+    | '/committee/manage-team'
     | '/committee/study-plan'
     | '/committee/team'
+    | '/events/$slug'
     | '/guides/$slug'
     | '/my/courses'
     | '/my/lectures'
@@ -1360,6 +1402,7 @@ export interface FileRouteTypes {
     | '/summaries'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/admin/events/$eventId'
     | '/admin/german/$courseId'
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
@@ -1373,6 +1416,7 @@ export interface FileRouteTypes {
     | '/german/$courseId/tap'
     | '/hy/guides/$slug'
     | '/ru/guides/$slug'
+    | '/admin/events'
     | '/admin/german'
     | '/admin/pages'
     | '/committee/$year'
@@ -1462,9 +1506,11 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/checkout/success'
     | '/committee/$year'
+    | '/committee/manage-team'
     | '/committee/study-plan'
     | '/committee/team'
     | '/courses/$courseId'
+    | '/events/$slug'
     | '/guides/$slug'
     | '/lectures/$courseId'
     | '/my/courses'
@@ -1486,6 +1532,7 @@ export interface FileRouteTypes {
     | '/summaries/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/admin/events/$eventId'
     | '/admin/german/$courseId'
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
@@ -1500,6 +1547,7 @@ export interface FileRouteTypes {
     | '/german/$courseId/tap'
     | '/hy/guides/$slug'
     | '/ru/guides/$slug'
+    | '/admin/events/'
     | '/admin/german/'
     | '/admin/pages/'
     | '/committee/$year/'
@@ -1589,6 +1637,7 @@ export interface RootRouteChildren {
   ApiCommitteeDriveUploadRoute: typeof ApiCommitteeDriveUploadRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   CheckoutSuccessRoute: typeof CheckoutSuccessRoute
+  EventsSlugRoute: typeof EventsSlugRoute
   GuidesSlugRoute: typeof GuidesSlugRoute
   MyCoursesRoute: typeof MyCoursesRoute
   MyLecturesRoute: typeof MyLecturesRoute
@@ -1602,6 +1651,7 @@ export interface RootRouteChildren {
   SummariesIndexRoute: typeof SummariesIndexRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
+  AdminEventsEventIdRoute: typeof AdminEventsEventIdRoute
   AdminPagesPageIdRoute: typeof AdminPagesPageIdRoute
   AdminUniTilesUniIdRoute: typeof AdminUniTilesUniIdRoute
   ApiGermanTtsRoute: typeof ApiGermanTtsRoute
@@ -1612,6 +1662,7 @@ export interface RootRouteChildren {
   GermanCourseIdTapRoute: typeof GermanCourseIdTapRoute
   HyGuidesSlugRoute: typeof HyGuidesSlugRoute
   RuGuidesSlugRoute: typeof RuGuidesSlugRoute
+  AdminEventsIndexRoute: typeof AdminEventsIndexRoute
   AdminPagesIndexRoute: typeof AdminPagesIndexRoute
   GermanCourseIdIndexRoute: typeof GermanCourseIdIndexRoute
   HyGuidesIndexRoute: typeof HyGuidesIndexRoute
@@ -2141,6 +2192,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CommitteeYearRouteImport
       parentRoute: typeof CommitteeRoute
     }
+    '/committee/manage-team': {
+      id: '/committee/manage-team'
+      path: '/manage-team'
+      fullPath: '/committee/manage-team'
+      preLoaderRoute: typeof CommitteeManageTeamRouteImport
+      parentRoute: typeof CommitteeRoute
+    }
     '/committee/study-plan': {
       id: '/committee/study-plan'
       path: '/study-plan'
@@ -2168,6 +2226,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/courses/$courseId'
       preLoaderRoute: typeof CoursesCourseIdRouteImport
       parentRoute: typeof CoursesRoute
+    }
+    '/events/$slug': {
+      id: '/events/$slug'
+      path: '/events/$slug'
+      fullPath: '/events/$slug'
+      preLoaderRoute: typeof EventsSlugRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/guides/': {
       id: '/guides/'
@@ -2293,6 +2358,20 @@ declare module '@tanstack/react-router' {
       path: '/.mcp/invoke-tool/$tool'
       fullPath: '/.mcp/invoke-tool/$tool'
       preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/events/': {
+      id: '/admin/events/'
+      path: '/admin/events'
+      fullPath: '/admin/events/'
+      preLoaderRoute: typeof AdminEventsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/events/$eventId': {
+      id: '/admin/events/$eventId'
+      path: '/admin/events/$eventId'
+      fullPath: '/admin/events/$eventId'
+      preLoaderRoute: typeof AdminEventsEventIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/german/': {
@@ -2517,6 +2596,7 @@ const CommitteeYearRouteWithChildren = CommitteeYearRoute._addFileChildren(
 
 interface CommitteeRouteChildren {
   CommitteeYearRoute: typeof CommitteeYearRouteWithChildren
+  CommitteeManageTeamRoute: typeof CommitteeManageTeamRoute
   CommitteeStudyPlanRoute: typeof CommitteeStudyPlanRoute
   CommitteeTeamRoute: typeof CommitteeTeamRoute
   CommitteeIndexRoute: typeof CommitteeIndexRoute
@@ -2524,6 +2604,7 @@ interface CommitteeRouteChildren {
 
 const CommitteeRouteChildren: CommitteeRouteChildren = {
   CommitteeYearRoute: CommitteeYearRouteWithChildren,
+  CommitteeManageTeamRoute: CommitteeManageTeamRoute,
   CommitteeStudyPlanRoute: CommitteeStudyPlanRoute,
   CommitteeTeamRoute: CommitteeTeamRoute,
   CommitteeIndexRoute: CommitteeIndexRoute,
@@ -2718,6 +2799,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCommitteeDriveUploadRoute: ApiCommitteeDriveUploadRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   CheckoutSuccessRoute: CheckoutSuccessRoute,
+  EventsSlugRoute: EventsSlugRoute,
   GuidesSlugRoute: GuidesSlugRoute,
   MyCoursesRoute: MyCoursesRoute,
   MyLecturesRoute: MyLecturesRoute,
@@ -2731,6 +2813,7 @@ const rootRouteChildren: RootRouteChildren = {
   SummariesIndexRoute: SummariesIndexRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
+  AdminEventsEventIdRoute: AdminEventsEventIdRoute,
   AdminPagesPageIdRoute: AdminPagesPageIdRoute,
   AdminUniTilesUniIdRoute: AdminUniTilesUniIdRoute,
   ApiGermanTtsRoute: ApiGermanTtsRoute,
@@ -2741,6 +2824,7 @@ const rootRouteChildren: RootRouteChildren = {
   GermanCourseIdTapRoute: GermanCourseIdTapRoute,
   HyGuidesSlugRoute: HyGuidesSlugRoute,
   RuGuidesSlugRoute: RuGuidesSlugRoute,
+  AdminEventsIndexRoute: AdminEventsIndexRoute,
   AdminPagesIndexRoute: AdminPagesIndexRoute,
   GermanCourseIdIndexRoute: GermanCourseIdIndexRoute,
   HyGuidesIndexRoute: HyGuidesIndexRoute,

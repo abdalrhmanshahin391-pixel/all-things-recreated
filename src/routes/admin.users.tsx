@@ -18,6 +18,7 @@ import {
   MailCheck,
   MailWarning,
   Crown,
+  Star,
 
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -49,12 +50,13 @@ export const Route = createFileRoute("/admin/users")({
   component: AdminUsersPage,
 });
 
-type RoleKey = "admin" | "committee" | "golden";
-type Filter = "all" | "admin" | "committee" | "golden" | "none" | "unverified";
+type RoleKey = "admin" | "committee" | "committee_head" | "golden";
+type Filter = "all" | "admin" | "committee" | "committee_head" | "golden" | "none" | "unverified";
 
 const ROLE_LABEL: Record<RoleKey, string> = {
   admin: "Admin",
   committee: "لجنة الطب والجراحة",
+  committee_head: "رئيس لجنة الطب والجراحة",
   golden: "Golden account",
 };
 
@@ -101,6 +103,7 @@ function AdminUsersPage() {
     return users.filter((u) => {
       if (filter === "admin" && !u.roles.includes("admin")) return false;
       if (filter === "committee" && !u.roles.includes("committee")) return false;
+      if (filter === "committee_head" && !u.roles.includes("committee_head")) return false;
       if (filter === "golden" && !u.roles.includes("golden")) return false;
       if (filter === "none" && u.roles.length > 0) return false;
       if (filter === "unverified" && u.email_confirmed_at) return false;
@@ -119,6 +122,7 @@ function AdminUsersPage() {
       total: users.length,
       admins: users.filter((u) => u.roles.includes("admin")).length,
       committee: users.filter((u) => u.roles.includes("committee")).length,
+      heads: users.filter((u) => u.roles.includes("committee_head")).length,
       golden: users.filter((u) => u.roles.includes("golden")).length,
     }),
     [users],
@@ -237,6 +241,7 @@ function AdminUsersPage() {
           <Stat label="Users" value={counts.total} />
           <Stat label="Admins" value={counts.admins} />
           <Stat label="لجنة الطب والجراحة" value={counts.committee} />
+          <Stat label="رؤساء اللجنة" value={counts.heads} />
           <Stat label="Golden accounts" value={counts.golden} />
         </div>
 
@@ -273,6 +278,7 @@ function AdminUsersPage() {
             ["all", "All"],
             ["admin", "Admins"],
             ["committee", "لجنة الطب والجراحة"],
+            ["committee_head", "رئيس اللجنة"],
             ["golden", "Golden accounts"],
             ["none", "No role"],
             ["unverified", "Not verified"],
@@ -428,6 +434,13 @@ function AdminUsersPage() {
                         active={u.roles.includes("committee")}
                         busy={busyRole === `${u.id}:committee`}
                         onClick={() => toggleRole(u, "committee")}
+                      />
+                      <RoleChip
+                        label={ROLE_LABEL.committee_head}
+                        icon={<Star size={13} />}
+                        active={u.roles.includes("committee_head")}
+                        busy={busyRole === `${u.id}:committee_head`}
+                        onClick={() => toggleRole(u, "committee_head")}
                       />
                       <RoleChip
                         label={ROLE_LABEL.golden}

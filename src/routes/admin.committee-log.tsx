@@ -50,15 +50,17 @@ function actionStyle(action: string) {
 }
 
 function CommitteeLogPage() {
-  const { isAdmin, loading } = useAuth();
+  const { isAdmin, isCommitteeHead, loading } = useAuth();
+  // Committee heads can read the library change log for their own team.
+  const canView = isAdmin || isCommitteeHead;
   const navigate = useNavigate();
   const [action, setAction] = useState<string>("all");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
 
   useEffect(() => {
-    if (!loading && !isAdmin) guardRedirect(navigate);
-  }, [loading, isAdmin, navigate]);
+    if (!loading && !canView) guardRedirect(navigate);
+  }, [loading, canView, navigate]);
 
   useEffect(() => setPage(0), [action, q]);
 
@@ -75,7 +77,7 @@ function CommitteeLogPage() {
       if (error) throw error;
       return (data ?? []) as Entry[];
     },
-    enabled: isAdmin,
+    enabled: canView,
     staleTime: 30_000,
   });
 
@@ -90,7 +92,7 @@ function CommitteeLogPage() {
     );
   }, [data, q]);
 
-  if (loading || !isAdmin) return <div className="min-h-screen bg-muted/40" />;
+  if (loading || !canView) return <div className="min-h-screen bg-muted/40" />;
 
   return (
     <div className="min-h-screen bg-muted/40">
