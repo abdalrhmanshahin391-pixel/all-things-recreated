@@ -84,10 +84,26 @@ function CommitteePage() {
             <MadeByLaith className="absolute left-0 top-0 hidden sm:block text-left" />
           )}
           {(isCommittee || isAdmin) && (
-            <div className="absolute right-0 top-0 flex items-center gap-2">
+            <div className="absolute right-0 top-0 flex flex-col items-end gap-2">
               <span className="px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-widest bg-primary text-primary-foreground">
-                {isAdmin ? "Admin" : "عضو في اللجنة"}
+                {isAdmin ? "Admin" : isCommitteeHead ? "رئيس اللجنة" : "عضو في اللجنة"}
               </span>
+              {canManageMembers && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    to="/committee/manage-team"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[11px] font-bold hover:border-primary/50"
+                  >
+                    <UsersRound size={13} /> Manage team
+                  </Link>
+                  <Link
+                    to="/admin/committee-log"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[11px] font-bold hover:border-primary/50"
+                  >
+                    <History size={13} /> Log
+                  </Link>
+                </div>
+              )}
             </div>
           )}
           <span className="inline-flex items-center gap-2 rounded-full bg-card border border-border px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
