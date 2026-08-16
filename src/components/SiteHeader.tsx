@@ -138,7 +138,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
         }`}
       >
         {/* Brand */}
-        <Link to="/" className={skin.brandWrap}>
+        <Link to="/" className={`${skin.brandWrap} min-w-0 max-w-[55%] overflow-hidden sm:max-w-none`}>
           <RaziWordmark size={skin.brandSize} />
         </Link>
 
@@ -150,22 +150,26 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
         </nav>
 
         {/* Right cluster */}
-        <div className={`flex items-center gap-2 md:gap-3 ${skin.rail ? "md:ps-6 md:border-s md:border-border" : ""}`}>
+        <div
+          className={`flex min-w-0 shrink-0 flex-nowrap items-center gap-1.5 sm:gap-2 md:gap-3 ${
+            skin.rail ? "lg:ps-6 lg:border-s lg:border-border" : ""
+          }`}
+        >
           {user && (
             <Link
               to="/mentor"
               title="My Mentor · مرشدي"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
+              className="hidden lg:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
             >
               <MoonStar size={16} className="text-primary" />
-              <span className="hidden lg:inline">My Mentor</span>
+              <span className="hidden xl:inline">My Mentor</span>
             </Link>
           )}
           <button
             type="button"
             onClick={toggleLang}
             aria-label="Switch language"
-            className={skin.iconBtn}
+            className={`${skin.iconBtn} shrink-0`}
           >
             {lang === "ar" ? "EN" : "ع"}
           </button>
@@ -182,7 +186,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setOpen((v) => !v)}
-                className={skin.avatarBtn}
+                className={`${skin.avatarBtn} max-w-[9.5rem] shrink-0 overflow-hidden`}
                 aria-label="Account menu"
                 aria-expanded={open}
               >
@@ -193,8 +197,18 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                 >
                   {initial}
                 </span>
-                {isGolden && <GoldenBadge />}
-                {isCommittee && <CommitteeBadge />}
+                {isGolden && (
+                  <>
+                    <GoldenBadge dot className="lg:hidden" />
+                    <GoldenBadge className="hidden lg:inline-flex" />
+                  </>
+                )}
+                {isCommittee && (
+                  <>
+                    <CommitteeBadge dot className="lg:hidden" />
+                    <CommitteeBadge className="hidden lg:inline-flex" />
+                  </>
+                )}
                 <ChevronDown size={14} className="shrink-0 text-muted-foreground" />
               </button>
               {open && (
@@ -278,7 +292,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
               )}
             </div>
           ) : (
-            <div className="hidden sm:flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-2 shrink-0">
               <Link to="/login" className={skin.loginBtn}>
                 {t("cms.header.login")}
               </Link>
@@ -291,8 +305,9 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
           {/* Mobile menu trigger */}
           <button
             onClick={() => setMobileOpen((v) => !v)}
-            className="md:hidden inline-grid place-items-center h-9 w-9 rounded-md text-foreground hover:bg-muted"
+            className="lg:hidden order-last inline-grid shrink-0 place-items-center h-9 w-9 rounded-md border border-border text-foreground hover:bg-muted"
             aria-label="Menu"
+            aria-expanded={mobileOpen}
           >
             {mobileOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
