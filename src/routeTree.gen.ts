@@ -49,6 +49,7 @@ import { Route as AdminCoursesRouteImport } from './routes/admin.courses'
 import { Route as AdminCoursesHubRouteImport } from './routes/admin.courses-hub'
 import { Route as AdminDatabaseRouteImport } from './routes/admin.database'
 import { Route as AdminDevicesRouteImport } from './routes/admin.devices'
+import { Route as AdminEventsRouteImport } from './routes/admin.events'
 import { Route as AdminGeminiKeysRouteImport } from './routes/admin.gemini-keys'
 import { Route as AdminGermanRouteImport } from './routes/admin.german'
 import { Route as AdminGroupsRouteImport } from './routes/admin.groups'
@@ -336,6 +337,11 @@ const AdminDatabaseRoute = AdminDatabaseRouteImport.update({
 const AdminDevicesRoute = AdminDevicesRouteImport.update({
   id: '/admin/devices',
   path: '/admin/devices',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminEventsRoute = AdminEventsRouteImport.update({
+  id: '/admin/events',
+  path: '/admin/events',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminGeminiKeysRoute = AdminGeminiKeysRouteImport.update({
@@ -815,6 +821,7 @@ export interface FileRoutesByFullPath {
   '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
+  '/admin/events': typeof AdminEventsRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
   '/admin/german': typeof AdminGermanRouteWithChildren
   '/admin/groups': typeof AdminGroupsRoute
@@ -939,6 +946,7 @@ export interface FileRoutesByTo {
   '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
+  '/admin/events': typeof AdminEventsRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
   '/admin/groups': typeof AdminGroupsRoute
   '/admin/jarvis-batch': typeof AdminJarvisBatchRoute
@@ -1063,6 +1071,7 @@ export interface FileRoutesById {
   '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
+  '/admin/events': typeof AdminEventsRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
   '/admin/german': typeof AdminGermanRouteWithChildren
   '/admin/groups': typeof AdminGroupsRoute
@@ -1193,6 +1202,7 @@ export interface FileRouteTypes {
     | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
+    | '/admin/events'
     | '/admin/gemini-keys'
     | '/admin/german'
     | '/admin/groups'
@@ -1317,6 +1327,7 @@ export interface FileRouteTypes {
     | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
+    | '/admin/events'
     | '/admin/gemini-keys'
     | '/admin/groups'
     | '/admin/jarvis-batch'
@@ -1440,6 +1451,7 @@ export interface FileRouteTypes {
     | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
+    | '/admin/events'
     | '/admin/gemini-keys'
     | '/admin/german'
     | '/admin/groups'
@@ -1569,6 +1581,7 @@ export interface RootRouteChildren {
   AdminCoursesHubRoute: typeof AdminCoursesHubRoute
   AdminDatabaseRoute: typeof AdminDatabaseRoute
   AdminDevicesRoute: typeof AdminDevicesRoute
+  AdminEventsRoute: typeof AdminEventsRoute
   AdminGeminiKeysRoute: typeof AdminGeminiKeysRoute
   AdminGermanRoute: typeof AdminGermanRouteWithChildren
   AdminGroupsRoute: typeof AdminGroupsRoute
@@ -1914,6 +1927,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/devices'
       fullPath: '/admin/devices'
       preLoaderRoute: typeof AdminDevicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/events': {
+      id: '/admin/events'
+      path: '/admin/events'
+      fullPath: '/admin/events'
+      preLoaderRoute: typeof AdminEventsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/gemini-keys': {
@@ -2706,6 +2726,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminCoursesHubRoute: AdminCoursesHubRoute,
   AdminDatabaseRoute: AdminDatabaseRoute,
   AdminDevicesRoute: AdminDevicesRoute,
+  AdminEventsRoute: AdminEventsRoute,
   AdminGeminiKeysRoute: AdminGeminiKeysRoute,
   AdminGermanRoute: AdminGermanRouteWithChildren,
   AdminGroupsRoute: AdminGroupsRoute,
