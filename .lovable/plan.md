@@ -13,7 +13,8 @@ Keeping zoom-out is not needed — the fix below makes the row genuinely fit, an
 
 ## Technical notes
 
-- `SiteHeader.tsx`: right cluster gets `min-w-0 max-w-full flex-nowrap`; the menu trigger gets `shrink-0 order-last`. The avatar button's badge slots render `<GoldenBadge dot />` / `<CommitteeBadge dot />` directly instead of the `*Responsive` wrappers, so no pill variant reaches the top bar. Avatar button gets `max-w-[9rem] overflow-hidden`.
+- `SiteHeader.tsx`: right cluster gets `min-w-0 max-w-full flex-nowrap`; the menu trigger gets `shrink-0 order-last` and its `md:hidden` becomes `lg:hidden` so it also shows on iPad widths. The avatar button's badge slots render `<GoldenBadge dot />` / `<CommitteeBadge dot />` directly instead of the `*Responsive` wrappers, so no pill variant reaches the top bar. Avatar button gets `max-w-[9rem] overflow-hidden`.
+- The mobile sheet's breakpoint moves in step with the trigger so iPad opens the same list.
 - `GoldenBadgeResponsive` / `CommitteeBadgeResponsive` stay exported (used elsewhere) but are no longer used in the header avatar row.
 - Nav wrapper keeps `min-w-0` and adds `overflow-hidden` so long link lists clip rather than push.
 - Leave `html, body { max-width: 100%; overflow-x: hidden }` in `src/styles.css` as-is.
