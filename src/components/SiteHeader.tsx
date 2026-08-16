@@ -143,14 +143,14 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
         </Link>
 
         {/* Center nav */}
-        <nav className={`min-w-0 ${skin.navWrap}`}>
+        <nav className={`min-w-0 overflow-hidden ${skin.navWrap}`}>
           {navLinks.map((l) => (
             <NavEntry key={l.id} item={l} />
           ))}
         </nav>
 
         {/* Right cluster */}
-        <div className={`flex shrink-0 items-center gap-2.5 md:gap-3 ${skin.rail ? "md:ps-6 md:border-s md:border-border" : ""}`}>
+        <div className={`flex min-w-0 max-w-full shrink-0 flex-nowrap items-center gap-2 md:gap-3 ${skin.rail ? "lg:ps-6 lg:border-s lg:border-border" : ""}`}>
           {user && (
             <Link
               to="/mentor"
@@ -182,7 +182,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setOpen((v) => !v)}
-                className={skin.avatarBtn}
+                className={`${skin.avatarBtn} max-w-[9rem] overflow-hidden`}
                 aria-label="Account menu"
                 aria-expanded={open}
               >
@@ -193,8 +193,8 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                 >
                   {initial}
                 </span>
-                {isGolden && <GoldenBadgeResponsive />}
-                {isCommittee && <CommitteeBadgeResponsive />}
+                {isGolden && <GoldenBadge dot />}
+                {isCommittee && <CommitteeBadge dot />}
                 <ChevronDown size={14} className="shrink-0 text-muted-foreground" />
               </button>
               {open && (
@@ -291,7 +291,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
           {/* Mobile menu trigger */}
           <button
             onClick={() => setMobileOpen((v) => !v)}
-            className="md:hidden inline-grid place-items-center h-9 w-9 rounded-md text-foreground hover:bg-muted"
+            className="order-last lg:hidden inline-grid shrink-0 place-items-center h-9 w-9 rounded-md text-foreground hover:bg-muted"
             aria-label="Menu"
           >
             {mobileOpen ? <X size={18} /> : <Menu size={18} />}
