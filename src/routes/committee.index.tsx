@@ -55,7 +55,7 @@ const committeeYearsQuery = queryOptions({
 const BRAND = "linear-gradient(135deg,#635BFF 0%,#FF5C8A 60%,#FF8A3D 100%)";
 
 function CommitteePage() {
-  const { canManage, isCommittee, isAdmin } = useCommitteeRole();
+  const { canManage, canManageMembers, isCommittee, isCommitteeHead, isAdmin } = useCommitteeRole();
   const { user, loading: authLoading } = useAuth();
   const guest = !authLoading && !user;
   const [gateOpen, setGateOpen] = useState(false);
