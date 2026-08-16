@@ -9,7 +9,7 @@ import { guardRedirect } from "@/lib/guard-redirect";
 import { supabase } from "@/integrations/supabase/client";
 import { eventsQuery, slugify, accentColor, type SiteEvent } from "@/lib/events";
 
-export const Route = createFileRoute("/admin/events")({
+export const Route = createFileRoute("/admin/events/")({
   head: () => ({
     meta: [
       { title: "Events — AquaQBank Admin" },

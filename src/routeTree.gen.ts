@@ -49,7 +49,6 @@ import { Route as AdminCoursesRouteImport } from './routes/admin.courses'
 import { Route as AdminCoursesHubRouteImport } from './routes/admin.courses-hub'
 import { Route as AdminDatabaseRouteImport } from './routes/admin.database'
 import { Route as AdminDevicesRouteImport } from './routes/admin.devices'
-import { Route as AdminEventsRouteImport } from './routes/admin.events'
 import { Route as AdminGeminiKeysRouteImport } from './routes/admin.gemini-keys'
 import { Route as AdminGermanRouteImport } from './routes/admin.german'
 import { Route as AdminGroupsRouteImport } from './routes/admin.groups'
@@ -107,6 +106,7 @@ import { Route as SummariesNewRouteImport } from './routes/summaries.new'
 import { Route as UUniSlugRouteImport } from './routes/u.$uniSlug'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
+import { Route as AdminEventsIndexRouteImport } from './routes/admin.events.index'
 import { Route as AdminGermanIndexRouteImport } from './routes/admin.german.index'
 import { Route as AdminGermanCourseIdRouteImport } from './routes/admin.german.$courseId'
 import { Route as AdminPagesIndexRouteImport } from './routes/admin.pages.index'
@@ -337,11 +337,6 @@ const AdminDatabaseRoute = AdminDatabaseRouteImport.update({
 const AdminDevicesRoute = AdminDevicesRouteImport.update({
   id: '/admin/devices',
   path: '/admin/devices',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminEventsRoute = AdminEventsRouteImport.update({
-  id: '/admin/events',
-  path: '/admin/events',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminGeminiKeysRoute = AdminGeminiKeysRouteImport.update({
@@ -631,6 +626,11 @@ const Char91DotmcpChar93InvokeToolToolRoute =
     path: '/.mcp/invoke-tool/$tool',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminEventsIndexRoute = AdminEventsIndexRouteImport.update({
+  id: '/admin/events/',
+  path: '/admin/events/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminGermanIndexRoute = AdminGermanIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -821,7 +821,6 @@ export interface FileRoutesByFullPath {
   '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
-  '/admin/events': typeof AdminEventsRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
   '/admin/german': typeof AdminGermanRouteWithChildren
   '/admin/groups': typeof AdminGroupsRoute
@@ -894,6 +893,7 @@ export interface FileRoutesByFullPath {
   '/german/$courseId/tap': typeof GermanCourseIdTapRoute
   '/hy/guides/$slug': typeof HyGuidesSlugRoute
   '/ru/guides/$slug': typeof RuGuidesSlugRoute
+  '/admin/events/': typeof AdminEventsIndexRoute
   '/admin/german/': typeof AdminGermanIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/committee/$year/': typeof CommitteeYearIndexRoute
@@ -946,7 +946,6 @@ export interface FileRoutesByTo {
   '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
-  '/admin/events': typeof AdminEventsRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
   '/admin/groups': typeof AdminGroupsRoute
   '/admin/jarvis-batch': typeof AdminJarvisBatchRoute
@@ -1014,6 +1013,7 @@ export interface FileRoutesByTo {
   '/german/$courseId/tap': typeof GermanCourseIdTapRoute
   '/hy/guides/$slug': typeof HyGuidesSlugRoute
   '/ru/guides/$slug': typeof RuGuidesSlugRoute
+  '/admin/events': typeof AdminEventsIndexRoute
   '/admin/german': typeof AdminGermanIndexRoute
   '/admin/pages': typeof AdminPagesIndexRoute
   '/committee/$year': typeof CommitteeYearIndexRoute
@@ -1071,7 +1071,6 @@ export interface FileRoutesById {
   '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
-  '/admin/events': typeof AdminEventsRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
   '/admin/german': typeof AdminGermanRouteWithChildren
   '/admin/groups': typeof AdminGroupsRoute
@@ -1144,6 +1143,7 @@ export interface FileRoutesById {
   '/german/$courseId/tap': typeof GermanCourseIdTapRoute
   '/hy/guides/$slug': typeof HyGuidesSlugRoute
   '/ru/guides/$slug': typeof RuGuidesSlugRoute
+  '/admin/events/': typeof AdminEventsIndexRoute
   '/admin/german/': typeof AdminGermanIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/committee/$year/': typeof CommitteeYearIndexRoute
@@ -1202,7 +1202,6 @@ export interface FileRouteTypes {
     | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
-    | '/admin/events'
     | '/admin/gemini-keys'
     | '/admin/german'
     | '/admin/groups'
@@ -1275,6 +1274,7 @@ export interface FileRouteTypes {
     | '/german/$courseId/tap'
     | '/hy/guides/$slug'
     | '/ru/guides/$slug'
+    | '/admin/events/'
     | '/admin/german/'
     | '/admin/pages/'
     | '/committee/$year/'
@@ -1327,7 +1327,6 @@ export interface FileRouteTypes {
     | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
-    | '/admin/events'
     | '/admin/gemini-keys'
     | '/admin/groups'
     | '/admin/jarvis-batch'
@@ -1395,6 +1394,7 @@ export interface FileRouteTypes {
     | '/german/$courseId/tap'
     | '/hy/guides/$slug'
     | '/ru/guides/$slug'
+    | '/admin/events'
     | '/admin/german'
     | '/admin/pages'
     | '/committee/$year'
@@ -1451,7 +1451,6 @@ export interface FileRouteTypes {
     | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
-    | '/admin/events'
     | '/admin/gemini-keys'
     | '/admin/german'
     | '/admin/groups'
@@ -1524,6 +1523,7 @@ export interface FileRouteTypes {
     | '/german/$courseId/tap'
     | '/hy/guides/$slug'
     | '/ru/guides/$slug'
+    | '/admin/events/'
     | '/admin/german/'
     | '/admin/pages/'
     | '/committee/$year/'
@@ -1581,7 +1581,6 @@ export interface RootRouteChildren {
   AdminCoursesHubRoute: typeof AdminCoursesHubRoute
   AdminDatabaseRoute: typeof AdminDatabaseRoute
   AdminDevicesRoute: typeof AdminDevicesRoute
-  AdminEventsRoute: typeof AdminEventsRoute
   AdminGeminiKeysRoute: typeof AdminGeminiKeysRoute
   AdminGermanRoute: typeof AdminGermanRouteWithChildren
   AdminGroupsRoute: typeof AdminGroupsRoute
@@ -1638,6 +1637,7 @@ export interface RootRouteChildren {
   GermanCourseIdTapRoute: typeof GermanCourseIdTapRoute
   HyGuidesSlugRoute: typeof HyGuidesSlugRoute
   RuGuidesSlugRoute: typeof RuGuidesSlugRoute
+  AdminEventsIndexRoute: typeof AdminEventsIndexRoute
   AdminPagesIndexRoute: typeof AdminPagesIndexRoute
   GermanCourseIdIndexRoute: typeof GermanCourseIdIndexRoute
   HyGuidesIndexRoute: typeof HyGuidesIndexRoute
@@ -1927,13 +1927,6 @@ declare module '@tanstack/react-router' {
       path: '/admin/devices'
       fullPath: '/admin/devices'
       preLoaderRoute: typeof AdminDevicesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/events': {
-      id: '/admin/events'
-      path: '/admin/events'
-      fullPath: '/admin/events'
-      preLoaderRoute: typeof AdminEventsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/gemini-keys': {
@@ -2335,6 +2328,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/events/': {
+      id: '/admin/events/'
+      path: '/admin/events'
+      fullPath: '/admin/events/'
+      preLoaderRoute: typeof AdminEventsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/german/': {
       id: '/admin/german/'
       path: '/'
@@ -2726,7 +2726,6 @@ const rootRouteChildren: RootRouteChildren = {
   AdminCoursesHubRoute: AdminCoursesHubRoute,
   AdminDatabaseRoute: AdminDatabaseRoute,
   AdminDevicesRoute: AdminDevicesRoute,
-  AdminEventsRoute: AdminEventsRoute,
   AdminGeminiKeysRoute: AdminGeminiKeysRoute,
   AdminGermanRoute: AdminGermanRouteWithChildren,
   AdminGroupsRoute: AdminGroupsRoute,
@@ -2783,6 +2782,7 @@ const rootRouteChildren: RootRouteChildren = {
   GermanCourseIdTapRoute: GermanCourseIdTapRoute,
   HyGuidesSlugRoute: HyGuidesSlugRoute,
   RuGuidesSlugRoute: RuGuidesSlugRoute,
+  AdminEventsIndexRoute: AdminEventsIndexRoute,
   AdminPagesIndexRoute: AdminPagesIndexRoute,
   GermanCourseIdIndexRoute: GermanCourseIdIndexRoute,
   HyGuidesIndexRoute: HyGuidesIndexRoute,
