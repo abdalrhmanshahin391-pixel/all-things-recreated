@@ -83,6 +83,7 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
 import { Route as CommitteeIndexRouteImport } from './routes/committee.index'
 import { Route as CommitteeYearRouteImport } from './routes/committee.$year'
+import { Route as CommitteeManageTeamRouteImport } from './routes/committee.manage-team'
 import { Route as CommitteeStudyPlanRouteImport } from './routes/committee.study-plan'
 import { Route as CommitteeTeamRouteImport } from './routes/committee.team'
 import { Route as CoursesIndexRouteImport } from './routes/courses.index'
@@ -511,6 +512,11 @@ const CommitteeYearRoute = CommitteeYearRouteImport.update({
   path: '/$year',
   getParentRoute: () => CommitteeRoute,
 } as any)
+const CommitteeManageTeamRoute = CommitteeManageTeamRouteImport.update({
+  id: '/manage-team',
+  path: '/manage-team',
+  getParentRoute: () => CommitteeRoute,
+} as any)
 const CommitteeStudyPlanRoute = CommitteeStudyPlanRouteImport.update({
   id: '/study-plan',
   path: '/study-plan',
@@ -860,6 +866,7 @@ export interface FileRoutesByFullPath {
   '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/$year': typeof CommitteeYearRouteWithChildren
+  '/committee/manage-team': typeof CommitteeManageTeamRoute
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
   '/committee/team': typeof CommitteeTeamRoute
   '/courses/$courseId': typeof CoursesCourseIdRouteWithChildren
@@ -984,6 +991,7 @@ export interface FileRoutesByTo {
   '/api/committee-drive-upload': typeof ApiCommitteeDriveUploadRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
+  '/committee/manage-team': typeof CommitteeManageTeamRoute
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
   '/committee/team': typeof CommitteeTeamRoute
   '/events/$slug': typeof EventsSlugRoute
@@ -1112,6 +1120,7 @@ export interface FileRoutesById {
   '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/$year': typeof CommitteeYearRouteWithChildren
+  '/committee/manage-team': typeof CommitteeManageTeamRoute
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
   '/committee/team': typeof CommitteeTeamRoute
   '/courses/$courseId': typeof CoursesCourseIdRouteWithChildren
@@ -1244,6 +1253,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/checkout/success'
     | '/committee/$year'
+    | '/committee/manage-team'
     | '/committee/study-plan'
     | '/committee/team'
     | '/courses/$courseId'
@@ -1368,6 +1378,7 @@ export interface FileRouteTypes {
     | '/api/committee-drive-upload'
     | '/auth/callback'
     | '/checkout/success'
+    | '/committee/manage-team'
     | '/committee/study-plan'
     | '/committee/team'
     | '/events/$slug'
@@ -1495,6 +1506,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/checkout/success'
     | '/committee/$year'
+    | '/committee/manage-team'
     | '/committee/study-plan'
     | '/committee/team'
     | '/courses/$courseId'
@@ -2180,6 +2192,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CommitteeYearRouteImport
       parentRoute: typeof CommitteeRoute
     }
+    '/committee/manage-team': {
+      id: '/committee/manage-team'
+      path: '/manage-team'
+      fullPath: '/committee/manage-team'
+      preLoaderRoute: typeof CommitteeManageTeamRouteImport
+      parentRoute: typeof CommitteeRoute
+    }
     '/committee/study-plan': {
       id: '/committee/study-plan'
       path: '/study-plan'
@@ -2577,6 +2596,7 @@ const CommitteeYearRouteWithChildren = CommitteeYearRoute._addFileChildren(
 
 interface CommitteeRouteChildren {
   CommitteeYearRoute: typeof CommitteeYearRouteWithChildren
+  CommitteeManageTeamRoute: typeof CommitteeManageTeamRoute
   CommitteeStudyPlanRoute: typeof CommitteeStudyPlanRoute
   CommitteeTeamRoute: typeof CommitteeTeamRoute
   CommitteeIndexRoute: typeof CommitteeIndexRoute
@@ -2584,6 +2604,7 @@ interface CommitteeRouteChildren {
 
 const CommitteeRouteChildren: CommitteeRouteChildren = {
   CommitteeYearRoute: CommitteeYearRouteWithChildren,
+  CommitteeManageTeamRoute: CommitteeManageTeamRoute,
   CommitteeStudyPlanRoute: CommitteeStudyPlanRoute,
   CommitteeTeamRoute: CommitteeTeamRoute,
   CommitteeIndexRoute: CommitteeIndexRoute,
