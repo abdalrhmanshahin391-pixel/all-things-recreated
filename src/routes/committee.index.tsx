@@ -7,6 +7,7 @@ import { toast } from "sonner";
 // JSZip is loaded dynamically inside export/import handlers to keep it out of the main bundle.
 import { useServerFn } from "@tanstack/react-start";
 import { SiteHeader } from "@/components/SiteHeader";
+import { TelegramQrCard } from "@/components/committee/TelegramQrCard";
 import { MadeByLaith } from "@/components/MadeByLaith";
 import { supabase } from "@/integrations/supabase/client";
 import { iconOf, ICON_KEYS } from "@/lib/committee-meta";
@@ -35,27 +36,6 @@ type Year = {
   icon_key: string;
   sort_order: number;
 } & ClosedInfo;
-
-function JoinTeamNote() {
-  return (
-    <div className="mt-6 flex justify-center" dir="ltr">
-      <div className="flex max-w-xl flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-border/60 bg-card/60 px-4 py-2 text-center">
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">
-          Join the team
-        </span>
-        <span className="text-sm text-muted-foreground">
-          Want to help other students by sharing resources? Join the staff team.
-        </span>
-        <Link
-          to="/support"
-          className="inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline"
-        >
-          Contact us <ArrowRight size={13} />
-        </Link>
-      </div>
-    </div>
-  );
-}
 
 const committeeYearsQuery = queryOptions({
   queryKey: ["committee-years"],
@@ -156,7 +136,7 @@ function CommitteePage() {
             </Link>
           </div>
 
-          <JoinTeamNote />
+          <TelegramQrCard canManage={canManage} />
         </header>
 
 

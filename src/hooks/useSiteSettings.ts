@@ -45,6 +45,8 @@ export type SiteSettings = {
   study_hub_title_ar: string | null;
   study_hub_subtitle: string | null;
   study_hub_subtitle_ar: string | null;
+  committee_qr_path: string | null;
+  committee_qr_link: string | null;
 };
 
 const DEFAULTS: SiteSettings = {
@@ -75,6 +77,8 @@ const DEFAULTS: SiteSettings = {
   study_hub_title_ar: null,
   study_hub_subtitle: null,
   study_hub_subtitle_ar: null,
+  committee_qr_path: null,
+  committee_qr_link: null,
 };
 
 export function normalizeSettings(data: any | null): SiteSettings {
@@ -95,7 +99,7 @@ export function normalizeSettings(data: any | null): SiteSettings {
 }
 
 async function fetchSiteSettings(): Promise<SiteSettings> {
-  const { data, error } = await (supabase.from as any)("site_settings").select("id,site_name,tagline,logo_url,updated_at,theme,show_signature,protect_enabled,protect_watermark_opacity,protect_blur_on_blur,protect_block_print,protect_block_copy,protect_consent_required,protect_devtools_guard,protect_auto_lock_threshold,protect_terms_en,protect_terms_ar,committee_default_storage,brand_style,header_style,study_plan_path,study_plan_title,study_plan_subtitle,terms_en,terms_ar,privacy_en,privacy_ar,refund_en,refund_ar,study_hub_title,study_hub_title_ar,study_hub_subtitle,study_hub_subtitle_ar")
+  const { data, error } = await (supabase.from as any)("site_settings").select("id,site_name,tagline,logo_url,updated_at,theme,show_signature,protect_enabled,protect_watermark_opacity,protect_blur_on_blur,protect_block_print,protect_block_copy,protect_consent_required,protect_devtools_guard,protect_auto_lock_threshold,protect_terms_en,protect_terms_ar,committee_default_storage,brand_style,header_style,study_plan_path,study_plan_title,study_plan_subtitle,terms_en,terms_ar,privacy_en,privacy_ar,refund_en,refund_ar,study_hub_title,study_hub_title_ar,study_hub_subtitle,study_hub_subtitle_ar,committee_qr_path,committee_qr_link")
     .eq("id", true)
     .maybeSingle();
   if (error || !data) return DEFAULTS;
