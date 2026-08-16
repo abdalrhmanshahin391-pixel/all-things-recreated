@@ -5210,7 +5210,23 @@ export type Database = {
         Returns: boolean
       }
       can_manage_committee: { Args: { _user_id: string }; Returns: boolean }
+      can_manage_committee_members: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       can_manage_events: { Args: never; Returns: boolean }
+      committee_team_add: { Args: { _username: string }; Returns: undefined }
+      committee_team_list: {
+        Args: never
+        Returns: {
+          email: string
+          full_name: string
+          is_head: boolean
+          user_id: string
+          username: string
+        }[]
+      }
+      committee_team_remove: { Args: { _user_id: string }; Returns: undefined }
       event_visible: { Args: { _event_id: string }; Returns: boolean }
       get_course_real_counts: {
         Args: { _course_ids: string[] }
