@@ -42,7 +42,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
   const [open, setOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useTranslation();
-  const { user, profile, isAdmin, isRealAdmin, isGolden, isCommittee, adminMode, setAdminMode, loading: authLoading } = useAuth();
+  const { user, profile, isAdmin, isRealAdmin, isGolden, isCommittee, isCommitteeHead, adminMode, setAdminMode, loading: authLoading } = useAuth();
   const { lang, toggle: toggleLang } = useLang();
   const settings = useSiteSettings();
   const skin = resolveHeaderSkin(settings.header_style);
@@ -165,7 +165,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
             {initial}
           </span>
           {isGolden && <GoldenBadge />}
-          {isCommittee && <CommitteeBadge />}
+          {isCommittee && <CommitteeBadge head={isCommitteeHead} />}
           <ChevronDown size={14} className="shrink-0 text-muted-foreground" />
         </button>
         {open && (
@@ -176,7 +176,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
               <p className="flex flex-wrap items-center gap-2 font-semibold text-sm">
                 <span className="truncate">{profile?.full_name || displayName}</span>
                 {isGolden && <GoldenBadge />}
-                {isCommittee && <CommitteeBadge />}
+                {isCommittee && <CommitteeBadge head={isCommitteeHead} />}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {isAdmin
