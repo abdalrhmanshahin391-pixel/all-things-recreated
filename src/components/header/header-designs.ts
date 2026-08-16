@@ -42,7 +42,7 @@ export const HEADER_SKINS: Record<HeaderDesign, HeaderSkin> = {
     inner: "h-[74px] gap-6 md:gap-10",
     brandSize: 25,
     brandWrap: "flex items-center gap-2 shrink-0",
-    navWrap: "hidden md:flex items-center gap-8",
+    navWrap: "hidden lg:flex items-center gap-8",
     navIdle:
       "font-mono text-[13px] font-bold uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground transition-colors py-1",
     navActive:
@@ -62,7 +62,7 @@ export const HEADER_SKINS: Record<HeaderDesign, HeaderSkin> = {
     avatarBtn: "flex items-center gap-2 border border-border ps-1 pe-1.5 py-1 hover:border-primary/60 transition-colors",
     avatarShape: "rounded-none",
     menuPanel: "rounded-none border border-border",
-    mobileSheet: "md:hidden border-t border-border bg-background",
+    mobileSheet: "lg:hidden border-t border-border bg-background",
     rail: false,
   },
   institutional: {
@@ -70,7 +70,7 @@ export const HEADER_SKINS: Record<HeaderDesign, HeaderSkin> = {
     inner: "h-[88px] gap-6 md:gap-12",
     brandSize: 33,
     brandWrap: "flex items-center gap-3 shrink-0",
-    navWrap: "hidden md:flex items-center gap-10 lg:gap-12",
+    navWrap: "hidden lg:flex items-center gap-10 lg:gap-12",
     navIdle:
       "text-[15px] uppercase tracking-[0.14em] font-bold text-muted-foreground hover:text-foreground transition-colors py-2",
     navActive:
@@ -91,7 +91,7 @@ export const HEADER_SKINS: Record<HeaderDesign, HeaderSkin> = {
       "flex items-center gap-2 rounded-sm border border-border ps-1 pe-2 py-1 hover:border-primary/60 transition-colors",
     avatarShape: "rounded-full",
     menuPanel: "rounded-sm border border-border shadow-xl",
-    mobileSheet: "md:hidden border-t border-border bg-background",
+    mobileSheet: "lg:hidden border-t border-border bg-background",
     rail: false,
   },
   modern: {
@@ -100,7 +100,7 @@ export const HEADER_SKINS: Record<HeaderDesign, HeaderSkin> = {
     inner: "h-[84px] gap-6 md:gap-10",
     brandSize: 29,
     brandWrap: "flex items-center gap-2.5 shrink-0",
-    navWrap: "hidden md:flex items-center gap-2",
+    navWrap: "hidden lg:flex items-center gap-2",
     navIdle:
       "text-[15px] font-bold rounded-full px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
     navActive: "text-[15px] font-black rounded-full px-4 py-2 bg-muted text-foreground",
@@ -119,7 +119,7 @@ export const HEADER_SKINS: Record<HeaderDesign, HeaderSkin> = {
       "flex items-center gap-2 rounded-full border border-border bg-card/60 ps-1 pe-2 py-1 hover:bg-muted transition-colors",
     avatarShape: "rounded-full",
     menuPanel: "rounded-2xl border border-border shadow-2xl",
-    mobileSheet: "md:hidden border-t border-border bg-background/95 backdrop-blur-xl",
+    mobileSheet: "lg:hidden border-t border-border bg-background/95 backdrop-blur-xl",
     rail: false,
   },
   editorial: {
@@ -127,7 +127,7 @@ export const HEADER_SKINS: Record<HeaderDesign, HeaderSkin> = {
     inner: "h-[84px] gap-6 md:gap-10",
     brandSize: 30,
     brandWrap: "flex items-center gap-2.5 shrink-0",
-    navWrap: "hidden md:flex flex-1 items-center justify-end gap-10",
+    navWrap: "hidden lg:flex flex-1 items-center justify-end gap-10",
     navIdle:
       "text-[14px] uppercase tracking-[0.16em] font-bold text-muted-foreground hover:text-foreground transition-colors",
     navActive:
@@ -147,7 +147,7 @@ export const HEADER_SKINS: Record<HeaderDesign, HeaderSkin> = {
     avatarBtn: "flex items-center gap-2 ps-0 pe-1 py-1 hover:opacity-80 transition-opacity",
     avatarShape: "rounded-full",
     menuPanel: "rounded-md border border-border shadow-xl",
-    mobileSheet: "md:hidden border-t border-border bg-background",
+    mobileSheet: "lg:hidden border-t border-border bg-background",
     rail: true,
   },
 };
