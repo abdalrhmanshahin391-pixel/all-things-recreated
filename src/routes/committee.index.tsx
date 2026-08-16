@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { committeeYearQuery } from "@/lib/committee-queries";
 import { useRef, useState } from "react";
-import { ArrowRight, Plus, Pencil, Trash2, Download, Upload, Loader2, Map as MapIcon, FileText, Lock as LockIcon, LogIn, UserPlus } from "lucide-react";
+import { ArrowRight, Plus, Pencil, Trash2, Download, Upload, Loader2, Map as MapIcon, FileText, Lock as LockIcon, LogIn, UserPlus, UsersRound, History } from "lucide-react";
 import { toast } from "sonner";
 // JSZip is loaded dynamically inside export/import handlers to keep it out of the main bundle.
 import { useServerFn } from "@tanstack/react-start";
