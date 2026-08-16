@@ -164,6 +164,53 @@
   box-shadow: 0 0 0 3px color-mix(in oklab, oklch(0.84 0.13 88) 70%, transparent);
 }
 
+/*
+ * لجنة الطب والجراحة — cosmetic red accent applied to <html> by CommitteeTheme.
+ * Mirrors the .golden scope so no component hardcodes a colour.
+ */
+.committee {
+  --primary: oklch(0.55 0.2 25);
+  --primary-foreground: oklch(0.98 0.01 20);
+  --primary-soft: oklch(0.95 0.04 25);
+  --primary-deep: oklch(0.45 0.19 25);
+  --accent: oklch(0.58 0.19 25);
+  --accent-foreground: oklch(0.98 0.01 20);
+  --ring: oklch(0.55 0.2 25);
+  --sidebar-primary: oklch(0.55 0.2 25);
+  --sidebar-primary-foreground: oklch(0.98 0.01 20);
+  --sidebar-ring: oklch(0.55 0.2 25);
+  --shadow-brand: 0 12px 32px -12px rgba(178, 34, 40, 0.45);
+  --gradient-brand: linear-gradient(135deg, #8f1d22 0%, #d83a40 100%);
+}
+
+/* Red chip used by the committee badge — readable in light and dark. */
+.committee-chip {
+  background: linear-gradient(135deg, oklch(0.55 0.2 25) 0%, oklch(0.64 0.18 30) 100%);
+  color: oklch(0.98 0.01 20);
+  border: 1px solid oklch(0.48 0.19 25);
+  box-shadow: 0 1px 6px -2px rgba(178, 34, 40, 0.6);
+}
+
+.committee-card {
+  background: linear-gradient(135deg,
+    color-mix(in oklab, oklch(0.6 0.19 25) 18%, var(--card)) 0%,
+    var(--card) 65%);
+  border-color: color-mix(in oklab, oklch(0.58 0.19 25) 50%, var(--border));
+  box-shadow: 0 12px 32px -18px rgba(178, 34, 40, 0.6);
+}
+
+.committee-ring {
+  box-shadow: 0 0 0 3px color-mix(in oklab, oklch(0.6 0.19 25) 65%, transparent);
+}
+
+/* Nothing may make the page wider than the screen — that pushed the header
+ * off-screen on phones and iPads. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 .dark {
   --background: oklch(0.18 0.03 355);
   --foreground: oklch(0.96 0.01 350);

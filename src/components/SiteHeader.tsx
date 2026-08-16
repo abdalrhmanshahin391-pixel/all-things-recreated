@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { GoldenBadge, GoldenBadgeResponsive } from "@/components/GoldenBadge";
+import { CommitteeBadge, CommitteeBadgeResponsive } from "@/components/CommitteeBadge";
 import { useLang } from "@/components/LanguageProvider";
 import { RaziWordmark } from "@/components/brand/RaziWordmark";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -41,7 +42,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
   const [open, setOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useTranslation();
-  const { user, profile, isAdmin, isRealAdmin, isGolden, adminMode, setAdminMode, loading: authLoading } = useAuth();
+  const { user, profile, isAdmin, isRealAdmin, isGolden, isCommittee, adminMode, setAdminMode, loading: authLoading } = useAuth();
   const { lang, toggle: toggleLang } = useLang();
   const settings = useSiteSettings();
   const skin = resolveHeaderSkin(settings.header_style);
@@ -137,19 +138,19 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
         }`}
       >
         {/* Brand */}
-        <Link to="/" className={skin.brandWrap}>
+        <Link to="/" className={`min-w-0 shrink ${skin.brandWrap}`}>
           <RaziWordmark size={skin.brandSize} />
         </Link>
 
         {/* Center nav */}
-        <nav className={skin.navWrap}>
+        <nav className={`min-w-0 ${skin.navWrap}`}>
           {navLinks.map((l) => (
             <NavEntry key={l.id} item={l} />
           ))}
         </nav>
 
         {/* Right cluster */}
-        <div className={`flex items-center gap-2.5 md:gap-3 ${skin.rail ? "md:ps-6 md:border-s md:border-border" : ""}`}>
+        <div className={`flex shrink-0 items-center gap-2.5 md:gap-3 ${skin.rail ? "md:ps-6 md:border-s md:border-border" : ""}`}>
           {user && (
             <Link
               to="/mentor"
@@ -187,13 +188,14 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
               >
 
                 <span
-                  className={`flex h-8 w-8 items-center justify-center text-sm font-black ${skin.avatarShape}`}
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center text-sm font-black ${skin.avatarShape}`}
                   style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
                 >
                   {initial}
                 </span>
                 {isGolden && <GoldenBadgeResponsive />}
-                <ChevronDown size={14} className="text-muted-foreground" />
+                {isCommittee && <CommitteeBadgeResponsive />}
+                <ChevronDown size={14} className="shrink-0 text-muted-foreground" />
               </button>
               {open && (
                 <div
@@ -204,13 +206,16 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                     <p className="flex items-center gap-2 font-semibold text-sm">
                       <span className="truncate">{profile?.full_name || displayName}</span>
                       {isGolden && <GoldenBadge />}
+                      {isCommittee && <CommitteeBadge />}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {isAdmin
                         ? t("cms.header.roleAdmin")
                         : isGolden
                           ? "Golden member"
-                          : t("cms.header.roleUser")}
+                          : isCommittee
+                            ? "لجنة الطب والجراحة"
+                            : t("cms.header.roleUser")}
                     </p>
                   </div>
                   <div className="py-1 overflow-y-auto overscroll-contain flex-1 min-h-0">
