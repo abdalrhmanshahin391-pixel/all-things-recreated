@@ -6,7 +6,7 @@ Keeping zoom-out is not needed — the fix below makes the row genuinely fit, an
 
 ## What changes
 
-- **Menu button always reachable on phone.** The mobile menu trigger is pinned as the last item of the right cluster and can never shrink or be pushed out; everything before it gives up space first.
+- **The three-line menu button is always visible and tappable.** It is pinned as the last item of the right cluster, can never shrink or be pushed off the edge, and stays visible on iPad as well as phone — so any nav link that doesn't fit is always reachable from it.
 - **No wide identity pills in the top bar.** The Golden and committee badges show only as small round chips (crown / red shield) beside the avatar at every width. The full "Golden" and "لجنة الطب والجراحة" labels stay where there's room for them: the account dropdown and the profile page. That removes the iPad overlap.
 - **Nav can't be overlapped.** The centre nav and the right cluster live in a layout where the nav shrinks (and hides its overflow) before the right cluster does, instead of the two drawing over each other.
 - **Room to grow.** The right cluster becomes a capped, single-line row: extra buttons added later collapse to icon-only and then move into the mobile sheet / account menu rather than widening the header.
