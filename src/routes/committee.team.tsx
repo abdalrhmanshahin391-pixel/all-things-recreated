@@ -9,6 +9,7 @@ import { useCommitteeRole } from "@/hooks/useCommitteeRole";
 import { useLang } from "@/components/LanguageProvider";
 import { MemberCard } from "@/components/members/MemberCard";
 import { MemberForm } from "@/components/members/MemberForm";
+import { JoinTeamNote } from "@/components/committee/JoinTeamNote";
 import { membersQuery, type Member } from "@/lib/members";
 
 export const Route = createFileRoute("/committee/team")({
@@ -98,6 +99,8 @@ function TeamPage() {
             </button>
           )}
         </header>
+
+        <JoinTeamNote />
 
         {isLoading ? (
           <div className="mt-12 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
