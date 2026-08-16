@@ -87,6 +87,7 @@ import { Route as CommitteeStudyPlanRouteImport } from './routes/committee.study
 import { Route as CommitteeTeamRouteImport } from './routes/committee.team'
 import { Route as CoursesIndexRouteImport } from './routes/courses.index'
 import { Route as CoursesCourseIdRouteImport } from './routes/courses.$courseId'
+import { Route as EventsSlugRouteImport } from './routes/events.$slug'
 import { Route as GuidesIndexRouteImport } from './routes/guides.index'
 import { Route as GuidesSlugRouteImport } from './routes/guides.$slug'
 import { Route as LecturesIndexRouteImport } from './routes/lectures.index'
@@ -528,6 +529,11 @@ const CoursesCourseIdRoute = CoursesCourseIdRouteImport.update({
   path: '/$courseId',
   getParentRoute: () => CoursesRoute,
 } as any)
+const EventsSlugRoute = EventsSlugRouteImport.update({
+  id: '/events/$slug',
+  path: '/events/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GuidesIndexRoute = GuidesIndexRouteImport.update({
   id: '/guides/',
   path: '/guides/',
@@ -845,6 +851,7 @@ export interface FileRoutesByFullPath {
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
   '/committee/team': typeof CommitteeTeamRoute
   '/courses/$courseId': typeof CoursesCourseIdRouteWithChildren
+  '/events/$slug': typeof EventsSlugRoute
   '/guides/$slug': typeof GuidesSlugRoute
   '/lectures/$courseId': typeof LecturesCourseIdRouteWithChildren
   '/my/courses': typeof MyCoursesRoute
@@ -965,6 +972,7 @@ export interface FileRoutesByTo {
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
   '/committee/team': typeof CommitteeTeamRoute
+  '/events/$slug': typeof EventsSlugRoute
   '/guides/$slug': typeof GuidesSlugRoute
   '/my/courses': typeof MyCoursesRoute
   '/my/lectures': typeof MyLecturesRoute
@@ -1091,6 +1099,7 @@ export interface FileRoutesById {
   '/committee/study-plan': typeof CommitteeStudyPlanRoute
   '/committee/team': typeof CommitteeTeamRoute
   '/courses/$courseId': typeof CoursesCourseIdRouteWithChildren
+  '/events/$slug': typeof EventsSlugRoute
   '/guides/$slug': typeof GuidesSlugRoute
   '/lectures/$courseId': typeof LecturesCourseIdRouteWithChildren
   '/my/courses': typeof MyCoursesRoute
@@ -1220,6 +1229,7 @@ export interface FileRouteTypes {
     | '/committee/study-plan'
     | '/committee/team'
     | '/courses/$courseId'
+    | '/events/$slug'
     | '/guides/$slug'
     | '/lectures/$courseId'
     | '/my/courses'
@@ -1340,6 +1350,7 @@ export interface FileRouteTypes {
     | '/checkout/success'
     | '/committee/study-plan'
     | '/committee/team'
+    | '/events/$slug'
     | '/guides/$slug'
     | '/my/courses'
     | '/my/lectures'
@@ -1465,6 +1476,7 @@ export interface FileRouteTypes {
     | '/committee/study-plan'
     | '/committee/team'
     | '/courses/$courseId'
+    | '/events/$slug'
     | '/guides/$slug'
     | '/lectures/$courseId'
     | '/my/courses'
@@ -1589,6 +1601,7 @@ export interface RootRouteChildren {
   ApiCommitteeDriveUploadRoute: typeof ApiCommitteeDriveUploadRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   CheckoutSuccessRoute: typeof CheckoutSuccessRoute
+  EventsSlugRoute: typeof EventsSlugRoute
   GuidesSlugRoute: typeof GuidesSlugRoute
   MyCoursesRoute: typeof MyCoursesRoute
   MyLecturesRoute: typeof MyLecturesRoute
@@ -2169,6 +2182,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CoursesCourseIdRouteImport
       parentRoute: typeof CoursesRoute
     }
+    '/events/$slug': {
+      id: '/events/$slug'
+      path: '/events/$slug'
+      fullPath: '/events/$slug'
+      preLoaderRoute: typeof EventsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/guides/': {
       id: '/guides/'
       path: '/guides'
@@ -2718,6 +2738,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCommitteeDriveUploadRoute: ApiCommitteeDriveUploadRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   CheckoutSuccessRoute: CheckoutSuccessRoute,
+  EventsSlugRoute: EventsSlugRoute,
   GuidesSlugRoute: GuidesSlugRoute,
   MyCoursesRoute: MyCoursesRoute,
   MyLecturesRoute: MyLecturesRoute,
