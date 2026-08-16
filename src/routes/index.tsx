@@ -85,6 +85,7 @@ function Index() {
     return (
       <div className="bg-background text-foreground min-h-screen">
         <SiteHeader />
+        <EventEntryButtons />
         <AcademyHome />
         <InstallAppBanner />
       </div>
@@ -125,6 +126,7 @@ function Index() {
   return (
     <div className="bg-background text-foreground min-h-screen">
       <SiteHeader />
+      <EventEntryButtons />
       {ordered
         ? ordered.map((node) =>
             node.visible === false ? null : node.builtin_key ? (
