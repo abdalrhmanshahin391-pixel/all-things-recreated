@@ -30,14 +30,18 @@ export function useCommitteeRole() {
   const isAdmin = isRealAdmin && adminMode;
   const isCommittee = isRealAdmin && !adminMode ? false : auth.isCommittee;
   const isCommitteeHead = isRealAdmin && !adminMode ? false : auth.isCommitteeHead;
+  // A genuine head keeps their member-management powers even while an admin
+  // browses with admin mode off — otherwise the team page bounces them home.
+  const isRealCommitteeHead = auth.isCommitteeHead;
 
   return {
     isAdmin,
     isRealAdmin,
     isCommittee,
     isCommitteeHead,
+    isRealCommitteeHead,
     canManage: isAdmin || isCommittee,
-    canManageMembers: isAdmin || isCommitteeHead,
+    canManageMembers: isAdmin || isRealCommitteeHead,
     loading: auth.loading,
   };
 }
