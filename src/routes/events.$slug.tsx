@@ -1,9 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Send, Users } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { useLang } from "@/components/LanguageProvider";
+import { resolveMemberPhoto } from "@/lib/members";
 import {
   accentColor,
   eventBySlugQuery,
@@ -126,10 +128,9 @@ function MemberTile({ member, ar, tint }: { member: EventMember; ar: boolean; ti
   return (
     <article className="overflow-hidden rounded-2xl border border-border bg-card text-center shadow-sm">
       {withPhoto ? (
-        <img
-          src={member.photo_url}
+        <StoredImage
+          value={member.photo_url}
           alt={name}
-          loading="lazy"
           className={`h-44 w-full ${member.photo_fit === "contain" ? "object-contain" : "object-cover"}`}
         />
       ) : (
@@ -161,7 +162,11 @@ function ContactTile({ contact, ar }: { contact: EventContact; ar: boolean }) {
       <p className="text-base font-black">{title}</p>
       {note && <p className="mt-2 text-sm text-muted-foreground">{note}</p>}
       {showQr && qr && (
-        <img src={qr} alt={title} loading="lazy" className="mx-auto mt-4 h-36 w-36 rounded-xl border border-border bg-background object-contain p-2" />
+        <StoredImage
+          value={qr}
+          alt={title}
+          className="mx-auto mt-4 h-36 w-36 rounded-xl border border-border bg-background object-contain p-2"
+        />
       )}
       {contact.link && (
         <a
@@ -175,4 +180,22 @@ function ContactTile({ contact, ar }: { contact: EventContact; ar: boolean }) {
       )}
     </div>
   );
+}
+
+/** Renders either a plain https image or a file stored in the media bucket. */
+export function StoredImage({ value, alt, className }: { value: string; alt: string; className?: string }) {
+  const [src, setSrc] = useState<string | null>(/^https?:\/\//i.test(value) ? value : null);
+  useEffect(() => {
+    let alive = true;
+    if (/^https?:\/\//i.test(value)) {
+      setSrc(value);
+      return;
+    }
+    resolveMemberPhoto(value).then((u) => alive && setSrc(u));
+    return () => {
+      alive = false;
+    };
+  }, [value]);
+  if (!src) return <div className={`${className ?? ""} animate-pulse bg-muted`} />;
+  return <img src={src} alt={alt} loading="lazy" className={className} />;
 }
