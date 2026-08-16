@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import {
@@ -49,7 +49,6 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
 
   
   const navigate = useNavigate();
-  const menuRef = useRef<HTMLElement | null>(null);
   const path = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
@@ -61,7 +60,6 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
-  void menuRef;
 
   async function handleLogout() {
     setOpen(false);
