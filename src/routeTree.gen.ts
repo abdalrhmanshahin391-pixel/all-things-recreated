@@ -107,6 +107,7 @@ import { Route as UUniSlugRouteImport } from './routes/u.$uniSlug'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as AdminEventsIndexRouteImport } from './routes/admin.events.index'
+import { Route as AdminEventsEventIdRouteImport } from './routes/admin.events.$eventId'
 import { Route as AdminGermanIndexRouteImport } from './routes/admin.german.index'
 import { Route as AdminGermanCourseIdRouteImport } from './routes/admin.german.$courseId'
 import { Route as AdminPagesIndexRouteImport } from './routes/admin.pages.index'
@@ -631,6 +632,11 @@ const AdminEventsIndexRoute = AdminEventsIndexRouteImport.update({
   path: '/admin/events/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminEventsEventIdRoute = AdminEventsEventIdRouteImport.update({
+  id: '/admin/events/$eventId',
+  path: '/admin/events/$eventId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminGermanIndexRoute = AdminGermanIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -879,6 +885,7 @@ export interface FileRoutesByFullPath {
   '/summaries/': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
@@ -1000,6 +1007,7 @@ export interface FileRoutesByTo {
   '/summaries': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
@@ -1129,6 +1137,7 @@ export interface FileRoutesById {
   '/summaries/': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
@@ -1260,6 +1269,7 @@ export interface FileRouteTypes {
     | '/summaries/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/admin/events/$eventId'
     | '/admin/german/$courseId'
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
@@ -1381,6 +1391,7 @@ export interface FileRouteTypes {
     | '/summaries'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/admin/events/$eventId'
     | '/admin/german/$courseId'
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
@@ -1509,6 +1520,7 @@ export interface FileRouteTypes {
     | '/summaries/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/admin/events/$eventId'
     | '/admin/german/$courseId'
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
@@ -1627,6 +1639,7 @@ export interface RootRouteChildren {
   SummariesIndexRoute: typeof SummariesIndexRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
+  AdminEventsEventIdRoute: typeof AdminEventsEventIdRoute
   AdminPagesPageIdRoute: typeof AdminPagesPageIdRoute
   AdminUniTilesUniIdRoute: typeof AdminUniTilesUniIdRoute
   ApiGermanTtsRoute: typeof ApiGermanTtsRoute
@@ -2335,6 +2348,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminEventsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/events/$eventId': {
+      id: '/admin/events/$eventId'
+      path: '/admin/events/$eventId'
+      fullPath: '/admin/events/$eventId'
+      preLoaderRoute: typeof AdminEventsEventIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/german/': {
       id: '/admin/german/'
       path: '/'
@@ -2772,6 +2792,7 @@ const rootRouteChildren: RootRouteChildren = {
   SummariesIndexRoute: SummariesIndexRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
+  AdminEventsEventIdRoute: AdminEventsEventIdRoute,
   AdminPagesPageIdRoute: AdminPagesPageIdRoute,
   AdminUniTilesUniIdRoute: AdminUniTilesUniIdRoute,
   ApiGermanTtsRoute: ApiGermanTtsRoute,
