@@ -27,7 +27,8 @@ export const Route = createFileRoute("/admin/")({
 
 
 function AdminHome() {
-  const { isAdmin, loading } = useAuth();
+  const { isAdmin, isCommitteeHead, loading } = useAuth();
+  const canAccess = isAdmin || isCommitteeHead;
   const navigate = useNavigate();
   const { i18n } = useTranslation();
   const isAr = (i18n.language ?? "").startsWith("ar");
@@ -36,12 +37,12 @@ function AdminHome() {
   const [override, setOverride] = useState<HubLayout | null>(null);
 
   useEffect(() => {
-    if (!loading && !isAdmin) guardRedirect(navigate);
-  }, [loading, isAdmin, navigate]);
+    if (!loading && !canAccess) guardRedirect(navigate);
+  }, [loading, canAccess, navigate]);
 
   const { data: stored } = useQuery({
     queryKey: ["admin-hub-layout"],
-    enabled: isAdmin,
+    enabled: canAccess,
     staleTime: 60_000,
     queryFn: async () => {
       const { data } = await (supabase.from as any)("admin_hub_layout")
@@ -74,9 +75,13 @@ function AdminHome() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-3xl md:text-4xl font-black tracking-tight text-foreground">Administration Site</h1>
-            <p className="mt-2 text-muted-foreground">Everything you can manage, in one place.</p>
+            <p className="mt-2 text-muted-foreground">
+              {isCommitteeHead && !isAdmin
+                ? "Committee management tools for the head of لجنة الطب والجراحة."
+                : "Everything you can manage, in one place."}
+            </p>
           </div>
-          {!editing && (
+          {isAdmin && !editing && (
             <button
               type="button"
               onClick={() => setEditing(true)}
@@ -96,7 +101,18 @@ function AdminHome() {
           />
         ) : (
           layout.groups.map((group) => {
-            const tiles = group.tiles.filter((t) => !t.hidden);
+            // Committee heads see only the committee/event tiles in the Content group.
+            const tiles = group.tiles.filter((t) => {
+              if (t.hidden) return false;
+              if (isAdmin) return true;
+              const allowed = new Set([
+                "/admin/committee",
+                "/admin/committee-log",
+                "/committee/manage-team",
+                "/admin/events",
+              ]);
+              return allowed.has(t.to);
+            });
             if (tiles.length === 0) return null;
             return (
               <section key={group.id} className="mt-10">
