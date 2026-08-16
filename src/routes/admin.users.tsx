@@ -241,6 +241,7 @@ function AdminUsersPage() {
           <Stat label="Users" value={counts.total} />
           <Stat label="Admins" value={counts.admins} />
           <Stat label="لجنة الطب والجراحة" value={counts.committee} />
+          <Stat label="رؤساء اللجنة" value={counts.heads} />
           <Stat label="Golden accounts" value={counts.golden} />
         </div>
 
@@ -277,6 +278,7 @@ function AdminUsersPage() {
             ["all", "All"],
             ["admin", "Admins"],
             ["committee", "لجنة الطب والجراحة"],
+            ["committee_head", "رئيس اللجنة"],
             ["golden", "Golden accounts"],
             ["none", "No role"],
             ["unverified", "Not verified"],
