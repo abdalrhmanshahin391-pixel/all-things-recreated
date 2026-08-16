@@ -15,8 +15,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { GoldenBadge, GoldenBadgeResponsive } from "@/components/GoldenBadge";
-import { CommitteeBadge, CommitteeBadgeResponsive } from "@/components/CommitteeBadge";
+import { GoldenBadge } from "@/components/GoldenBadge";
+import { CommitteeBadge } from "@/components/CommitteeBadge";
 import { useLang } from "@/components/LanguageProvider";
 import { RaziWordmark } from "@/components/brand/RaziWordmark";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
