@@ -157,7 +157,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
       <div className="relative" data-account-menu>
         <button
           onClick={() => setOpen((v) => !v)}
-          className={`${skin.avatarBtn} shrink-0 ${compact ? "" : "max-w-[9.5rem] overflow-hidden"}`}
+          className={`${skin.avatarBtn} shrink-0`}
           aria-label="Account menu"
           aria-expanded={open}
         >
