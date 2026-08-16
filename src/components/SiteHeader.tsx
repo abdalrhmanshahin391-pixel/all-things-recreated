@@ -138,7 +138,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
         }`}
       >
         {/* Brand */}
-        <Link to="/" className={`min-w-0 shrink ${skin.brandWrap}`}>
+        <Link to="/" className={`min-w-0 shrink overflow-hidden ${skin.brandWrap}`}>
           <RaziWordmark size={skin.brandSize} />
         </Link>
 
@@ -150,7 +150,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
         </nav>
 
         {/* Right cluster */}
-        <div className={`flex min-w-0 max-w-full shrink-0 flex-nowrap items-center gap-2 md:gap-3 ${skin.rail ? "lg:ps-6 lg:border-s lg:border-border" : ""}`}>
+        <div className={`flex shrink-0 flex-nowrap items-center gap-2 md:gap-3 ${skin.rail ? "lg:ps-6 lg:border-s lg:border-border" : ""}`}>
           {user && (
             <Link
               to="/mentor"
