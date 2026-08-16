@@ -3605,6 +3605,8 @@ export type Database = {
         Row: {
           brand_style: string
           committee_default_storage: string
+          committee_qr_link: string | null
+          committee_qr_path: string | null
           header_style: string
           id: boolean
           logo_url: string | null
@@ -3640,6 +3642,8 @@ export type Database = {
         Insert: {
           brand_style?: string
           committee_default_storage?: string
+          committee_qr_link?: string | null
+          committee_qr_path?: string | null
           header_style?: string
           id?: boolean
           logo_url?: string | null
@@ -3675,6 +3679,8 @@ export type Database = {
         Update: {
           brand_style?: string
           committee_default_storage?: string
+          committee_qr_link?: string | null
+          committee_qr_path?: string | null
           header_style?: string
           id?: boolean
           logo_url?: string | null
