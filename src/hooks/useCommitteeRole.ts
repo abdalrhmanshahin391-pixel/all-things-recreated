@@ -29,12 +29,15 @@ export function useCommitteeRole() {
   // including the committee/course management tools.
   const isAdmin = isRealAdmin && adminMode;
   const isCommittee = isRealAdmin && !adminMode ? false : auth.isCommittee;
+  const isCommitteeHead = isRealAdmin && !adminMode ? false : auth.isCommitteeHead;
 
   return {
     isAdmin,
     isRealAdmin,
     isCommittee,
+    isCommitteeHead,
     canManage: isAdmin || isCommittee,
+    canManageMembers: isAdmin || isCommitteeHead,
     loading: auth.loading,
   };
 }
