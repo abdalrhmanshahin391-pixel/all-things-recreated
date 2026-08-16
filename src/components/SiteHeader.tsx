@@ -184,9 +184,11 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                   ? t("cms.header.roleAdmin")
                   : isGolden
                     ? "Golden member"
-                    : isCommittee
-                      ? "لجنة الطب والجراحة"
-                      : t("cms.header.roleUser")}
+                    : isCommitteeHead
+                      ? "رئيس لجنة الطب والجراحة"
+                      : isCommittee
+                        ? "لجنة الطب والجراحة"
+                        : t("cms.header.roleUser")}
               </p>
             </div>
             <div className="py-1 overflow-y-auto overscroll-contain flex-1 min-h-0">
@@ -230,9 +232,27 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
               {isAdmin && (
                 <>
                   <div className="my-1 mx-3 border-t border-border" />
+                  <MenuLink to="/summaries" icon={<Sparkles size={16} />} onClick={() => setOpen(false)}>
+                    {t("cms.header.summaries")}
+                  </MenuLink>
+                </>
+              )}
+              {(isAdmin || isCommitteeHead) && (
+                <>
+                  <div className="my-1 mx-3 border-t border-border" />
                   <MenuLink to="/admin" icon={<LayoutGrid size={16} />} onClick={() => setOpen(false)}>
                     Admin
                   </MenuLink>
+                  {isCommitteeHead && (
+                    <>
+                      <MenuLink to="/committee/manage-team" icon={<Users size={16} />} onClick={() => setOpen(false)}>
+                        Committee team
+                      </MenuLink>
+                      <MenuLink to="/admin/committee-log" icon={<History size={16} />} onClick={() => setOpen(false)}>
+                        Committee log
+                      </MenuLink>
+                    </>
+                  )}
                 </>
               )}
             </div>
