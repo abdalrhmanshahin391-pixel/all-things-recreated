@@ -231,14 +231,6 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                 {t("cms.header.myNotes")}
               </MenuLink>
               <InstallAppButton />
-              {isAdmin && (
-                <>
-                  <div className="my-1 mx-3 border-t border-border" />
-                  <MenuLink to="/summaries" icon={<Sparkles size={16} />} onClick={() => setOpen(false)}>
-                    {t("cms.header.summaries")}
-                  </MenuLink>
-                </>
-              )}
               {(isAdmin || isCommitteeHead) && (
                 <>
                   <div className="my-1 mx-3 border-t border-border" />
