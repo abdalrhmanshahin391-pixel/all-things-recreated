@@ -1,8 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, HeartHandshake } from "lucide-react";
 
-const FLAGS = ["jo", "ps", "sy", "iq", "eg", "sa"];
-
 /**
  * Recruitment panel shown on the Staff Team page, under the intro line.
  * Kept in normal flow (never absolutely positioned) so it can't overlap
@@ -21,22 +19,8 @@ export function JoinTeamNote() {
       <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
         Our staff team is not only for Jordanian students. If you have resources to
         share and you carry honesty and a real wish to help other students, you are
-        welcome to join — and your own country&apos;s flag will sit on your card
-        beside the rest.
+        welcome to join, wherever you study.
       </p>
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-1.5">
-        {FLAGS.map((c) => (
-          <img
-            key={c}
-            src={`https://flagcdn.com/w40/${c}.png`}
-            alt=""
-            aria-hidden
-            loading="lazy"
-            className="h-3.5 w-5 rounded-[2px] object-cover opacity-90"
-          />
-        ))}
-        <span className="ms-1 text-xs font-bold text-muted-foreground">+ your flag</span>
-      </div>
       <Link
         to="/support"
         className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground hover:opacity-90"

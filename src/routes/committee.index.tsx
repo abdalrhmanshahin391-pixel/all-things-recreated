@@ -135,8 +135,6 @@ function CommitteePage() {
               </span>
             </Link>
           </div>
-
-          <TelegramQrCard canManage={canManage} />
         </header>
 
 
@@ -223,6 +221,10 @@ function CommitteePage() {
             })}
           </div>
         )}
+
+        <div className="mt-12">
+          <TelegramQrCard canManage={canManage} />
+        </div>
       </main>
 
 
