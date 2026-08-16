@@ -73,6 +73,8 @@ export const DEFAULT_LAYOUT: HubLayout = {
         t("/admin/packages", "Packages Table", "Package"),
         t("/admin/committee", "Committee Hub", "FolderTree"),
         t("/admin/committee-log", "Committee Log", "History"),
+        t("/committee/manage-team", "Committee Team", "UsersRound"),
+        t("/admin/events", "Events", "CalendarDays"),
         t("/admin/german", "German Learning", "Languages"),
         t("/admin/universities", "Universities", "GraduationCap"),
         t("/admin/study-hub", "Study Hub Control", "Rocket"),
