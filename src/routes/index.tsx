@@ -18,6 +18,7 @@ import { QuestionCountsSection } from "@/components/home/QuestionCountsSection";
 import { InstallAppBanner } from "@/components/InstallAppButton";
 import { AcademyHome } from "@/components/home/academy/AcademyHome";
 import { EthicsBands } from "@/components/about/EthicsBands";
+import { EventEntryButtons } from "@/components/events/EventButtons";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import ogImage from "@/assets/aquaqbank-og-gold.jpg.asset.json";
 
