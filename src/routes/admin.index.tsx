@@ -106,10 +106,8 @@ function AdminHome() {
               if (t.hidden) return false;
               if (isAdmin) return true;
               const allowed = new Set([
-                "/admin/committee",
                 "/admin/committee-log",
                 "/committee/manage-team",
-                "/admin/events",
               ]);
               return allowed.has(t.to);
             });
