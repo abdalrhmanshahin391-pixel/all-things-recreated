@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bell, BellOff, Loader2, Share } from "lucide-react";
 import { toast } from "sonner";
-import { useLanguage } from "@/components/LanguageProvider";
+import { useLang } from "@/components/LanguageProvider";
 import {
   currentSubscription,
   disablePush,
@@ -13,7 +13,7 @@ import {
 
 /** Profile switch that turns phone notifications on or off for this device. */
 export function PushToggle() {
-  const { lang } = useLanguage();
+  const { lang } = useLang();
   const ar = lang === "ar";
   const [on, setOn] = useState(false);
   const [busy, setBusy] = useState(false);
