@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Copy, Link2 } from "lucide-react";
 import { PdfPreviewModal } from "@/components/committee/PdfPreviewModal";
+import { CommitteeAccessNote } from "@/components/committee/CommitteeAccessNote";
 
 import { toast } from "sonner";
 import {
