@@ -899,3 +899,12 @@ export async function assertSiteAdmin(ctx: { supabase: any; userId: string }) {
   const { data: isAdmin } = await ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "admin" });
   if (!isAdmin) throw new Error("Forbidden: admins only");
 }
+
+/** Committee backups are also open to the committee head, not just site admins. */
+export async function assertCommitteeAdmin(ctx: { supabase: any; userId: string }) {
+  const [{ data: isAdmin }, { data: isHead }] = await Promise.all([
+    ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "admin" }),
+    ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "committee_head" }),
+  ]);
+  if (!isAdmin && !isHead) throw new Error("Forbidden: committee head or admin only");
+}
