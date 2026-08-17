@@ -153,7 +153,7 @@ function QuoteCard({ p, lang, i }: { p: (typeof PHYSICIANS)[number]; lang: strin
 }
 
 function Founders({ ar }: { ar: boolean }) {
-  const { canManage } = useCommitteeRole();
+  const { canManageMembers: canManage } = useCommitteeRole();
   const qc = useQueryClient();
   const { data } = useQuery(membersQuery(true));
   const [adding, setAdding] = useState(false);
