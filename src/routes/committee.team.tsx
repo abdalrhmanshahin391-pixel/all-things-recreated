@@ -31,7 +31,7 @@ export const Route = createFileRoute("/committee/team")({
 });
 
 function TeamPage() {
-  const { canManage } = useCommitteeRole();
+  const { canManageMembers: canManage } = useCommitteeRole();
   const { lang } = useLang();
   const ar = lang === "ar";
   const qc = useQueryClient();

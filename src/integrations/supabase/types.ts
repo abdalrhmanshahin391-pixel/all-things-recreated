@@ -5375,6 +5375,10 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      can_manage_committee_years: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       can_manage_events: { Args: never; Returns: boolean }
       committee_team_add: { Args: { _username: string }; Returns: undefined }
       committee_team_list: {

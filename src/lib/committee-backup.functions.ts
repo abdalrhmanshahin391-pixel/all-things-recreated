@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { guessContentType } from "./backup-tables";
 import {
-  assertSiteAdmin,
+  assertCommitteeAdmin,
   buildCommitteeSnapshot,
   restoreCommitteeSnapshot,
   type CommitteeSnapshot,
@@ -17,7 +17,7 @@ export const exportCommitteeBackupData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { universitySlug?: string }) => d)
   .handler(async ({ data, context }): Promise<CommitteeBackup> => {
-    await assertSiteAdmin(context);
+    await assertCommitteeAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     return await buildCommitteeSnapshot(supabaseAdmin, data.universitySlug);
   });
@@ -27,7 +27,7 @@ export const signCommitteeFile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { bucket: string; path: string }) => d)
   .handler(async ({ data, context }): Promise<{ url: string }> => {
-    await assertSiteAdmin(context);
+    await assertCommitteeAdmin(context);
     if (!(COMMITTEE_BUCKETS as readonly string[]).includes(data.bucket)) {
       throw new Error("Bucket not allowed");
     }
@@ -42,7 +42,7 @@ export const importCommitteeBackup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { payload: any; targetUniversitySlug?: string; replace?: boolean }) => d)
   .handler(async ({ data, context }) => {
-    await assertSiteAdmin(context);
+    await assertCommitteeAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     return await restoreCommitteeSnapshot(supabaseAdmin, data.payload, {
       targetUniversitySlug: data.targetUniversitySlug,
@@ -55,7 +55,7 @@ export const uploadCommitteeFile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { bucket: string; path: string; base64: string; contentType?: string }) => d)
   .handler(async ({ data, context }) => {
-    await assertSiteAdmin(context);
+    await assertCommitteeAdmin(context);
     if (!(COMMITTEE_BUCKETS as readonly string[]).includes(data.bucket)) {
       throw new Error("Bucket not allowed");
     }

@@ -56,6 +56,8 @@ const BRAND = "linear-gradient(135deg,#635BFF 0%,#FF5C8A 60%,#FF8A3D 100%)";
 
 function CommitteePage() {
   const { canManage, canManageMembers, isCommittee, isCommitteeHead, isAdmin } = useCommitteeRole();
+  // Years and backups are head/admin work; members only edit inside a year.
+  const canManageYears = canManageMembers;
   const { user, loading: authLoading } = useAuth();
   const guest = !authLoading && !user;
   const [gateOpen, setGateOpen] = useState(false);
@@ -121,7 +123,7 @@ function CommitteePage() {
           <p className="mt-4 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
             Pick your year to explore subjects, books and resources curated by senior students.
           </p>
-          {isAdmin && (
+          {canManageYears && (
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
               <button
                 onClick={() => setAdding(true)}
@@ -212,7 +214,7 @@ function CommitteePage() {
                   </Link>
                   )}
                   </ClosedWrap>
-                  {canManage && (
+                  {canManageYears && (
                     <div className="absolute top-2 right-2 flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-40">
                       <button
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditing(y); }}
