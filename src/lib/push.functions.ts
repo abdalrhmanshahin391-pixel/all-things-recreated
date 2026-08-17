@@ -82,6 +82,36 @@ export const sendPushTest = createServerFn({ method: "POST" })
     return { sent, devices: list.length };
   });
 
+/** Any signed-in member can send a check notification to their own devices. */
+export const sendPushSelfTest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { lang?: string }) => d ?? {})
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { sendWebPush } = await import("@/lib/web-push.server");
+    const { data: subs } = await (supabaseAdmin.from as any)("push_subscriptions")
+      .select("endpoint,p256dh,auth,lang")
+      .eq("user_id", context.userId)
+      .eq("enabled", true);
+    const list = (subs ?? []) as { endpoint: string; p256dh: string; auth: string; lang: string }[];
+    if (!list.length) return { sent: 0, devices: 0, failed: 0 };
+    const ar = (data?.lang ?? list[0]?.lang) === "ar";
+    let sent = 0;
+    let failed = 0;
+    for (const s of list) {
+      const r = await sendWebPush(s, {
+        title: ar ? "أكوا كيو بانك" : "AquaQBank",
+        body: ar ? "الإشعارات تعمل على هذا الجهاز ✅" : "Notifications are working on this device ✅",
+        url: "/profile",
+        lang: ar ? "ar" : "en",
+        dir: ar ? "rtl" : "ltr",
+      });
+      if (r.ok) sent++;
+      else failed++;
+    }
+    return { sent, failed, devices: list.length };
+  });
+
 export const cancelScheduledPush = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => d)
