@@ -440,7 +440,21 @@ function AnnouncementsPanel() {
                 <input
                   type="checkbox"
                   checked={a.urgent}
-                  onChange={(e) => patch(a.id, { urgent: e.target.checked })}
+                  onChange={(e) => {
+                    patch(a.id, { urgent: e.target.checked });
+                    if (e.target.checked) {
+                      autoNotify({
+                        data: {
+                          kind: "on_urgent_announcement",
+                          title_en: a.title || "AquaQBank",
+                          body_en: a.body || "",
+                          title_ar: a.title || "أكوا كيو بانك",
+                          body_ar: a.body || "",
+                          url: "/",
+                        },
+                      }).catch(() => undefined);
+                    }
+                  }}
                   className="h-4 w-4 accent-[var(--primary)]"
                 />
                 Pulse dot
