@@ -16,18 +16,11 @@ export const getPushPublicKey = createServerFn({ method: "GET" }).handler(async 
   key: process.env["VAPID_PUBLIC_KEY"] ?? "",
 }));
 
-async function assertSender(context: any) {
-  const [{ data: admin }, { data: head }] = await Promise.all([
-    context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" }),
-    context.supabase.rpc("has_role", { _user_id: context.userId, _role: "committee_head" }),
-  ]);
-  if (!admin && !head) throw new Error("Forbidden");
-}
-
 export const sendPushMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: PushDraft) => d)
   .handler(async ({ data, context }) => {
+    const { assertSender } = await import("@/lib/push.server");
     await assertSender(context);
     const body = {
       title_en: (data.title_en ?? "").slice(0, 120),
@@ -64,6 +57,7 @@ export const sendPushTest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: PushDraft) => d)
   .handler(async ({ data, context }) => {
+    const { assertSender } = await import("@/lib/push.server");
     await assertSender(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { sendWebPush } = await import("@/lib/web-push.server");
@@ -92,6 +86,7 @@ export const cancelScheduledPush = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => d)
   .handler(async ({ data, context }) => {
+    const { assertSender } = await import("@/lib/push.server");
     await assertSender(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await (supabaseAdmin.from as any)("push_messages")

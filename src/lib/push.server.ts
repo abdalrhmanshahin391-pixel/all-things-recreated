@@ -77,3 +77,12 @@ export async function createAndSend(
   if (error) throw new Error(error.message);
   return deliverMessage(data.id as string, msg, groupIds);
 }
+
+/** Only admins and committee heads may send notifications. */
+export async function assertSender(context: any) {
+  const [{ data: admin }, { data: head }] = await Promise.all([
+    context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" }),
+    context.supabase.rpc("has_role", { _user_id: context.userId, _role: "committee_head" }),
+  ]);
+  if (!admin && !head) throw new Error("Forbidden");
+}
