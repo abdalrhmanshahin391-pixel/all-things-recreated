@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { guardRedirect } from "@/lib/guard-redirect";
+import { autoNotify } from "@/lib/push.functions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
