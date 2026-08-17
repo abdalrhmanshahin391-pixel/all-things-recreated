@@ -1329,6 +1329,19 @@ function ResourceForm({
     }
     setUploadPct(100);
     toast.success(ed ? "Updated" : "Added");
+    if (!ed) {
+      const label = String(basePayload["title"] ?? "");
+      autoNotify({
+        data: {
+          kind: "on_committee_resource",
+          title_en: "New committee resource",
+          body_en: label,
+          title_ar: "مادة جديدة في اللجنة",
+          body_ar: label,
+          url: window.location.pathname,
+        },
+      }).catch(() => undefined);
+    }
     onSaved();
   }
 
