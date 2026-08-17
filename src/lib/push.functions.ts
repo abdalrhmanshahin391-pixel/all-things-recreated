@@ -112,3 +112,42 @@ export const saveNotificationSettings = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+export type AutoKind = "on_event" | "on_committee_resource" | "on_new_course" | "on_urgent_announcement";
+
+/**
+ * Fired by admin pages after they publish something. It only sends when the
+ * matching automatic toggle is on, so call sites never need to check first.
+ */
+export const autoNotify = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { kind: AutoKind; title_en: string; body_en: string; title_ar: string; body_ar: string; url?: string }) => d)
+  .handler(async ({ data, context }) => {
+    const [{ data: admin }, { data: head }] = await Promise.all([
+      context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" }),
+      context.supabase.rpc("has_role", { _user_id: context.userId, _role: "committee_head" }),
+    ]);
+    if (!admin && !head) return { sent: 0, skipped: true };
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: settings } = await (supabaseAdmin.from as any)("notification_settings")
+      .select("*")
+      .eq("id", true)
+      .maybeSingle();
+    if (!settings?.[data.kind]) return { sent: 0, skipped: true };
+
+    const { createAndSend } = await import("@/lib/push.server");
+    const res = await createAndSend(
+      {
+        title_en: (data.title_en ?? "").slice(0, 120),
+        body_en: (data.body_en ?? "").slice(0, 400),
+        title_ar: (data.title_ar ?? "").slice(0, 120),
+        body_ar: (data.body_ar ?? "").slice(0, 400),
+        url: (data.url ?? "").slice(0, 400),
+      },
+      [],
+      data.kind,
+      context.userId,
+    );
+    return { ...res, skipped: false };
+  });
