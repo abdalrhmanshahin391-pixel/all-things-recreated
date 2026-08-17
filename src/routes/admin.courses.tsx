@@ -196,6 +196,16 @@ function AdminCoursesPage() {
       setError(error.message);
       return;
     }
+    autoNotify({
+      data: {
+        kind: "on_new_course",
+        title_en: "New course available",
+        body_en: payload.title,
+        title_ar: "دورة جديدة متاحة",
+        body_ar: payload.title,
+        url: "/courses",
+      },
+    }).catch(() => undefined);
     setTitle("");
     setPrice("");
     setPaddlePriceId("");
