@@ -94,6 +94,7 @@ export const DEFAULT_LAYOUT: HubLayout = {
         t("/admin/content-protection", "Content Protection", "ShieldAlert"),
         t("/admin/coupons", "Coupons", "Ticket"),
         t("/admin/marketing", "Marketing", "BarChart3"),
+        t("/admin/notifications", "Notifications", "Bell"),
       ],
     },
     {
