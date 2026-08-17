@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Bell, X } from "lucide-react";
 import { useLang } from "@/components/LanguageProvider";
-import { useAuthStore } from "@/lib/auth-store";
+import { useAuth } from "@/hooks/useAuth";
 import { currentSubscription, isInstalled, isIos, pushSupported } from "@/lib/push-client";
 
 const KEY = "aq.push-prompt.dismissed";
@@ -14,7 +14,7 @@ const KEY = "aq.push-prompt.dismissed";
 export function NotificationsPrompt() {
   const { lang } = useLang();
   const ar = lang === "ar";
-  const user = useAuthStore((s) => s.user);
+  const { user } = useAuth();
   const [show, setShow] = useState(false);
 
   useEffect(() => {
