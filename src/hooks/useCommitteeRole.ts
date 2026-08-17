@@ -30,8 +30,11 @@ export function useCommitteeRole() {
   const isAdmin = isRealAdmin && adminMode;
   const isCommittee = isRealAdmin && !adminMode ? false : auth.isCommittee;
   const isCommitteeHead = isRealAdmin && !adminMode ? false : auth.isCommitteeHead;
-  // A genuine head keeps their member-management powers even while an admin
-  // browses with admin mode off — otherwise the team page bounces them home.
+  // A genuine committee role (member or head) survives the admin-mode switch.
+  // Admin mode only decides whether an *admin* browses as a student; it must
+  // not strip real committee membership, or an admin who is also on the
+  // committee loses every edit control inside the years.
+  const isRealCommittee = auth.isCommittee;
   const isRealCommitteeHead = auth.isCommitteeHead;
 
   return {
@@ -39,8 +42,9 @@ export function useCommitteeRole() {
     isRealAdmin,
     isCommittee,
     isCommitteeHead,
+    isRealCommittee,
     isRealCommitteeHead,
-    canManage: isAdmin || isCommittee,
+    canManage: isAdmin || isRealCommittee,
     canManageMembers: isAdmin || isRealCommitteeHead,
     loading: auth.loading,
   };

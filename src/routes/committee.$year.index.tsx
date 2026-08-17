@@ -11,6 +11,7 @@ import { useCommitteeRole } from "@/hooks/useCommitteeRole";
 import { CommitteeDialog, Field, inputCls, primaryBtn, primaryBtnStyle } from "@/components/committee/Dialog";
 import { SubjectTag, TAG_COLOR_KEYS, tagChipClass } from "@/components/committee/SubjectTag";
 import { ClosedWrap, ClosedBanner, ClosedFields, closedDefaults, closedPayload, CLOSED_SELECT, type ClosedInfo } from "@/components/committee/ClosedState";
+import { CommitteeAccessNote } from "@/components/committee/CommitteeAccessNote";
 
 export const Route = createFileRoute("/committee/$year/")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -259,6 +260,8 @@ function YearPage() {
         {canManage && (
           <ClosedBanner info={(activeModule ?? activeSemester ?? data?.year ?? {}) as ClosedInfo} />
         )}
+
+        <CommitteeAccessNote />
 
         {blockedBy ? (
           <div className="text-center py-20 rounded-xl bg-card border border-dashed border-border">
