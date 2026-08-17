@@ -57,21 +57,40 @@ export async function currentSubscription(): Promise<PushSubscription | null> {
 
 /** Must be called from a user gesture — never on page load. */
 export async function enablePush(lang: string): Promise<{ ok: boolean; reason?: string }> {
-  if (!pushSupported()) return { ok: false, reason: "unsupported" };
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") return { ok: false, reason: "denied" };
+  if (!pushSupported()) return { ok: false, reason: needsInstallFirst() ? "ios-install" : "unsupported" };
+  if (isIos() && !isInstalled()) return { ok: false, reason: "ios-install" };
+
+  let permission: NotificationPermission;
+  try {
+    permission = await Notification.requestPermission();
+  } catch {
+    return { ok: false, reason: "permission-failed" };
+  }
+  if (permission === "denied") return { ok: false, reason: "denied" };
+  if (permission !== "granted") return { ok: false, reason: "dismissed" };
 
   const { key } = await getPushPublicKey();
   if (!key) return { ok: false, reason: "not-configured" };
 
-  const reg = await navigator.serviceWorker.register(SW_PATH);
-  await navigator.serviceWorker.ready;
-  const sub =
-    (await reg.pushManager.getSubscription()) ??
-    (await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(key) as BufferSource,
-    }));
+  let reg: ServiceWorkerRegistration;
+  try {
+    reg = await navigator.serviceWorker.register(SW_PATH);
+    await navigator.serviceWorker.ready;
+  } catch (e: any) {
+    return { ok: false, reason: `sw-failed: ${e?.message ?? "service worker did not start"}` };
+  }
+
+  let sub: PushSubscription;
+  try {
+    sub =
+      (await reg.pushManager.getSubscription()) ??
+      (await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(key) as BufferSource,
+      }));
+  } catch (e: any) {
+    return { ok: false, reason: `subscribe-failed: ${e?.message ?? "browser refused the subscription"}` };
+  }
 
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return { ok: false, reason: "signed-out" };
@@ -99,4 +118,15 @@ export async function disablePush(): Promise<void> {
   const endpoint = sub.endpoint;
   await sub.unsubscribe().catch(() => undefined);
   await (supabase.from as any)("push_subscriptions").delete().eq("endpoint", endpoint);
+}
+
+/** How many devices this account has registered, across all of them. */
+export async function myDeviceCount(): Promise<number> {
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return 0;
+  const { count } = await (supabase.from as any)("push_subscriptions")
+    .select("endpoint", { count: "exact", head: true })
+    .eq("user_id", auth.user.id)
+    .eq("enabled", true);
+  return count ?? 0;
 }

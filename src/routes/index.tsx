@@ -16,6 +16,7 @@ import { HomeFaq, HOME_FAQ } from "@/components/home/HomeFaq";
 import { ExamPrepPanel } from "@/components/home/ExamPrepPanel";
 import { QuestionCountsSection } from "@/components/home/QuestionCountsSection";
 import { InstallAppBanner } from "@/components/InstallAppButton";
+import { NotificationsPrompt } from "@/components/NotificationsPrompt";
 import { AcademyHome } from "@/components/home/academy/AcademyHome";
 import { EthicsBands } from "@/components/about/EthicsBands";
 import { EventEntryButtons } from "@/components/events/EventButtons";
@@ -88,6 +89,7 @@ function Index() {
         <EventEntryButtons />
         <AcademyHome />
         <InstallAppBanner />
+        <NotificationsPrompt />
       </div>
     );
   }
@@ -151,6 +153,7 @@ function Index() {
           ))}
 
       <InstallAppBanner />
+      <NotificationsPrompt />
     </div>
   );
 }

@@ -253,6 +253,14 @@ function AdminNotifications() {
               </button>
               <span className="text-xs text-muted-foreground">{reach ?? 0} device(s) will receive this</span>
             </div>
+
+            {(reach ?? 0) === 0 && (
+              <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                No device is registered for this audience yet, so sending now delivers to nobody. Every person must
+                open Profile → Phone notifications once on each phone, iPad or computer and tap Enable (on iPhone/iPad
+                the site must first be added to the Home Screen and opened from that icon).
+              </p>
+            )}
           </section>
 
           <aside className="space-y-6">

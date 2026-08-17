@@ -14,6 +14,7 @@ import {
   MoonStar,
   Users,
   History,
+  Bell,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -230,6 +231,15 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
               <MenuLink to="/notes" icon={<BookOpen size={16} />} onClick={() => setOpen(false)}>
                 {t("cms.header.myNotes")}
               </MenuLink>
+              <Link
+                to="/profile"
+                hash="notifications"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-3 px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+              >
+                <span className="text-muted-foreground"><Bell size={16} /></span>
+                {t("cms.header.notifications", { defaultValue: "Notifications" })}
+              </Link>
               <InstallAppButton />
               {(isAdmin || isCommitteeHead) && (
                 <>
