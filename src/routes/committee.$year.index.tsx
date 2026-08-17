@@ -260,6 +260,8 @@ function YearPage() {
           <ClosedBanner info={(activeModule ?? activeSemester ?? data?.year ?? {}) as ClosedInfo} />
         )}
 
+        <CommitteeAccessNote />
+
         {blockedBy ? (
           <div className="text-center py-20 rounded-xl bg-card border border-dashed border-border">
             <p className="text-lg font-semibold text-foreground">
