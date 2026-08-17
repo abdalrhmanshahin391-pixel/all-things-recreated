@@ -5465,6 +5465,16 @@ export type Database = {
         }
       }
       push_audience_count: { Args: { _group_ids: string[] }; Returns: number }
+      push_audience_devices: {
+        Args: { _group_ids: string[] }
+        Returns: {
+          auth: string
+          endpoint: string
+          lang: string
+          p256dh: string
+          user_id: string
+        }[]
+      }
       revoke_golden_user: { Args: { _user_id: string }; Returns: undefined }
       search_users_for_group: {
         Args: { _exclude: string; _query: string }
