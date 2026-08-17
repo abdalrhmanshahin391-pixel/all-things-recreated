@@ -21,6 +21,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { SiteHeader } from "@/components/SiteHeader";
 import { supabase } from "@/integrations/supabase/client";
+import { autoNotify } from "@/lib/push.functions";
 import { iconOf } from "@/lib/committee-meta";
 import { useCommitteeRole } from "@/hooks/useCommitteeRole";
 import { SubjectTag } from "@/components/committee/SubjectTag";
@@ -1329,6 +1330,19 @@ function ResourceForm({
     }
     setUploadPct(100);
     toast.success(ed ? "Updated" : "Added");
+    if (!ed) {
+      const label = String(basePayload["title"] ?? "");
+      autoNotify({
+        data: {
+          kind: "on_committee_resource",
+          title_en: "New committee resource",
+          body_en: label,
+          title_ar: "مادة جديدة في اللجنة",
+          body_ar: label,
+          url: window.location.pathname,
+        },
+      }).catch(() => undefined);
+    }
     onSaved();
   }
 

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
 import { updateSiteSettings } from "@/lib/site-settings.functions";
+import { autoNotify } from "@/lib/push.functions";
 import { useSiteSettings, type SiteTheme } from "@/hooks/useSiteSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -440,7 +441,21 @@ function AnnouncementsPanel() {
                 <input
                   type="checkbox"
                   checked={a.urgent}
-                  onChange={(e) => patch(a.id, { urgent: e.target.checked })}
+                  onChange={(e) => {
+                    patch(a.id, { urgent: e.target.checked });
+                    if (e.target.checked) {
+                      autoNotify({
+                        data: {
+                          kind: "on_urgent_announcement",
+                          title_en: a.title || "AquaQBank",
+                          body_en: a.body || "",
+                          title_ar: a.title || "أكوا كيو بانك",
+                          body_ar: a.body || "",
+                          url: "/",
+                        },
+                      }).catch(() => undefined);
+                    }
+                  }}
                   className="h-4 w-4 accent-[var(--primary)]"
                 />
                 Pulse dot

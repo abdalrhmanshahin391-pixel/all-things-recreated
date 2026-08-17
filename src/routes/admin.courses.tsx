@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { guardRedirect } from "@/lib/guard-redirect";
+import { autoNotify } from "@/lib/push.functions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
@@ -196,6 +197,16 @@ function AdminCoursesPage() {
       setError(error.message);
       return;
     }
+    autoNotify({
+      data: {
+        kind: "on_new_course",
+        title_en: "New course available",
+        body_en: payload.title,
+        title_ar: "دورة جديدة متاحة",
+        body_ar: payload.title,
+        url: "/courses",
+      },
+    }).catch(() => undefined);
     setTitle("");
     setPrice("");
     setPaddlePriceId("");

@@ -60,6 +60,7 @@ import { Route as AdminLecturesRouteImport } from './routes/admin.lectures'
 import { Route as AdminLegalRouteImport } from './routes/admin.legal'
 import { Route as AdminMarketingRouteImport } from './routes/admin.marketing'
 import { Route as AdminNavigationRouteImport } from './routes/admin.navigation'
+import { Route as AdminNotificationsRouteImport } from './routes/admin.notifications'
 import { Route as AdminPackagesRouteImport } from './routes/admin.packages'
 import { Route as AdminPatchIpadProxRouteImport } from './routes/admin.patch-ipad-prox'
 import { Route as AdminPdfSlicerRouteImport } from './routes/admin.pdf-slicer'
@@ -115,6 +116,7 @@ import { Route as AdminPagesIndexRouteImport } from './routes/admin.pages.index'
 import { Route as AdminPagesPageIdRouteImport } from './routes/admin.pages.$pageId'
 import { Route as AdminUniTilesUniIdRouteImport } from './routes/admin.uni-tiles.$uniId'
 import { Route as ApiGermanTtsRouteImport } from './routes/api/german/tts'
+import { Route as ApiPublicPushDispatchRouteImport } from './routes/api/public/push-dispatch'
 import { Route as CommitteeYearIndexRouteImport } from './routes/committee.$year.index'
 import { Route as CommitteeYearSubjectRouteImport } from './routes/committee.$year.$subject'
 import { Route as CoursesCourseIdIndexRouteImport } from './routes/courses.$courseId.index'
@@ -397,6 +399,11 @@ const AdminNavigationRoute = AdminNavigationRouteImport.update({
   path: '/admin/navigation',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminNotificationsRoute = AdminNotificationsRouteImport.update({
+  id: '/admin/notifications',
+  path: '/admin/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminPackagesRoute = AdminPackagesRouteImport.update({
   id: '/admin/packages',
   path: '/admin/packages',
@@ -673,6 +680,11 @@ const ApiGermanTtsRoute = ApiGermanTtsRouteImport.update({
   path: '/api/german/tts',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicPushDispatchRoute = ApiPublicPushDispatchRouteImport.update({
+  id: '/api/public/push-dispatch',
+  path: '/api/public/push-dispatch',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CommitteeYearIndexRoute = CommitteeYearIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -844,6 +856,7 @@ export interface FileRoutesByFullPath {
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
   '/admin/navigation': typeof AdminNavigationRoute
+  '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/packages': typeof AdminPackagesRoute
   '/admin/patch-ipad-prox': typeof AdminPatchIpadProxRoute
   '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
@@ -897,6 +910,7 @@ export interface FileRoutesByFullPath {
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
   '/api/german/tts': typeof ApiGermanTtsRoute
+  '/api/public/push-dispatch': typeof ApiPublicPushDispatchRoute
   '/committee/$year/$subject': typeof CommitteeYearSubjectRoute
   '/courses/$courseId/checkout': typeof CoursesCourseIdCheckoutRoute
   '/courses/$courseId/run': typeof CoursesCourseIdRunRoute
@@ -970,6 +984,7 @@ export interface FileRoutesByTo {
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
   '/admin/navigation': typeof AdminNavigationRoute
+  '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/packages': typeof AdminPackagesRoute
   '/admin/patch-ipad-prox': typeof AdminPatchIpadProxRoute
   '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
@@ -1020,6 +1035,7 @@ export interface FileRoutesByTo {
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
   '/api/german/tts': typeof ApiGermanTtsRoute
+  '/api/public/push-dispatch': typeof ApiPublicPushDispatchRoute
   '/committee/$year/$subject': typeof CommitteeYearSubjectRoute
   '/courses/$courseId/checkout': typeof CoursesCourseIdCheckoutRoute
   '/courses/$courseId/run': typeof CoursesCourseIdRunRoute
@@ -1098,6 +1114,7 @@ export interface FileRoutesById {
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
   '/admin/navigation': typeof AdminNavigationRoute
+  '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/packages': typeof AdminPackagesRoute
   '/admin/patch-ipad-prox': typeof AdminPatchIpadProxRoute
   '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
@@ -1151,6 +1168,7 @@ export interface FileRoutesById {
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
   '/api/german/tts': typeof ApiGermanTtsRoute
+  '/api/public/push-dispatch': typeof ApiPublicPushDispatchRoute
   '/committee/$year/$subject': typeof CommitteeYearSubjectRoute
   '/courses/$courseId/checkout': typeof CoursesCourseIdCheckoutRoute
   '/courses/$courseId/run': typeof CoursesCourseIdRunRoute
@@ -1231,6 +1249,7 @@ export interface FileRouteTypes {
     | '/admin/legal'
     | '/admin/marketing'
     | '/admin/navigation'
+    | '/admin/notifications'
     | '/admin/packages'
     | '/admin/patch-ipad-prox'
     | '/admin/pdf-slicer'
@@ -1284,6 +1303,7 @@ export interface FileRouteTypes {
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
     | '/api/german/tts'
+    | '/api/public/push-dispatch'
     | '/committee/$year/$subject'
     | '/courses/$courseId/checkout'
     | '/courses/$courseId/run'
@@ -1357,6 +1377,7 @@ export interface FileRouteTypes {
     | '/admin/legal'
     | '/admin/marketing'
     | '/admin/navigation'
+    | '/admin/notifications'
     | '/admin/packages'
     | '/admin/patch-ipad-prox'
     | '/admin/pdf-slicer'
@@ -1407,6 +1428,7 @@ export interface FileRouteTypes {
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
     | '/api/german/tts'
+    | '/api/public/push-dispatch'
     | '/committee/$year/$subject'
     | '/courses/$courseId/checkout'
     | '/courses/$courseId/run'
@@ -1484,6 +1506,7 @@ export interface FileRouteTypes {
     | '/admin/legal'
     | '/admin/marketing'
     | '/admin/navigation'
+    | '/admin/notifications'
     | '/admin/packages'
     | '/admin/patch-ipad-prox'
     | '/admin/pdf-slicer'
@@ -1537,6 +1560,7 @@ export interface FileRouteTypes {
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
     | '/api/german/tts'
+    | '/api/public/push-dispatch'
     | '/committee/$year/$subject'
     | '/courses/$courseId/checkout'
     | '/courses/$courseId/run'
@@ -1616,6 +1640,7 @@ export interface RootRouteChildren {
   AdminLegalRoute: typeof AdminLegalRoute
   AdminMarketingRoute: typeof AdminMarketingRoute
   AdminNavigationRoute: typeof AdminNavigationRoute
+  AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminPackagesRoute: typeof AdminPackagesRoute
   AdminPatchIpadProxRoute: typeof AdminPatchIpadProxRoute
   AdminPdfSlicerRoute: typeof AdminPdfSlicerRoute
@@ -1655,6 +1680,7 @@ export interface RootRouteChildren {
   AdminPagesPageIdRoute: typeof AdminPagesPageIdRoute
   AdminUniTilesUniIdRoute: typeof AdminUniTilesUniIdRoute
   ApiGermanTtsRoute: typeof ApiGermanTtsRoute
+  ApiPublicPushDispatchRoute: typeof ApiPublicPushDispatchRoute
   GermanCourseIdExamRoute: typeof GermanCourseIdExamRoute
   GermanCourseIdMatchRoute: typeof GermanCourseIdMatchRoute
   GermanCourseIdReviewRoute: typeof GermanCourseIdReviewRouteWithChildren
@@ -2029,6 +2055,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/navigation'
       fullPath: '/admin/navigation'
       preLoaderRoute: typeof AdminNavigationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/notifications': {
+      id: '/admin/notifications'
+      path: '/admin/notifications'
+      fullPath: '/admin/notifications'
+      preLoaderRoute: typeof AdminNotificationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/packages': {
@@ -2416,6 +2449,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGermanTtsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/push-dispatch': {
+      id: '/api/public/push-dispatch'
+      path: '/api/public/push-dispatch'
+      fullPath: '/api/public/push-dispatch'
+      preLoaderRoute: typeof ApiPublicPushDispatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/committee/$year/': {
       id: '/committee/$year/'
       path: '/'
@@ -2778,6 +2818,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminLegalRoute: AdminLegalRoute,
   AdminMarketingRoute: AdminMarketingRoute,
   AdminNavigationRoute: AdminNavigationRoute,
+  AdminNotificationsRoute: AdminNotificationsRoute,
   AdminPackagesRoute: AdminPackagesRoute,
   AdminPatchIpadProxRoute: AdminPatchIpadProxRoute,
   AdminPdfSlicerRoute: AdminPdfSlicerRoute,
@@ -2817,6 +2858,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminPagesPageIdRoute: AdminPagesPageIdRoute,
   AdminUniTilesUniIdRoute: AdminUniTilesUniIdRoute,
   ApiGermanTtsRoute: ApiGermanTtsRoute,
+  ApiPublicPushDispatchRoute: ApiPublicPushDispatchRoute,
   GermanCourseIdExamRoute: GermanCourseIdExamRoute,
   GermanCourseIdMatchRoute: GermanCourseIdMatchRoute,
   GermanCourseIdReviewRoute: GermanCourseIdReviewRouteWithChildren,

@@ -2928,6 +2928,33 @@ export type Database = {
           },
         ]
       }
+      notification_settings: {
+        Row: {
+          id: boolean
+          on_committee_resource: boolean
+          on_event: boolean
+          on_new_course: boolean
+          on_urgent_announcement: boolean
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          on_committee_resource?: boolean
+          on_event?: boolean
+          on_new_course?: boolean
+          on_urgent_announcement?: boolean
+          updated_at?: string
+        }
+        Update: {
+          id?: boolean
+          on_committee_resource?: boolean
+          on_event?: boolean
+          on_new_course?: boolean
+          on_urgent_announcement?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       package_courses: {
         Row: {
           course_id: string
@@ -3306,6 +3333,140 @@ export type Database = {
           phone?: string | null
           updated_at?: string
           username?: string
+        }
+        Relationships: []
+      }
+      push_deliveries: {
+        Row: {
+          created_at: string
+          endpoint: string
+          error: string
+          id: string
+          message_id: string
+          ok: boolean
+          status_code: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          endpoint?: string
+          error?: string
+          id?: string
+          message_id: string
+          ok?: boolean
+          status_code?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          endpoint?: string
+          error?: string
+          id?: string
+          message_id?: string
+          ok?: boolean
+          status_code?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_deliveries_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "push_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_messages: {
+        Row: {
+          audience_group_ids: string[]
+          body_ar: string
+          body_en: string
+          created_at: string
+          created_by: string | null
+          failed_count: number
+          id: string
+          scheduled_at: string | null
+          sent_at: string | null
+          sent_count: number
+          source: string
+          status: string
+          title_ar: string
+          title_en: string
+          url: string
+        }
+        Insert: {
+          audience_group_ids?: string[]
+          body_ar?: string
+          body_en?: string
+          created_at?: string
+          created_by?: string | null
+          failed_count?: number
+          id?: string
+          scheduled_at?: string | null
+          sent_at?: string | null
+          sent_count?: number
+          source?: string
+          status?: string
+          title_ar?: string
+          title_en?: string
+          url?: string
+        }
+        Update: {
+          audience_group_ids?: string[]
+          body_ar?: string
+          body_en?: string
+          created_at?: string
+          created_by?: string | null
+          failed_count?: number
+          id?: string
+          scheduled_at?: string | null
+          sent_at?: string | null
+          sent_count?: number
+          source?: string
+          status?: string
+          title_ar?: string
+          title_en?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          enabled: boolean
+          endpoint: string
+          id: string
+          lang: string
+          last_used_at: string | null
+          p256dh: string
+          user_agent: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          enabled?: boolean
+          endpoint: string
+          id?: string
+          lang?: string
+          last_used_at?: string | null
+          p256dh: string
+          user_agent?: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          enabled?: boolean
+          endpoint?: string
+          id?: string
+          lang?: string
+          last_used_at?: string | null
+          p256dh?: string
+          user_agent?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -5302,6 +5463,17 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      push_audience_count: { Args: { _group_ids: string[] }; Returns: number }
+      push_audience_devices: {
+        Args: { _group_ids: string[] }
+        Returns: {
+          auth: string
+          endpoint: string
+          lang: string
+          p256dh: string
+          user_id: string
+        }[]
       }
       revoke_golden_user: { Args: { _user_id: string }; Returns: undefined }
       search_users_for_group: {

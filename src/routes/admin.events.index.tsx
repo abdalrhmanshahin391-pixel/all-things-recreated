@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { guardRedirect } from "@/lib/guard-redirect";
 import { supabase } from "@/integrations/supabase/client";
 import { eventsQuery, slugify, accentColor, type SiteEvent } from "@/lib/events";
+import { autoNotify } from "@/lib/push.functions";
 
 export const Route = createFileRoute("/admin/events/")({
   head: () => ({
@@ -57,6 +58,19 @@ function AdminEventsPage() {
     const { error } = await db("events").update(values).eq("id", ev.id);
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["events"] });
+    // Switching an event on is the moment members should hear about it.
+    if (values.enabled === true && !ev.enabled) {
+      autoNotify({
+        data: {
+          kind: "on_event",
+          title_en: "New event",
+          body_en: ev.title_en || ev.slug,
+          title_ar: "فعالية جديدة",
+          body_ar: ev.title_ar || ev.title_en || ev.slug,
+          url: `/events/${ev.slug}`,
+        },
+      }).catch(() => undefined);
+    }
   }
 
   async function remove(ev: SiteEvent) {

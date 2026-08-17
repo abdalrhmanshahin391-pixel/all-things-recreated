@@ -5,8 +5,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
+import { PushToggle } from "@/components/PushToggle";
 import {
   AlertCircle,
+  Bell,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -314,6 +316,10 @@ function ProfilePage() {
         </SectionCard>
 
         {/* Change Password */}
+        <SectionCard icon={<Bell size={18} />} title="Notifications">
+          <PushToggle />
+        </SectionCard>
+
         <SectionCard icon={<KeyRound size={18} />} title="Change Password">
           <form onSubmit={changePassword} className="space-y-5">
             {pwMsg && <MessageBox msg={pwMsg} />}

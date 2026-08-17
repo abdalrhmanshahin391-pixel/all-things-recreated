@@ -3,7 +3,7 @@ import {
   FolderTree, Users, Smartphone, Ticket, Archive, BookOpen, Video, Package,
   ListPlus, BarChart3, GraduationCap, Palette, ShieldAlert, LifeBuoy, Info,
   UsersRound, Server, History, Star, Heart, Flag, Link2, Wrench, Rocket,
-  ListChecks, CalendarDays, Timer, Library,
+  ListChecks, CalendarDays, Timer, Library, Bell,
   type LucideIcon,
 } from "lucide-react";
 
@@ -12,7 +12,7 @@ export const ICONS: Record<string, LucideIcon> = {
   FolderTree, Users, Smartphone, Ticket, Archive, BookOpen, Video, Package,
   ListPlus, BarChart3, GraduationCap, Palette, ShieldAlert, LifeBuoy, Info,
   UsersRound, Server, History, Star, Heart, Flag, Link2, Wrench, Rocket,
-  ListChecks, CalendarDays, Timer, Library,
+  ListChecks, CalendarDays, Timer, Library, Bell,
 };
 
 
@@ -94,6 +94,7 @@ export const DEFAULT_LAYOUT: HubLayout = {
         t("/admin/content-protection", "Content Protection", "ShieldAlert"),
         t("/admin/coupons", "Coupons", "Ticket"),
         t("/admin/marketing", "Marketing", "BarChart3"),
+        t("/admin/notifications", "Notifications", "Bell"),
       ],
     },
     {
