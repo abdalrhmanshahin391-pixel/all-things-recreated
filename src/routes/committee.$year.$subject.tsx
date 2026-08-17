@@ -315,6 +315,8 @@ function SubjectPage() {
             </div>
           </header>
 
+          <CommitteeAccessNote />
+
           <LinkedCourses subjectId={subject} canManage={canManage} />
 
           {/* Search bar */}
