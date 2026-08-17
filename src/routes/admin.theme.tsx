@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
 import { updateSiteSettings } from "@/lib/site-settings.functions";
+import { autoNotify } from "@/lib/push.functions";
 import { useSiteSettings, type SiteTheme } from "@/hooks/useSiteSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
