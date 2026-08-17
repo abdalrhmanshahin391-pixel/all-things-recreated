@@ -21,6 +21,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { SiteHeader } from "@/components/SiteHeader";
 import { supabase } from "@/integrations/supabase/client";
+import { autoNotify } from "@/lib/push.functions";
 import { iconOf } from "@/lib/committee-meta";
 import { useCommitteeRole } from "@/hooks/useCommitteeRole";
 import { SubjectTag } from "@/components/committee/SubjectTag";
