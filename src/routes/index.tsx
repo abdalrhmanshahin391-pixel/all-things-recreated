@@ -89,7 +89,6 @@ function Index() {
         <EventEntryButtons />
         <AcademyHome />
         <InstallAppBanner />
-      <NotificationsPrompt />
         <NotificationsPrompt />
       </div>
     );
@@ -154,6 +153,7 @@ function Index() {
           ))}
 
       <InstallAppBanner />
+      <NotificationsPrompt />
     </div>
   );
 }
