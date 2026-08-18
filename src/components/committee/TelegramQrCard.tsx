@@ -105,18 +105,33 @@ function QrDialog({
       .from(MEMBERS_BUCKET)
       .upload(p, file, { upsert: true, contentType: file.type || undefined });
     setUploading(false);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error.message || "Upload failed");
     setStored(p);
-    toast.success("QR uploaded");
+    toast.success("QR uploaded — press Save to apply");
   }
 
   async function save() {
     setSaving(true);
-    const { error } = await (supabase.from as any)("site_settings")
-      .update({ committee_qr_link: url.trim(), committee_qr_path: stored })
-      .eq("id", true);
+    const link = url.trim();
+    const { error } = await (supabase.rpc as any)("set_committee_qr", {
+      _link: link,
+      _path: stored,
+    });
     setSaving(false);
-    if (error) return toast.error(error.message);
+    if (error) {
+      return toast.error(
+        /not allowed/i.test(error.message)
+          ? "You don't have permission to change the QR card."
+          : error.message,
+      );
+    }
+    // Update the cached settings straight away so the card shows the new
+    // link/image without waiting for a refetch.
+    qc.setQueryData(["site-settings"], (old: any) => ({
+      ...(old ?? {}),
+      committee_qr_link: link || null,
+      committee_qr_path: stored,
+    }));
     qc.invalidateQueries({ queryKey: ["site-settings"] });
     toast.success("Saved");
     onClose();
