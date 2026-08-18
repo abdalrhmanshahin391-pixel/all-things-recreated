@@ -5489,6 +5489,10 @@ export type Database = {
           username: string
         }[]
       }
+      set_committee_qr: {
+        Args: { _link: string; _path: string }
+        Returns: undefined
+      }
       sync_golden_user: { Args: { _user_id: string }; Returns: undefined }
       university_id_by_slug: { Args: { _slug: string }; Returns: string }
       user_in_group: {
