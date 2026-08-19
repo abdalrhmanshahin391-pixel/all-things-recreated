@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
+import { AdminBadge, StudentBadge } from "@/components/RoleBadge";
 import { PushToggle } from "@/components/PushToggle";
 import {
   AlertCircle,
@@ -37,7 +38,7 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
-  const { user, profile, isGolden, isCommittee, loading } = useAuth();
+  const { user, profile, isGolden, isCommittee, isRealAdmin, loading } = useAuth();
   const navigate = useNavigate();
 
   const [fullName, setFullName] = useState("");
@@ -250,8 +251,15 @@ function ProfilePage() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-lg font-bold">
               <span className="truncate">{fullName || username || "Student"}</span>
-              {isGolden && <GoldenBadge size="md" />}
-              {isCommittee && <CommitteeBadge size="md" />}
+              {isRealAdmin ? (
+                <AdminBadge size="md" />
+              ) : isGolden ? (
+                <GoldenBadge size="md" />
+              ) : isCommittee ? (
+                <CommitteeBadge size="md" />
+              ) : (
+                <StudentBadge size="md" />
+              )}
             </div>
             <div className="truncate text-sm text-muted-foreground">
               {username ? `@${username}` : ""}
