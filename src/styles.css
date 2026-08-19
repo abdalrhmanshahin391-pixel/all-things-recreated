@@ -183,6 +183,23 @@
   --gradient-brand: linear-gradient(135deg, #8f1d22 0%, #d83a40 100%);
 }
 
+/* Deep navy→violet chip used by the Admin badge — the most premium of the set. */
+.admin-chip {
+  background: linear-gradient(135deg, oklch(0.32 0.09 265) 0%, oklch(0.45 0.17 295) 100%);
+  color: oklch(0.97 0.01 280);
+  border: 1px solid oklch(0.28 0.08 265);
+  box-shadow:
+    0 1px 8px -2px rgba(76, 45, 160, 0.6),
+    inset 0 1px 0 oklch(0.75 0.1 300 / 0.35);
+}
+
+/* Calm neutral chip for members without any role. */
+.student-chip {
+  background: color-mix(in oklab, var(--muted) 82%, var(--card));
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+}
+
 /* Red chip used by the committee badge — readable in light and dark. */
 .committee-chip {
   background: linear-gradient(135deg, oklch(0.55 0.2 25) 0%, oklch(0.64 0.18 30) 100%);

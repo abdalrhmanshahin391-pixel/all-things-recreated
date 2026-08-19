@@ -21,6 +21,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { EventEntryButtons } from "@/components/events/EventButtons";
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
+import { AdminBadge, StudentBadge } from "@/components/RoleBadge";
 import { useLang } from "@/components/LanguageProvider";
 import { RaziWordmark } from "@/components/brand/RaziWordmark";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -168,8 +169,15 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
           >
             {initial}
           </span>
-          {isGolden && <GoldenBadge />}
-          {isCommittee && <CommitteeBadge head={isCommitteeHead} />}
+          {isRealAdmin ? (
+            <AdminBadge />
+          ) : isGolden ? (
+            <GoldenBadge />
+          ) : isCommittee ? (
+            <CommitteeBadge head={isCommitteeHead} />
+          ) : (
+            <StudentBadge />
+          )}
           <ChevronDown size={14} className="shrink-0 text-muted-foreground" />
         </button>
         {open && (
@@ -179,8 +187,15 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
             <div className="px-4 py-3 border-b border-border shrink-0">
               <p className="flex flex-wrap items-center gap-2 font-semibold text-sm">
                 <span className="truncate">{profile?.full_name || displayName}</span>
-                {isGolden && <GoldenBadge />}
-                {isCommittee && <CommitteeBadge head={isCommitteeHead} />}
+                {isRealAdmin ? (
+                  <AdminBadge />
+                ) : isGolden ? (
+                  <GoldenBadge />
+                ) : isCommittee ? (
+                  <CommitteeBadge head={isCommitteeHead} />
+                ) : (
+                  <StudentBadge />
+                )}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {isAdmin
