@@ -13,6 +13,7 @@ A new, optional panel on every committee subject page listing the resources prev
   - Optional link (opens in a new tab) or a link to an existing file already in that subject
   - Optional "Top pick" highlight on one entry
 - Entries can be reordered, edited and deleted.
+- Layout is responsive: one column on phone, two on iPad, three on desktop. Titles truncate instead of clipping, star ratings and action buttons stay tap-sized (min 40px) and never overlap the text, and the editor dialog scrolls inside the screen on small devices.
 
 ## On / off switch
 
