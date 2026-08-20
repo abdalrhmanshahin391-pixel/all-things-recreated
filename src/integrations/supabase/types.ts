@@ -472,6 +472,66 @@ export type Database = {
         }
         Relationships: []
       }
+      committee_best_sources: {
+        Row: {
+          created_at: string
+          id: string
+          is_top: boolean
+          kind: string
+          note: string | null
+          rating: number
+          resource_id: string | null
+          sort_order: number
+          subject_id: string
+          title: string
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_top?: boolean
+          kind?: string
+          note?: string | null
+          rating?: number
+          resource_id?: string | null
+          sort_order?: number
+          subject_id: string
+          title: string
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_top?: boolean
+          kind?: string
+          note?: string | null
+          rating?: number
+          resource_id?: string | null
+          sort_order?: number
+          subject_id?: string
+          title?: string
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "committee_best_sources_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "committee_resources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "committee_best_sources_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "committee_subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       committee_categories: {
         Row: {
           created_at: string
@@ -804,6 +864,7 @@ export type Database = {
       }
       committee_subjects: {
         Row: {
+          best_sources_enabled: boolean
           closed_color: string
           closed_note: string | null
           closed_style: string
@@ -823,6 +884,7 @@ export type Database = {
           year_id: string
         }
         Insert: {
+          best_sources_enabled?: boolean
           closed_color?: string
           closed_note?: string | null
           closed_style?: string
@@ -842,6 +904,7 @@ export type Database = {
           year_id: string
         }
         Update: {
+          best_sources_enabled?: boolean
           closed_color?: string
           closed_note?: string | null
           closed_style?: string
