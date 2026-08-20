@@ -730,6 +730,24 @@ export async function restoreCommitteeSnapshot(
         subjectsAdded++;
       }
 
+      if (Array.isArray(s.best_sources)) {
+        await db.from("committee_best_sources").delete().eq("subject_id", subjectId);
+        if (s.best_sources.length) {
+          await db.from("committee_best_sources").insert(
+            s.best_sources.map((b: any, i: number) => ({
+              subject_id: subjectId,
+              title: b.title,
+              kind: b.kind ?? "other",
+              rating: b.rating ?? 5,
+              note: b.note ?? null,
+              url: b.url ?? null,
+              is_top: !!b.is_top,
+              sort_order: b.sort_order ?? i,
+            })),
+          );
+        }
+      }
+
       for (const cl of s.course_links ?? []) {
         let courseId: string | null = null;
         const byId = await firstRow(db.from("courses").select("id").eq("id", cl.course_id));
