@@ -48,6 +48,16 @@ export type SnapSubject = {
   closed_style: string | null;
   semester_key: string | null;
   module_key: string | null;
+  best_sources_enabled?: boolean;
+  best_sources?: Array<{
+    title: string;
+    kind: string;
+    rating: number;
+    note: string | null;
+    url: string | null;
+    is_top: boolean;
+    sort_order: number;
+  }>;
   course_links: Array<{
     course_id: string;
     course_title: string | null;
@@ -176,7 +186,7 @@ export async function buildCommitteeSnapshot(
   const { data: subjects = [] } = yearIds.length
     ? await db
         .from("committee_subjects")
-        .select("id,year_id,semester_id,module_id,name,icon_key,color_key,image_url,sort_order,tag_label,tag_color,is_closed,closed_note,closed_color,closed_style")
+        .select("id,year_id,semester_id,module_id,name,icon_key,color_key,image_url,sort_order,tag_label,tag_color,is_closed,closed_note,closed_color,closed_style,best_sources_enabled")
         .in("year_id", yearIds)
         .order("sort_order")
     : { data: [] as any[] };
@@ -197,6 +207,28 @@ export async function buildCommitteeSnapshot(
         .in("subject_id", subjectIds)
         .order("sort_order")
     : { data: [] as any[] };
+
+  const { data: bestSources = [] } = subjectIds.length
+    ? await db
+        .from("committee_best_sources")
+        .select("subject_id,title,kind,rating,note,url,is_top,sort_order")
+        .in("subject_id", subjectIds)
+        .order("sort_order")
+    : { data: [] as any[] };
+  const bestBySubject = new Map<string, any[]>();
+  for (const b of (bestSources ?? []) as any[]) {
+    const arr = bestBySubject.get(b.subject_id) ?? [];
+    arr.push({
+      title: b.title,
+      kind: b.kind,
+      rating: b.rating ?? 5,
+      note: b.note ?? null,
+      url: b.url ?? null,
+      is_top: !!b.is_top,
+      sort_order: b.sort_order ?? 0,
+    });
+    bestBySubject.set(b.subject_id, arr);
+  }
   const categoryIds = (categories ?? []).map((c: any) => c.id);
 
   // Resources can exceed the default 1000-row page — read them in pages.
@@ -319,6 +351,8 @@ export async function buildCommitteeSnapshot(
       closed_style: s.closed_style ?? null,
       semester_key: s.semester_id ?? null,
       module_key: s.module_id ?? null,
+      best_sources_enabled: !!s.best_sources_enabled,
+      best_sources: bestBySubject.get(s.id) ?? [],
       course_links: linksBySubject.get(s.id) ?? [],
       categories: catBySubject.get(s.id) ?? [],
     });
@@ -670,6 +704,7 @@ export async function restoreCommitteeSnapshot(
         closed_note: s.closed_note ?? null,
         closed_color: s.closed_color ?? "amber",
         closed_style: s.closed_style ?? "ribbon",
+        best_sources_enabled: !!s.best_sources_enabled,
       };
       const { data: sameName = [] } = await db
         .from("committee_subjects")
@@ -693,6 +728,24 @@ export async function restoreCommitteeSnapshot(
         if (error || !ins) throw new Error("subject insert: " + (error?.message ?? ""));
         subjectId = ins.id;
         subjectsAdded++;
+      }
+
+      if (Array.isArray(s.best_sources)) {
+        await db.from("committee_best_sources").delete().eq("subject_id", subjectId);
+        if (s.best_sources.length) {
+          await db.from("committee_best_sources").insert(
+            s.best_sources.map((b: any, i: number) => ({
+              subject_id: subjectId,
+              title: b.title,
+              kind: b.kind ?? "other",
+              rating: b.rating ?? 5,
+              note: b.note ?? null,
+              url: b.url ?? null,
+              is_top: !!b.is_top,
+              sort_order: b.sort_order ?? i,
+            })),
+          );
+        }
       }
 
       for (const cl of s.course_links ?? []) {

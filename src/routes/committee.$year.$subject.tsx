@@ -30,6 +30,7 @@ import { CommitteeDialog, Field, inputCls, primaryBtn, primaryBtnStyle } from "@
 import { ExistingFilePicker, CopyToDialog, refCounts } from "@/components/committee/ExistingFilePicker";
 import { CopySectionDialog } from "@/components/committee/CopySectionDialog";
 import { LinkedCourses } from "@/components/committee/LinkedCourses";
+import { BestSources } from "@/components/committee/BestSources";
 import { uploadFileToDrive, removeDriveFile, type DriveUploadPhase } from "@/lib/committee-drive";
 import { touchCommitteeSnapshot } from "@/lib/committee-snapshot-touch";
 import { VideoModal } from "@/components/committee/VideoModal";
@@ -319,6 +320,12 @@ function SubjectPage() {
           <CommitteeAccessNote />
 
           <LinkedCourses subjectId={subject} canManage={canManage} />
+
+          <BestSources
+            subjectId={subject}
+            canManage={canManage}
+            enabled={Boolean((subj as { best_sources_enabled?: boolean } | null)?.best_sources_enabled)}
+          />
 
           {/* Search bar */}
           <div className="mb-5 relative">
