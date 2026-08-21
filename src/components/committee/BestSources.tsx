@@ -64,7 +64,7 @@ export function BestSources({
     queryFn: async () => {
       const { data: rows, error } = await supabase
         .from("committee_best_sources")
-        .select("id, subject_id, title, kind, rating, note, url, is_top, sort_order")
+        .select("id, subject_id, title, kind, rating, note, url, resource_id, is_top, sort_order")
         .eq("subject_id", subjectId)
         .order("sort_order");
       if (error) throw error;
