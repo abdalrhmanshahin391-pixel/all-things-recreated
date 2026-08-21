@@ -4,9 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   BookOpen, Video, NotebookPen, ListChecks, Sparkles, Star, Plus, Pencil, Trash2,
-  ArrowUp, ArrowDown, ExternalLink, Crown, Eye, EyeOff,
+  ArrowUp, ArrowDown, ExternalLink, Crown, Eye, EyeOff, Check, FileText, FolderOpen, Search, X,
 } from "lucide-react";
 import { CommitteeDialog, Field, inputCls, primaryBtn, primaryBtnStyle } from "@/components/committee/Dialog";
+import { useCommitteeLibrary, type LibraryFile } from "@/components/committee/ExistingFilePicker";
 import { touchCommitteeSnapshot } from "@/lib/committee-snapshot-touch";
 
 export type BestSource = {
