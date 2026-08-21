@@ -318,9 +318,36 @@ function SourceDialog({
   const [note, setNote] = useState(existing?.note ?? "");
   const [url, setUrl] = useState(existing?.url ?? "");
   const [isTop, setIsTop] = useState(existing?.is_top ?? false);
+  const [resourceId, setResourceId] = useState<string | null>(existing?.resource_id ?? null);
+  const [mode, setMode] = useState<"library" | "manual">(
+    existing ? (existing.resource_id ? "library" : "manual") : "library",
+  );
+  const [q, setQ] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const { data: library, isLoading: loadingLib } = useCommitteeLibrary(mode === "library");
+  const list = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const all = library ?? [];
+    if (!needle) return all.slice(0, 200);
+    return all
+      .filter((f) => f.title.toLowerCase().includes(needle) || f.path.toLowerCase().includes(needle))
+      .slice(0, 200);
+  }, [library, q]);
+  const picked = useMemo(
+    () => (resourceId ? (library ?? []).find((f) => f.id === resourceId) ?? null : null),
+    [library, resourceId],
+  );
+
+  function pick(f: LibraryFile) {
+    setResourceId(f.id);
+    setTitle(f.title);
+    setKind(f.kind === "video" ? "video" : "notes");
+    setUrl("");
+  }
+
   async function save() {
+    if (mode === "library" && !resourceId) return toast.error("Pick a file from the committee");
     if (!title.trim()) return toast.error("Source name is required");
     setSaving(true);
     const payload = {
@@ -328,7 +355,8 @@ function SourceDialog({
       kind,
       rating,
       note: note.trim() || null,
-      url: url.trim() || null,
+      url: mode === "library" ? null : url.trim() || null,
+      resource_id: mode === "library" ? resourceId : null,
       is_top: isTop,
     };
     const { error } = existing
@@ -344,7 +372,86 @@ function SourceDialog({
 
   return (
     <CommitteeDialog title={existing ? "Edit source" : "Add best source"} onClose={onClose}>
-      <Field label="Source name">
+      <div className="grid grid-cols-2 gap-1 rounded-full border border-border bg-muted/50 p-1">
+        {([
+          ["library", "From the committee"],
+          ["manual", "Write it manually"],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setMode(key)}
+            className={`min-h-10 rounded-full px-3 text-xs font-bold ${
+              mode === key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "library" ? (
+        <Field label="File already in the committee">
+          <div className="relative mb-2">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search by title or location…"
+              className={`${inputCls} pl-9 pr-8`}
+            />
+            {q && (
+              <button
+                type="button"
+                onClick={() => setQ("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          <div className="max-h-[240px] overflow-y-auto rounded-xl border border-border divide-y divide-border">
+            {loadingLib ? (
+              <div className="p-4 text-sm text-muted-foreground">Loading library…</div>
+            ) : list.length === 0 ? (
+              <div className="p-4 text-sm text-muted-foreground">No stored files match.</div>
+            ) : (
+              list.map((f) => {
+                const on = resourceId === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => pick(f)}
+                    className={`flex w-full min-h-12 items-center gap-3 p-2.5 text-left ${
+                      on ? "bg-primary/10" : "hover:bg-muted"
+                    }`}
+                  >
+                    <span
+                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
+                        on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {on ? <Check size={15} /> : f.kind === "video" ? <Video size={15} /> : <FileText size={15} />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-bold">{f.title}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">{f.path}</span>
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+          {picked && (
+            <p className="mt-1.5 truncate text-[11px] text-muted-foreground">
+              Selected: {picked.title} · {picked.path}
+            </p>
+          )}
+        </Field>
+      ) : null}
+
+      <Field label={mode === "library" ? "Shown name" : "Source name"}>
         <input
           className={inputCls}
           value={title}
