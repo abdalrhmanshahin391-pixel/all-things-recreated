@@ -17,6 +17,7 @@ export type BestSource = {
   rating: number;
   note: string | null;
   url: string | null;
+  resource_id: string | null;
   is_top: boolean;
   sort_order: number;
 };
