@@ -495,14 +495,16 @@ function SourceDialog({
           onChange={(e) => setNote(e.target.value)}
         />
       </Field>
-      <Field label="Link (optional)">
-        <input
-          className={inputCls}
-          value={url}
-          placeholder="https://…"
-          onChange={(e) => setUrl(e.target.value)}
-        />
-      </Field>
+      {mode === "manual" && (
+        <Field label="Link (optional)">
+          <input
+            className={inputCls}
+            value={url}
+            placeholder="https://…"
+            onChange={(e) => setUrl(e.target.value)}
+          />
+        </Field>
+      )}
       <label className="flex items-center gap-2 text-sm text-foreground">
         <input type="checkbox" checked={isTop} onChange={(e) => setIsTop(e.target.checked)} />
         Mark as top pick
