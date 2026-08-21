@@ -83,6 +83,14 @@ export function BestSources({
     [data],
   );
 
+  const hasLinked = items.some((i) => !!i.resource_id);
+  const { data: library } = useCommitteeLibrary(hasLinked);
+  const libMap = useMemo(
+    () => new Map((library ?? []).map((f) => [f.id, f] as const)),
+    [library],
+  );
+
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["committee-best-sources", subjectId] });
     touchCommitteeSnapshot();
