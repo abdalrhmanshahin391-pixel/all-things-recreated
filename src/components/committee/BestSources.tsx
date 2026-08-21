@@ -227,15 +227,19 @@ export function BestSources({
                       <Stars value={s.rating} />
                     </div>
                     {s.note && <p className="mt-1.5 text-xs text-muted-foreground">{s.note}</p>}
-                    {s.url && (
-                      <a
-                        href={s.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-flex min-h-10 items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-                      >
-                        <ExternalLink size={13} /> Open source
-                      </a>
+                    {s.resource_id && libMap.get(s.resource_id) ? (
+                      <LibraryLink file={libMap.get(s.resource_id)!} />
+                    ) : (
+                      s.url && (
+                        <a
+                          href={s.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-flex min-h-10 items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                        >
+                          <ExternalLink size={13} /> Open source
+                        </a>
+                      )
                     )}
                   </div>
                 </div>
