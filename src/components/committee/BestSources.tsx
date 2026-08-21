@@ -515,3 +515,44 @@ function SourceDialog({
     </CommitteeDialog>
   );
 }
+/** Opens a committee file (Drive preview or stored file) straight from a best-source card. */
+function LibraryLink({ file }: { file: LibraryFile }) {
+  const [busy, setBusy] = useState(false);
+
+  async function open() {
+    const direct = file.drive_web_link
+      ? file.drive_web_link.replace(/\/view$/, "/preview")
+      : null;
+    if (direct) {
+      window.open(direct, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (!file.file_path) return;
+    const tab = window.open("", "_blank");
+    setBusy(true);
+    const { data, error } = await supabase.storage
+      .from("committee-files")
+      .createSignedUrl(file.file_path, 3600);
+    setBusy(false);
+    if (error || !data?.signedUrl) {
+      tab?.close();
+      return toast.error(error?.message ?? "Could not open the file");
+    }
+    if (tab) tab.location.href = data.signedUrl;
+    else window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={open}
+        disabled={busy}
+        className="inline-flex min-h-10 items-center gap-1.5 text-xs font-semibold text-primary hover:underline disabled:opacity-60"
+      >
+        <FolderOpen size={13} /> {busy ? "Opening…" : "Open file"}
+      </button>
+      <p className="truncate text-[11px] text-muted-foreground">{file.path}</p>
+    </div>
+  );
+}
