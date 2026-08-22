@@ -325,10 +325,12 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
             <Link
               to="/mentor"
               title="My Mentor · مرشدي"
+              aria-label="My Mentor"
               className="hidden lg:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
             >
               <MoonStar size={16} className="text-primary" />
               <span className="hidden xl:inline">My Mentor</span>
+
             </Link>
           )}
           <button
