@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronRight,
   ListChecks,
+  FileText,
   Sparkles,
   CheckCircle2,
 } from "lucide-react";
@@ -562,8 +563,16 @@ function ItemRow({
         className={cls}
       >
         {content}
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-md bg-accent text-accent-foreground shrink-0">
+          Start →
+        </span>
       </Link>
     );
   }
-  return <div className={cls}>{content}</div>;
+  return (
+    <div className={cls}>
+      {content}
+      <span className="text-[11px] text-muted-foreground font-semibold shrink-0">No questions yet</span>
+    </div>
+  );
 }
