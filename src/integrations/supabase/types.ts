@@ -2485,6 +2485,8 @@ export type Database = {
           id: string
           is_free: boolean
           kind: string
+          pdf_storage_path: string | null
+          pdf_url: string | null
           position: number
           subject_id: string
           title: string
@@ -2498,6 +2500,8 @@ export type Database = {
           id?: string
           is_free?: boolean
           kind: string
+          pdf_storage_path?: string | null
+          pdf_url?: string | null
           position?: number
           subject_id: string
           title: string
@@ -2511,6 +2515,8 @@ export type Database = {
           id?: string
           is_free?: boolean
           kind?: string
+          pdf_storage_path?: string | null
+          pdf_url?: string | null
           position?: number
           subject_id?: string
           title?: string
