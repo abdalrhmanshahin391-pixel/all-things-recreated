@@ -17,8 +17,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { resolveCourseImageUrl } from "@/lib/course-image";
-import { resolveLectureVideoUrl } from "@/lib/lecture-video";
+import { resolveLectureVideoUrl, resolveLecturePdfUrl } from "@/lib/lecture-video";
 import { IntroVideoModal } from "@/components/lectures/IntroVideoModal";
+import { LecturePdfModal } from "@/components/lectures/LecturePdfModal";
 import { ProtectedContent } from "@/components/protect/ProtectedContent";
 import { ensureFreeEnrollment } from "@/lib/course-access";
 
@@ -83,6 +84,8 @@ type Item = {
   position: number;
   video_url: string | null;
   video_storage_path: string | null;
+  pdf_url: string | null;
+  pdf_storage_path: string | null;
   duration_seconds: number | null;
   is_free: boolean;
 };
@@ -103,6 +106,8 @@ function LectureCoursePage() {
   const [activeVideo, setActiveVideo] = useState<{ src: string; title: string } | null>(null);
   const [introOpen, setIntroOpen] = useState(false);
   const [videoLoading, setVideoLoading] = useState<string | null>(null);
+  const [activePdf, setActivePdf] = useState<{ src: string; title: string } | null>(null);
+  const [pdfLoading, setPdfLoading] = useState<string | null>(null);
 
   const owns = enrolled || isAdmin;
 
@@ -136,7 +141,7 @@ function LectureCoursePage() {
 
       if (subjList.length) {
         const { data: its } = await (supabase.from as any)("lecture_items")
-          .select("id,subject_id,kind,title,position,video_url,video_storage_path,duration_seconds,is_free")
+          .select("id,subject_id,kind,title,position,video_url,video_storage_path,pdf_url,pdf_storage_path,duration_seconds,is_free")
           .in("subject_id", subjList.map((s) => s.id))
           .order("position");
         if (!cancelled) setItems((its ?? []) as Item[]);
@@ -203,6 +208,14 @@ function LectureCoursePage() {
     const url = await resolveLectureVideoUrl(item.video_url, item.video_storage_path);
     setVideoLoading(null);
     if (url) setActiveVideo({ src: url, title: item.title });
+  }
+
+  async function openPdf(item: Item) {
+    if (!owns && !item.is_free) return;
+    setPdfLoading(item.id);
+    const url = await resolveLecturePdfUrl(item.pdf_url, item.pdf_storage_path);
+    setPdfLoading(null);
+    if (url) setActivePdf({ src: url, title: item.title });
   }
 
   async function openIntro() {
@@ -379,7 +392,9 @@ function LectureCoursePage() {
                               courseId={courseId}
                               quizId={quizByItemId.get(item.id)}
                               loadingId={videoLoading}
+                              pdfLoadingId={pdfLoading}
                               onPlay={() => playLecture(item)}
+                              onOpenPdf={() => openPdf(item)}
                             />
                           ))
                         )}
@@ -408,6 +423,14 @@ function LectureCoursePage() {
           </div>
         )}
       </main>
+
+      {activePdf && (
+        <LecturePdfModal
+          src={activePdf.src}
+          title={activePdf.title}
+          onClose={() => setActivePdf(null)}
+        />
+      )}
 
       {activeVideo && (
         <IntroVideoModal
