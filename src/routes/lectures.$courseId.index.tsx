@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronRight,
   ListChecks,
+  FileText,
   Sparkles,
   CheckCircle2,
 } from "lucide-react";
@@ -17,8 +18,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { resolveCourseImageUrl } from "@/lib/course-image";
-import { resolveLectureVideoUrl } from "@/lib/lecture-video";
+import { resolveLectureVideoUrl, resolveLecturePdfUrl } from "@/lib/lecture-video";
 import { IntroVideoModal } from "@/components/lectures/IntroVideoModal";
+import { LecturePdfModal } from "@/components/lectures/LecturePdfModal";
 import { ProtectedContent } from "@/components/protect/ProtectedContent";
 import { ensureFreeEnrollment } from "@/lib/course-access";
 
@@ -83,6 +85,8 @@ type Item = {
   position: number;
   video_url: string | null;
   video_storage_path: string | null;
+  pdf_url: string | null;
+  pdf_storage_path: string | null;
   duration_seconds: number | null;
   is_free: boolean;
 };
@@ -103,6 +107,8 @@ function LectureCoursePage() {
   const [activeVideo, setActiveVideo] = useState<{ src: string; title: string } | null>(null);
   const [introOpen, setIntroOpen] = useState(false);
   const [videoLoading, setVideoLoading] = useState<string | null>(null);
+  const [activePdf, setActivePdf] = useState<{ src: string; title: string } | null>(null);
+  const [pdfLoading, setPdfLoading] = useState<string | null>(null);
 
   const owns = enrolled || isAdmin;
 
@@ -136,7 +142,7 @@ function LectureCoursePage() {
 
       if (subjList.length) {
         const { data: its } = await (supabase.from as any)("lecture_items")
-          .select("id,subject_id,kind,title,position,video_url,video_storage_path,duration_seconds,is_free")
+          .select("id,subject_id,kind,title,position,video_url,video_storage_path,pdf_url,pdf_storage_path,duration_seconds,is_free")
           .in("subject_id", subjList.map((s) => s.id))
           .order("position");
         if (!cancelled) setItems((its ?? []) as Item[]);
@@ -203,6 +209,14 @@ function LectureCoursePage() {
     const url = await resolveLectureVideoUrl(item.video_url, item.video_storage_path);
     setVideoLoading(null);
     if (url) setActiveVideo({ src: url, title: item.title });
+  }
+
+  async function openPdf(item: Item) {
+    if (!owns && !item.is_free) return;
+    setPdfLoading(item.id);
+    const url = await resolveLecturePdfUrl(item.pdf_url, item.pdf_storage_path);
+    setPdfLoading(null);
+    if (url) setActivePdf({ src: url, title: item.title });
   }
 
   async function openIntro() {
@@ -379,7 +393,9 @@ function LectureCoursePage() {
                               courseId={courseId}
                               quizId={quizByItemId.get(item.id)}
                               loadingId={videoLoading}
+                              pdfLoadingId={pdfLoading}
                               onPlay={() => playLecture(item)}
+                              onOpenPdf={() => openPdf(item)}
                             />
                           ))
                         )}
@@ -409,6 +425,14 @@ function LectureCoursePage() {
         )}
       </main>
 
+      {activePdf && (
+        <LecturePdfModal
+          src={activePdf.src}
+          title={activePdf.title}
+          onClose={() => setActivePdf(null)}
+        />
+      )}
+
       {activeVideo && (
         <IntroVideoModal
           src={activeVideo.src}
@@ -429,22 +453,36 @@ function ItemRow({
   courseId,
   quizId,
   loadingId,
+  pdfLoadingId,
   onPlay,
+  onOpenPdf,
 }: {
   item: Item;
   owns: boolean;
   courseId: string;
   quizId?: string;
   loadingId: string | null;
+  pdfLoadingId?: string | null;
   onPlay: () => void;
+  onOpenPdf?: () => void;
 }) {
   const isLecture = item.kind === "lecture";
-  const Icon = isLecture ? PlayCircle : ListChecks;
+  const hasVideo = !!(item.video_url || item.video_storage_path);
+  const hasPdf = !!(item.pdf_url || item.pdf_storage_path);
+  const Icon = isLecture ? (hasVideo ? PlayCircle : FileText) : ListChecks;
   const unlocked = owns || item.is_free;
+
+  const kindLabel = isLecture
+    ? hasVideo && hasPdf
+      ? "Lecture video + PDF"
+      : hasPdf
+        ? "Lecture PDF"
+        : "Lecture video"
+    : "Quiz · session mode";
 
   const content = (
     <>
-      <span className="grid place-items-center h-9 w-9 rounded-md bg-muted text-primary">
+      <span className="grid place-items-center h-9 w-9 rounded-md bg-muted text-primary shrink-0">
         <Icon size={18} />
       </span>
       <div className="flex-1 min-w-0">
@@ -457,40 +495,66 @@ function ItemRow({
           )}
         </div>
         <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mt-0.5">
-          {isLecture ? "Lecture video" : "Quiz · session mode"}
+          {kindLabel}
         </div>
       </div>
-      {unlocked ? (
-        isLecture ? (
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-md bg-primary text-primary-foreground">
-            {loadingId === item.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play size={12} fill="currentColor" />}
-            Play
-          </span>
-        ) : quizId ? (
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-md bg-accent text-accent-foreground">
-            Start →
-          </span>
-        ) : (
-          <span className="text-[11px] text-muted-foreground font-semibold">No questions yet</span>
-        )
-      ) : (
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-2 rounded-md bg-muted text-muted-foreground border border-border">
-          <Lock size={11} /> Locked
-        </span>
-      )}
     </>
   );
 
   const cls = "w-full text-left px-5 py-3.5 flex items-center gap-3 hover:bg-muted/40 transition";
 
-  if (!unlocked) return <div className={cls}>{content}</div>;
-  if (isLecture) {
+  if (!unlocked) {
     return (
-      <button onClick={onPlay} disabled={loadingId === item.id} className={cls + " disabled:opacity-70"}>
+      <div className={cls}>
         {content}
-      </button>
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-2 rounded-md bg-muted text-muted-foreground border border-border shrink-0">
+          <Lock size={11} /> Locked
+        </span>
+      </div>
     );
   }
+
+  if (isLecture) {
+    return (
+      <div className={cls}>
+        {content}
+        <div className="flex items-center gap-2 shrink-0">
+          {hasVideo && (
+            <button
+              onClick={onPlay}
+              disabled={loadingId === item.id}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-md bg-primary text-primary-foreground disabled:opacity-70"
+            >
+              {loadingId === item.id ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Play size={12} fill="currentColor" />
+              )}
+              Watch
+            </button>
+          )}
+          {hasPdf && (
+            <button
+              onClick={onOpenPdf}
+              disabled={pdfLoadingId === item.id}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-md bg-accent text-accent-foreground disabled:opacity-70"
+            >
+              {pdfLoadingId === item.id ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <FileText size={12} />
+              )}
+              Open PDF
+            </button>
+          )}
+          {!hasVideo && !hasPdf && (
+            <span className="text-[11px] text-muted-foreground font-semibold">No material yet</span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (quizId) {
     return (
       <Link
@@ -499,8 +563,16 @@ function ItemRow({
         className={cls}
       >
         {content}
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-md bg-accent text-accent-foreground shrink-0">
+          Start →
+        </span>
       </Link>
     );
   }
-  return <div className={cls}>{content}</div>;
+  return (
+    <div className={cls}>
+      {content}
+      <span className="text-[11px] text-muted-foreground font-semibold shrink-0">No questions yet</span>
+    </div>
+  );
 }
