@@ -68,12 +68,13 @@ type Question = {
 type QOption = { id: string; question_id: string; position: number; body: string; is_correct: boolean };
 
 function AdminLecturesPage() {
-  const { user, isAdmin, loading } = useAuth();
+  const { user, isAdmin, isRealAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const { courseId: initialCourseId } = Route.useSearch();
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [activeCourseId, setActiveCourseId] = useState<string>(initialCourseId);
+  const [staffCourseIds, setStaffCourseIds] = useState<string[] | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
@@ -86,27 +87,49 @@ function AdminLecturesPage() {
   );
 
   const activeCourse = courses.find((c) => c.id === activeCourseId) ?? null;
+  const isStaff = (staffCourseIds?.length ?? 0) > 0;
+  const canOwnerEdit = isRealAdmin || isAdmin;
+
+  // Who is staff on which lecture courses
+  useEffect(() => {
+    if (loading || !user) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase.from as any)("lecture_staff")
+        .select("course_id")
+        .eq("user_id", user.id);
+      if (!cancelled) setStaffCourseIds(((data ?? []) as { course_id: string }[]).map((r) => r.course_id));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, user]);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
-    else if (!loading && user && !isAdmin) guardRedirect(navigate);
-  }, [loading, user, isAdmin, navigate]);
+    else if (!loading && user && !isAdmin && staffCourseIds !== null && staffCourseIds.length === 0)
+      guardRedirect(navigate);
+  }, [loading, user, isAdmin, staffCourseIds, navigate]);
 
-  async function loadCourses() {
-    const { data } = await supabase
+  async function loadCourses(staffIds: string[]) {
+    let q = supabase
       .from("courses")
       .select("id,title,year,published,university_id,intro_video_url,intro_video_storage_path,intro_free")
       .eq("kind", "lectures")
       .order("year")
       .order("title");
+    if (!isAdmin) q = q.in("id", staffIds.length ? staffIds : ["00000000-0000-0000-0000-000000000000"]);
+    const { data } = await q;
     const list = (data as Course[]) ?? [];
     setCourses(list);
-    if (!activeCourseId && list.length) setActiveCourseId(list[0].id);
+    setActiveCourseId((prev) => (prev && list.some((c) => c.id === prev) ? prev : (list[0]?.id ?? "")));
   }
 
   useEffect(() => {
-    if (isAdmin) loadCourses();
-  }, [isAdmin]);
+    if (staffCourseIds === null) return;
+    if (isAdmin || staffCourseIds.length) loadCourses(staffCourseIds);
+  }, [isAdmin, staffCourseIds]);
+
 
   async function refreshSyllabus(cid: string) {
     const { data: subs } = await (supabase.from as any)("lecture_subjects")
