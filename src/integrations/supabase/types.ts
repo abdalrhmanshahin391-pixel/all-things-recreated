@@ -280,6 +280,7 @@ export type Database = {
           options: Json
           page_id: string | null
           printed_choices: Json
+          question_type: string
           solved: boolean
           status: string
           stem: string
@@ -301,6 +302,7 @@ export type Database = {
           options?: Json
           page_id?: string | null
           printed_choices?: Json
+          question_type?: string
           solved?: boolean
           status?: string
           stem: string
@@ -322,6 +324,7 @@ export type Database = {
           options?: Json
           page_id?: string | null
           printed_choices?: Json
+          question_type?: string
           solved?: boolean
           status?: string
           stem?: string
