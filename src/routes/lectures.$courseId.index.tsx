@@ -270,6 +270,10 @@ function LectureCoursePage() {
           <ArrowLeft className="w-3 h-3" /> Back to lectures
         </Link>
 
+        <ProtectionNotice className="mt-4" />
+
+
+
         <div className="mt-6 grid md:grid-cols-[1.1fr_1fr] gap-6 items-start">
           <button
             onClick={introPlayable ? openIntro : undefined}
@@ -409,6 +413,11 @@ function LectureCoursePage() {
             </div>
           )}
         </section>
+
+        {owns && <CourseMaterialsList courseId={courseId} />}
+        {owns && <LiveClassesList courseId={courseId} />}
+
+
 
         {isAdmin && (
           <div className="mt-10 rounded-lg border border-border bg-card p-5 flex items-center justify-between gap-4">
