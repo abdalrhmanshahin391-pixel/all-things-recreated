@@ -95,6 +95,9 @@ function parseExplanation(raw: string): Section[] {
       m.kind === "concept" && m.bodyStart === 0
         ? text.slice(0, end).trim()
         : text.slice(m.bodyStart, end).trim();
+    // Strip A./B./C./D. letter prefixes from wrong-option bullets and
+    // summary table cells (only for wrong + summary sections).
+    body = stripOptionLetters(body, m.kind);
     // Peel off a trailing markdown table from non-summary sections so it
     // becomes its own Summary block at the bottom.
     if (m.kind !== "summary") {
