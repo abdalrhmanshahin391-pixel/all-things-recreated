@@ -477,9 +477,10 @@ export const pollAqvRead = createServerFn({ method: "POST" })
         const printedChoices = Array.isArray(q?.printed_choices) ? q.printed_choices : [];
         const numericMultiple = normalized.answerMode === "multiple" && normalized.options.length >= 2
           && normalized.options.every((option) => /^\d+$/.test(option.letter));
-        const questionType = q?.question_type === "combination" ? "combination"
-          : q?.question_type === "multiple_select" ? "multiple_select"
-          : numericMultiple ? "combination" : "ordinary";
+        // Fail closed: numbered multi-answer options are treated as paper
+        // combinations unless the paper choices were safely recovered.
+        const questionType = q?.question_type === "combination" || numericMultiple ? "combination"
+          : q?.question_type === "multiple_select" ? "multiple_select" : "ordinary";
         const looksLikeCombination = questionType === "combination"
           || (normalized.answerMode === "multiple" && normalized.options.length >= 2
             && normalized.options.every((option) => /^\d+$/.test(option.letter)) && printedChoices.length > 0);
