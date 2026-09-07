@@ -1230,8 +1230,10 @@ export type Database = {
           id: string
           image_url: string | null
           intro_free: boolean
+          intro_image_url: string | null
           intro_video_storage_path: string | null
           intro_video_url: string | null
+          is_live: boolean
           kind: string
           paddle_price_id: string | null
           price: number
@@ -1261,8 +1263,10 @@ export type Database = {
           id?: string
           image_url?: string | null
           intro_free?: boolean
+          intro_image_url?: string | null
           intro_video_storage_path?: string | null
           intro_video_url?: string | null
+          is_live?: boolean
           kind?: string
           paddle_price_id?: string | null
           price?: number
@@ -1292,8 +1296,10 @@ export type Database = {
           id?: string
           image_url?: string | null
           intro_free?: boolean
+          intro_image_url?: string | null
           intro_video_storage_path?: string | null
           intro_video_url?: string | null
+          is_live?: boolean
           kind?: string
           paddle_price_id?: string | null
           price?: number
@@ -2478,6 +2484,106 @@ export type Database = {
         }
         Relationships: []
       }
+      lecture_classes: {
+        Row: {
+          course_id: string
+          created_at: string
+          description: string | null
+          duration_minutes: number
+          id: string
+          materials: Json
+          meeting_url: string | null
+          notified_at: string | null
+          recording_url: string | null
+          repeat_weekly: boolean
+          starts_at: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          materials?: Json
+          meeting_url?: string | null
+          notified_at?: string | null
+          recording_url?: string | null
+          repeat_weekly?: boolean
+          starts_at: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          materials?: Json
+          meeting_url?: string | null
+          notified_at?: string | null
+          recording_url?: string | null
+          repeat_weekly?: boolean
+          starts_at?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lecture_classes_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lecture_course_materials: {
+        Row: {
+          course_id: string
+          created_at: string
+          id: string
+          kind: string
+          position: number
+          storage_path: string | null
+          title: string
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          id?: string
+          kind?: string
+          position?: number
+          storage_path?: string | null
+          title: string
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          position?: number
+          storage_path?: string | null
+          title?: string
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lecture_course_materials_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lecture_items: {
         Row: {
           created_at: string
@@ -2485,9 +2591,11 @@ export type Database = {
           id: string
           is_free: boolean
           kind: string
+          link_url: string | null
           pdf_storage_path: string | null
           pdf_url: string | null
           position: number
+          resource_kind: string | null
           subject_id: string
           title: string
           updated_at: string
@@ -2500,9 +2608,11 @@ export type Database = {
           id?: string
           is_free?: boolean
           kind: string
+          link_url?: string | null
           pdf_storage_path?: string | null
           pdf_url?: string | null
           position?: number
+          resource_kind?: string | null
           subject_id: string
           title: string
           updated_at?: string
@@ -2515,9 +2625,11 @@ export type Database = {
           id?: string
           is_free?: boolean
           kind?: string
+          link_url?: string | null
           pdf_storage_path?: string | null
           pdf_url?: string | null
           position?: number
+          resource_kind?: string | null
           subject_id?: string
           title?: string
           updated_at?: string
@@ -2527,6 +2639,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "lecture_items_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "lecture_subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lecture_questions: {
+        Row: {
+          answer_index: number
+          created_at: string
+          created_by: string | null
+          explanation: string | null
+          id: string
+          options: Json
+          position: number
+          stem: string
+          subject_id: string
+          updated_at: string
+          visible: boolean
+        }
+        Insert: {
+          answer_index?: number
+          created_at?: string
+          created_by?: string | null
+          explanation?: string | null
+          id?: string
+          options?: Json
+          position?: number
+          stem: string
+          subject_id: string
+          updated_at?: string
+          visible?: boolean
+        }
+        Update: {
+          answer_index?: number
+          created_at?: string
+          created_by?: string | null
+          explanation?: string | null
+          id?: string
+          options?: Json
+          position?: number
+          stem?: string
+          subject_id?: string
+          updated_at?: string
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lecture_questions_subject_id_fkey"
             columns: ["subject_id"]
             isOneToOne: false
             referencedRelation: "lecture_subjects"
@@ -2674,10 +2836,37 @@ export type Database = {
           },
         ]
       }
+      lecture_staff: {
+        Row: {
+          course_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lecture_staff_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lecture_subjects: {
         Row: {
           course_id: string
           created_at: string
+          hidden: boolean
           id: string
           position: number
           title: string
@@ -2687,6 +2876,7 @@ export type Database = {
         Insert: {
           course_id: string
           created_at?: string
+          hidden?: boolean
           id?: string
           position?: number
           title: string
@@ -2696,6 +2886,7 @@ export type Database = {
         Update: {
           course_id?: string
           created_at?: string
+          hidden?: boolean
           id?: string
           position?: number
           title?: string
@@ -4056,6 +4247,8 @@ export type Database = {
           protect_consent_required: boolean
           protect_devtools_guard: boolean
           protect_enabled: boolean
+          protect_lectures: boolean
+          protect_qbank: boolean
           protect_terms_ar: string | null
           protect_terms_en: string | null
           protect_watermark_opacity: number
@@ -4093,6 +4286,8 @@ export type Database = {
           protect_consent_required?: boolean
           protect_devtools_guard?: boolean
           protect_enabled?: boolean
+          protect_lectures?: boolean
+          protect_qbank?: boolean
           protect_terms_ar?: string | null
           protect_terms_en?: string | null
           protect_watermark_opacity?: number
@@ -4130,6 +4325,8 @@ export type Database = {
           protect_consent_required?: boolean
           protect_devtools_guard?: boolean
           protect_enabled?: boolean
+          protect_lectures?: boolean
+          protect_qbank?: boolean
           protect_terms_ar?: string | null
           protect_terms_en?: string | null
           protect_watermark_opacity?: number
@@ -5439,6 +5636,10 @@ export type Database = {
         Args: { _subject_id: string }
         Returns: boolean
       }
+      can_edit_lecture_course: {
+        Args: { _course_id: string }
+        Returns: boolean
+      }
       can_manage_committee: { Args: { _user_id: string }; Returns: boolean }
       can_manage_committee_members: {
         Args: { _user_id: string }
@@ -5449,6 +5650,10 @@ export type Database = {
         Returns: boolean
       }
       can_manage_events: { Args: never; Returns: boolean }
+      can_view_lecture_course: {
+        Args: { _course_id: string }
+        Returns: boolean
+      }
       committee_team_add: { Args: { _username: string }; Returns: undefined }
       committee_team_list: {
         Args: never
@@ -5510,6 +5715,19 @@ export type Database = {
       identity_taken: {
         Args: { _phone: string; _username: string }
         Returns: Json
+      }
+      is_lecture_staff: {
+        Args: { _course_id: string; _user_id: string }
+        Returns: boolean
+      }
+      lecture_staff_list: {
+        Args: { _course_id: string }
+        Returns: {
+          email: string
+          full_name: string
+          user_id: string
+          username: string
+        }[]
       }
       my_announcements: {
         Args: never
