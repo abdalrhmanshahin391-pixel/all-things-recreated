@@ -510,6 +510,8 @@ function CourseDetailPage() {
           </div>
         )}
 
+        <ProtectionNotice className="mb-6" />
+
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
           {/* LEFT — curriculum */}
           <section>
