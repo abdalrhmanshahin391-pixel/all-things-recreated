@@ -530,9 +530,11 @@ export const pollAqvAnswers = createServerFn({ method: "POST" })
 
 // ---------------- 7. import ----------------
 
+const ImportInput = z.object({ jobId: z.string().uuid(), allowPartial: z.boolean().optional() });
+
 export const importAqvJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => JobInput.parse(d))
+  .inputValidator((d: unknown) => ImportInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
     const { data: job, error } = await supabase.from(JOBS)
@@ -546,7 +548,11 @@ export const importAqvJob = createServerFn({ method: "POST" })
     if (iErr) throw iErr;
     if (!items?.length) throw new Error("Nothing to import.");
     const unsolved = items.filter((it: any) => !it.solved).length;
-    if (unsolved > 0) throw new Error(`${unsolved} question(s) are not solved yet — import is blocked.`);
+    if (unsolved > 0 && !data.allowPartial) {
+      throw new Error(`${unsolved} question(s) are not solved yet — import is blocked.`);
+    }
+    const importable = data.allowPartial ? items.filter((it: any) => it.solved) : items;
+    if (!importable.length) throw new Error("No solved question to import yet.");
 
     const { count } = await supabase.from("questions")
       .select("id", { count: "exact", head: true }).eq("subject_id", job.subject_id);
@@ -554,7 +560,7 @@ export const importAqvJob = createServerFn({ method: "POST" })
     let inserted = 0, skipped = 0, failed = 0;
     const errors: string[] = [];
 
-    for (const it of items) {
+    for (const it of importable) {
       if (it.imported) { skipped++; continue; }
       try {
         const explanation = [it.explanation || "", it.summary_table ? `\n\n${it.summary_table}` : ""].join("").trim() || null;
@@ -586,12 +592,13 @@ export const importAqvJob = createServerFn({ method: "POST" })
       }
     }
 
+    const stage = unsolved > 0 ? "solve_partial" : "imported";
     await supabase.from(JOBS).update({
-      stage: "imported", status: "imported", imported_count: inserted,
+      stage, status: stage, imported_count: inserted,
       error: errors.length ? errors.slice(0, 3).join(" | ") : null,
     }).eq("id", data.jobId);
 
-    return { inserted, skipped, failed, errors: errors.slice(0, 5) };
+    return { inserted, skipped, failed, leftOut: unsolved, errors: errors.slice(0, 5) };
   });
 
 // ---------------- listing / housekeeping ----------------

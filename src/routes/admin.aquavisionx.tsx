@@ -208,12 +208,15 @@ function Page() {
     } finally { setBusy(false); }
   }
 
-  async function handleImport() {
+  async function handleImport(allowPartial = false) {
     if (!job?.id) return;
     setBusy(true);
     try {
-      const r: any = await importFn({ data: { jobId: job.id } });
-      say(`🎉 imported ${r.inserted} question(s) · ${r.skipped} duplicate(s) · ${r.failed} failed`);
+      const r: any = await importFn({ data: { jobId: job.id, allowPartial } });
+      say(
+        `🎉 imported ${r.inserted} question(s) · ${r.skipped} duplicate(s) · ${r.failed} failed` +
+          (r.leftOut ? ` · ${r.leftOut} unsolved left out` : ""),
+      );
       toast.success(`Imported ${r.inserted} question(s)`);
       await openJob(job.id);
       refreshJobs();
@@ -230,6 +233,8 @@ function Page() {
   const allSolved = items.length > 0 && solvedCount === items.length;
   const canSolve = !!job && pagesReady && items.length > 0 && !allSolved && stage !== "solving" && !busy;
   const canImport = !!job && allSolved && stage !== "imported" && !busy;
+  const pendingSolved = items.filter((i) => i.solved && !i.imported).length;
+  const canPartialImport = !!job && !allSolved && pendingSolved > 0 && !busy;
 
   return (
     <div className="min-h-screen bg-background">
@@ -328,10 +333,16 @@ function Page() {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-sm disabled:opacity-40">
                 <Brain size={16} /> Send for answers (stage 2)
               </button>
-              <button onClick={handleImport} disabled={!canImport}
+              <button onClick={() => handleImport(false)} disabled={!canImport}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-sm disabled:opacity-40">
                 <Download size={16} /> Import
               </button>
+              {canPartialImport && (
+                <button onClick={() => handleImport(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-emerald-600 text-emerald-600 font-bold text-sm">
+                  <Download size={16} /> Import solved only ({pendingSolved})
+                </button>
+              )}
               {stage === "reading" && <span className="text-xs text-muted-foreground">waiting for Gemini to read the pages…</span>}
               {stage === "solving" && <span className="text-xs text-muted-foreground">waiting for Gemini to solve every question…</span>}
             </div>

@@ -50,7 +50,7 @@ function EventCard({ event, ar }: { event: SiteEvent; ar: boolean }) {
   const style = event.button_style;
 
   const base =
-    "group flex items-center justify-between gap-4 rounded-2xl px-6 py-5 transition hover:opacity-95";
+    "group flex w-full min-w-0 max-w-full items-center justify-between gap-3 rounded-2xl px-4 py-4 transition hover:opacity-95 sm:gap-4 sm:px-6 sm:py-5";
   const look =
     style === "outline"
       ? { className: `${base} border-2 bg-transparent`, style: { borderColor: tint, color: tint } }
@@ -71,12 +71,12 @@ function EventCard({ event, ar }: { event: SiteEvent; ar: boolean }) {
       style={look.style}
       dir={ar ? "rtl" : "ltr"}
     >
-      <span className="min-w-0">
-        <span className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] opacity-80">
-          <CalendarDays size={13} /> {ar ? "فعالية" : "Event"}
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] opacity-80 sm:text-[11px]">
+          <CalendarDays size={13} className="shrink-0" /> {ar ? "فعالية" : "Event"}
         </span>
-        <span className="mt-1 block truncate text-xl font-black">{title}</span>
-        {sub && <span className="mt-1 block truncate text-sm opacity-85">{sub}</span>}
+        <span className="mt-1 block break-words text-lg font-black leading-tight sm:text-xl">{title}</span>
+        {sub && <span className="mt-1 block break-words text-sm opacity-85">{sub}</span>}
       </span>
       <ArrowRight size={20} className="shrink-0 transition group-hover:translate-x-1" />
     </Link>
