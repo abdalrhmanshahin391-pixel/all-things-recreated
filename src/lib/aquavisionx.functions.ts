@@ -560,7 +560,7 @@ export const importAqvJob = createServerFn({ method: "POST" })
     let inserted = 0, skipped = 0, failed = 0;
     const errors: string[] = [];
 
-    for (const it of items) {
+    for (const it of importable) {
       if (it.imported) { skipped++; continue; }
       try {
         const explanation = [it.explanation || "", it.summary_table ? `\n\n${it.summary_table}` : ""].join("").trim() || null;
