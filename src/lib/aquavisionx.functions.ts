@@ -35,6 +35,62 @@ Answer and explain STRICTLY according to this textbook:
 `;
 }
 
+function isSafeResourceUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") return false;
+    const host = url.hostname.toLowerCase();
+    if (host === "localhost" || host.endsWith(".local") || /^127\./.test(host) || /^10\./.test(host)
+      || /^192\.168\./.test(host) || /^169\.254\./.test(host) || /^0\./.test(host) || host === "::1") return false;
+    const parts = host.split(".").map(Number);
+    if (parts.length === 4 && parts.every(Number.isFinite) && parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return false;
+    return true;
+  } catch { return false; }
+}
+
+function stripHtml(value: string): string {
+  return value.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ").replace(/&nbsp;/gi, " ").replace(/\s+/g, " ").trim();
+}
+
+async function buildResourceParts(supabase: any, job: any): Promise<any[]> {
+  const parts: any[] = [];
+  const kind = String(job?.resource_kind ?? "");
+  if (kind === "text" && job?.resource_text) {
+    parts.push({ text: `SUPPLIED SOURCE (pasted by the administrator):\n${String(job.resource_text).slice(0, 60_000)}\nEND SUPPLIED SOURCE` });
+  } else if (kind === "pdf" && job?.resource_storage_path) {
+    const { data, error } = await supabase.storage.from("aquavision-resources").download(job.resource_storage_path);
+    if (error || !data) throw new Error("The resource PDF could not be loaded. Remove it or upload it again.");
+    const bytes = new Uint8Array(await data.arrayBuffer());
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    parts.push({ inlineData: { mimeType: "application/pdf", data: btoa(binary) } });
+    parts.push({ text: `The attached PDF is the administrator's supplied source (${job.resource_name || "resource PDF"}). Use it as the authority for the answer.` });
+  } else if (kind === "link" && job?.resource_url) {
+    const url = String(job.resource_url);
+    if (!isSafeResourceUrl(url)) throw new Error("Resource links must be safe public HTTPS addresses.");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8_000);
+    let response: Response;
+    try { response = await fetch(url, { redirect: "error", signal: controller.signal }); }
+    finally { clearTimeout(timer); }
+    if (!response.ok) throw new Error(`The resource link could not be opened (${response.status}).`);
+    const length = Number(response.headers.get("content-length") || 0);
+    if (length > 5_000_000) throw new Error("The linked resource is too large (maximum 5 MB).");
+    const type = (response.headers.get("content-type") || "").toLowerCase();
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.length > 5_000_000) throw new Error("The linked resource is too large (maximum 5 MB).");
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    if (type.includes("application/pdf")) parts.push({ inlineData: { mimeType: "application/pdf", data: btoa(binary) } });
+    else if (type.includes("text/") || type.includes("html")) {
+      const text = new TextDecoder().decode(bytes);
+      parts.push({ text: `SUPPLIED SOURCE (${url}):\n${stripHtml(text).slice(0, 60_000)}\nEND SUPPLIED SOURCE` });
+    } else throw new Error("The resource link must open a webpage, text file, or PDF.");
+  }
+  return parts;
+}
+
 async function getGeminiKey(supabase: any): Promise<string> {
   const { data, error } = await supabase
     .from("admin_ai_keys").select("api_key, slot").eq("provider", "gemini")
@@ -74,7 +130,7 @@ function parseQuestionsPayload(text: string): any[] {
 
 type AnswerMode = "single" | "multiple";
 
-const COMBO_RE = /^\s*\d+(?:\s*(?:[,./+]|\s)\s*\d+)+\s*[.)]?\s*$/;
+const COMBO_RE = /^\s*(?:[A-Da-d]\s*[.)\-:]\s*)?\d+(?:\s*(?:[,./+;&]|\band\b|\s)\s*\d+)+\s*[.)]?\s*$/i;
 
 function parseComboSets(source: any): string[][] {
   const raw = Array.isArray(source) ? source : [];
@@ -82,7 +138,7 @@ function parseComboSets(source: any): string[][] {
   for (const entry of raw) {
     const nums = Array.isArray(entry)
       ? entry.map((v: unknown) => String(v).trim()).filter((v) => /^\d+$/.test(v))
-      : (String(entry ?? "").match(/\d+/g) ?? []);
+      : (String(entry?.text ?? entry ?? "").match(/\d+/g) ?? []);
     const uniq = [...new Set(nums)];
     if (uniq.length >= 2) sets.push(uniq);
   }
@@ -108,7 +164,9 @@ function normalizeCombinationQuestion(raw: any): {
   );
   // Printed a/b/c/d combinations: either given explicitly by the model, or read
   // back from raw combination-looking choices as a fallback.
+  const printedChoices = Array.isArray(raw?.printed_choices) ? raw.printed_choices : [];
   let comboSets = parseComboSets(raw?.combinations);
+  if (!comboSets.length) comboSets = parseComboSets(printedChoices);
   if (!comboSets.length && isCombination) {
     comboSets = parseComboSets(options.map((o: { text: string }) => o.text));
   }
@@ -235,7 +293,7 @@ async function submitBatch(apiKey: string, displayName: string, requests: any[])
 const READ_SYSTEM = `You read ONE page of a medical exam past-paper (image or text PDF page) and transcribe its questions.
 
 Return STRICT JSON only (no markdown fences):
-{"questions":[{"number":"12","answer_mode":"single|multiple","stem":"the main question, verbatim plain text","options":[{"letter":"A or 1","text":"..."}],"combinations":[[1,2],[2,3]]}]}
+{"questions":[{"number":"12","question_type":"ordinary|combination|multiple_select","answer_mode":"single|multiple","stem":"the main question, verbatim plain text","options":[{"letter":"A or 1","text":"..."}],"printed_choices":[{"letter":"A","text":"1,2"}],"combinations":[[1,2],[2,3]]}]}
 
 Rules:
 - Transcribe EVERY question that appears on this page, in reading order. Never skip one.
@@ -243,13 +301,14 @@ Rules:
 - Options may be labelled "A." "a)" "1-" or bullets — normalise the letter to A, B, C, D...
 - CRITICAL COMBINATION-QUESTION RULE — apply this independently to EVERY question on EVERY page:
   1. First inspect the answer choices. If choices labelled a/b/c/d or A/B/C/D contain only combinations of statement numbers, such as "1.2", "1, 3, 4", "1 + 2", "2/3/4", or "1 2 3 4", this is a combination question.
-  2. Set "answer_mode":"multiple".
+   2. Set "question_type":"combination" and "answer_mode":"multiple".
   3. Set "stem" to ONLY the main question line, without the numbered statements and without A/B/C/D choices.
-  4. The A/B/C/D combination choices must NOT appear in "options". Instead copy them into "combinations" as arrays of numbers, in printed order — a)1.2 b)2.3 becomes "combinations":[[1,2],[2,3]].
+   4. The A/B/C/D combination choices must NOT appear in "options". Copy each one VERBATIM into required "printed_choices", then parse it into "combinations" in printed order — a)1.2 b)2.3 becomes "printed_choices":[{"letter":"A","text":"1.2"},{"letter":"B","text":"2.3"}],"combinations":[[1,2],[2,3]].
   5. Convert EVERY numbered statement into an option: its number is "letter" and its full wording is "text". Preserve wording and order exactly.
   6. Before returning JSON, verify that every printed numbered statement is present as an option, no A/B/C/D combination remains in "options", and every printed combination is listed in "combinations".
   Required example: "Which apply? / 1. First statement / 2. Second statement / 3. Third statement / a)1.2 / b)2.3" becomes {"answer_mode":"multiple","stem":"Which apply?","options":[{"letter":"1","text":"First statement"},{"letter":"2","text":"Second statement"},{"letter":"3","text":"Third statement"}],"combinations":[[1,2],[2,3]]}.
-- Ordinary questions whose A/B/C/D choices contain answer words remain ordinary: set "answer_mode":"single", keep their answer text as A/B/C/D options, and omit "combinations" (or return []).
+- Ordinary questions whose A/B/C/D choices contain answer words remain ordinary: set "question_type":"ordinary", "answer_mode":"single", keep their answer text as A/B/C/D options, and return empty printed_choices/combinations.
+- Genuine select-all-that-apply questions without printed A/B/C/D combinations use "question_type":"multiple_select" and may have empty combinations.
 - If a question has no visible options (open/short answer), return "options": [].
 - Do NOT answer the questions and do NOT explain anything here.
 - If the page contains no questions at all (cover page, index, blank), return {"questions":[]}.`;
@@ -415,6 +474,11 @@ export const pollAqvRead = createServerFn({ method: "POST" })
         const stem = normalized.stem;
         if (stem.length < 5) continue;
         const options = normalized.options;
+        const printedChoices = Array.isArray(q?.printed_choices) ? q.printed_choices : [];
+        const looksLikeCombination = q?.question_type === "combination"
+          || (normalized.answerMode === "multiple" && normalized.options.length >= 2
+            && normalized.options.every((option) => /^\d+$/.test(option.letter)) && printedChoices.length > 0);
+        const missingCombos = looksLikeCombination && normalized.comboSets.length < 2;
         rows.push({
           job_id: data.jobId,
           page_id: page.id,
@@ -424,7 +488,9 @@ export const pollAqvRead = createServerFn({ method: "POST" })
           options,
           answer_mode: normalized.answerMode,
           combo_sets: normalized.answerMode === "multiple" ? normalized.comboSets : [],
-          status: "read",
+          printed_choices: printedChoices,
+          status: missingCombos ? "needs_combinations" : "read",
+          error: missingCombos ? "Printed A–D answer combinations were not recovered. Enter them before solving." : null,
         });
       }
       if (rows.length) {
@@ -435,7 +501,6 @@ export const pollAqvRead = createServerFn({ method: "POST" })
       await supabase.from(PAGES).update({
         status: rows.length ? "ready" : "empty",
         question_count: rows.length,
-        pdf_b64: null,
         error: rows.length ? null : "No questions found on this page",
       }).eq("id", page.id);
     }
@@ -460,15 +525,18 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
     if (notReady.length) throw new Error(`Stage 1 is not finished — ${notReady.length} page(s) still pending.`);
 
     const { data: items, error: iErr } = await supabase.from(ITEMS)
-      .select("id, stem, options, answer_mode, combo_sets, solved").eq("job_id", data.jobId).order("item_index");
+      .select("id, stem, options, answer_mode, combo_sets, printed_choices, solved, status").eq("job_id", data.jobId).order("item_index");
     if (iErr) throw iErr;
     const todo = (items ?? []).filter((it: any) => !it.solved);
     if (!todo.length) throw new Error("Every question is already solved.");
+    const blocked = todo.filter((it: any) => it.status === "needs_combinations");
+    if (blocked.length) throw new Error(`${blocked.length} combination question(s) are missing the paper's allowed sets. Repair them before solving.`);
 
     const apiKey = await getGeminiKey(supabase);
     const { data: jobRow } = await supabase.from(JOBS)
-      .select("reference_book").eq("id", data.jobId).maybeSingle();
+      .select("reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime").eq("id", data.jobId).maybeSingle();
     const refBlock = buildReferenceBlock(jobRow?.reference_book);
+    const resourceParts = await buildResourceParts(supabase, jobRow);
     const requests = todo.map((it: any) => {
       const opts = Array.isArray(it.options) ? it.options : [];
       const optText = opts.length
@@ -481,7 +549,7 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
       return {
         request: {
           systemInstruction: { parts: [{ text: SOLVE_SYSTEM }] },
-          contents: [{ role: "user", parts: [{ text: `${refBlock}ANSWER MODE: ${it.answer_mode === "multiple" ? "MULTIPLE — select every correct numbered statement" : "SINGLE — select exactly one answer"}\n${comboBlock}--- QUESTION ---\n${it.stem}\n\n${optText}\n--- END ---` }] }],
+          contents: [{ role: "user", parts: [...resourceParts, { text: `${refBlock}${resourceParts.length ? "RESOURCE RULE: Base the answer and explanation on the supplied source. If it does not contain enough evidence, return an error field instead of guessing.\n" : ""}ANSWER MODE: ${it.answer_mode === "multiple" ? "MULTIPLE — select every correct numbered statement" : "SINGLE — select exactly one answer"}\n${comboBlock}--- QUESTION ---\n${it.stem}\n\n${optText}\n--- END ---` }] }],
           generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json" },
         },
         metadata: { key: `i-${it.id}` },
@@ -548,7 +616,9 @@ export const pollAqvAnswers = createServerFn({ method: "POST" })
       let labels = parsedAnswers.length
         ? parsedAnswers
         : opts.filter((o: any) => o.is_correct).map((o: any) => o.letter);
-      if (answerMode === "multiple") labels = snapToPrintedCombo(labels, itemRow?.combo_sets);
+      const storedSets = parseComboSets(itemRow?.combo_sets);
+      if (answerMode === "multiple" && storedSets.length) labels = snapToPrintedCombo(labels, storedSets);
+      if (answerMode === "multiple" && itemRow?.status === "needs_combinations") labels = [];
       const correctLabels = new Set(labels);
       const answer = [...correctLabels].join(",");
       const explanation = String(parsed?.explanation || "").trim();
@@ -596,7 +666,7 @@ export const importAqvJob = createServerFn({ method: "POST" })
     if (!job.subject_id) throw new Error("This job has no target subject.");
 
     const { data: items, error: iErr } = await supabase.from(ITEMS)
-      .select("id, stem, options, answer_mode, explanation, summary_table, solved, imported")
+      .select("id, stem, options, answer_mode, combo_sets, status, explanation, summary_table, solved, imported")
       .eq("job_id", data.jobId).order("item_index");
     if (iErr) throw iErr;
     if (!items?.length) throw new Error("Nothing to import.");
@@ -616,6 +686,13 @@ export const importAqvJob = createServerFn({ method: "POST" })
     for (const it of importable) {
       if (it.imported) { skipped++; continue; }
       try {
+        if (it.status === "needs_combinations") throw new Error("Printed answer combinations are missing.");
+        const sets = parseComboSets(it.combo_sets);
+        if (it.answer_mode === "multiple" && sets.length) {
+          const selected = (Array.isArray(it.options) ? it.options : []).filter((o: any) => o.is_correct).map((o: any) => String(o.letter));
+          const valid = sets.some((set) => set.length === selected.length && set.every((label) => selected.includes(label)));
+          if (!valid) throw new Error("The solved answer is not one of the paper's printed combinations.");
+        }
         const explanation = [it.explanation || "", it.summary_table ? `\n\n${it.summary_table}` : ""].join("").trim() || null;
         const { data: q, error: qErr } = await supabase.from("questions").upsert(
           { subject_id: job.subject_id, stem: it.stem, explanation, answer_mode: it.answer_mode ?? "single", sort_order: sort },
@@ -673,9 +750,9 @@ export const getAqvJob = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
     const [{ data: job, error: e1 }, { data: pages, error: e2 }, { data: items, error: e3 }] = await Promise.all([
-      supabase.from(JOBS).select("id, pdf_name, total_pages, stage, status, imported_count, error, course_id, group_id, subject_id, reference_book, created_at").eq("id", data.jobId).single(),
+      supabase.from(JOBS).select("id, pdf_name, total_pages, stage, status, imported_count, error, course_id, group_id, subject_id, reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime, created_at").eq("id", data.jobId).single(),
       supabase.from(PAGES).select("id, page_number, status, question_count, error").eq("job_id", data.jobId).order("page_number"),
-      supabase.from(ITEMS).select("id, item_index, number, stem, options, answer_mode, answer_letter, concept, explanation, summary_table, solved, imported, status, error").eq("job_id", data.jobId).order("item_index"),
+      supabase.from(ITEMS).select("id, item_index, number, stem, options, answer_mode, combo_sets, printed_choices, answer_letter, concept, explanation, summary_table, solved, imported, status, error").eq("job_id", data.jobId).order("item_index"),
     ]);
     if (e1) throw e1; if (e2) throw e2; if (e3) throw e3;
     return { job, pages: pages ?? [], items: items ?? [] };
@@ -704,4 +781,60 @@ export const setAqvReferenceBook = createServerFn({ method: "POST" })
       .update({ reference_book: book || null }).eq("id", data.jobId);
     if (error) throw error;
     return { book: book || null };
+  });
+
+export const setAqvComboSets = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    itemId: z.string().uuid(),
+    combinations: z.array(z.array(z.string().regex(/^\d+$/)).min(2)).min(2).max(12),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const sets = parseComboSets(data.combinations);
+    if (sets.length < 2) throw new Error("Enter at least two printed combinations.");
+    const { error } = await supabase.from(ITEMS).update({
+      combo_sets: sets, solved: false, answer_letter: null, concept: null, explanation: null,
+      summary_table: null, status: "read", error: null,
+    }).eq("id", data.itemId);
+    if (error) throw error;
+    return { comboSets: sets };
+  });
+
+export const setAqvResource = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    jobId: z.string().uuid(), kind: z.enum(["text", "link", "pdf"]).nullable(),
+    text: z.string().max(60_000).optional(), url: z.string().max(2_000).optional(),
+    fileName: z.string().max(200).optional(), pdfBase64: z.string().max(28_000_000).optional(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const { data: existing } = await supabase.from(JOBS).select("resource_storage_path").eq("id", data.jobId).single();
+    if (existing?.resource_storage_path) await supabase.storage.from("aquavision-resources").remove([existing.resource_storage_path]);
+    if (!data.kind) {
+      const { error } = await supabase.from(JOBS).update({ resource_kind: null, resource_text: null, resource_url: null, resource_storage_path: null, resource_name: null, resource_mime: null }).eq("id", data.jobId);
+      if (error) throw error;
+      return { resource: null };
+    }
+    if (data.kind === "text" && !data.text?.trim()) throw new Error("Paste the source text first.");
+    if (data.kind === "link" && (!data.url || !isSafeResourceUrl(data.url))) throw new Error("Enter a safe public HTTPS link.");
+    let path: string | null = null;
+    if (data.kind === "pdf") {
+      if (!data.pdfBase64 || !data.fileName) throw new Error("Choose a PDF first.");
+      const binary = atob(data.pdfBase64);
+      if (binary.length > 20_000_000) throw new Error("Resource PDFs must be 20 MB or smaller.");
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      path = `${data.jobId}/${crypto.randomUUID()}.pdf`;
+      const { error: uploadError } = await supabase.storage.from("aquavision-resources").upload(path, bytes, { contentType: "application/pdf", upsert: false });
+      if (uploadError) throw uploadError;
+    }
+    const resource = {
+      resource_kind: data.kind, resource_text: data.kind === "text" ? data.text?.trim() : null,
+      resource_url: data.kind === "link" ? data.url : null, resource_storage_path: path,
+      resource_name: data.kind === "pdf" ? data.fileName : null, resource_mime: data.kind === "pdf" ? "application/pdf" : null,
+    };
+    const { error } = await supabase.from(JOBS).update(resource).eq("id", data.jobId);
+    if (error) throw error;
+    return { resource };
   });
