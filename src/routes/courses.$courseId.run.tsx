@@ -49,8 +49,25 @@ type Question = {
   stem: string;
   explanation: string | null;
   image_url: string | null;
+  answer_mode: "single" | "multiple";
   options: Option[];
 };
+
+type SelectedAnswers = Record<string, string[]>;
+
+function isExactAnswer(q: Question, selected: string[] | undefined) {
+  const chosen = new Set(selected ?? []);
+  const correct = q.options.filter((option) => option.is_correct).map((option) => option.label);
+  return chosen.size === correct.length && correct.every((label) => chosen.has(label));
+}
+
+function toggleSelection(current: string[] | undefined, label: string, multiple: boolean) {
+  if (!multiple) return [label];
+  const next = new Set(current ?? []);
+  if (next.has(label)) next.delete(label);
+  else next.add(label);
+  return [...next];
+}
 
 function RunPage() {
   const { courseId } = Route.useParams();
@@ -61,7 +78,7 @@ function RunPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [current, setCurrent] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<SelectedAnswers>({});
   const [submitted, setSubmitted] = useState<Record<string, boolean>>({});
   const [flags, setFlags] = useState<Set<string>>(new Set());
   const initialSeconds = (timed && duration > 0 ? duration : 60) * 60;
@@ -146,7 +163,7 @@ function RunPage() {
 
       const { data: qs } = await (supabase.from as any)("questions")
         .select(
-          "id,subject_id,stem,explanation,image_url,sort_order,question_options(id,label,text,is_correct,sort_order)",
+          "id,subject_id,stem,explanation,image_url,answer_mode,sort_order,question_options(id,label,text,is_correct,sort_order)",
         )
         .in("subject_id", subjectIds)
         .order("sort_order");
@@ -166,7 +183,8 @@ function RunPage() {
           .sort((a: Option, b: Option) => a.sort_order - b.sort_order);
         // Randomize A/B/C/D display order per load, re-letter by position.
         // is_correct stays with the option, so grading is unaffected.
-        const shuffled: Option[] = shuffle(originals).map((o, i) => ({
+        const isMultiple = q.answer_mode === "multiple";
+        const shuffled: Option[] = isMultiple ? originals : shuffle(originals).map((o, i) => ({
           ...o,
           label: LETTERS[i] ?? o.label,
           sort_order: i + 1,
@@ -177,6 +195,7 @@ function RunPage() {
           stem: q.stem,
           explanation: q.explanation,
           image_url: q.image_url ?? null,
+          answer_mode: isMultiple ? "multiple" : "single",
           options: shuffled,
         };
       });
@@ -210,10 +229,10 @@ function RunPage() {
 
   useEffect(() => {
     if (mode !== "study" || !questions.length) return;
-    const preset: Record<string, string> = {};
+    const preset: SelectedAnswers = {};
     for (const q of questions) {
-      const right = q.options.find((o) => o.is_correct);
-      if (right) preset[q.id] = right.label;
+      const right = q.options.filter((o) => o.is_correct).map((o) => o.label);
+      if (right.length) preset[q.id] = right;
     }
     setAnswers(preset);
   }, [mode, questions]);
@@ -231,13 +250,13 @@ function RunPage() {
   useEffect(() => {
     if (!finished || !user || mode === "study") return;
     const rows = questions.map((q) => {
-      const sel = answers[q.id];
-      const opt = q.options.find((o) => o.label === sel);
+       const sel = answers[q.id] ?? [];
       return {
         user_id: user.id,
         question_id: q.id,
-        selected_label: sel ?? null,
-        is_correct: !!opt?.is_correct,
+         selected_label: sel.join(",") || null,
+         selected_labels: sel,
+         is_correct: isExactAnswer(q, sel),
         mode,
       };
     });
@@ -253,9 +272,8 @@ function RunPage() {
     const wrongIds: string[] = [];
     for (const q of questions) {
       const a = answers[q.id];
-      if (!a) { unanswered++; continue; }
-      const opt = q.options.find((o) => o.label === a);
-      if (opt?.is_correct) correct++;
+       if (!a?.length) { unanswered++; continue; }
+       if (isExactAnswer(q, a)) correct++;
       else { wrong++; wrongIds.push(q.id); }
     }
     const total = questions.length;
@@ -349,18 +367,28 @@ function RunPage() {
   async function setCorrectOption(questionId: string, optionId: string) {
     const q = questions.find((x) => x.id === questionId);
     if (!q) return;
-    await (supabase.from as any)("question_options").update({ is_correct: false }).eq("question_id", questionId);
-    await (supabase.from as any)("question_options").update({ is_correct: true }).eq("id", optionId);
+    const target = q.options.find((option) => option.id === optionId);
+    if (!target) return;
+    if (q.answer_mode === "single") {
+      await (supabase.from as any)("question_options").update({ is_correct: false }).eq("question_id", questionId);
+    }
+    await (supabase.from as any)("question_options").update({ is_correct: !target.is_correct }).eq("id", optionId);
     setQuestions((prev) =>
       prev.map((qq) =>
         qq.id === questionId
-          ? { ...qq, options: qq.options.map((o) => ({ ...o, is_correct: o.id === optionId })) }
+           ? { ...qq, options: qq.options.map((o) => ({
+               ...o,
+               is_correct: q.answer_mode === "single" ? o.id === optionId : o.id === optionId ? !o.is_correct : o.is_correct,
+             })) }
           : qq,
       ),
     );
     if (mode === "study") {
-      const newRight = q.options.find((o) => o.id === optionId);
-      if (newRight) setAnswers((p) => ({ ...p, [questionId]: newRight.label }));
+      const nextOptions = q.options.map((o) => ({
+        ...o,
+        is_correct: q.answer_mode === "single" ? o.id === optionId : o.id === optionId ? !o.is_correct : o.is_correct,
+      }));
+      setAnswers((p) => ({ ...p, [questionId]: nextOptions.filter((o) => o.is_correct).map((o) => o.label) }));
     }
   }
 
@@ -479,7 +507,7 @@ function RunPage() {
                   <ExamCard
                     key={q.id} q={q} index={i}
                     selected={answers[q.id]}
-                    onSelect={(opt) => setAnswers((p) => ({ ...p, [q.id]: opt }))}
+                     onSelect={(opt) => setAnswers((p) => ({ ...p, [q.id]: toggleSelection(p[q.id], opt, q.answer_mode === "multiple") }))}
                     isFlagged={flags.has(q.id)}
                     onToggleFlag={() => toggleFlag(q.id)}
                   />
@@ -496,7 +524,7 @@ function RunPage() {
                 submitted={!!submitted[currentQ.id] || mode === "study"}
                 isFlagged={isFlaggedCurrent}
                 onToggleFlag={() => toggleFlag(currentQ.id)}
-                onSelect={(opt) => setAnswers((p) => ({ ...p, [currentQ.id]: opt }))}
+                 onSelect={(opt) => setAnswers((p) => ({ ...p, [currentQ.id]: toggleSelection(p[currentQ.id], opt, currentQ.answer_mode === "multiple") }))}
                 onSubmit={() => setSubmitted((p) => ({ ...p, [currentQ.id]: true }))}
                 onNext={() => {
                   if (current === questions.length - 1) setFinished(true);
@@ -525,12 +553,11 @@ function RunPage() {
               </div>
               <div className="p-3 grid grid-cols-5 gap-2">
                 {questions.map((q, i) => {
-                  const answered = !!answers[q.id];
+                   const answered = !!answers[q.id]?.length;
                   const isCurrent = i === current && mode !== "exam";
                   const wasSubmitted = !!submitted[q.id] || mode === "study";
-                  const opt = q.options.find((o) => o.label === answers[q.id]);
-                  const right = wasSubmitted && opt?.is_correct;
-                  const wrong = wasSubmitted && answered && opt && !opt.is_correct;
+                   const right = wasSubmitted && answered && isExactAnswer(q, answers[q.id]);
+                   const wrong = wasSubmitted && answered && !right;
                   const flagged = flags.has(q.id);
                   return (
                     <button
@@ -602,7 +629,7 @@ function QuestionCard({
   onToggleFlag, onSelect, onSubmit, onNext, isLast, onSetCorrect, onDelete, onCapture,
 }: {
   q: Question; mode: Mode; isAdmin: boolean;
-  selected: string | undefined; submitted: boolean; isFlagged: boolean;
+   selected: string[] | undefined; submitted: boolean; isFlagged: boolean;
   onToggleFlag: () => void; onSelect: (label: string) => void;
   onSubmit: () => void; onNext: () => void; isLast: boolean;
   onSetCorrect: (optionId: string) => void; onDelete: () => void;
@@ -639,9 +666,14 @@ function QuestionCard({
       ) : (
         <div className="px-6 py-6 text-lg leading-relaxed text-foreground font-medium">{q.stem}</div>
       )}
+      {q.answer_mode === "multiple" && (
+        <div className="mx-6 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
+          More than one answer — select all that apply.
+        </div>
+      )}
       <div className="px-6 pb-6 space-y-3">
         {q.options.map((o) => {
-          const isSelected = selected === o.label;
+          const isSelected = selected?.includes(o.label) ?? false;
           const showAnswers = submitted;
           const isRight = showAnswers && o.is_correct;
           const isWrong = showAnswers && isSelected && !o.is_correct;
@@ -678,13 +710,13 @@ function QuestionCard({
                 {isRight && <CheckCircle2 className="w-5 h-5 text-emerald-600" />}
                 {isWrong && <XCircle className="w-5 h-5 text-rose-600" />}
               </button>
-              {isAdmin && isStudy && !o.is_correct && (
+               {isAdmin && isStudy && (q.answer_mode === "multiple" || !o.is_correct) && (
                 <button
                   onClick={() => onSetCorrect(o.id)}
-                  title="Mark as the correct answer"
+                   title={o.is_correct ? "Remove from correct answers" : "Mark as a correct answer"}
                   className="px-3 rounded-xl border border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-xs font-bold inline-flex items-center gap-1"
                 >
-                  <Save className="w-3.5 h-3.5" /> Set correct
+                   <Save className="w-3.5 h-3.5" /> {o.is_correct ? "Unset" : "Set correct"}
                 </button>
               )}
             </div>
@@ -700,7 +732,7 @@ function QuestionCard({
       <div className="px-6 pb-6">
         {mode === "session" && !submitted ? (
           <button
-            disabled={!selected}
+             disabled={!selected?.length}
             onClick={onSubmit}
             className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-muted disabled:text-muted-foreground text-white font-bold transition-colors"
           >
@@ -729,14 +761,14 @@ function QuestionCard({
 function ExamCard({
   q, index, selected, onSelect, isFlagged, onToggleFlag,
 }: {
-  q: Question; index: number; selected: string | undefined;
+   q: Question; index: number; selected: string[] | undefined;
   onSelect: (label: string) => void; isFlagged: boolean; onToggleFlag: () => void;
 }) {
   return (
     <div className="medical-card grid grid-cols-1 md:grid-cols-[180px_1fr] overflow-hidden">
       <div className="px-5 py-5 border-b md:border-b-0 md:border-r border-border bg-muted">
         <div className="font-bold text-foreground">Question {index + 1}</div>
-        <div className="text-xs text-muted-foreground mt-1">{selected ? "Answered" : "Not yet answered"}</div>
+         <div className="text-xs text-muted-foreground mt-1">{selected?.length ? "Answered" : "Not yet answered"}</div>
         <button
           onClick={onToggleFlag}
           className={`mt-3 text-xs inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${
@@ -756,19 +788,21 @@ function ExamCard({
         ) : (
           <div className="text-base leading-relaxed mb-4 text-foreground">{q.stem}</div>
         )}
-        <div className="text-xs italic text-muted-foreground mb-3">Select one:</div>
+         <div className="text-xs italic text-muted-foreground mb-3">
+           {q.answer_mode === "multiple" ? "More than one answer — select all that apply:" : "Select one:"}
+         </div>
         <div className="space-y-2">
           {q.options.map((o) => (
             <label
               key={o.id}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer border transition-colors ${
-                selected === o.label
+                 selected?.includes(o.label)
                   ? "border-indigo-400 bg-indigo-50"
                   : "border-border hover:bg-muted"
               }`}
             >
               <input
-                type="radio" name={q.id} checked={selected === o.label}
+                 type={q.answer_mode === "multiple" ? "checkbox" : "radio"} name={q.id} checked={selected?.includes(o.label) ?? false}
                 onChange={() => onSelect(o.label)}
                 className="accent-indigo-600"
               />
@@ -783,7 +817,7 @@ function ExamCard({
   );
 }
 
-function ReviewCard({ q, userAnswer }: { q: Question; userAnswer: string | undefined }) {
+function ReviewCard({ q, userAnswer }: { q: Question; userAnswer: string[] | undefined }) {
   return (
     <div className="medical-card overflow-hidden">
       <div className="px-6 py-4 border-b border-border flex items-center gap-2">
@@ -797,7 +831,7 @@ function ReviewCard({ q, userAnswer }: { q: Question; userAnswer: string | undef
       )}
       <div className="px-6 pb-6 space-y-3">
         {q.options.map((o) => {
-          const isUser = userAnswer === o.label;
+           const isUser = userAnswer?.includes(o.label) ?? false;
           const isRight = o.is_correct;
           return (
             <div

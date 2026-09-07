@@ -266,6 +266,7 @@ export type Database = {
       aquavision_items: {
         Row: {
           answer_letter: string | null
+          answer_mode: string
           concept: string | null
           created_at: string
           error: string | null
@@ -284,6 +285,7 @@ export type Database = {
         }
         Insert: {
           answer_letter?: string | null
+          answer_mode?: string
           concept?: string | null
           created_at?: string
           error?: string | null
@@ -302,6 +304,7 @@ export type Database = {
         }
         Update: {
           answer_letter?: string | null
+          answer_mode?: string
           concept?: string | null
           created_at?: string
           error?: string | null
@@ -3738,6 +3741,7 @@ export type Database = {
           mode: string
           question_id: string
           selected_label: string | null
+          selected_labels: string[] | null
           user_id: string
         }
         Insert: {
@@ -3747,6 +3751,7 @@ export type Database = {
           mode: string
           question_id: string
           selected_label?: string | null
+          selected_labels?: string[] | null
           user_id: string
         }
         Update: {
@@ -3756,6 +3761,7 @@ export type Database = {
           mode?: string
           question_id?: string
           selected_label?: string | null
+          selected_labels?: string[] | null
           user_id?: string
         }
         Relationships: [
@@ -3870,6 +3876,7 @@ export type Database = {
       }
       questions: {
         Row: {
+          answer_mode: string
           created_at: string
           explanation: string | null
           id: string
@@ -3881,6 +3888,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          answer_mode?: string
           created_at?: string
           explanation?: string | null
           id?: string
@@ -3892,6 +3900,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          answer_mode?: string
           created_at?: string
           explanation?: string | null
           id?: string

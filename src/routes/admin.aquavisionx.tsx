@@ -343,6 +343,9 @@ function Page() {
                     <div className="flex items-center gap-2 text-xs">
                       <span className="font-bold">{it.number ? `Q${it.number}` : `#${it.item_index + 1}`}</span>
                       <StagePill stage={it.status} />
+                      {it.answer_mode === "multiple" && (
+                        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-black text-amber-700">MULTIPLE</span>
+                      )}
                       {it.answer_letter && <span className="ml-auto font-black text-emerald-600">{it.answer_letter}</span>}
                     </div>
                     <p className="text-sm mt-1 line-clamp-2">{it.stem}</p>

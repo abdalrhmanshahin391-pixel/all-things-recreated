@@ -1,0 +1,4 @@
+- [x] Add universal AquaVisionX combination conversion and multi-answer solving
+- [x] Add question answer-mode storage and transfer support
+- [x] Add exact multi-select behavior throughout student quiz modes
+- [x] Verify sample conversion, checks, and live build
