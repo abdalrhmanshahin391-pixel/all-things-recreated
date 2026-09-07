@@ -208,12 +208,15 @@ function Page() {
     } finally { setBusy(false); }
   }
 
-  async function handleImport() {
+  async function handleImport(allowPartial = false) {
     if (!job?.id) return;
     setBusy(true);
     try {
-      const r: any = await importFn({ data: { jobId: job.id } });
-      say(`🎉 imported ${r.inserted} question(s) · ${r.skipped} duplicate(s) · ${r.failed} failed`);
+      const r: any = await importFn({ data: { jobId: job.id, allowPartial } });
+      say(
+        `🎉 imported ${r.inserted} question(s) · ${r.skipped} duplicate(s) · ${r.failed} failed` +
+          (r.leftOut ? ` · ${r.leftOut} unsolved left out` : ""),
+      );
       toast.success(`Imported ${r.inserted} question(s)`);
       await openJob(job.id);
       refreshJobs();
