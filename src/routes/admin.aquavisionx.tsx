@@ -20,6 +20,8 @@ import {
   getAqvJob,
   deleteAqvJob,
   setAqvReferenceBook,
+  setAqvComboSets,
+  setAqvResource,
 } from "@/lib/aquavisionx.functions";
 import { ReferenceBookCard } from "@/components/admin/ReferenceBookCard";
 
@@ -91,6 +93,8 @@ function Page() {
   const getFn = useServerFn(getAqvJob);
   const delFn = useServerFn(deleteAqvJob);
   const setBook = useServerFn(setAqvReferenceBook);
+  const setCombos = useServerFn(setAqvComboSets);
+  const setResource = useServerFn(setAqvResource);
 
   const say = (m: string) => setLog((p) => [`${new Date().toLocaleTimeString()} · ${m}`, ...p].slice(0, 120));
 
@@ -231,7 +235,8 @@ function Page() {
   const pagesReady = pages.length > 0 && pages.every((p) => p.status === "ready" || p.status === "empty");
   const solvedCount = items.filter((i) => i.solved).length;
   const allSolved = items.length > 0 && solvedCount === items.length;
-  const canSolve = !!job && pagesReady && items.length > 0 && !allSolved && stage !== "solving" && !busy;
+  const missingComboCount = items.filter((i) => i.status === "needs_combinations").length;
+  const canSolve = !!job && pagesReady && items.length > 0 && !allSolved && !missingComboCount && stage !== "solving" && !busy;
   const canImport = !!job && allSolved && stage !== "imported" && !busy;
   const pendingSolved = items.filter((i) => i.solved && !i.imported).length;
   const canPartialImport = !!job && !allSolved && pendingSolved > 0 && !busy;
@@ -316,6 +321,9 @@ function Page() {
             <div className="mt-4">
               <ReferenceBookCard
                 saved={(job as any).reference_book ?? null}
+                resource={{
+                  kind: job.resource_kind, text: job.resource_text, url: job.resource_url, name: job.resource_name,
+                }}
                 onSave={async (book) => {
                   try {
                     const res = await setBook({ data: { jobId: job.id, book } });
@@ -325,8 +333,31 @@ function Page() {
                     toast.error(e?.message || "Could not save the book");
                   }
                 }}
+                onSaveResource={async (value) => {
+                  try {
+                    let pdfBase64: string | undefined;
+                    if (value?.kind === "pdf") {
+                      if (!value.file) throw new Error("Choose a PDF first.");
+                      if (value.file.size > 20_000_000) throw new Error("Resource PDFs must be 20 MB or smaller.");
+                      pdfBase64 = await blobToBase64(value.file);
+                    }
+                    await setResource({ data: {
+                      jobId: job.id, kind: value?.kind ?? null, text: value?.text, url: value?.url,
+                      fileName: value?.file?.name, pdfBase64,
+                    } });
+                    await openJob(job.id);
+                    toast.success(value ? "Answer resource saved" : "Answer resource removed");
+                  } catch (e: any) { toast.error(e?.message || "Could not save the resource"); }
+                }}
               />
             </div>
+
+            {missingComboCount > 0 && (
+              <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm text-amber-800 dark:text-amber-300">
+                <p className="font-black">{missingComboCount} combination question(s) need the printed A–D sets.</p>
+                <p className="mt-1 text-xs">Enter each printed choice separated by a slash, for example: 1,2,3,4 / 1,4 / 2,3 / 1,2. Stage 2 stays blocked until this is repaired.</p>
+              </div>
+            )}
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button onClick={handleSolve} disabled={!canSolve}
@@ -362,6 +393,15 @@ function Page() {
                     <p className="text-sm mt-1 line-clamp-2">{it.stem}</p>
                     {it.concept && <p className="text-[11px] text-muted-foreground mt-0.5">{it.concept}</p>}
                     {it.error && <p className="text-[11px] text-destructive mt-0.5">{it.error}</p>}
+                    {it.status === "needs_combinations" && (
+                      <CombinationRepair onSave={async (sets) => {
+                        try {
+                          await setCombos({ data: { itemId: it.id, combinations: sets } });
+                          await openJob(job.id);
+                          toast.success("Printed combinations saved");
+                        } catch (e: any) { toast.error(e?.message || "Could not save combinations"); }
+                      }} />
+                    )}
                   </li>
                 ))}
               </ul>
@@ -399,6 +439,22 @@ function Page() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function CombinationRepair({ onSave }: { onSave: (sets: string[][]) => Promise<void> }) {
+  const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const parse = () => value.split(/[\/\n]/).map((part) => [...new Set(part.match(/\d+/g) ?? [])]).filter((set) => set.length >= 2);
+  return (
+    <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+      <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="1,2,3,4 / 1,4 / 2,3 / 1,2"
+        className="min-w-0 flex-1 rounded-lg border border-amber-500/40 bg-background px-3 py-2 text-xs" />
+      <button type="button" disabled={saving || parse().length < 2} onClick={async () => { setSaving(true); try { await onSave(parse()); } finally { setSaving(false); } }}
+        className="inline-flex items-center justify-center gap-1 rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-primary-foreground disabled:opacity-40">
+        {saving ? <Loader2 className="animate-spin" size={13} /> : <Check size={13} />} Save printed sets
+      </button>
     </div>
   );
 }
