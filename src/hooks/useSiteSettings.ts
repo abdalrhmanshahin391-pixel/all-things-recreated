@@ -26,6 +26,8 @@ export type SiteSettings = {
   theme: SiteTheme;
   show_signature: boolean;
   protect_enabled: boolean;
+  protect_lectures: boolean;
+  protect_qbank: boolean;
   protect_watermark_opacity: number;
   protect_blur_on_blur: boolean;
   protect_block_print: boolean;
