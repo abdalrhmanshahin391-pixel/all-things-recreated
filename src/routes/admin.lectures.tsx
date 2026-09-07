@@ -499,6 +499,7 @@ function AdminLecturesPage() {
                         optionsByQuestion={optionsByQuestion}
                         onRename={(t) => renameSubject(s.id, t)}
                         onDelete={() => deleteSubject(s.id)}
+                        onToggleHidden={(next) => toggleSubjectHidden(s.id, next)}
                         onReorder={(d) => reorderSubject(s.id, d)}
                         onAddLecture={(t, u, f, pu, pf) => addLecture(s.id, t, u, f, pu, pf)}
                         onAddQuiz={(t) => addQuiz(s.id, t)}
