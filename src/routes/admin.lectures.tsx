@@ -632,6 +632,7 @@ function SubjectBlock(props: {
   optionsByQuestion: Map<string, QOption[]>;
   onRename: (t: string) => void;
   onDelete: () => void;
+  onToggleHidden: (next: boolean) => void;
   onReorder: (d: -1 | 1) => void;
   onAddLecture: (t: string, url: string, file: File | null, pdfUrl: string, pdfFile: File | null) => void;
   onAddQuiz: (t: string) => void;
@@ -689,6 +690,14 @@ function SubjectBlock(props: {
             {subject.title}
           </button>
         )}
+        <button
+          onClick={() => props.onToggleHidden(!subject.hidden)}
+          className="text-xs px-2 py-1 rounded border border-white/15 text-white/60 hover:text-white inline-flex items-center gap-1"
+          title={subject.hidden ? "Hidden from students — click to show" : "Visible — click to hide"}
+        >
+          {subject.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+          {subject.hidden ? "Hidden" : "Visible"}
+        </button>
         <button onClick={() => setOpen((v) => !v)} className="text-xs text-white/50 hover:text-white px-2">
           {open ? "Collapse" : "Expand"}
         </button>
