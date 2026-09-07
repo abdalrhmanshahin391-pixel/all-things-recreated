@@ -156,7 +156,15 @@ Rules:
 - Transcribe EVERY question that appears on this page, in reading order. Never skip one.
 - Copy the stem and every option VERBATIM. Do not shorten, translate or fix them.
 - Options may be labelled "A." "a)" "1-" or bullets — normalise the letter to A, B, C, D...
-- IMPORTANT: if the lettered choices are combinations of numbered statements (e.g. a)1.2  b)1.3.4  c)1.2.3.4  d)3.4), then those numbered statements 1,2,3,4 are PART OF THE STEM, not options. Put the question line then each numbered statement verbatim on its own line inside "stem", and use only the lettered combinations as "options".
+- CRITICAL COMBINATION-QUESTION RULE — apply this independently to EVERY question on EVERY page:
+  1. First inspect the answer choices. If choices labelled a/b/c/d or A/B/C/D contain only combinations of statement numbers, such as "1.2", "1, 3, 4", "1 + 2", "2/3/4", or "1 2 3 4", this is a combination question.
+  2. In a combination question, every numbered statement printed between the main question line and the lettered choices is REQUIRED QUESTION CONTENT. It is never an option to discard.
+  3. Set "stem" to the main question line followed by EVERY numbered statement with its number and full wording, verbatim and in printed order, one statement per line.
+  4. Set "options" to ONLY the lettered combination choices. Preserve each combination exactly as printed.
+  5. Never return bare number combinations unless the corresponding numbered statements and their words are present in "stem". Include all printed numbered statements, even if one is not referenced by every choice.
+  6. Before returning JSON, check every number referenced by a combination choice. Its numbered statement and wording MUST appear in "stem". If any is absent, reread the page and add it.
+  Required pattern example: printed text "Which apply? / 1. First statement / 2. Second statement / 3. Third statement / a)1.2 / b)2.3" becomes {"stem":"Which apply?\n1. First statement\n2. Second statement\n3. Third statement","options":[{"letter":"A","text":"1.2"},{"letter":"B","text":"2.3"}]}.
+- Ordinary questions whose A/B/C/D choices contain answer words rather than combinations of statement numbers remain ordinary: keep their main question in "stem" and their answer text in "options".
 - If a question has no visible options (open/short answer), return "options": [].
 - Do NOT answer the questions and do NOT explain anything here.
 - If the page contains no questions at all (cover page, index, blank), return {"questions":[]}.`;
