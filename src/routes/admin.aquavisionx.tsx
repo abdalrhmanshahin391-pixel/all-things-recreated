@@ -233,6 +233,8 @@ function Page() {
   const allSolved = items.length > 0 && solvedCount === items.length;
   const canSolve = !!job && pagesReady && items.length > 0 && !allSolved && stage !== "solving" && !busy;
   const canImport = !!job && allSolved && stage !== "imported" && !busy;
+  const pendingSolved = items.filter((i) => i.solved && !i.imported).length;
+  const canPartialImport = !!job && !allSolved && pendingSolved > 0 && !busy;
 
   return (
     <div className="min-h-screen bg-background">
