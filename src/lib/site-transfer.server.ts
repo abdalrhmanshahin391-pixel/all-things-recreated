@@ -58,6 +58,13 @@ export async function buildOverview(admin: any, mode: TransferMode): Promise<Tra
     for (const c of courses.data ?? []) push("course-images", c.image_url);
     if (mode === "all") {
       for (const c of courses.data ?? []) push("lecture-videos", c.intro_video_storage_path);
+      const lecItems = await admin
+        .from("lecture_items")
+        .select("video_storage_path,pdf_storage_path");
+      for (const i of (lecItems.data ?? []) as Array<Record<string, string | null>>) {
+        push("lecture-videos", i["video_storage_path"] ?? null);
+        push("lecture-pdfs", i["pdf_storage_path"] ?? null);
+      }
     }
     if (s?.logo_url) push("site-media", s.logo_url);
     const questions = await admin.from("questions").select("image_url");
