@@ -549,9 +549,12 @@ function AdminLecturesPage() {
               </section>
             </div>
 
-            <div className="space-y-6">
-              <GrantAccessCard courseId={activeCourse.id} />
-            </div>
+            {canOwnerEdit && (
+              <div className="space-y-6">
+                <GrantAccessCard courseId={activeCourse.id} />
+              </div>
+            )}
+
           </div>
         )}
       </main>
