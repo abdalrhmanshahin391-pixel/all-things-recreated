@@ -133,10 +133,10 @@ function LectureCoursePage() {
       if (c?.image_url) resolveCourseImageUrl(c.image_url).then((u) => !cancelled && setCoverUrl(u));
 
       const { data: subs } = await (supabase.from as any)("lecture_subjects")
-        .select("id,title,position")
+        .select("id,title,position,hidden")
         .eq("course_id", courseId)
         .order("position");
-      const subjList = ((subs ?? []) as Subject[]);
+      const subjList = (((subs ?? []) as Subject[])).filter((s) => isAdmin || !s.hidden);
       if (!cancelled) {
         setSubjects(subjList);
         if (subjList.length && openSubject === null) setOpenSubject(subjList[0].id);
