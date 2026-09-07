@@ -38,11 +38,12 @@ type Course = {
   title: string;
   year: number;
   published: boolean;
+  university_id: string;
   intro_video_url: string | null;
   intro_video_storage_path: string | null;
   intro_free: boolean;
 };
-type Subject = { id: string; course_id: string; title: string; position: number };
+type Subject = { id: string; course_id: string; title: string; position: number; hidden?: boolean };
 type Item = {
   id: string;
   subject_id: string;
