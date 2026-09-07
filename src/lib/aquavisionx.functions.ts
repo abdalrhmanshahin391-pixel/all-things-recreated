@@ -540,14 +540,16 @@ export const pollAqvAnswers = createServerFn({ method: "POST" })
             is_correct: !!o?.is_correct,
           })).filter((o: any) => o.text)
         : [];
-      const { data: itemRow } = await supabase.from(ITEMS).select("answer_mode").eq("id", itemId).single();
+      const { data: itemRow } = await supabase.from(ITEMS).select("answer_mode, combo_sets").eq("id", itemId).single();
       const answerMode: AnswerMode = itemRow?.answer_mode === "multiple" ? "multiple" : "single";
       const parsedAnswers = Array.isArray(parsed?.answer_letters)
         ? parsed.answer_letters.map((value: unknown) => String(value).trim()).filter(Boolean)
         : String(parsed?.answer_letter || "").split(",").map((value) => value.trim()).filter(Boolean);
-      const correctLabels = new Set(parsedAnswers.length
+      let labels = parsedAnswers.length
         ? parsedAnswers
-        : opts.filter((o: any) => o.is_correct).map((o: any) => o.letter));
+        : opts.filter((o: any) => o.is_correct).map((o: any) => o.letter);
+      if (answerMode === "multiple") labels = snapToPrintedCombo(labels, itemRow?.combo_sets);
+      const correctLabels = new Set(labels);
       const answer = [...correctLabels].join(",");
       const explanation = String(parsed?.explanation || "").trim();
       const ok = opts.length >= 2 && correctLabels.size >= 1
