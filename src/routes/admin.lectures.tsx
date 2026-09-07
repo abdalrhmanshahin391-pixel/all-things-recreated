@@ -38,11 +38,12 @@ type Course = {
   title: string;
   year: number;
   published: boolean;
+  university_id: string;
   intro_video_url: string | null;
   intro_video_storage_path: string | null;
   intro_free: boolean;
 };
-type Subject = { id: string; course_id: string; title: string; position: number };
+type Subject = { id: string; course_id: string; title: string; position: number; hidden?: boolean };
 type Item = {
   id: string;
   subject_id: string;
@@ -94,7 +95,7 @@ function AdminLecturesPage() {
   async function loadCourses() {
     const { data } = await supabase
       .from("courses")
-      .select("id,title,year,published,intro_video_url,intro_video_storage_path,intro_free")
+      .select("id,title,year,published,university_id,intro_video_url,intro_video_storage_path,intro_free")
       .eq("kind", "lectures")
       .order("year")
       .order("title");
@@ -109,7 +110,7 @@ function AdminLecturesPage() {
 
   async function refreshSyllabus(cid: string) {
     const { data: subs } = await (supabase.from as any)("lecture_subjects")
-      .select("id,course_id,title,position")
+      .select("id,course_id,title,position,hidden")
       .eq("course_id", cid)
       .order("position");
     const subjList = (subs ?? []) as Subject[];
@@ -209,16 +210,28 @@ function AdminLecturesPage() {
   // --- Subject ops ---
   async function addSubject(title: string) {
     if (!title.trim() || !activeCourseId) return;
+    const course = courses.find((c) => c.id === activeCourseId);
+    if (!course) return;
     setBusy(true);
     const position = subjects.length;
     const { error } = await (supabase.from as any)("lecture_subjects")
-      .insert({ course_id: activeCourseId, title: title.trim(), position });
+      .insert({
+        course_id: activeCourseId,
+        university_id: course.university_id,
+        title: title.trim(),
+        position,
+      });
     setBusy(false);
     if (error) setError(error.message);
     else refreshSyllabus(activeCourseId);
   }
   async function renameSubject(id: string, title: string) {
     const { error } = await (supabase.from as any)("lecture_subjects").update({ title }).eq("id", id);
+    if (error) setError(error.message);
+    else refreshSyllabus(activeCourseId);
+  }
+  async function toggleSubjectHidden(id: string, next: boolean) {
+    const { error } = await (supabase.from as any)("lecture_subjects").update({ hidden: next }).eq("id", id);
     if (error) setError(error.message);
     else refreshSyllabus(activeCourseId);
   }
@@ -486,6 +499,7 @@ function AdminLecturesPage() {
                         optionsByQuestion={optionsByQuestion}
                         onRename={(t) => renameSubject(s.id, t)}
                         onDelete={() => deleteSubject(s.id)}
+                        onToggleHidden={(next) => toggleSubjectHidden(s.id, next)}
                         onReorder={(d) => reorderSubject(s.id, d)}
                         onAddLecture={(t, u, f, pu, pf) => addLecture(s.id, t, u, f, pu, pf)}
                         onAddQuiz={(t) => addQuiz(s.id, t)}
@@ -624,6 +638,7 @@ function SubjectBlock(props: {
   optionsByQuestion: Map<string, QOption[]>;
   onRename: (t: string) => void;
   onDelete: () => void;
+  onToggleHidden: (next: boolean) => void;
   onReorder: (d: -1 | 1) => void;
   onAddLecture: (t: string, url: string, file: File | null, pdfUrl: string, pdfFile: File | null) => void;
   onAddQuiz: (t: string) => void;
@@ -681,6 +696,14 @@ function SubjectBlock(props: {
             {subject.title}
           </button>
         )}
+        <button
+          onClick={() => props.onToggleHidden(!subject.hidden)}
+          className="text-xs px-2 py-1 rounded border border-white/15 text-white/60 hover:text-white inline-flex items-center gap-1"
+          title={subject.hidden ? "Hidden from students — click to show" : "Visible — click to hide"}
+        >
+          {subject.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+          {subject.hidden ? "Hidden" : "Visible"}
+        </button>
         <button onClick={() => setOpen((v) => !v)} className="text-xs text-white/50 hover:text-white px-2">
           {open ? "Collapse" : "Expand"}
         </button>

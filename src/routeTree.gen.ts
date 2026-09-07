@@ -56,6 +56,7 @@ import { Route as AdminJarvisBatchRouteImport } from './routes/admin.jarvis-batc
 import { Route as AdminJarvisBatchGermanIpadRouteImport } from './routes/admin.jarvis-batch-german-ipad'
 import { Route as AdminJarvisBatchV2RouteImport } from './routes/admin.jarvis-batch-v2'
 import { Route as AdminJarvisBatchV2IpadRouteImport } from './routes/admin.jarvis-batch-v2-ipad'
+import { Route as AdminLectureCentreRouteImport } from './routes/admin.lecture-centre'
 import { Route as AdminLecturesRouteImport } from './routes/admin.lectures'
 import { Route as AdminLegalRouteImport } from './routes/admin.legal'
 import { Route as AdminMarketingRouteImport } from './routes/admin.marketing'
@@ -116,6 +117,7 @@ import { Route as AdminPagesIndexRouteImport } from './routes/admin.pages.index'
 import { Route as AdminPagesPageIdRouteImport } from './routes/admin.pages.$pageId'
 import { Route as AdminUniTilesUniIdRouteImport } from './routes/admin.uni-tiles.$uniId'
 import { Route as ApiGermanTtsRouteImport } from './routes/api/german/tts'
+import { Route as ApiPublicLectureRemindersRouteImport } from './routes/api/public/lecture-reminders'
 import { Route as ApiPublicPushDispatchRouteImport } from './routes/api/public/push-dispatch'
 import { Route as CommitteeYearIndexRouteImport } from './routes/committee.$year.index'
 import { Route as CommitteeYearSubjectRouteImport } from './routes/committee.$year.$subject'
@@ -377,6 +379,11 @@ const AdminJarvisBatchV2Route = AdminJarvisBatchV2RouteImport.update({
 const AdminJarvisBatchV2IpadRoute = AdminJarvisBatchV2IpadRouteImport.update({
   id: '/admin/jarvis-batch-v2-ipad',
   path: '/admin/jarvis-batch-v2-ipad',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLectureCentreRoute = AdminLectureCentreRouteImport.update({
+  id: '/admin/lecture-centre',
+  path: '/admin/lecture-centre',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminLecturesRoute = AdminLecturesRouteImport.update({
@@ -680,6 +687,12 @@ const ApiGermanTtsRoute = ApiGermanTtsRouteImport.update({
   path: '/api/german/tts',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicLectureRemindersRoute =
+  ApiPublicLectureRemindersRouteImport.update({
+    id: '/api/public/lecture-reminders',
+    path: '/api/public/lecture-reminders',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicPushDispatchRoute = ApiPublicPushDispatchRouteImport.update({
   id: '/api/public/push-dispatch',
   path: '/api/public/push-dispatch',
@@ -852,6 +865,7 @@ export interface FileRoutesByFullPath {
   '/admin/jarvis-batch-german-ipad': typeof AdminJarvisBatchGermanIpadRoute
   '/admin/jarvis-batch-v2': typeof AdminJarvisBatchV2Route
   '/admin/jarvis-batch-v2-ipad': typeof AdminJarvisBatchV2IpadRoute
+  '/admin/lecture-centre': typeof AdminLectureCentreRoute
   '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
@@ -910,6 +924,7 @@ export interface FileRoutesByFullPath {
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
   '/api/german/tts': typeof ApiGermanTtsRoute
+  '/api/public/lecture-reminders': typeof ApiPublicLectureRemindersRoute
   '/api/public/push-dispatch': typeof ApiPublicPushDispatchRoute
   '/committee/$year/$subject': typeof CommitteeYearSubjectRoute
   '/courses/$courseId/checkout': typeof CoursesCourseIdCheckoutRoute
@@ -980,6 +995,7 @@ export interface FileRoutesByTo {
   '/admin/jarvis-batch-german-ipad': typeof AdminJarvisBatchGermanIpadRoute
   '/admin/jarvis-batch-v2': typeof AdminJarvisBatchV2Route
   '/admin/jarvis-batch-v2-ipad': typeof AdminJarvisBatchV2IpadRoute
+  '/admin/lecture-centre': typeof AdminLectureCentreRoute
   '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
@@ -1035,6 +1051,7 @@ export interface FileRoutesByTo {
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
   '/api/german/tts': typeof ApiGermanTtsRoute
+  '/api/public/lecture-reminders': typeof ApiPublicLectureRemindersRoute
   '/api/public/push-dispatch': typeof ApiPublicPushDispatchRoute
   '/committee/$year/$subject': typeof CommitteeYearSubjectRoute
   '/courses/$courseId/checkout': typeof CoursesCourseIdCheckoutRoute
@@ -1110,6 +1127,7 @@ export interface FileRoutesById {
   '/admin/jarvis-batch-german-ipad': typeof AdminJarvisBatchGermanIpadRoute
   '/admin/jarvis-batch-v2': typeof AdminJarvisBatchV2Route
   '/admin/jarvis-batch-v2-ipad': typeof AdminJarvisBatchV2IpadRoute
+  '/admin/lecture-centre': typeof AdminLectureCentreRoute
   '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
@@ -1168,6 +1186,7 @@ export interface FileRoutesById {
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
   '/api/german/tts': typeof ApiGermanTtsRoute
+  '/api/public/lecture-reminders': typeof ApiPublicLectureRemindersRoute
   '/api/public/push-dispatch': typeof ApiPublicPushDispatchRoute
   '/committee/$year/$subject': typeof CommitteeYearSubjectRoute
   '/courses/$courseId/checkout': typeof CoursesCourseIdCheckoutRoute
@@ -1245,6 +1264,7 @@ export interface FileRouteTypes {
     | '/admin/jarvis-batch-german-ipad'
     | '/admin/jarvis-batch-v2'
     | '/admin/jarvis-batch-v2-ipad'
+    | '/admin/lecture-centre'
     | '/admin/lectures'
     | '/admin/legal'
     | '/admin/marketing'
@@ -1303,6 +1323,7 @@ export interface FileRouteTypes {
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
     | '/api/german/tts'
+    | '/api/public/lecture-reminders'
     | '/api/public/push-dispatch'
     | '/committee/$year/$subject'
     | '/courses/$courseId/checkout'
@@ -1373,6 +1394,7 @@ export interface FileRouteTypes {
     | '/admin/jarvis-batch-german-ipad'
     | '/admin/jarvis-batch-v2'
     | '/admin/jarvis-batch-v2-ipad'
+    | '/admin/lecture-centre'
     | '/admin/lectures'
     | '/admin/legal'
     | '/admin/marketing'
@@ -1428,6 +1450,7 @@ export interface FileRouteTypes {
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
     | '/api/german/tts'
+    | '/api/public/lecture-reminders'
     | '/api/public/push-dispatch'
     | '/committee/$year/$subject'
     | '/courses/$courseId/checkout'
@@ -1502,6 +1525,7 @@ export interface FileRouteTypes {
     | '/admin/jarvis-batch-german-ipad'
     | '/admin/jarvis-batch-v2'
     | '/admin/jarvis-batch-v2-ipad'
+    | '/admin/lecture-centre'
     | '/admin/lectures'
     | '/admin/legal'
     | '/admin/marketing'
@@ -1560,6 +1584,7 @@ export interface FileRouteTypes {
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
     | '/api/german/tts'
+    | '/api/public/lecture-reminders'
     | '/api/public/push-dispatch'
     | '/committee/$year/$subject'
     | '/courses/$courseId/checkout'
@@ -1636,6 +1661,7 @@ export interface RootRouteChildren {
   AdminJarvisBatchGermanIpadRoute: typeof AdminJarvisBatchGermanIpadRoute
   AdminJarvisBatchV2Route: typeof AdminJarvisBatchV2Route
   AdminJarvisBatchV2IpadRoute: typeof AdminJarvisBatchV2IpadRoute
+  AdminLectureCentreRoute: typeof AdminLectureCentreRoute
   AdminLecturesRoute: typeof AdminLecturesRoute
   AdminLegalRoute: typeof AdminLegalRoute
   AdminMarketingRoute: typeof AdminMarketingRoute
@@ -1680,6 +1706,7 @@ export interface RootRouteChildren {
   AdminPagesPageIdRoute: typeof AdminPagesPageIdRoute
   AdminUniTilesUniIdRoute: typeof AdminUniTilesUniIdRoute
   ApiGermanTtsRoute: typeof ApiGermanTtsRoute
+  ApiPublicLectureRemindersRoute: typeof ApiPublicLectureRemindersRoute
   ApiPublicPushDispatchRoute: typeof ApiPublicPushDispatchRoute
   GermanCourseIdExamRoute: typeof GermanCourseIdExamRoute
   GermanCourseIdMatchRoute: typeof GermanCourseIdMatchRoute
@@ -2027,6 +2054,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/jarvis-batch-v2-ipad'
       fullPath: '/admin/jarvis-batch-v2-ipad'
       preLoaderRoute: typeof AdminJarvisBatchV2IpadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/lecture-centre': {
+      id: '/admin/lecture-centre'
+      path: '/admin/lecture-centre'
+      fullPath: '/admin/lecture-centre'
+      preLoaderRoute: typeof AdminLectureCentreRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/lectures': {
@@ -2449,6 +2483,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGermanTtsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/lecture-reminders': {
+      id: '/api/public/lecture-reminders'
+      path: '/api/public/lecture-reminders'
+      fullPath: '/api/public/lecture-reminders'
+      preLoaderRoute: typeof ApiPublicLectureRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/push-dispatch': {
       id: '/api/public/push-dispatch'
       path: '/api/public/push-dispatch'
@@ -2814,6 +2855,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminJarvisBatchGermanIpadRoute: AdminJarvisBatchGermanIpadRoute,
   AdminJarvisBatchV2Route: AdminJarvisBatchV2Route,
   AdminJarvisBatchV2IpadRoute: AdminJarvisBatchV2IpadRoute,
+  AdminLectureCentreRoute: AdminLectureCentreRoute,
   AdminLecturesRoute: AdminLecturesRoute,
   AdminLegalRoute: AdminLegalRoute,
   AdminMarketingRoute: AdminMarketingRoute,
@@ -2858,6 +2900,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminPagesPageIdRoute: AdminPagesPageIdRoute,
   AdminUniTilesUniIdRoute: AdminUniTilesUniIdRoute,
   ApiGermanTtsRoute: ApiGermanTtsRoute,
+  ApiPublicLectureRemindersRoute: ApiPublicLectureRemindersRoute,
   ApiPublicPushDispatchRoute: ApiPublicPushDispatchRoute,
   GermanCourseIdExamRoute: GermanCourseIdExamRoute,
   GermanCourseIdMatchRoute: GermanCourseIdMatchRoute,

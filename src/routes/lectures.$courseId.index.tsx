@@ -22,6 +22,8 @@ import { resolveLectureVideoUrl, resolveLecturePdfUrl } from "@/lib/lecture-vide
 import { IntroVideoModal } from "@/components/lectures/IntroVideoModal";
 import { LecturePdfModal } from "@/components/lectures/LecturePdfModal";
 import { ProtectedContent } from "@/components/protect/ProtectedContent";
+import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
+import { CourseMaterialsList, LiveClassesList } from "@/components/lectures/LectureExtras";
 import { ensureFreeEnrollment } from "@/lib/course-access";
 
 export const Route = createFileRoute("/lectures/$courseId/")({
@@ -76,7 +78,7 @@ type Course = {
   intro_free: boolean;
 };
 
-type Subject = { id: string; title: string; position: number };
+type Subject = { id: string; title: string; position: number; hidden?: boolean };
 type Item = {
   id: string;
   subject_id: string;
@@ -131,10 +133,10 @@ function LectureCoursePage() {
       if (c?.image_url) resolveCourseImageUrl(c.image_url).then((u) => !cancelled && setCoverUrl(u));
 
       const { data: subs } = await (supabase.from as any)("lecture_subjects")
-        .select("id,title,position")
+        .select("id,title,position,hidden")
         .eq("course_id", courseId)
         .order("position");
-      const subjList = ((subs ?? []) as Subject[]);
+      const subjList = (((subs ?? []) as Subject[])).filter((s) => isAdmin || !s.hidden);
       if (!cancelled) {
         setSubjects(subjList);
         if (subjList.length && openSubject === null) setOpenSubject(subjList[0].id);
@@ -267,6 +269,10 @@ function LectureCoursePage() {
         >
           <ArrowLeft className="w-3 h-3" /> Back to lectures
         </Link>
+
+        <ProtectionNotice className="mt-4" />
+
+
 
         <div className="mt-6 grid md:grid-cols-[1.1fr_1fr] gap-6 items-start">
           <button
@@ -407,6 +413,11 @@ function LectureCoursePage() {
             </div>
           )}
         </section>
+
+        {owns && <CourseMaterialsList courseId={courseId} />}
+        {owns && <LiveClassesList courseId={courseId} />}
+
+
 
         {isAdmin && (
           <div className="mt-10 rounded-lg border border-border bg-card p-5 flex items-center justify-between gap-4">

@@ -42,6 +42,8 @@ const KIND_LABEL: Record<string, string> = {
 
 type Toggles = {
   protect_enabled: boolean;
+  protect_lectures: boolean;
+  protect_qbank: boolean;
   protect_blur_on_blur: boolean;
   protect_block_print: boolean;
   protect_block_copy: boolean;
@@ -54,6 +56,8 @@ type Toggles = {
 
 const DEFAULT_TOGGLES: Toggles = {
   protect_enabled: true,
+  protect_lectures: true,
+  protect_qbank: true,
   protect_blur_on_blur: true,
   protect_block_print: true,
   protect_block_copy: true,
@@ -86,10 +90,12 @@ function AdminContentProtection() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await (supabase.from as any)("site_settings").select("id,site_name,tagline,logo_url,updated_at,theme,show_signature,protect_enabled,protect_watermark_opacity,protect_blur_on_blur,protect_block_print,protect_block_copy,protect_consent_required,protect_devtools_guard,protect_auto_lock_threshold,protect_terms_en,protect_terms_ar,committee_default_storage,brand_style,study_plan_path,study_plan_title,study_plan_subtitle,terms_en,terms_ar,privacy_en,privacy_ar,study_hub_title,study_hub_title_ar,study_hub_subtitle,study_hub_subtitle_ar").eq("id", true).maybeSingle();
+      const { data } = await (supabase.from as any)("site_settings").select("id,site_name,tagline,logo_url,updated_at,theme,show_signature,protect_enabled,protect_lectures,protect_qbank,protect_watermark_opacity,protect_blur_on_blur,protect_block_print,protect_block_copy,protect_consent_required,protect_devtools_guard,protect_auto_lock_threshold,protect_terms_en,protect_terms_ar,committee_default_storage,brand_style,study_plan_path,study_plan_title,study_plan_subtitle,terms_en,terms_ar,privacy_en,privacy_ar,study_hub_title,study_hub_title_ar,study_hub_subtitle,study_hub_subtitle_ar").eq("id", true).maybeSingle();
       if (data) {
         setToggles({
           protect_enabled: data.protect_enabled ?? true,
+          protect_lectures: data.protect_lectures ?? true,
+          protect_qbank: data.protect_qbank ?? true,
           protect_blur_on_blur: data.protect_blur_on_blur ?? true,
           protect_block_print: data.protect_block_print ?? true,
           protect_block_copy: data.protect_block_copy ?? true,
@@ -182,6 +188,8 @@ function AdminContentProtection() {
           <p className="text-sm text-slate-500 mt-1">These apply to every protected page instantly. Admins are never affected.</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <Toggle label="Protection enabled" desc="Master switch for watermarks and detection" checked={toggles.protect_enabled} onChange={(v) => patch({ protect_enabled: v })} />
+            <Toggle label="Protect lectures" desc="Watermarks and capture detection on lecture pages" checked={toggles.protect_lectures} onChange={(v) => patch({ protect_lectures: v })} />
+            <Toggle label="Protect question bank" desc="Watermarks and capture detection while solving questions" checked={toggles.protect_qbank} onChange={(v) => patch({ protect_qbank: v })} />
             <Toggle label="Warning gate" desc="Users must accept the anti-sharing terms once" checked={toggles.protect_consent_required} onChange={(v) => patch({ protect_consent_required: v })} />
             <Toggle label="Hide when they leave" desc="Blur content when the tab loses focus" checked={toggles.protect_blur_on_blur} onChange={(v) => patch({ protect_blur_on_blur: v })} />
             <Toggle label="Block printing" desc="Ctrl/Cmd+P and print output disabled" checked={toggles.protect_block_print} onChange={(v) => patch({ protect_block_print: v })} />
