@@ -168,8 +168,8 @@ Return STRICT JSON only (no markdown fences):
   "options": [{"letter":"A","body":"...","is_correct":true|false}],
   "answer_letter": "A",
   "concept": "<=8 words naming the core concept tested",
-  "explanation": "GitHub-flavored Markdown with THREE sections separated by BLANK LINES:\\n\\n**Concept**\\n2-3 sentences explaining the underlying mechanism.\\n\\n**Why the correct answer is right**\\n- 2-3 short bullets.\\n\\n**Why the other options are wrong**\\n- **A.** one clear sentence with the specific reason\\n- **B.** ...\\n- **C.** ...\\n- **D.** ...",
-  "summary_table": "A GitHub-flavored Markdown table. Every row on its OWN line. Header | Option | Verdict | One-line reason |, separator |---|---|---|, then one line per option, with the correct row marked ✓ and wrong rows ✗."
+  "explanation": "GitHub-flavored Markdown with THREE sections separated by BLANK LINES:\\n\\n**Concept**\\n2-3 sentences explaining the underlying mechanism.\\n\\n**Why the correct answer is right**\\n- 2-3 short bullets.\\n\\n**Why the other options are wrong**\\nList ONLY the wrong options. Each bullet MUST start with the option's OWN TEXT in **bold** (NO letter prefix like A. or B.), then a dash, then one clear sentence with the specific reason. Example: - **Histiocytes** — are involved but activated by T-cells, not the primary drivers.",
+  "summary_table": "A GitHub-flavored Markdown table. Every row on its OWN line. Header | Option | Verdict | One-line reason |, separator |---|---|---|, then one line per option. The Option column must contain the option TEXT ONLY (NO letter prefix like A. or B.). With the correct row marked ✓ and wrong rows ✗."
 }
 
 Rules:
