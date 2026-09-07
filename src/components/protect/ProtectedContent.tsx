@@ -55,10 +55,19 @@ export function ProtectedContent({
   const flips = useRef<number[]>([]);
   const alarmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /** Per-area switches: lectures and the question bank can be protected independently. */
+  const areaEnabled =
+    context === "lectures"
+      ? settings.protect_lectures !== false
+      : ["quiz", "qbank", "exam", "question", "questions"].includes(context)
+        ? settings.protect_qbank !== false
+        : true;
+
   /** Deterrence + logging: everyone signed in except admins. */
-  const active = settings.protect_enabled && !!user && !isAdmin && !loading;
+  const active = settings.protect_enabled && areaEnabled && !!user && !isAdmin && !loading;
   /** The watermark itself is shown to admins too. */
-  const watermarked = settings.protect_enabled && !!user && !loading && !!identity;
+  const watermarked =
+    settings.protect_enabled && areaEnabled && !!user && !loading && !!identity;
 
   const log = useCallback(
     (kind: string, meta: Record<string, unknown> = {}) => {
