@@ -475,6 +475,10 @@ function CombinationRepair({ onSave, onRelease }: { onSave: (sets: string[][]) =
         className="inline-flex items-center justify-center gap-1 rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-primary-foreground disabled:opacity-40">
         {saving ? <Loader2 className="animate-spin" size={13} /> : <Check size={13} />} Save printed sets
       </button>
+      <button type="button" disabled={saving} onClick={async () => { setSaving(true); try { await onRelease(); } finally { setSaving(false); } }}
+        className="inline-flex items-center justify-center gap-1 rounded-lg border border-amber-600 px-3 py-2 text-xs font-bold text-amber-700 disabled:opacity-40 dark:text-amber-300">
+        <Brain size={13} /> Let AI decide
+      </button>
     </div>
   );
 }
