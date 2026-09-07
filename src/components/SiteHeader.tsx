@@ -256,7 +256,16 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                 {t("cms.header.notifications", { defaultValue: "Notifications" })}
               </Link>
               <InstallAppButton />
+              {isLectureStaff && !isAdmin && (
+                <>
+                  <div className="my-1 mx-3 border-t border-border" />
+                  <MenuLink to="/admin/lecture-centre" icon={<GraduationCap size={16} />} onClick={() => setOpen(false)}>
+                    My lecture courses
+                  </MenuLink>
+                </>
+              )}
               {(isAdmin || isCommitteeHead) && (
+
                 <>
                   <div className="my-1 mx-3 border-t border-border" />
                   <MenuLink to="/admin" icon={<LayoutGrid size={16} />} onClick={() => setOpen(false)}>
