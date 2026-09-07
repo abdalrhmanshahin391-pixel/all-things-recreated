@@ -814,6 +814,23 @@ export const setAqvComboSets = createServerFn({ method: "POST" })
     return { comboSets: sets };
   });
 
+/** Let the AI (and any saved resource/textbook) answer combination questions whose printed sets could not be recovered. */
+export const releaseAqvCombinations = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    jobId: z.string().uuid(), itemId: z.string().uuid().optional(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    let q = supabase.from(ITEMS).update({
+      question_type: "multiple_select", combo_sets: [], answer_mode: "multiple", status: "read", error: null,
+    }).eq("job_id", data.jobId).eq("status", "needs_combinations");
+    if (data.itemId) q = q.eq("id", data.itemId);
+    const { error } = await q;
+    if (error) throw error;
+    return { ok: true };
+  });
+
 export const setAqvResource = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({
