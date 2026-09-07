@@ -496,7 +496,10 @@ function RunPage() {
             <div className="text-sm text-muted-foreground font-semibold tabular-nums">
               Q{current + 1} <span className="text-muted-foreground">/ {questions.length}</span>
             </div>
-          </div>
+        </div>
+
+        <ProtectionNotice className="mb-6" />
+
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
