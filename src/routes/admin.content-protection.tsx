@@ -188,6 +188,8 @@ function AdminContentProtection() {
           <p className="text-sm text-slate-500 mt-1">These apply to every protected page instantly. Admins are never affected.</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <Toggle label="Protection enabled" desc="Master switch for watermarks and detection" checked={toggles.protect_enabled} onChange={(v) => patch({ protect_enabled: v })} />
+            <Toggle label="Protect lectures" desc="Watermarks and capture detection on lecture pages" checked={toggles.protect_lectures} onChange={(v) => patch({ protect_lectures: v })} />
+            <Toggle label="Protect question bank" desc="Watermarks and capture detection while solving questions" checked={toggles.protect_qbank} onChange={(v) => patch({ protect_qbank: v })} />
             <Toggle label="Warning gate" desc="Users must accept the anti-sharing terms once" checked={toggles.protect_consent_required} onChange={(v) => patch({ protect_consent_required: v })} />
             <Toggle label="Hide when they leave" desc="Blur content when the tab loses focus" checked={toggles.protect_blur_on_blur} onChange={(v) => patch({ protect_blur_on_blur: v })} />
             <Toggle label="Block printing" desc="Ctrl/Cmd+P and print output disabled" checked={toggles.protect_block_print} onChange={(v) => patch({ protect_block_print: v })} />
