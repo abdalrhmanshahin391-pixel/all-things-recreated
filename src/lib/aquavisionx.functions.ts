@@ -74,10 +74,26 @@ function parseQuestionsPayload(text: string): any[] {
 
 type AnswerMode = "single" | "multiple";
 
+const COMBO_RE = /^\s*\d+(?:\s*(?:[,./+]|\s)\s*\d+)+\s*[.)]?\s*$/;
+
+function parseComboSets(source: any): string[][] {
+  const raw = Array.isArray(source) ? source : [];
+  const sets: string[][] = [];
+  for (const entry of raw) {
+    const nums = Array.isArray(entry)
+      ? entry.map((v: unknown) => String(v).trim()).filter((v) => /^\d+$/.test(v))
+      : (String(entry ?? "").match(/\d+/g) ?? []);
+    const uniq = [...new Set(nums)];
+    if (uniq.length >= 2) sets.push(uniq);
+  }
+  return sets;
+}
+
 function normalizeCombinationQuestion(raw: any): {
   stem: string;
   options: Array<{ letter: string; text: string }>;
   answerMode: AnswerMode;
+  comboSets: string[][];
 } {
   const stem = String(raw?.stem ?? raw?.question ?? "").trim();
   const options = Array.isArray(raw?.options)
@@ -88,12 +104,22 @@ function normalizeCombinationQuestion(raw: any): {
     : [];
   const explicitMode = raw?.answer_mode === "multiple" ? "multiple" : "single";
   const isCombination = options.length >= 2 && options.every((option: { text: string }) =>
-    /^\s*\d+(?:\s*(?:[,./+]|\s)\s*\d+)+\s*[.)]?\s*$/.test(option.text),
+    COMBO_RE.test(option.text),
   );
-  if (!isCombination && explicitMode !== "multiple") return { stem, options, answerMode: "single" };
+  // Printed a/b/c/d combinations: either given explicitly by the model, or read
+  // back from raw combination-looking choices as a fallback.
+  let comboSets = parseComboSets(raw?.combinations);
+  if (!comboSets.length && isCombination) {
+    comboSets = parseComboSets(options.map((o: { text: string }) => o.text));
+  }
+  if (!isCombination && explicitMode !== "multiple") {
+    return { stem, options, answerMode: "single", comboSets: [] };
+  }
 
   const referenced = new Set(
-    options.flatMap((option: { text: string }) => option.text.match(/\d+/g) ?? []),
+    comboSets.length
+      ? comboSets.flat()
+      : options.flatMap((option: { text: string }) => option.text.match(/\d+/g) ?? []),
   );
   const lines = stem.split(/\n+/).map((line) => line.trim()).filter(Boolean);
   const statements = lines.flatMap((line) => {
@@ -101,15 +127,35 @@ function normalizeCombinationQuestion(raw: any): {
     if (!match || !referenced.has(match[1]) || !/[A-Za-z\p{L}]/u.test(match[2])) return [];
     return [{ letter: match[1], text: match[2].trim(), source: line }];
   });
-  if (statements.length < 2) return { stem, options, answerMode: explicitMode };
+  if (statements.length < 2) return { stem, options, answerMode: explicitMode, comboSets };
   const statementLines = new Set(statements.map((statement) => statement.source));
   const mainStem = lines.filter((line) => !statementLines.has(line)).join("\n").trim();
   return {
     stem: mainStem || stem,
     options: statements.map(({ letter, text }) => ({ letter, text })),
     answerMode: "multiple",
+    comboSets,
   };
 }
+
+/** Force a multi-answer result onto one of the printed a/b/c/d combinations. */
+function snapToPrintedCombo(labels: string[], comboSets: any): string[] {
+  const sets = parseComboSets(comboSets);
+  if (!sets.length) return labels;
+  const chosen = new Set(labels.map((l) => String(l).trim()));
+  const exact = sets.find((s) => s.length === chosen.size && s.every((n) => chosen.has(n)));
+  if (exact) return exact;
+  let best = sets[0];
+  let bestScore = -Infinity;
+  for (const set of sets) {
+    const hits = set.filter((n) => chosen.has(n)).length;
+    const extra = [...chosen].filter((n) => !set.includes(n)).length;
+    const score = hits * 2 - extra - (set.length - hits);
+    if (score > bestScore) { bestScore = score; best = set; }
+  }
+  return best;
+}
+
 
 function getBatchResponses(json: any): any[] {
   const c = [
