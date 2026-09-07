@@ -475,7 +475,9 @@ export const pollAqvRead = createServerFn({ method: "POST" })
         if (stem.length < 5) continue;
         const options = normalized.options;
         const printedChoices = Array.isArray(q?.printed_choices) ? q.printed_choices : [];
-        const looksLikeCombination = q?.question_type === "combination"
+        const questionType = q?.question_type === "combination" ? "combination"
+          : q?.question_type === "multiple_select" ? "multiple_select" : "ordinary";
+        const looksLikeCombination = questionType === "combination"
           || (normalized.answerMode === "multiple" && normalized.options.length >= 2
             && normalized.options.every((option) => /^\d+$/.test(option.letter)) && printedChoices.length > 0);
         const missingCombos = looksLikeCombination && normalized.comboSets.length < 2;
@@ -487,6 +489,7 @@ export const pollAqvRead = createServerFn({ method: "POST" })
           stem,
           options,
           answer_mode: normalized.answerMode,
+          question_type: questionType,
           combo_sets: normalized.answerMode === "multiple" ? normalized.comboSets : [],
           printed_choices: printedChoices,
           status: missingCombos ? "needs_combinations" : "read",
@@ -525,11 +528,12 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
     if (notReady.length) throw new Error(`Stage 1 is not finished — ${notReady.length} page(s) still pending.`);
 
     const { data: items, error: iErr } = await supabase.from(ITEMS)
-      .select("id, stem, options, answer_mode, combo_sets, printed_choices, solved, status").eq("job_id", data.jobId).order("item_index");
+      .select("id, stem, options, answer_mode, question_type, combo_sets, printed_choices, solved, status").eq("job_id", data.jobId).order("item_index");
     if (iErr) throw iErr;
     const todo = (items ?? []).filter((it: any) => !it.solved);
     if (!todo.length) throw new Error("Every question is already solved.");
-    const blocked = todo.filter((it: any) => it.status === "needs_combinations");
+    const blocked = todo.filter((it: any) => it.status === "needs_combinations"
+      || (it.question_type === "combination" && parseComboSets(it.combo_sets).length < 2));
     if (blocked.length) throw new Error(`${blocked.length} combination question(s) are missing the paper's allowed sets. Repair them before solving.`);
 
     const apiKey = await getGeminiKey(supabase);
@@ -608,7 +612,7 @@ export const pollAqvAnswers = createServerFn({ method: "POST" })
             is_correct: !!o?.is_correct,
           })).filter((o: any) => o.text)
         : [];
-      const { data: itemRow } = await supabase.from(ITEMS).select("answer_mode, combo_sets").eq("id", itemId).single();
+      const { data: itemRow } = await supabase.from(ITEMS).select("answer_mode, question_type, combo_sets, status").eq("id", itemId).single();
       const answerMode: AnswerMode = itemRow?.answer_mode === "multiple" ? "multiple" : "single";
       const parsedAnswers = Array.isArray(parsed?.answer_letters)
         ? parsed.answer_letters.map((value: unknown) => String(value).trim()).filter(Boolean)
@@ -618,7 +622,8 @@ export const pollAqvAnswers = createServerFn({ method: "POST" })
         : opts.filter((o: any) => o.is_correct).map((o: any) => o.letter);
       const storedSets = parseComboSets(itemRow?.combo_sets);
       if (answerMode === "multiple" && storedSets.length) labels = snapToPrintedCombo(labels, storedSets);
-      if (answerMode === "multiple" && itemRow?.status === "needs_combinations") labels = [];
+      if (answerMode === "multiple" && (itemRow?.status === "needs_combinations"
+        || (itemRow?.question_type === "combination" && storedSets.length < 2))) labels = [];
       const correctLabels = new Set(labels);
       const answer = [...correctLabels].join(",");
       const explanation = String(parsed?.explanation || "").trim();
@@ -666,7 +671,7 @@ export const importAqvJob = createServerFn({ method: "POST" })
     if (!job.subject_id) throw new Error("This job has no target subject.");
 
     const { data: items, error: iErr } = await supabase.from(ITEMS)
-      .select("id, stem, options, answer_mode, combo_sets, status, explanation, summary_table, solved, imported")
+      .select("id, stem, options, answer_mode, question_type, combo_sets, status, explanation, summary_table, solved, imported")
       .eq("job_id", data.jobId).order("item_index");
     if (iErr) throw iErr;
     if (!items?.length) throw new Error("Nothing to import.");
@@ -686,7 +691,9 @@ export const importAqvJob = createServerFn({ method: "POST" })
     for (const it of importable) {
       if (it.imported) { skipped++; continue; }
       try {
-        if (it.status === "needs_combinations") throw new Error("Printed answer combinations are missing.");
+        if (it.status === "needs_combinations" || (it.question_type === "combination" && parseComboSets(it.combo_sets).length < 2)) {
+          throw new Error("Printed answer combinations are missing.");
+        }
         const sets = parseComboSets(it.combo_sets);
         if (it.answer_mode === "multiple" && sets.length) {
           const selected = (Array.isArray(it.options) ? it.options : []).filter((o: any) => o.is_correct).map((o: any) => String(o.letter));
@@ -752,7 +759,7 @@ export const getAqvJob = createServerFn({ method: "POST" })
     const [{ data: job, error: e1 }, { data: pages, error: e2 }, { data: items, error: e3 }] = await Promise.all([
       supabase.from(JOBS).select("id, pdf_name, total_pages, stage, status, imported_count, error, course_id, group_id, subject_id, reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime, created_at").eq("id", data.jobId).single(),
       supabase.from(PAGES).select("id, page_number, status, question_count, error").eq("job_id", data.jobId).order("page_number"),
-      supabase.from(ITEMS).select("id, item_index, number, stem, options, answer_mode, combo_sets, printed_choices, answer_letter, concept, explanation, summary_table, solved, imported, status, error").eq("job_id", data.jobId).order("item_index"),
+      supabase.from(ITEMS).select("id, item_index, number, stem, options, answer_mode, question_type, combo_sets, printed_choices, answer_letter, concept, explanation, summary_table, solved, imported, status, error").eq("job_id", data.jobId).order("item_index"),
     ]);
     if (e1) throw e1; if (e2) throw e2; if (e3) throw e3;
     return { job, pages: pages ?? [], items: items ?? [] };
@@ -794,7 +801,7 @@ export const setAqvComboSets = createServerFn({ method: "POST" })
     const sets = parseComboSets(data.combinations);
     if (sets.length < 2) throw new Error("Enter at least two printed combinations.");
     const { error } = await supabase.from(ITEMS).update({
-      combo_sets: sets, solved: false, answer_letter: null, concept: null, explanation: null,
+      combo_sets: sets, question_type: "combination", solved: false, answer_letter: null, concept: null, explanation: null,
       summary_table: null, status: "read", error: null,
     }).eq("id", data.itemId);
     if (error) throw error;
