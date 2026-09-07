@@ -111,8 +111,29 @@ function LectureCoursePage() {
   const [videoLoading, setVideoLoading] = useState<string | null>(null);
   const [activePdf, setActivePdf] = useState<{ src: string; title: string } | null>(null);
   const [pdfLoading, setPdfLoading] = useState<string | null>(null);
+  const [isCourseStaff, setIsCourseStaff] = useState(false);
 
-  const owns = enrolled || isAdmin;
+  const owns = enrolled || isAdmin || isCourseStaff;
+
+  useEffect(() => {
+    if (!user) {
+      setIsCourseStaff(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase.from as any)("lecture_staff")
+        .select("course_id")
+        .eq("user_id", user.id)
+        .eq("course_id", courseId)
+        .limit(1);
+      if (!cancelled) setIsCourseStaff(((data ?? []) as unknown[]).length > 0);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, courseId]);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -419,21 +440,32 @@ function LectureCoursePage() {
 
 
 
-        {isAdmin && (
-          <div className="mt-10 rounded-lg border border-border bg-card p-5 flex items-center justify-between gap-4">
+        {(isAdmin || isCourseStaff) && (
+          <div className="mt-10 rounded-lg border border-border bg-card p-5 flex flex-wrap items-center justify-between gap-4">
             <div>
-              <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-widest">Admin</div>
-              <div className="text-foreground font-semibold">Manage this lecture course's syllabus</div>
+              <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-widest">
+                {isAdmin ? "Admin" : "Teaching staff"}
+              </div>
+              <div className="text-foreground font-semibold">Manage this lecture course</div>
             </div>
-            <Link
-              to="/admin/lectures"
-              search={{ courseId }}
-              className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90"
-            >
-              Open syllabus admin →
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                to="/admin/lectures"
+                search={{ courseId }}
+                className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90"
+              >
+                Topics &amp; lessons →
+              </Link>
+              <Link
+                to="/admin/lecture-centre"
+                className="px-4 py-2 rounded-md border border-border text-sm font-semibold hover:border-accent"
+              >
+                Material, questions &amp; classes →
+              </Link>
+            </div>
           </div>
         )}
+
       </main>
 
       {activePdf && (

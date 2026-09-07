@@ -68,12 +68,13 @@ type Question = {
 type QOption = { id: string; question_id: string; position: number; body: string; is_correct: boolean };
 
 function AdminLecturesPage() {
-  const { user, isAdmin, loading } = useAuth();
+  const { user, isAdmin, isRealAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const { courseId: initialCourseId } = Route.useSearch();
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [activeCourseId, setActiveCourseId] = useState<string>(initialCourseId);
+  const [staffCourseIds, setStaffCourseIds] = useState<string[] | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
@@ -86,27 +87,49 @@ function AdminLecturesPage() {
   );
 
   const activeCourse = courses.find((c) => c.id === activeCourseId) ?? null;
+  const isStaff = (staffCourseIds?.length ?? 0) > 0;
+  const canOwnerEdit = isRealAdmin || isAdmin;
+
+  // Who is staff on which lecture courses
+  useEffect(() => {
+    if (loading || !user) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase.from as any)("lecture_staff")
+        .select("course_id")
+        .eq("user_id", user.id);
+      if (!cancelled) setStaffCourseIds(((data ?? []) as { course_id: string }[]).map((r) => r.course_id));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, user]);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
-    else if (!loading && user && !isAdmin) guardRedirect(navigate);
-  }, [loading, user, isAdmin, navigate]);
+    else if (!loading && user && !isAdmin && staffCourseIds !== null && staffCourseIds.length === 0)
+      guardRedirect(navigate);
+  }, [loading, user, isAdmin, staffCourseIds, navigate]);
 
-  async function loadCourses() {
-    const { data } = await supabase
+  async function loadCourses(staffIds: string[]) {
+    let q = supabase
       .from("courses")
       .select("id,title,year,published,university_id,intro_video_url,intro_video_storage_path,intro_free")
       .eq("kind", "lectures")
       .order("year")
       .order("title");
+    if (!isAdmin) q = q.in("id", staffIds.length ? staffIds : ["00000000-0000-0000-0000-000000000000"]);
+    const { data } = await q;
     const list = (data as Course[]) ?? [];
     setCourses(list);
-    if (!activeCourseId && list.length) setActiveCourseId(list[0].id);
+    setActiveCourseId((prev) => (prev && list.some((c) => c.id === prev) ? prev : (list[0]?.id ?? "")));
   }
 
   useEffect(() => {
-    if (isAdmin) loadCourses();
-  }, [isAdmin]);
+    if (staffCourseIds === null) return;
+    if (isAdmin || staffCourseIds.length) loadCourses(staffCourseIds);
+  }, [isAdmin, staffCourseIds]);
+
 
   async function refreshSyllabus(cid: string) {
     const { data: subs } = await (supabase.from as any)("lecture_subjects")
@@ -421,10 +444,11 @@ function AdminLecturesPage() {
       .eq("id", activeCourse.id);
     setBusy(false);
     if (error) setError(error.message);
-    else loadCourses();
+    else loadCourses(staffCourseIds ?? []);
   }
 
-  if (loading || !user || !isAdmin) return <div className="min-h-screen bg-black" />;
+  if (loading || !user || staffCourseIds === null || (!isAdmin && !isStaff))
+    return <div className="min-h-screen bg-black" />;
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -432,15 +456,21 @@ function AdminLecturesPage() {
       <main className="mx-auto max-w-6xl px-6 pt-32 pb-20">
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
-            <h1 className="font-serif text-4xl md:text-5xl font-bold mb-2">Lectures admin</h1>
+            <h1 className="font-serif text-4xl md:text-5xl font-bold mb-2">
+              {isAdmin ? "Lectures admin" : "Course editor"}
+            </h1>
             <p className="text-white/60 text-sm">
-              Build the syllabus for each lecture course: subjects, lecture videos, and quizzes.
+              Build the syllabus for each lecture course: subjects, lecture videos, PDFs and quizzes.
             </p>
           </div>
-          <Link to="/admin/courses" className="text-xs text-white/60 hover:text-white inline-flex items-center gap-1">
-            <ArrowLeft className="w-3 h-3" /> Back to courses
+          <Link
+            to={isAdmin ? "/admin/courses" : "/admin/lecture-centre"}
+            className="text-xs text-white/60 hover:text-white inline-flex items-center gap-1"
+          >
+            <ArrowLeft className="w-3 h-3" /> {isAdmin ? "Back to courses" : "Back to my courses"}
           </Link>
         </div>
+
 
         {error && (
           <div className="mb-6 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300 flex items-start justify-between gap-3">
@@ -471,9 +501,10 @@ function AdminLecturesPage() {
         </div>
 
         {activeCourse && (
-          <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start">
+          <div className={`grid gap-6 items-start ${canOwnerEdit ? "lg:grid-cols-[1fr_360px]" : ""}`}>
             <div className="space-y-8 min-w-0">
-              <IntroEditor course={activeCourse} onSave={setIntro} busy={busy} />
+              {canOwnerEdit && <IntroEditor course={activeCourse} onSave={setIntro} busy={busy} />}
+
 
               <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
                 <div className="flex items-center justify-between mb-4">
@@ -518,9 +549,12 @@ function AdminLecturesPage() {
               </section>
             </div>
 
-            <div className="space-y-6">
-              <GrantAccessCard courseId={activeCourse.id} />
-            </div>
+            {canOwnerEdit && (
+              <div className="space-y-6">
+                <GrantAccessCard courseId={activeCourse.id} />
+              </div>
+            )}
+
           </div>
         )}
       </main>

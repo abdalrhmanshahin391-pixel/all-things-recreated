@@ -15,10 +15,14 @@ import {
   Users,
   History,
   Bell,
+  GraduationCap,
 } from "lucide-react";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useLectureStaff } from "@/hooks/useLectureStaff";
 import { EventEntryButtons } from "@/components/events/EventButtons";
+
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
 import { AdminBadge, StudentBadge } from "@/components/RoleBadge";
@@ -51,6 +55,8 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
   const { lang, toggle: toggleLang } = useLang();
   const settings = useSiteSettings();
   const skin = resolveHeaderSkin(settings.header_style);
+  const isLectureStaff = useLectureStaff();
+
 
   
   const navigate = useNavigate();
@@ -256,7 +262,16 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                 {t("cms.header.notifications", { defaultValue: "Notifications" })}
               </Link>
               <InstallAppButton />
+              {isLectureStaff && !isAdmin && (
+                <>
+                  <div className="my-1 mx-3 border-t border-border" />
+                  <MenuLink to="/admin/lecture-centre" icon={<GraduationCap size={16} />} onClick={() => setOpen(false)}>
+                    My lecture courses
+                  </MenuLink>
+                </>
+              )}
               {(isAdmin || isCommitteeHead) && (
+
                 <>
                   <div className="my-1 mx-3 border-t border-border" />
                   <MenuLink to="/admin" icon={<LayoutGrid size={16} />} onClick={() => setOpen(false)}>
