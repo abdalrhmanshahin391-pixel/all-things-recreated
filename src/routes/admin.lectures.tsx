@@ -501,9 +501,10 @@ function AdminLecturesPage() {
         </div>
 
         {activeCourse && (
-          <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start">
+          <div className={`grid gap-6 items-start ${canOwnerEdit ? "lg:grid-cols-[1fr_360px]" : ""}`}>
             <div className="space-y-8 min-w-0">
-              <IntroEditor course={activeCourse} onSave={setIntro} busy={busy} />
+              {canOwnerEdit && <IntroEditor course={activeCourse} onSave={setIntro} busy={busy} />}
+
 
               <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
                 <div className="flex items-center justify-between mb-4">
