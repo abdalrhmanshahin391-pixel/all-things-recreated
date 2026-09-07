@@ -405,13 +405,22 @@ function Page() {
                     {it.concept && <p className="text-[11px] text-muted-foreground mt-0.5">{it.concept}</p>}
                     {it.error && <p className="text-[11px] text-destructive mt-0.5">{it.error}</p>}
                     {it.status === "needs_combinations" && (
-                      <CombinationRepair onSave={async (sets) => {
-                        try {
-                          await setCombos({ data: { itemId: it.id, combinations: sets } });
-                          await openJob(job.id);
-                          toast.success("Printed combinations saved");
-                        } catch (e: any) { toast.error(e?.message || "Could not save combinations"); }
-                      }} />
+                      <CombinationRepair
+                        onSave={async (sets) => {
+                          try {
+                            await setCombos({ data: { itemId: it.id, combinations: sets } });
+                            await openJob(job.id);
+                            toast.success("Printed combinations saved");
+                          } catch (e: any) { toast.error(e?.message || "Could not save combinations"); }
+                        }}
+                        onRelease={async () => {
+                          try {
+                            await releaseCombos({ data: { jobId: job.id, itemId: it.id } });
+                            await openJob(job.id);
+                            toast.success("The AI will answer this question freely");
+                          } catch (e: any) { toast.error(e?.message || "Could not update this question"); }
+                        }}
+                      />
                     )}
                   </li>
                 ))}
@@ -454,7 +463,7 @@ function Page() {
   );
 }
 
-function CombinationRepair({ onSave }: { onSave: (sets: string[][]) => Promise<void> }) {
+function CombinationRepair({ onSave, onRelease }: { onSave: (sets: string[][]) => Promise<void>; onRelease: () => Promise<void> }) {
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
   const parse = () => value.split(/[\/\n]/).map((part) => [...new Set(part.match(/\d+/g) ?? [])]).filter((set) => set.length >= 2);
