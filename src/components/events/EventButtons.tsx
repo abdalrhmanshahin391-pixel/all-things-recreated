@@ -50,7 +50,7 @@ function EventCard({ event, ar }: { event: SiteEvent; ar: boolean }) {
   const style = event.button_style;
 
   const base =
-    "group flex items-center justify-between gap-4 rounded-2xl px-6 py-5 transition hover:opacity-95";
+    "group flex w-full min-w-0 max-w-full items-center justify-between gap-3 rounded-2xl px-4 py-4 transition hover:opacity-95 sm:gap-4 sm:px-6 sm:py-5";
   const look =
     style === "outline"
       ? { className: `${base} border-2 bg-transparent`, style: { borderColor: tint, color: tint } }
