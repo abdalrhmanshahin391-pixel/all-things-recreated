@@ -95,7 +95,7 @@ function AdminLecturesPage() {
   async function loadCourses() {
     const { data } = await supabase
       .from("courses")
-      .select("id,title,year,published,intro_video_url,intro_video_storage_path,intro_free")
+      .select("id,title,year,published,university_id,intro_video_url,intro_video_storage_path,intro_free")
       .eq("kind", "lectures")
       .order("year")
       .order("title");
@@ -110,7 +110,7 @@ function AdminLecturesPage() {
 
   async function refreshSyllabus(cid: string) {
     const { data: subs } = await (supabase.from as any)("lecture_subjects")
-      .select("id,course_id,title,position")
+      .select("id,course_id,title,position,hidden")
       .eq("course_id", cid)
       .order("position");
     const subjList = (subs ?? []) as Subject[];
@@ -210,10 +210,17 @@ function AdminLecturesPage() {
   // --- Subject ops ---
   async function addSubject(title: string) {
     if (!title.trim() || !activeCourseId) return;
+    const course = courses.find((c) => c.id === activeCourseId);
+    if (!course) return;
     setBusy(true);
     const position = subjects.length;
     const { error } = await (supabase.from as any)("lecture_subjects")
-      .insert({ course_id: activeCourseId, title: title.trim(), position });
+      .insert({
+        course_id: activeCourseId,
+        university_id: course.university_id,
+        title: title.trim(),
+        position,
+      });
     setBusy(false);
     if (error) setError(error.message);
     else refreshSyllabus(activeCourseId);
