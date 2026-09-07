@@ -65,6 +65,7 @@ export const DEFAULT_LAYOUT: HubLayout = {
         t("/admin/courses-hub", "CoursesHub", "Library"),
         t("/admin/courses", "Courses Control", "BookOpen"),
         t("/admin/course-control", "Course Control New", "Rocket"),
+        t("/admin/lecture-centre", "Lecture Centre", "GraduationCap"),
         t("/admin/lectures", "Lectures Syllabus", "Video"),
         t("/admin/questions", "Questions", "ListPlus"),
         t("/admin/question-generator", "Questions Generator", "Sparkles"),
