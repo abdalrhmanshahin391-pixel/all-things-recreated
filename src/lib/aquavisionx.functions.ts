@@ -774,6 +774,8 @@ export const deleteAqvJob = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => JobInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
+    const { data: job } = await supabase.from(JOBS).select("resource_storage_path").eq("id", data.jobId).single();
+    if (job?.resource_storage_path) await supabase.storage.from("aquavision-resources").remove([job.resource_storage_path]);
     const { error } = await supabase.from(JOBS).delete().eq("id", data.jobId);
     if (error) throw error;
     return { ok: true };
@@ -822,8 +824,8 @@ export const setAqvResource = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
     const { data: existing } = await supabase.from(JOBS).select("resource_storage_path").eq("id", data.jobId).single();
-    if (existing?.resource_storage_path) await supabase.storage.from("aquavision-resources").remove([existing.resource_storage_path]);
     if (!data.kind) {
+      if (existing?.resource_storage_path) await supabase.storage.from("aquavision-resources").remove([existing.resource_storage_path]);
       const { error } = await supabase.from(JOBS).update({ resource_kind: null, resource_text: null, resource_url: null, resource_storage_path: null, resource_name: null, resource_mime: null }).eq("id", data.jobId);
       if (error) throw error;
       return { resource: null };
@@ -846,6 +848,12 @@ export const setAqvResource = createServerFn({ method: "POST" })
       resource_name: data.kind === "pdf" ? data.fileName : null, resource_mime: data.kind === "pdf" ? "application/pdf" : null,
     };
     const { error } = await supabase.from(JOBS).update(resource).eq("id", data.jobId);
-    if (error) throw error;
+    if (error) {
+      if (path) await supabase.storage.from("aquavision-resources").remove([path]);
+      throw error;
+    }
+    if (existing?.resource_storage_path && existing.resource_storage_path !== path) {
+      await supabase.storage.from("aquavision-resources").remove([existing.resource_storage_path]);
+    }
     return { resource };
   });
