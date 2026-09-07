@@ -74,10 +74,26 @@ function parseQuestionsPayload(text: string): any[] {
 
 type AnswerMode = "single" | "multiple";
 
+const COMBO_RE = /^\s*\d+(?:\s*(?:[,./+]|\s)\s*\d+)+\s*[.)]?\s*$/;
+
+function parseComboSets(source: any): string[][] {
+  const raw = Array.isArray(source) ? source : [];
+  const sets: string[][] = [];
+  for (const entry of raw) {
+    const nums = Array.isArray(entry)
+      ? entry.map((v: unknown) => String(v).trim()).filter((v) => /^\d+$/.test(v))
+      : (String(entry ?? "").match(/\d+/g) ?? []);
+    const uniq = [...new Set(nums)];
+    if (uniq.length >= 2) sets.push(uniq);
+  }
+  return sets;
+}
+
 function normalizeCombinationQuestion(raw: any): {
   stem: string;
   options: Array<{ letter: string; text: string }>;
   answerMode: AnswerMode;
+  comboSets: string[][];
 } {
   const stem = String(raw?.stem ?? raw?.question ?? "").trim();
   const options = Array.isArray(raw?.options)
@@ -88,12 +104,22 @@ function normalizeCombinationQuestion(raw: any): {
     : [];
   const explicitMode = raw?.answer_mode === "multiple" ? "multiple" : "single";
   const isCombination = options.length >= 2 && options.every((option: { text: string }) =>
-    /^\s*\d+(?:\s*(?:[,./+]|\s)\s*\d+)+\s*[.)]?\s*$/.test(option.text),
+    COMBO_RE.test(option.text),
   );
-  if (!isCombination && explicitMode !== "multiple") return { stem, options, answerMode: "single" };
+  // Printed a/b/c/d combinations: either given explicitly by the model, or read
+  // back from raw combination-looking choices as a fallback.
+  let comboSets = parseComboSets(raw?.combinations);
+  if (!comboSets.length && isCombination) {
+    comboSets = parseComboSets(options.map((o: { text: string }) => o.text));
+  }
+  if (!isCombination && explicitMode !== "multiple") {
+    return { stem, options, answerMode: "single", comboSets: [] };
+  }
 
   const referenced = new Set(
-    options.flatMap((option: { text: string }) => option.text.match(/\d+/g) ?? []),
+    comboSets.length
+      ? comboSets.flat()
+      : options.flatMap((option: { text: string }) => option.text.match(/\d+/g) ?? []),
   );
   const lines = stem.split(/\n+/).map((line) => line.trim()).filter(Boolean);
   const statements = lines.flatMap((line) => {
@@ -101,15 +127,35 @@ function normalizeCombinationQuestion(raw: any): {
     if (!match || !referenced.has(match[1]) || !/[A-Za-z\p{L}]/u.test(match[2])) return [];
     return [{ letter: match[1], text: match[2].trim(), source: line }];
   });
-  if (statements.length < 2) return { stem, options, answerMode: explicitMode };
+  if (statements.length < 2) return { stem, options, answerMode: explicitMode, comboSets };
   const statementLines = new Set(statements.map((statement) => statement.source));
   const mainStem = lines.filter((line) => !statementLines.has(line)).join("\n").trim();
   return {
     stem: mainStem || stem,
     options: statements.map(({ letter, text }) => ({ letter, text })),
     answerMode: "multiple",
+    comboSets,
   };
 }
+
+/** Force a multi-answer result onto one of the printed a/b/c/d combinations. */
+function snapToPrintedCombo(labels: string[], comboSets: any): string[] {
+  const sets = parseComboSets(comboSets);
+  if (!sets.length) return labels;
+  const chosen = new Set(labels.map((l) => String(l).trim()));
+  const exact = sets.find((s) => s.length === chosen.size && s.every((n) => chosen.has(n)));
+  if (exact) return exact;
+  let best = sets[0];
+  let bestScore = -Infinity;
+  for (const set of sets) {
+    const hits = set.filter((n) => chosen.has(n)).length;
+    const extra = [...chosen].filter((n) => !set.includes(n)).length;
+    const score = hits * 2 - extra - (set.length - hits);
+    if (score > bestScore) { bestScore = score; best = set; }
+  }
+  return best;
+}
+
 
 function getBatchResponses(json: any): any[] {
   const c = [
@@ -189,7 +235,7 @@ async function submitBatch(apiKey: string, displayName: string, requests: any[])
 const READ_SYSTEM = `You read ONE page of a medical exam past-paper (image or text PDF page) and transcribe its questions.
 
 Return STRICT JSON only (no markdown fences):
-{"questions":[{"number":"12","answer_mode":"single|multiple","stem":"the main question, verbatim plain text","options":[{"letter":"A or 1","text":"..."}]}]}
+{"questions":[{"number":"12","answer_mode":"single|multiple","stem":"the main question, verbatim plain text","options":[{"letter":"A or 1","text":"..."}],"combinations":[[1,2],[2,3]]}]}
 
 Rules:
 - Transcribe EVERY question that appears on this page, in reading order. Never skip one.
@@ -199,11 +245,11 @@ Rules:
   1. First inspect the answer choices. If choices labelled a/b/c/d or A/B/C/D contain only combinations of statement numbers, such as "1.2", "1, 3, 4", "1 + 2", "2/3/4", or "1 2 3 4", this is a combination question.
   2. Set "answer_mode":"multiple".
   3. Set "stem" to ONLY the main question line, without the numbered statements and without A/B/C/D choices.
-  4. IGNORE the A/B/C/D combination choices. They must not appear in the output.
+  4. The A/B/C/D combination choices must NOT appear in "options". Instead copy them into "combinations" as arrays of numbers, in printed order — a)1.2 b)2.3 becomes "combinations":[[1,2],[2,3]].
   5. Convert EVERY numbered statement into an option: its number is "letter" and its full wording is "text". Preserve wording and order exactly.
-  6. Before returning JSON, verify that every printed numbered statement is present as an option and no A/B/C/D combination remains.
-  Required example: "Which apply? / 1. First statement / 2. Second statement / 3. Third statement / a)1.2 / b)2.3" becomes {"answer_mode":"multiple","stem":"Which apply?","options":[{"letter":"1","text":"First statement"},{"letter":"2","text":"Second statement"},{"letter":"3","text":"Third statement"}]}.
-- Ordinary questions whose A/B/C/D choices contain answer words remain ordinary: set "answer_mode":"single" and keep their answer text as A/B/C/D options.
+  6. Before returning JSON, verify that every printed numbered statement is present as an option, no A/B/C/D combination remains in "options", and every printed combination is listed in "combinations".
+  Required example: "Which apply? / 1. First statement / 2. Second statement / 3. Third statement / a)1.2 / b)2.3" becomes {"answer_mode":"multiple","stem":"Which apply?","options":[{"letter":"1","text":"First statement"},{"letter":"2","text":"Second statement"},{"letter":"3","text":"Third statement"}],"combinations":[[1,2],[2,3]]}.
+- Ordinary questions whose A/B/C/D choices contain answer words remain ordinary: set "answer_mode":"single", keep their answer text as A/B/C/D options, and omit "combinations" (or return []).
 - If a question has no visible options (open/short answer), return "options": [].
 - Do NOT answer the questions and do NOT explain anything here.
 - If the page contains no questions at all (cover page, index, blank), return {"questions":[]}.`;
@@ -222,7 +268,7 @@ Return STRICT JSON only (no markdown fences):
 
 Rules:
 - The user message states ANSWER MODE. For SINGLE, mark exactly ONE option correct and return its label in both answer_letter and answer_letters.
-- For MULTIPLE, judge every numbered statement independently, mark ALL medically correct statements true, and return every correct numeric label in answer_letters. answer_letter may contain the labels joined by commas for compatibility.
+- For MULTIPLE, the user message may list ALLOWED ANSWER SETS (the combinations printed on the paper, e.g. 1,2 / 2,3 / 1,3 / 3,4). When it does, you MUST pick exactly ONE of those printed sets as the answer: mark true ONLY the statements of that set, and return exactly its numbers in answer_letters. Never return a set that is not listed. In "Why the other options are wrong" explain why each other printed set is wrong. If no allowed sets are given, judge every statement independently and mark all correct ones true.
 - Keep the given options verbatim and in the given order.
 - If the question came with no options, INVENT exactly 4 plausible options A-D where exactly one is correct.
 - answer_letter MUST match the option you marked is_correct.
@@ -377,6 +423,7 @@ export const pollAqvRead = createServerFn({ method: "POST" })
           stem,
           options,
           answer_mode: normalized.answerMode,
+          combo_sets: normalized.answerMode === "multiple" ? normalized.comboSets : [],
           status: "read",
         });
       }
@@ -413,7 +460,7 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
     if (notReady.length) throw new Error(`Stage 1 is not finished — ${notReady.length} page(s) still pending.`);
 
     const { data: items, error: iErr } = await supabase.from(ITEMS)
-      .select("id, stem, options, answer_mode, solved").eq("job_id", data.jobId).order("item_index");
+      .select("id, stem, options, answer_mode, combo_sets, solved").eq("job_id", data.jobId).order("item_index");
     if (iErr) throw iErr;
     const todo = (items ?? []).filter((it: any) => !it.solved);
     if (!todo.length) throw new Error("Every question is already solved.");
@@ -427,10 +474,14 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
       const optText = opts.length
         ? opts.map((o: any) => `${o.letter}. ${o.text}`).join("\n")
         : "(no options given — invent 4)";
+      const sets = parseComboSets(it.combo_sets);
+      const comboBlock = it.answer_mode === "multiple" && sets.length
+        ? `ALLOWED ANSWER SETS (printed on the paper — you MUST choose exactly one of these):\n${sets.map((s) => s.join(",")).join("\n")}\n`
+        : "";
       return {
         request: {
           systemInstruction: { parts: [{ text: SOLVE_SYSTEM }] },
-          contents: [{ role: "user", parts: [{ text: `${refBlock}ANSWER MODE: ${it.answer_mode === "multiple" ? "MULTIPLE — select every correct numbered statement" : "SINGLE — select exactly one answer"}\n--- QUESTION ---\n${it.stem}\n\n${optText}\n--- END ---` }] }],
+          contents: [{ role: "user", parts: [{ text: `${refBlock}ANSWER MODE: ${it.answer_mode === "multiple" ? "MULTIPLE — select every correct numbered statement" : "SINGLE — select exactly one answer"}\n${comboBlock}--- QUESTION ---\n${it.stem}\n\n${optText}\n--- END ---` }] }],
           generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json" },
         },
         metadata: { key: `i-${it.id}` },
@@ -489,14 +540,16 @@ export const pollAqvAnswers = createServerFn({ method: "POST" })
             is_correct: !!o?.is_correct,
           })).filter((o: any) => o.text)
         : [];
-      const { data: itemRow } = await supabase.from(ITEMS).select("answer_mode").eq("id", itemId).single();
+      const { data: itemRow } = await supabase.from(ITEMS).select("answer_mode, combo_sets").eq("id", itemId).single();
       const answerMode: AnswerMode = itemRow?.answer_mode === "multiple" ? "multiple" : "single";
       const parsedAnswers = Array.isArray(parsed?.answer_letters)
         ? parsed.answer_letters.map((value: unknown) => String(value).trim()).filter(Boolean)
         : String(parsed?.answer_letter || "").split(",").map((value) => value.trim()).filter(Boolean);
-      const correctLabels = new Set(parsedAnswers.length
+      let labels = parsedAnswers.length
         ? parsedAnswers
-        : opts.filter((o: any) => o.is_correct).map((o: any) => o.letter));
+        : opts.filter((o: any) => o.is_correct).map((o: any) => o.letter);
+      if (answerMode === "multiple") labels = snapToPrintedCombo(labels, itemRow?.combo_sets);
+      const correctLabels = new Set(labels);
       const answer = [...correctLabels].join(",");
       const explanation = String(parsed?.explanation || "").trim();
       const ok = opts.length >= 2 && correctLabels.size >= 1
