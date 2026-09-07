@@ -79,13 +79,13 @@ export async function collectQuestions(subjectId: string, questionIds?: string[]
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   let query = supabaseAdmin
     .from("questions")
-    .select("id,stem,explanation,sort_order")
+    .select("id,stem,explanation,answer_mode,sort_order")
     .eq("subject_id", subjectId)
     .order("sort_order", { ascending: true });
   if (questionIds?.length) query = query.in("id", questionIds);
   const { data: rows, error } = await query;
   if (error) throw new Error(error.message);
-  const list = (rows ?? []) as Array<{ id: string; stem: string; explanation: string | null; sort_order: number }>;
+  const list = (rows ?? []) as Array<{ id: string; stem: string; explanation: string | null; answer_mode: "single" | "multiple"; sort_order: number }>;
   if (!list.length) return [];
 
   const { data: optRows, error: oErr } = await supabaseAdmin
@@ -105,6 +105,7 @@ export async function collectQuestions(subjectId: string, questionIds?: string[]
   return list.map((q, i) => ({
     stem: q.stem,
     explanation: q.explanation ?? null,
+    answer_mode: q.answer_mode ?? "single",
     sort_order: q.sort_order ?? i + 1,
     options: byQuestion.get(q.id) ?? [],
   }));
@@ -142,6 +143,7 @@ export async function pourIntoCourse(opts: {
         subject_id: subject.id,
         stem: q.stem.trim(),
         explanation: q.explanation,
+        answer_mode: q.answer_mode ?? "single",
         sort_order: order++,
       })
       .select("id")

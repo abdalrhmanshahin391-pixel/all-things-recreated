@@ -13,6 +13,7 @@ export type BackupOption = {
 export type BackupQuestion = {
   stem: string;
   explanation: string | null;
+  answer_mode?: "single" | "multiple";
   sort_order: number;
   options: BackupOption[];
 };
@@ -80,7 +81,7 @@ export const exportCourseBackup = createServerFn({ method: "POST" })
       const chunk = subjectIds.slice(i, i + 200);
       const { data: qs } = await supabaseAdmin
         .from("questions")
-        .select("id,subject_id,stem,explanation,sort_order")
+        .select("id,subject_id,stem,explanation,answer_mode,sort_order")
         .in("subject_id", chunk)
         .order("sort_order");
       if (qs) questions.push(...qs);
@@ -111,6 +112,7 @@ export const exportCourseBackup = createServerFn({ method: "POST" })
       arr.push({
         stem: q.stem,
         explanation: q.explanation,
+        answer_mode: q.answer_mode ?? "single",
         sort_order: q.sort_order,
         options: optsByQ.get(q.id) ?? [],
       });
@@ -220,6 +222,7 @@ export const importCourseBackup = createServerFn({ method: "POST" })
               subject_id: subjectRow.id,
               stem: q.stem,
               explanation: q.explanation,
+              answer_mode: q.answer_mode ?? "single",
               sort_order: q.sort_order ?? 0,
             })
             .select("id").single();

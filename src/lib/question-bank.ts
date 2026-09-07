@@ -1,7 +1,7 @@
 /** Shared, client-safe types and lists for the admin Question Bank. */
 
 export type QbOption = { label: string; text: string; is_correct: boolean; sort_order: number };
-export type QbQuestion = { stem: string; explanation: string | null; sort_order: number; options: QbOption[] };
+export type QbQuestion = { stem: string; explanation: string | null; answer_mode?: "single" | "multiple"; sort_order: number; options: QbOption[] };
 export type QbMeta = {
   id: string;
   name: string;
