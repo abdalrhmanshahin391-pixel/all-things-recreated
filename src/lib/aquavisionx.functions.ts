@@ -156,6 +156,7 @@ Rules:
 - Transcribe EVERY question that appears on this page, in reading order. Never skip one.
 - Copy the stem and every option VERBATIM. Do not shorten, translate or fix them.
 - Options may be labelled "A." "a)" "1-" or bullets — normalise the letter to A, B, C, D...
+- IMPORTANT: if the lettered choices are combinations of numbered statements (e.g. a)1.2  b)1.3.4  c)1.2.3.4  d)3.4), then those numbered statements 1,2,3,4 are PART OF THE STEM, not options. Put the question line then each numbered statement verbatim on its own line inside "stem", and use only the lettered combinations as "options".
 - If a question has no visible options (open/short answer), return "options": [].
 - Do NOT answer the questions and do NOT explain anything here.
 - If the page contains no questions at all (cover page, index, blank), return {"questions":[]}.`;
