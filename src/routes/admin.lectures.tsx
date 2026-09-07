@@ -444,10 +444,11 @@ function AdminLecturesPage() {
       .eq("id", activeCourse.id);
     setBusy(false);
     if (error) setError(error.message);
-    else loadCourses();
+    else loadCourses(staffCourseIds ?? []);
   }
 
-  if (loading || !user || !isAdmin) return <div className="min-h-screen bg-black" />;
+  if (loading || !user || staffCourseIds === null || (!isAdmin && !isStaff))
+    return <div className="min-h-screen bg-black" />;
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -455,15 +456,21 @@ function AdminLecturesPage() {
       <main className="mx-auto max-w-6xl px-6 pt-32 pb-20">
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
-            <h1 className="font-serif text-4xl md:text-5xl font-bold mb-2">Lectures admin</h1>
+            <h1 className="font-serif text-4xl md:text-5xl font-bold mb-2">
+              {isAdmin ? "Lectures admin" : "Course editor"}
+            </h1>
             <p className="text-white/60 text-sm">
-              Build the syllabus for each lecture course: subjects, lecture videos, and quizzes.
+              Build the syllabus for each lecture course: subjects, lecture videos, PDFs and quizzes.
             </p>
           </div>
-          <Link to="/admin/courses" className="text-xs text-white/60 hover:text-white inline-flex items-center gap-1">
-            <ArrowLeft className="w-3 h-3" /> Back to courses
+          <Link
+            to={isAdmin ? "/admin/courses" : "/admin/lecture-centre"}
+            className="text-xs text-white/60 hover:text-white inline-flex items-center gap-1"
+          >
+            <ArrowLeft className="w-3 h-3" /> {isAdmin ? "Back to courses" : "Back to my courses"}
           </Link>
         </div>
+
 
         {error && (
           <div className="mb-6 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300 flex items-start justify-between gap-3">
