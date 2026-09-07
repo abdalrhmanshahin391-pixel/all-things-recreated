@@ -245,11 +245,11 @@ Rules:
   1. First inspect the answer choices. If choices labelled a/b/c/d or A/B/C/D contain only combinations of statement numbers, such as "1.2", "1, 3, 4", "1 + 2", "2/3/4", or "1 2 3 4", this is a combination question.
   2. Set "answer_mode":"multiple".
   3. Set "stem" to ONLY the main question line, without the numbered statements and without A/B/C/D choices.
-  4. IGNORE the A/B/C/D combination choices. They must not appear in the output.
+  4. The A/B/C/D combination choices must NOT appear in "options". Instead copy them into "combinations" as arrays of numbers, in printed order — a)1.2 b)2.3 becomes "combinations":[[1,2],[2,3]].
   5. Convert EVERY numbered statement into an option: its number is "letter" and its full wording is "text". Preserve wording and order exactly.
-  6. Before returning JSON, verify that every printed numbered statement is present as an option and no A/B/C/D combination remains.
-  Required example: "Which apply? / 1. First statement / 2. Second statement / 3. Third statement / a)1.2 / b)2.3" becomes {"answer_mode":"multiple","stem":"Which apply?","options":[{"letter":"1","text":"First statement"},{"letter":"2","text":"Second statement"},{"letter":"3","text":"Third statement"}]}.
-- Ordinary questions whose A/B/C/D choices contain answer words remain ordinary: set "answer_mode":"single" and keep their answer text as A/B/C/D options.
+  6. Before returning JSON, verify that every printed numbered statement is present as an option, no A/B/C/D combination remains in "options", and every printed combination is listed in "combinations".
+  Required example: "Which apply? / 1. First statement / 2. Second statement / 3. Third statement / a)1.2 / b)2.3" becomes {"answer_mode":"multiple","stem":"Which apply?","options":[{"letter":"1","text":"First statement"},{"letter":"2","text":"Second statement"},{"letter":"3","text":"Third statement"}],"combinations":[[1,2],[2,3]]}.
+- Ordinary questions whose A/B/C/D choices contain answer words remain ordinary: set "answer_mode":"single", keep their answer text as A/B/C/D options, and omit "combinations" (or return []).
 - If a question has no visible options (open/short answer), return "options": [].
 - Do NOT answer the questions and do NOT explain anything here.
 - If the page contains no questions at all (cover page, index, blank), return {"questions":[]}.`;
