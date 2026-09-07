@@ -530,9 +530,11 @@ export const pollAqvAnswers = createServerFn({ method: "POST" })
 
 // ---------------- 7. import ----------------
 
+const ImportInput = z.object({ jobId: z.string().uuid(), allowPartial: z.boolean().optional() });
+
 export const importAqvJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => JobInput.parse(d))
+  .inputValidator((d: unknown) => ImportInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
     const { data: job, error } = await supabase.from(JOBS)
