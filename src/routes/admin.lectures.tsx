@@ -838,6 +838,8 @@ function ItemBlock({
   onReorder,
   onRename,
   onToggleFree,
+  onSetPdf,
+  onRemovePdf,
   onEditQuestion,
   onDeleteQuestion,
 }: {
@@ -851,14 +853,20 @@ function ItemBlock({
   onReorder: (d: -1 | 1) => void;
   onRename: (t: string) => void;
   onToggleFree: (next: boolean) => void;
+  onSetPdf: (url: string, file: File | null) => void;
+  onRemovePdf: () => void;
   onEditQuestion: (quizId: string, q: EditingQuestion | null, position: number) => void;
   onDeleteQuestion: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [expandQuiz, setExpandQuiz] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState(item.pdf_url ?? "");
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
 
   const isLec = item.kind === "lecture";
+  const hasPdf = !!(item.pdf_url || item.pdf_storage_path);
   const Icon = isLec ? PlayCircle : ListChecks;
   const tint = isLec ? "text-emerald-300 bg-emerald-500/10" : "text-cyan-300 bg-cyan-500/10";
 
@@ -913,6 +921,19 @@ function ItemBlock({
           {item.is_free ? "Free" : "Paid"}
         </label>
 
+        {isLec && (
+          <button
+            onClick={() => setPdfOpen((v) => !v)}
+            className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full border ${
+              hasPdf
+                ? "bg-amber-500/15 text-amber-300 border-amber-400/40"
+                : "bg-white/5 text-white/40 border-white/10 hover:text-white/70"
+            }`}
+          >
+            {hasPdf ? "PDF" : "Add PDF"}
+          </button>
+        )}
+
         {!isLec && quiz && (
           <button onClick={() => setExpandQuiz((v) => !v)} className="text-xs text-cyan-300 hover:text-cyan-200 px-2">
             {expandQuiz ? "Hide questions" : `Questions (${quizQuestions.length})`}
@@ -922,6 +943,55 @@ function ItemBlock({
           <Trash2 size={12} />
         </button>
       </div>
+
+      {isLec && pdfOpen && (
+        <div className="border-t border-white/5 p-3 space-y-2">
+          <input
+            value={pdfUrl}
+            onChange={(e) => setPdfUrl(e.target.value)}
+            placeholder="PDF link"
+            className="w-full rounded border border-white/15 bg-black/50 px-3 py-2 text-sm outline-none focus:border-white/50"
+          />
+          <label className="block rounded border border-dashed border-white/20 px-3 py-2 text-xs text-white/60 cursor-pointer hover:border-white/40">
+            <Upload size={12} className="inline mr-1" />
+            {pdfFile
+              ? pdfFile.name
+              : item.pdf_storage_path
+                ? "Replace uploaded PDF…"
+                : "Or upload a PDF…"}
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)}
+              className="hidden"
+            />
+          </label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                onSetPdf(pdfUrl, pdfFile);
+                setPdfFile(null);
+                setPdfOpen(false);
+              }}
+              disabled={!pdfUrl.trim() && !pdfFile && !item.pdf_storage_path}
+              className="rounded-md bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-bold px-3 py-2"
+            >
+              Save PDF
+            </button>
+            {hasPdf && (
+              <button
+                onClick={() => {
+                  onRemovePdf();
+                  setPdfOpen(false);
+                }}
+                className="rounded-md border border-red-400/40 text-red-300 hover:bg-red-500/10 text-xs font-bold px-3 py-2"
+              >
+                Remove PDF
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {!isLec && quiz && expandQuiz && (
         <div className="border-t border-white/5 p-3 space-y-2">
