@@ -51,6 +51,8 @@ type Item = {
   position: number;
   video_url: string | null;
   video_storage_path: string | null;
+  pdf_url: string | null;
+  pdf_storage_path: string | null;
   is_free: boolean;
 };
 type Quiz = { id: string; item_id: string };
@@ -121,7 +123,7 @@ function AdminLecturesPage() {
       return;
     }
     const { data: its } = await (supabase.from as any)("lecture_items")
-      .select("id,subject_id,kind,title,position,video_url,video_storage_path,is_free")
+      .select("id,subject_id,kind,title,position,video_url,video_storage_path,pdf_url,pdf_storage_path,is_free")
       .in("subject_id", subjList.map((s) => s.id))
       .order("position");
     const itList = (its ?? []) as Item[];
@@ -238,23 +240,45 @@ function AdminLecturesPage() {
   }
 
   // --- Item ops ---
-  async function addLecture(subjectId: string, title: string, videoUrl: string, file: File | null) {
+  async function uploadTo(bucket: string, subjectId: string, file: File): Promise<string | null> {
+    const key = `${subjectId}/${crypto.randomUUID()}-${file.name}`;
+    const { error: upErr } = await supabase.storage
+      .from(bucket)
+      .upload(key, file, { upsert: false, contentType: file.type });
+    if (upErr) {
+      setError(upErr.message);
+      return null;
+    }
+    return key;
+  }
+
+  async function addLecture(
+    subjectId: string,
+    title: string,
+    videoUrl: string,
+    file: File | null,
+    pdfUrl: string,
+    pdfFile: File | null,
+  ) {
     if (!title.trim()) return;
     setBusy(true);
     const sublist = itemsBySubject.get(subjectId) ?? [];
     const position = sublist.length;
     let storagePath: string | null = null;
     if (file) {
-      const key = `${subjectId}/${crypto.randomUUID()}-${file.name}`;
-      const { error: upErr } = await supabase.storage
-        .from("lecture-videos")
-        .upload(key, file, { upsert: false, contentType: file.type });
-      if (upErr) {
+      storagePath = await uploadTo("lecture-videos", subjectId, file);
+      if (!storagePath) {
         setBusy(false);
-        setError(upErr.message);
         return;
       }
-      storagePath = key;
+    }
+    let pdfPath: string | null = null;
+    if (pdfFile) {
+      pdfPath = await uploadTo("lecture-pdfs", subjectId, pdfFile);
+      if (!pdfPath) {
+        setBusy(false);
+        return;
+      }
     }
     const { error } = await (supabase.from as any)("lecture_items").insert({
       subject_id: subjectId,
@@ -263,7 +287,42 @@ function AdminLecturesPage() {
       position,
       video_url: videoUrl.trim() || null,
       video_storage_path: storagePath,
+      pdf_url: pdfUrl.trim() || null,
+      pdf_storage_path: pdfPath,
     });
+    setBusy(false);
+    if (error) setError(error.message);
+    else refreshSyllabus(activeCourseId);
+  }
+
+  async function setItemPdf(item: Item, pdfUrl: string, pdfFile: File | null) {
+    setBusy(true);
+    let pdfPath: string | null = item.pdf_storage_path;
+    if (pdfFile) {
+      const key = await uploadTo("lecture-pdfs", item.subject_id, pdfFile);
+      if (!key) {
+        setBusy(false);
+        return;
+      }
+      pdfPath = key;
+    }
+    const { error } = await (supabase.from as any)("lecture_items")
+      .update({ pdf_url: pdfUrl.trim() || null, pdf_storage_path: pdfPath })
+      .eq("id", item.id);
+    setBusy(false);
+    if (error) setError(error.message);
+    else refreshSyllabus(activeCourseId);
+  }
+
+  async function removeItemPdf(item: Item) {
+    if (!confirm("Remove the PDF from this lecture?")) return;
+    setBusy(true);
+    if (item.pdf_storage_path) {
+      await supabase.storage.from("lecture-pdfs").remove([item.pdf_storage_path]);
+    }
+    const { error } = await (supabase.from as any)("lecture_items")
+      .update({ pdf_url: null, pdf_storage_path: null })
+      .eq("id", item.id);
     setBusy(false);
     if (error) setError(error.message);
     else refreshSyllabus(activeCourseId);
@@ -428,12 +487,14 @@ function AdminLecturesPage() {
                         onRename={(t) => renameSubject(s.id, t)}
                         onDelete={() => deleteSubject(s.id)}
                         onReorder={(d) => reorderSubject(s.id, d)}
-                        onAddLecture={(t, u, f) => addLecture(s.id, t, u, f)}
+                        onAddLecture={(t, u, f, pu, pf) => addLecture(s.id, t, u, f, pu, pf)}
                         onAddQuiz={(t) => addQuiz(s.id, t)}
                         onDeleteItem={deleteItem}
                         onReorderItem={(id, d) => reorderItem(s.id, id, d)}
                         onRenameItem={renameItem}
                         onToggleFree={toggleItemFree}
+                        onSetItemPdf={setItemPdf}
+                        onRemoveItemPdf={removeItemPdf}
                         onEditQuestion={(quizId, q, position) => setModal({ quizId, initial: q, position })}
                         onDeleteQuestion={deleteQuestion}
                       />
@@ -564,12 +625,14 @@ function SubjectBlock(props: {
   onRename: (t: string) => void;
   onDelete: () => void;
   onReorder: (d: -1 | 1) => void;
-  onAddLecture: (t: string, url: string, file: File | null) => void;
+  onAddLecture: (t: string, url: string, file: File | null, pdfUrl: string, pdfFile: File | null) => void;
   onAddQuiz: (t: string) => void;
   onDeleteItem: (id: string) => void;
   onReorderItem: (id: string, d: -1 | 1) => void;
   onRenameItem: (id: string, title: string) => void;
   onToggleFree: (id: string, next: boolean) => void;
+  onSetItemPdf: (item: Item, pdfUrl: string, pdfFile: File | null) => void;
+  onRemoveItemPdf: (item: Item) => void;
   onEditQuestion: (quizId: string, q: EditingQuestion | null, position: number) => void;
   onDeleteQuestion: (id: string) => void;
 }) {
@@ -582,6 +645,8 @@ function SubjectBlock(props: {
   const [newLecTitle, setNewLecTitle] = useState("");
   const [newLecUrl, setNewLecUrl] = useState("");
   const [newLecFile, setNewLecFile] = useState<File | null>(null);
+  const [newLecPdfUrl, setNewLecPdfUrl] = useState("");
+  const [newLecPdfFile, setNewLecPdfFile] = useState<File | null>(null);
   const [newQuizTitle, setNewQuizTitle] = useState("");
 
   const sortedItems = items.slice().sort((a, b) => a.position - b.position);
@@ -642,6 +707,8 @@ function SubjectBlock(props: {
                 onReorder={(d) => props.onReorderItem(it.id, d)}
                 onRename={(t) => props.onRenameItem(it.id, t)}
                 onToggleFree={(next) => props.onToggleFree(it.id, next)}
+                onSetPdf={(url, file) => props.onSetItemPdf(it, url, file)}
+                onRemovePdf={() => props.onRemoveItemPdf(it)}
                 onEditQuestion={props.onEditQuestion}
                 onDeleteQuestion={props.onDeleteQuestion}
               />
@@ -693,15 +760,39 @@ function SubjectBlock(props: {
                   className="hidden"
                 />
               </label>
+              <div className="pt-1 text-[10px] font-bold uppercase tracking-widest text-white/40">
+                PDF (notes / slides) — optional
+              </div>
+              <input
+                value={newLecPdfUrl}
+                onChange={(e) => setNewLecPdfUrl(e.target.value)}
+                placeholder="PDF link — optional if uploading"
+                className="w-full rounded border border-white/15 bg-black/50 px-3 py-2 text-sm outline-none focus:border-white/50"
+              />
+              <label className="block rounded border border-dashed border-white/20 px-3 py-2 text-xs text-white/60 cursor-pointer hover:border-white/40">
+                <Upload size={12} className="inline mr-1" />
+                {newLecPdfFile ? newLecPdfFile.name : "Or upload a PDF…"}
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => setNewLecPdfFile(e.target.files?.[0] ?? null)}
+                  className="hidden"
+                />
+              </label>
               <button
                 onClick={() => {
-                  props.onAddLecture(newLecTitle, newLecUrl, newLecFile);
+                  props.onAddLecture(newLecTitle, newLecUrl, newLecFile, newLecPdfUrl, newLecPdfFile);
                   setNewLecTitle("");
                   setNewLecUrl("");
                   setNewLecFile(null);
+                  setNewLecPdfUrl("");
+                  setNewLecPdfFile(null);
                   setShowLectureForm(false);
                 }}
-                disabled={!newLecTitle.trim() || (!newLecUrl.trim() && !newLecFile)}
+                disabled={
+                  !newLecTitle.trim() ||
+                  (!newLecUrl.trim() && !newLecFile && !newLecPdfUrl.trim() && !newLecPdfFile)
+                }
                 className="rounded-md bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black text-xs font-bold px-3 py-2"
               >
                 Save lecture
