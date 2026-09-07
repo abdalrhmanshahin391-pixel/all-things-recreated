@@ -423,6 +423,7 @@ export const pollAqvRead = createServerFn({ method: "POST" })
           stem,
           options,
           answer_mode: normalized.answerMode,
+          combo_sets: normalized.answerMode === "multiple" ? normalized.comboSets : [],
           status: "read",
         });
       }
