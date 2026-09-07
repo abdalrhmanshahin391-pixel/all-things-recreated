@@ -31,6 +31,26 @@ function normalizeMarkdownTables(raw: string): string {
   );
 }
 
+// Strip A./B./C./D. letter prefixes from the "Why the other options are wrong"
+// bullets and from the summary table's Option column. Applies ONLY to the
+// "wrong" and "summary" section bodies — concept and correct sections are
+// left untouched. This cleans up both old imported explanations and any case
+// where Gemini still emits a letter despite the prompt change.
+function stripOptionLetters(body: string, kind: Section["kind"]): string {
+  if (kind !== "wrong" && kind !== "summary") return body;
+  if (!body) return body;
+  let out = body;
+  if (kind === "wrong") {
+    // Remove "**A.** " / "**B.** " etc. at the start of each bullet line
+    out = out.replace(/^\s*[-•]\s*\*\*[A-Z]\.\*\*\s*/gim, "- ");
+  } else {
+    // Summary table: strip leading letter prefix in the first column cells
+    // e.g. "| A. Histiocytes |" → "| Histiocytes |"
+    out = out.replace(/\|\s*[A-Z]\.\s+/g, "| ");
+  }
+  return out;
+}
+
 function parseExplanation(raw: string): Section[] {
   const text = normalizeMarkdownTables(raw.trim());
   if (!text) return [];
@@ -75,6 +95,9 @@ function parseExplanation(raw: string): Section[] {
       m.kind === "concept" && m.bodyStart === 0
         ? text.slice(0, end).trim()
         : text.slice(m.bodyStart, end).trim();
+    // Strip A./B./C./D. letter prefixes from wrong-option bullets and
+    // summary table cells (only for wrong + summary sections).
+    body = stripOptionLetters(body, m.kind);
     // Peel off a trailing markdown table from non-summary sections so it
     // becomes its own Summary block at the bottom.
     if (m.kind !== "summary") {
