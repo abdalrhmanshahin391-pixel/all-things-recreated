@@ -460,7 +460,7 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
     if (notReady.length) throw new Error(`Stage 1 is not finished — ${notReady.length} page(s) still pending.`);
 
     const { data: items, error: iErr } = await supabase.from(ITEMS)
-      .select("id, stem, options, answer_mode, solved").eq("job_id", data.jobId).order("item_index");
+      .select("id, stem, options, answer_mode, combo_sets, solved").eq("job_id", data.jobId).order("item_index");
     if (iErr) throw iErr;
     const todo = (items ?? []).filter((it: any) => !it.solved);
     if (!todo.length) throw new Error("Every question is already solved.");
@@ -474,10 +474,14 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
       const optText = opts.length
         ? opts.map((o: any) => `${o.letter}. ${o.text}`).join("\n")
         : "(no options given — invent 4)";
+      const sets = parseComboSets(it.combo_sets);
+      const comboBlock = it.answer_mode === "multiple" && sets.length
+        ? `ALLOWED ANSWER SETS (printed on the paper — you MUST choose exactly one of these):\n${sets.map((s) => s.join(",")).join("\n")}\n`
+        : "";
       return {
         request: {
           systemInstruction: { parts: [{ text: SOLVE_SYSTEM }] },
-          contents: [{ role: "user", parts: [{ text: `${refBlock}ANSWER MODE: ${it.answer_mode === "multiple" ? "MULTIPLE — select every correct numbered statement" : "SINGLE — select exactly one answer"}\n--- QUESTION ---\n${it.stem}\n\n${optText}\n--- END ---` }] }],
+          contents: [{ role: "user", parts: [{ text: `${refBlock}ANSWER MODE: ${it.answer_mode === "multiple" ? "MULTIPLE — select every correct numbered statement" : "SINGLE — select exactly one answer"}\n${comboBlock}--- QUESTION ---\n${it.stem}\n\n${optText}\n--- END ---` }] }],
           generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json" },
         },
         metadata: { key: `i-${it.id}` },
