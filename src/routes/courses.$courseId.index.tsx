@@ -25,6 +25,7 @@ import { setSubjectAccess, type SubjectAccess } from "@/lib/subjects.functions";
 import { AdminBackupControls } from "@/components/course/AdminBackupControls";
 import { ensureFreeEnrollment } from "@/lib/course-access";
 import { toast } from "sonner";
+import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
 
 export const Route = createFileRoute("/courses/$courseId/")({
   loader: async ({ params }) => {
@@ -509,6 +510,8 @@ function CourseDetailPage() {
             </div>
           </div>
         )}
+
+        <ProtectionNotice className="mb-6" />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
           {/* LEFT — curriculum */}
