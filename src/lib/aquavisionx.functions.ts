@@ -592,12 +592,13 @@ export const importAqvJob = createServerFn({ method: "POST" })
       }
     }
 
+    const stage = unsolved > 0 ? "solve_partial" : "imported";
     await supabase.from(JOBS).update({
-      stage: "imported", status: "imported", imported_count: inserted,
+      stage, status: stage, imported_count: inserted,
       error: errors.length ? errors.slice(0, 3).join(" | ") : null,
     }).eq("id", data.jobId);
 
-    return { inserted, skipped, failed, errors: errors.slice(0, 5) };
+    return { inserted, skipped, failed, leftOut: unsolved, errors: errors.slice(0, 5) };
   });
 
 // ---------------- listing / housekeeping ----------------
