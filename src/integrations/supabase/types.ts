@@ -279,6 +279,7 @@ export type Database = {
           number: string | null
           options: Json
           page_id: string | null
+          printed_choices: Json
           solved: boolean
           status: string
           stem: string
@@ -299,6 +300,7 @@ export type Database = {
           number?: string | null
           options?: Json
           page_id?: string | null
+          printed_choices?: Json
           solved?: boolean
           status?: string
           stem: string
@@ -319,6 +321,7 @@ export type Database = {
           number?: string | null
           options?: Json
           page_id?: string | null
+          printed_choices?: Json
           solved?: boolean
           status?: string
           stem?: string
@@ -353,6 +356,12 @@ export type Database = {
           pdf_name: string
           read_batch_id: string | null
           reference_book: string | null
+          resource_kind: string | null
+          resource_mime: string | null
+          resource_name: string | null
+          resource_storage_path: string | null
+          resource_text: string | null
+          resource_url: string | null
           stage: string
           status: string
           subject_id: string | null
@@ -371,6 +380,12 @@ export type Database = {
           pdf_name: string
           read_batch_id?: string | null
           reference_book?: string | null
+          resource_kind?: string | null
+          resource_mime?: string | null
+          resource_name?: string | null
+          resource_storage_path?: string | null
+          resource_text?: string | null
+          resource_url?: string | null
           stage?: string
           status?: string
           subject_id?: string | null
@@ -389,6 +404,12 @@ export type Database = {
           pdf_name?: string
           read_batch_id?: string | null
           reference_book?: string | null
+          resource_kind?: string | null
+          resource_mime?: string | null
+          resource_name?: string | null
+          resource_storage_path?: string | null
+          resource_text?: string | null
+          resource_url?: string | null
           stage?: string
           status?: string
           subject_id?: string | null
