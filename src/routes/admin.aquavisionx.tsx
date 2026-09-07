@@ -333,10 +333,16 @@ function Page() {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-sm disabled:opacity-40">
                 <Brain size={16} /> Send for answers (stage 2)
               </button>
-              <button onClick={handleImport} disabled={!canImport}
+              <button onClick={() => handleImport(false)} disabled={!canImport}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-sm disabled:opacity-40">
                 <Download size={16} /> Import
               </button>
+              {canPartialImport && (
+                <button onClick={() => handleImport(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-emerald-600 text-emerald-600 font-bold text-sm">
+                  <Download size={16} /> Import solved only ({pendingSolved})
+                </button>
+              )}
               {stage === "reading" && <span className="text-xs text-muted-foreground">waiting for Gemini to read the pages…</span>}
               {stage === "solving" && <span className="text-xs text-muted-foreground">waiting for Gemini to solve every question…</span>}
             </div>
