@@ -267,6 +267,7 @@ export type Database = {
         Row: {
           answer_letter: string | null
           answer_mode: string
+          combo_sets: Json
           concept: string | null
           created_at: string
           error: string | null
@@ -286,6 +287,7 @@ export type Database = {
         Insert: {
           answer_letter?: string | null
           answer_mode?: string
+          combo_sets?: Json
           concept?: string | null
           created_at?: string
           error?: string | null
@@ -305,6 +307,7 @@ export type Database = {
         Update: {
           answer_letter?: string | null
           answer_mode?: string
+          combo_sets?: Json
           concept?: string | null
           created_at?: string
           error?: string | null

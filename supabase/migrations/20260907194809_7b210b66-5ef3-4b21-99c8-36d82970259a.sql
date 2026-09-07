@@ -1,0 +1,1 @@
+ALTER TABLE public.aquavision_items ADD COLUMN IF NOT EXISTS combo_sets jsonb NOT NULL DEFAULT '[]'::jsonb;
