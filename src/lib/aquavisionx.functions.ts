@@ -235,7 +235,7 @@ async function submitBatch(apiKey: string, displayName: string, requests: any[])
 const READ_SYSTEM = `You read ONE page of a medical exam past-paper (image or text PDF page) and transcribe its questions.
 
 Return STRICT JSON only (no markdown fences):
-{"questions":[{"number":"12","answer_mode":"single|multiple","stem":"the main question, verbatim plain text","options":[{"letter":"A or 1","text":"..."}]}]}
+{"questions":[{"number":"12","answer_mode":"single|multiple","stem":"the main question, verbatim plain text","options":[{"letter":"A or 1","text":"..."}],"combinations":[[1,2],[2,3]]}]}
 
 Rules:
 - Transcribe EVERY question that appears on this page, in reading order. Never skip one.
