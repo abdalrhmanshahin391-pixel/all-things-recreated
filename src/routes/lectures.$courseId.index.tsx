@@ -111,8 +111,29 @@ function LectureCoursePage() {
   const [videoLoading, setVideoLoading] = useState<string | null>(null);
   const [activePdf, setActivePdf] = useState<{ src: string; title: string } | null>(null);
   const [pdfLoading, setPdfLoading] = useState<string | null>(null);
+  const [isCourseStaff, setIsCourseStaff] = useState(false);
 
-  const owns = enrolled || isAdmin;
+  const owns = enrolled || isAdmin || isCourseStaff;
+
+  useEffect(() => {
+    if (!user) {
+      setIsCourseStaff(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase.from as any)("lecture_staff")
+        .select("course_id")
+        .eq("user_id", user.id)
+        .eq("course_id", courseId)
+        .limit(1);
+      if (!cancelled) setIsCourseStaff(((data ?? []) as unknown[]).length > 0);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, courseId]);
+
 
   useEffect(() => {
     let cancelled = false;
