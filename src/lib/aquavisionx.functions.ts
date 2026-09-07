@@ -548,7 +548,11 @@ export const importAqvJob = createServerFn({ method: "POST" })
     if (iErr) throw iErr;
     if (!items?.length) throw new Error("Nothing to import.");
     const unsolved = items.filter((it: any) => !it.solved).length;
-    if (unsolved > 0) throw new Error(`${unsolved} question(s) are not solved yet — import is blocked.`);
+    if (unsolved > 0 && !data.allowPartial) {
+      throw new Error(`${unsolved} question(s) are not solved yet — import is blocked.`);
+    }
+    const importable = data.allowPartial ? items.filter((it: any) => it.solved) : items;
+    if (!importable.length) throw new Error("No solved question to import yet.");
 
     const { count } = await supabase.from("questions")
       .select("id", { count: "exact", head: true }).eq("subject_id", job.subject_id);
