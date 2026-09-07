@@ -7,6 +7,7 @@ import { ExplanationPanel, type CapturePayload } from "@/components/ExplanationP
 import { SaveNoteDialog, type SaveNotePayload } from "@/components/SaveNoteDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { ProtectedContent } from "@/components/protect/ProtectedContent";
+import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
 import {
   Flag,
   CheckCircle2,
