@@ -230,6 +230,11 @@ function AdminLecturesPage() {
     if (error) setError(error.message);
     else refreshSyllabus(activeCourseId);
   }
+  async function toggleSubjectHidden(id: string, next: boolean) {
+    const { error } = await (supabase.from as any)("lecture_subjects").update({ hidden: next }).eq("id", id);
+    if (error) setError(error.message);
+    else refreshSyllabus(activeCourseId);
+  }
   async function deleteSubject(id: string) {
     if (!confirm("Delete this subject and all its lectures and quizzes?")) return;
     const { error } = await (supabase.from as any)("lecture_subjects").delete().eq("id", id);
