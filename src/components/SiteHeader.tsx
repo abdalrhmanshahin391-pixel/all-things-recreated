@@ -15,10 +15,14 @@ import {
   Users,
   History,
   Bell,
+  GraduationCap,
 } from "lucide-react";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useLectureStaff } from "@/hooks/useLectureStaff";
 import { EventEntryButtons } from "@/components/events/EventButtons";
+
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
 import { AdminBadge, StudentBadge } from "@/components/RoleBadge";
@@ -51,6 +55,8 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
   const { lang, toggle: toggleLang } = useLang();
   const settings = useSiteSettings();
   const skin = resolveHeaderSkin(settings.header_style);
+  const isLectureStaff = useLectureStaff();
+
 
   
   const navigate = useNavigate();
