@@ -268,7 +268,7 @@ Return STRICT JSON only (no markdown fences):
 
 Rules:
 - The user message states ANSWER MODE. For SINGLE, mark exactly ONE option correct and return its label in both answer_letter and answer_letters.
-- For MULTIPLE, judge every numbered statement independently, mark ALL medically correct statements true, and return every correct numeric label in answer_letters. answer_letter may contain the labels joined by commas for compatibility.
+- For MULTIPLE, the user message may list ALLOWED ANSWER SETS (the combinations printed on the paper, e.g. 1,2 / 2,3 / 1,3 / 3,4). When it does, you MUST pick exactly ONE of those printed sets as the answer: mark true ONLY the statements of that set, and return exactly its numbers in answer_letters. Never return a set that is not listed. In "Why the other options are wrong" explain why each other printed set is wrong. If no allowed sets are given, judge every statement independently and mark all correct ones true.
 - Keep the given options verbatim and in the given order.
 - If the question came with no options, INVENT exactly 4 plausible options A-D where exactly one is correct.
 - answer_letter MUST match the option you marked is_correct.
