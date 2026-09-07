@@ -42,6 +42,8 @@ const KIND_LABEL: Record<string, string> = {
 
 type Toggles = {
   protect_enabled: boolean;
+  protect_lectures: boolean;
+  protect_qbank: boolean;
   protect_blur_on_blur: boolean;
   protect_block_print: boolean;
   protect_block_copy: boolean;
@@ -54,6 +56,8 @@ type Toggles = {
 
 const DEFAULT_TOGGLES: Toggles = {
   protect_enabled: true,
+  protect_lectures: true,
+  protect_qbank: true,
   protect_blur_on_blur: true,
   protect_block_print: true,
   protect_block_copy: true,
@@ -86,10 +90,12 @@ function AdminContentProtection() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await (supabase.from as any)("site_settings").select("id,site_name,tagline,logo_url,updated_at,theme,show_signature,protect_enabled,protect_watermark_opacity,protect_blur_on_blur,protect_block_print,protect_block_copy,protect_consent_required,protect_devtools_guard,protect_auto_lock_threshold,protect_terms_en,protect_terms_ar,committee_default_storage,brand_style,study_plan_path,study_plan_title,study_plan_subtitle,terms_en,terms_ar,privacy_en,privacy_ar,study_hub_title,study_hub_title_ar,study_hub_subtitle,study_hub_subtitle_ar").eq("id", true).maybeSingle();
+      const { data } = await (supabase.from as any)("site_settings").select("id,site_name,tagline,logo_url,updated_at,theme,show_signature,protect_enabled,protect_lectures,protect_qbank,protect_watermark_opacity,protect_blur_on_blur,protect_block_print,protect_block_copy,protect_consent_required,protect_devtools_guard,protect_auto_lock_threshold,protect_terms_en,protect_terms_ar,committee_default_storage,brand_style,study_plan_path,study_plan_title,study_plan_subtitle,terms_en,terms_ar,privacy_en,privacy_ar,study_hub_title,study_hub_title_ar,study_hub_subtitle,study_hub_subtitle_ar").eq("id", true).maybeSingle();
       if (data) {
         setToggles({
           protect_enabled: data.protect_enabled ?? true,
+          protect_lectures: data.protect_lectures ?? true,
+          protect_qbank: data.protect_qbank ?? true,
           protect_blur_on_blur: data.protect_blur_on_blur ?? true,
           protect_block_print: data.protect_block_print ?? true,
           protect_block_copy: data.protect_block_copy ?? true,
