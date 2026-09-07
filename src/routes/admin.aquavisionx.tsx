@@ -21,6 +21,7 @@ import {
   deleteAqvJob,
   setAqvReferenceBook,
   setAqvComboSets,
+  releaseAqvCombinations,
   setAqvResource,
 } from "@/lib/aquavisionx.functions";
 import { ReferenceBookCard } from "@/components/admin/ReferenceBookCard";
@@ -94,6 +95,7 @@ function Page() {
   const delFn = useServerFn(deleteAqvJob);
   const setBook = useServerFn(setAqvReferenceBook);
   const setCombos = useServerFn(setAqvComboSets);
+  const releaseCombos = useServerFn(releaseAqvCombinations);
   const setResource = useServerFn(setAqvResource);
 
   const say = (m: string) => setLog((p) => [`${new Date().toLocaleTimeString()} · ${m}`, ...p].slice(0, 120));
@@ -355,7 +357,16 @@ function Page() {
             {missingComboCount > 0 && (
               <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm text-amber-800 dark:text-amber-300">
                 <p className="font-black">{missingComboCount} combination question(s) need the printed A–D sets.</p>
-                <p className="mt-1 text-xs">Enter each printed choice separated by a slash, for example: 1,2,3,4 / 1,4 / 2,3 / 1,2. Stage 2 stays blocked until this is repaired.</p>
+                <p className="mt-1 text-xs">Enter each printed choice separated by a slash, for example: 1,2,3,4 / 1,4 / 2,3 / 1,2 — or let the AI answer them using your saved resource or textbook.</p>
+                <button type="button" onClick={async () => {
+                  try {
+                    await releaseCombos({ data: { jobId: job.id } });
+                    await openJob(job.id);
+                    toast.success("The AI will answer those questions freely");
+                  } catch (e: any) { toast.error(e?.message || "Could not update those questions"); }
+                }} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-600 px-3 py-1.5 text-xs font-bold text-amber-700 dark:text-amber-300">
+                  <Brain size={13} /> Let AI decide for all
+                </button>
               </div>
             )}
 
@@ -394,13 +405,22 @@ function Page() {
                     {it.concept && <p className="text-[11px] text-muted-foreground mt-0.5">{it.concept}</p>}
                     {it.error && <p className="text-[11px] text-destructive mt-0.5">{it.error}</p>}
                     {it.status === "needs_combinations" && (
-                      <CombinationRepair onSave={async (sets) => {
-                        try {
-                          await setCombos({ data: { itemId: it.id, combinations: sets } });
-                          await openJob(job.id);
-                          toast.success("Printed combinations saved");
-                        } catch (e: any) { toast.error(e?.message || "Could not save combinations"); }
-                      }} />
+                      <CombinationRepair
+                        onSave={async (sets) => {
+                          try {
+                            await setCombos({ data: { itemId: it.id, combinations: sets } });
+                            await openJob(job.id);
+                            toast.success("Printed combinations saved");
+                          } catch (e: any) { toast.error(e?.message || "Could not save combinations"); }
+                        }}
+                        onRelease={async () => {
+                          try {
+                            await releaseCombos({ data: { jobId: job.id, itemId: it.id } });
+                            await openJob(job.id);
+                            toast.success("The AI will answer this question freely");
+                          } catch (e: any) { toast.error(e?.message || "Could not update this question"); }
+                        }}
+                      />
                     )}
                   </li>
                 ))}
@@ -443,7 +463,7 @@ function Page() {
   );
 }
 
-function CombinationRepair({ onSave }: { onSave: (sets: string[][]) => Promise<void> }) {
+function CombinationRepair({ onSave, onRelease }: { onSave: (sets: string[][]) => Promise<void>; onRelease: () => Promise<void> }) {
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
   const parse = () => value.split(/[\/\n]/).map((part) => [...new Set(part.match(/\d+/g) ?? [])]).filter((set) => set.length >= 2);
@@ -454,6 +474,10 @@ function CombinationRepair({ onSave }: { onSave: (sets: string[][]) => Promise<v
       <button type="button" disabled={saving || parse().length < 2} onClick={async () => { setSaving(true); try { await onSave(parse()); } finally { setSaving(false); } }}
         className="inline-flex items-center justify-center gap-1 rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-primary-foreground disabled:opacity-40">
         {saving ? <Loader2 className="animate-spin" size={13} /> : <Check size={13} />} Save printed sets
+      </button>
+      <button type="button" disabled={saving} onClick={async () => { setSaving(true); try { await onRelease(); } finally { setSaving(false); } }}
+        className="inline-flex items-center justify-center gap-1 rounded-lg border border-amber-600 px-3 py-2 text-xs font-bold text-amber-700 disabled:opacity-40 dark:text-amber-300">
+        <Brain size={13} /> Let AI decide
       </button>
     </div>
   );
