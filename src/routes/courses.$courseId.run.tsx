@@ -53,6 +53,7 @@ type Question = {
   explanation: string | null;
   image_url: string | null;
   answer_mode: "single" | "multiple";
+  sort_order?: number;
   options: Option[];
 };
 
