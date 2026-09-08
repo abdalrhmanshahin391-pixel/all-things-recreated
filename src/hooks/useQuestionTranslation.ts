@@ -17,9 +17,11 @@ export function useQuestionTranslation(questionId: string | undefined, enabled: 
     if (hit) {
       setData(hit);
       setError(null);
+      setLoading(false);
       return;
     }
     let alive = true;
+    setData(null);
     setLoading(true);
     setError(null);
     let p = inflight.get(questionId);
