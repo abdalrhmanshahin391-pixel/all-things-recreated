@@ -164,6 +164,13 @@ function RunPage() {
         return;
       }
 
+      const { data: subjMeta } = await (supabase.from as any)("subjects")
+        .select("id,sort_order,ordered")
+        .in("id", subjectIds);
+      const subjectInfo = new Map<string, { sort: number; ordered: boolean }>(
+        ((subjMeta ?? []) as any[]).map((r) => [r.id as string, { sort: Number(r.sort_order) || 0, ordered: Boolean(r.ordered) }]),
+      );
+
       const { data: qs } = await (supabase.from as any)("questions")
         .select(
           "id,subject_id,stem,explanation,image_url,answer_mode,sort_order,question_options(id,label,text,is_correct,sort_order)",
