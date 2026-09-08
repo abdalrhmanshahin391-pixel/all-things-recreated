@@ -28,3 +28,26 @@ export const setSubjectAccess = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true };
   });
+
+export const setSubjectOrdered = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { subjectId: string; ordered: boolean }) => {
+    if (!data?.subjectId) throw new Error("subjectId required");
+    if (typeof data.ordered !== "boolean") throw new Error("ordered required");
+    return data;
+  })
+  .handler(async ({ data, context }) => {
+    const { data: isAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
+    if (roleErr) throw roleErr;
+    if (!isAdmin) throw new Error("Forbidden");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await (supabaseAdmin.from("subjects") as any)
+      .update({ ordered: data.ordered })
+      .eq("id", data.subjectId);
+    if (error) throw error;
+    return { ok: true };
+  });
