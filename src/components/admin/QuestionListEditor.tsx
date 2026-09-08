@@ -306,8 +306,8 @@ function EditQuestionDialog({
 
   async function save() {
     setErr(null);
-    if (!stem.trim()) {
-      setErr("The question text is required.");
+    if (!stem.trim() && !imagePath) {
+      setErr("Write the question text or add a picture.");
       return;
     }
     const clean = options.filter((o) => o.text.trim());
@@ -331,6 +331,7 @@ function EditQuestionDialog({
           stem: stem.trim(),
           explanation: explanation.trim() || null,
           answer_mode: multi ? "multiple" : "single",
+          image_url: imagePath,
         })
         .eq("id", question.id);
       if (qErr) throw qErr;
@@ -384,6 +385,9 @@ function EditQuestionDialog({
               className="min-h-28 w-full rounded-lg border border-white/15 bg-black/40 px-4 py-3 text-sm outline-none focus:border-amber-400"
             />
           </label>
+
+          <QuestionImagePicker path={imagePath} onChange={setImagePath} />
+
 
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
