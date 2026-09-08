@@ -13,6 +13,7 @@ import { PdfImportButton } from "@/components/admin/PdfImporter";
 import { BatchPdfImportButton } from "@/components/admin/BatchPdfImporter";
 import { GermanImportButton } from "@/components/admin/GermanImportButton";
 import { QuestionListEditor } from "@/components/admin/QuestionListEditor";
+import { QuestionImagePicker } from "@/components/admin/QuestionImagePicker";
 
 export const Route = createFileRoute("/admin/questions")({
   head: () => ({ meta: [{ title: "Q add choice — AquaQBank" }] }),
@@ -49,6 +50,7 @@ function AdminQuestionsPage() {
   const [stem, setStem] = useState("");
   const [explanation, setExplanation] = useState("");
   const [choices, setChoices] = useState<NewChoice[]>(emptyChoices);
+  const [imagePath, setImagePath] = useState<string | null>(null);
   const [multi, setMulti] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
