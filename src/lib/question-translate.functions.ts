@@ -106,9 +106,25 @@ export const translateQuestion = createServerFn({ method: "POST" })
     }
 
     const parsed = parseJson(raw);
+    // Gemini sometimes returns options as an array of {id,text} instead of a map.
+    const optMap: Record<string, string> = {};
+    const rawOpts = parsed?.options;
+    if (Array.isArray(rawOpts)) {
+      for (let i = 0; i < rawOpts.length; i++) {
+        const item = rawOpts[i] as any;
+        const id = typeof item?.id === "string" ? item.id : options[i]?.id;
+        const text = typeof item?.text === "string" ? item.text : typeof item === "string" ? item : "";
+        if (id) optMap[id] = text;
+      }
+    } else if (rawOpts && typeof rawOpts === "object") {
+      for (const [k, v] of Object.entries(rawOpts as Record<string, unknown>)) {
+        if (typeof v === "string") optMap[k] = v;
+        else if (v && typeof (v as any).text === "string") optMap[k] = (v as any).text;
+      }
+    }
     const outOptions: Record<string, string> = {};
     for (const o of options) {
-      const v = parsed?.options?.[o.id];
+      const v = optMap[o.id];
       outOptions[o.id] = typeof v === "string" && v.trim() ? v.trim() : (o.text ?? "");
     }
     const result: QuestionTranslation = {
