@@ -474,31 +474,87 @@ function AdminQuestionsPage() {
             />
           </label>
 
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-white/50">
+              {multi ? "Answers · tick every right one" : "Answers · pick the right one"}
+            </span>
+            <label className="inline-flex items-center gap-2 text-xs text-white/70">
+              <input
+                type="checkbox"
+                checked={multi}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setMulti(on);
+                  if (!on) {
+                    setChoices((curr) => {
+                      const first = curr.findIndex((c) => c.is_correct);
+                      return curr.map((c, j) => ({ ...c, is_correct: j === (first === -1 ? 0 : first) }));
+                    });
+                  }
+                }}
+                className="accent-emerald-400"
+              />
+              More than one answer
+            </label>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-            {labels.map((label) => (
-              <label key={label} className="rounded-xl border border-white/10 bg-black/30 p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-widest text-white/50">Answer {label}</span>
-                  <span className="inline-flex items-center gap-2 text-xs text-white/60">
-                    <input
-                      type="radio"
-                      name="correct-answer"
-                      checked={correct === label}
-                      onChange={() => setCorrect(label)}
-                      className="accent-emerald-400"
-                    />
-                    Right
+            {choices.map((c, i) => (
+              <div key={i} className="rounded-xl border border-white/10 bg-black/30 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-widest text-white/50">
+                    Answer {LETTERS[i] ?? i + 1}
                   </span>
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex items-center gap-2 text-xs text-white/60">
+                      <input
+                        type={multi ? "checkbox" : "radio"}
+                        name={multi ? undefined : "correct-answer"}
+                        checked={c.is_correct}
+                        onChange={() =>
+                          setChoices((curr) =>
+                            multi
+                              ? curr.map((x, j) => (j === i ? { ...x, is_correct: !x.is_correct } : x))
+                              : curr.map((x, j) => ({ ...x, is_correct: j === i })),
+                          )
+                        }
+                        className="accent-emerald-400"
+                      />
+                      Right
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setChoices((curr) => curr.filter((_, j) => j !== i))}
+                      disabled={choices.length <= 2}
+                      title="Remove this answer"
+                      className="p-1 rounded-md text-white/40 hover:text-rose-400 hover:bg-white/10 disabled:opacity-25"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <input
-                  value={answers[label]}
-                  onChange={(e) => setAnswers((p) => ({ ...p, [label]: e.target.value }))}
-                  placeholder={`Choice ${label}`}
+                  value={c.text}
+                  onChange={(e) =>
+                    setChoices((curr) => curr.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))
+                  }
+                  placeholder={`Choice ${LETTERS[i] ?? i + 1}`}
                   className="w-full rounded-lg border border-white/15 bg-black/40 px-4 py-3 text-sm placeholder:text-white/30 outline-none focus:border-amber-400"
                 />
-              </label>
+              </div>
             ))}
           </div>
+
+          {choices.length < LETTERS.length && (
+            <button
+              type="button"
+              onClick={() => setChoices((curr) => [...curr, { text: "", is_correct: false }])}
+              className="mb-4 inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-white/70 hover:bg-white/5"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add choice
+            </button>
+          )}
+
 
           <label className="block space-y-2 mb-5">
             <span className="text-xs font-bold uppercase tracking-widest text-white/50">Explanation</span>
