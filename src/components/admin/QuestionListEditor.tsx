@@ -313,14 +313,23 @@ function EditQuestionDialog({
       setErr("Keep at least two answer choices.");
       return;
     }
-    if (!clean.some((o) => o.is_correct)) {
-      setErr("Mark one choice as the correct answer.");
+    const correctCount = clean.filter((o) => o.is_correct).length;
+    if (correctCount < 1) {
+      setErr("Mark at least one choice as correct.");
+      return;
+    }
+    if (multi && correctCount < 2) {
+      setErr("Mark at least two correct choices, or turn off “More than one answer”.");
       return;
     }
     setSaving(true);
     try {
       const { error: qErr } = await (supabase.from as any)("questions")
-        .update({ stem: stem.trim(), explanation: explanation.trim() || null })
+        .update({
+          stem: stem.trim(),
+          explanation: explanation.trim() || null,
+          answer_mode: multi ? "multiple" : "single",
+        })
         .eq("id", question.id);
       if (qErr) throw qErr;
 
