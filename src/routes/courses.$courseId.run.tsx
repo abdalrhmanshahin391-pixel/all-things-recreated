@@ -826,9 +826,8 @@ function ReviewCard({ q, userAnswer }: { q: Question; userAnswer: string[] | und
         <Pencil className="w-4 h-4 text-rose-500" />
         <span className="text-xs uppercase tracking-widest font-bold text-rose-600">Wrong answer</span>
       </div>
-      {q.image_url ? (
-        <div className="px-6 py-6"><QuestionImage path={q.image_url} /></div>
-      ) : (
+      {q.image_url && <div className="px-6 pt-6"><QuestionImage path={q.image_url} /></div>}
+      {(q.stem?.trim() || !q.image_url) && (
         <div className="px-6 py-6 text-base leading-relaxed text-foreground">{q.stem}</div>
       )}
       <div className="px-6 pb-6 space-y-3">
