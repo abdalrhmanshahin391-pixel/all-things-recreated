@@ -266,12 +266,16 @@ function AdminQuestionsPage() {
   async function addQuestion(e: React.FormEvent) {
     e.preventDefault();
     setError(null); setMessage(null);
-    if (!subjectId || !stem.trim() || labels.some((l) => !answers[l].trim())) {
-      setError("Choose a subject, write the question, and fill all four answers.");
+    const clean = choices.filter((c) => c.text.trim());
+    if (!subjectId || !stem.trim() || clean.length < 2) {
+      setError("Choose a subject, write the question, and fill at least two answers.");
       return;
     }
-    const uniq = new Set(labels.map((l) => answers[l].trim().toLowerCase()));
-    if (uniq.size !== labels.length) { setError("The four answers must be different."); return; }
+    const uniq = new Set(clean.map((c) => c.text.trim().toLowerCase()));
+    if (uniq.size !== clean.length) { setError("The answers must be different."); return; }
+    const correctCount = clean.filter((c) => c.is_correct).length;
+    if (correctCount < 1) { setError("Mark at least one answer as right."); return; }
+    if (multi && correctCount < 2) { setError("Mark at least two right answers, or turn off “More than one answer”."); return; }
     setSaving(true);
     try {
       const { count } = await (supabase.from as any)("questions")
