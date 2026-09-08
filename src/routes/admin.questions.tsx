@@ -269,8 +269,8 @@ function AdminQuestionsPage() {
     e.preventDefault();
     setError(null); setMessage(null);
     const clean = choices.filter((c) => c.text.trim());
-    if (!subjectId || !stem.trim() || clean.length < 2) {
-      setError("Choose a subject, write the question, and fill at least two answers.");
+    if (!subjectId || (!stem.trim() && !imagePath) || clean.length < 2) {
+      setError("Choose a subject, write the question (or add a picture), and fill at least two answers.");
       return;
     }
     const uniq = new Set(clean.map((c) => c.text.trim().toLowerCase()));
@@ -477,6 +477,10 @@ function AdminQuestionsPage() {
               className="min-h-32 w-full rounded-lg border border-white/15 bg-black/40 px-4 py-3 text-sm placeholder:text-white/30 outline-none focus:border-amber-400"
             />
           </label>
+
+          <div className="mb-4">
+            <QuestionImagePicker path={imagePath} onChange={setImagePath} />
+          </div>
 
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-bold uppercase tracking-widest text-white/50">
