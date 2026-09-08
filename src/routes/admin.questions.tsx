@@ -24,7 +24,14 @@ type SubjectGroup = { id: string; course_id: string; name: string; sort_order: n
 type Subject = { id: string; group_id: string; name: string; sort_order: number };
 type University = { id: string; name: string; short_name: string | null };
 
-const labels = ["A", "B", "C", "D"] as const;
+const LETTERS = "ABCDEFGHIJ".split("");
+type NewChoice = { text: string; is_correct: boolean };
+const emptyChoices = (): NewChoice[] => [
+  { text: "", is_correct: true },
+  { text: "", is_correct: false },
+  { text: "", is_correct: false },
+  { text: "", is_correct: false },
+];
 
 function AdminQuestionsPage() {
   const { user, isAdmin, loading } = useAuth();
@@ -41,10 +48,8 @@ function AdminQuestionsPage() {
   const [newSubject, setNewSubject] = useState("");
   const [stem, setStem] = useState("");
   const [explanation, setExplanation] = useState("");
-  const [answers, setAnswers] = useState<Record<(typeof labels)[number], string>>({
-    A: "", B: "", C: "", D: "",
-  });
-  const [correct, setCorrect] = useState<(typeof labels)[number]>("A");
+  const [choices, setChoices] = useState<NewChoice[]>(emptyChoices);
+  const [multi, setMulti] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -261,12 +266,16 @@ function AdminQuestionsPage() {
   async function addQuestion(e: React.FormEvent) {
     e.preventDefault();
     setError(null); setMessage(null);
-    if (!subjectId || !stem.trim() || labels.some((l) => !answers[l].trim())) {
-      setError("Choose a subject, write the question, and fill all four answers.");
+    const clean = choices.filter((c) => c.text.trim());
+    if (!subjectId || !stem.trim() || clean.length < 2) {
+      setError("Choose a subject, write the question, and fill at least two answers.");
       return;
     }
-    const uniq = new Set(labels.map((l) => answers[l].trim().toLowerCase()));
-    if (uniq.size !== labels.length) { setError("The four answers must be different."); return; }
+    const uniq = new Set(clean.map((c) => c.text.trim().toLowerCase()));
+    if (uniq.size !== clean.length) { setError("The answers must be different."); return; }
+    const correctCount = clean.filter((c) => c.is_correct).length;
+    if (correctCount < 1) { setError("Mark at least one answer as right."); return; }
+    if (multi && correctCount < 2) { setError("Mark at least two right answers, or turn off “More than one answer”."); return; }
     setSaving(true);
     try {
       const { count } = await (supabase.from as any)("questions")
@@ -278,21 +287,22 @@ function AdminQuestionsPage() {
           stem: stem.trim(),
           explanation: explanation.trim() || null,
           sort_order: (count ?? 0) + 1,
+          answer_mode: multi ? "multiple" : "single",
         })
         .select("id").single();
       if (qErr) throw qErr;
-      const optionRows = labels.map((l, i) => ({
+      const optionRows = clean.map((c, i) => ({
         question_id: question.id,
-        label: l,
-        text: answers[l].trim(),
-        is_correct: l === correct,
+        label: LETTERS[i] ?? String(i + 1),
+        text: c.text.trim(),
+        is_correct: !!c.is_correct,
         sort_order: i + 1,
       }));
       const { error: oErr } = await (supabase.from as any)("question_options").insert(optionRows);
       if (oErr) throw oErr;
       setStem(""); setExplanation("");
-      setAnswers({ A: "", B: "", C: "", D: "" });
-      setCorrect("A");
+      setChoices(emptyChoices());
+      setMulti(false);
       setMessage("Question and choices saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save question.");
@@ -452,7 +462,7 @@ function AdminQuestionsPage() {
         <form onSubmit={addQuestion} className="rounded-2xl border border-white/10 bg-zinc-900 p-6">
           <div className="flex items-center gap-2 mb-5">
             <Save className="w-5 h-5 text-emerald-400" />
-            <h2 className="font-bold text-lg">Question and four choices</h2>
+            <h2 className="font-bold text-lg">Question and choices</h2>
           </div>
           <label className="block space-y-2 mb-4">
             <span className="text-xs font-bold uppercase tracking-widest text-white/50">Question</span>
@@ -464,31 +474,87 @@ function AdminQuestionsPage() {
             />
           </label>
 
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-white/50">
+              {multi ? "Answers · tick every right one" : "Answers · pick the right one"}
+            </span>
+            <label className="inline-flex items-center gap-2 text-xs text-white/70">
+              <input
+                type="checkbox"
+                checked={multi}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setMulti(on);
+                  if (!on) {
+                    setChoices((curr) => {
+                      const first = curr.findIndex((c) => c.is_correct);
+                      return curr.map((c, j) => ({ ...c, is_correct: j === (first === -1 ? 0 : first) }));
+                    });
+                  }
+                }}
+                className="accent-emerald-400"
+              />
+              More than one answer
+            </label>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-            {labels.map((label) => (
-              <label key={label} className="rounded-xl border border-white/10 bg-black/30 p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-widest text-white/50">Answer {label}</span>
-                  <span className="inline-flex items-center gap-2 text-xs text-white/60">
-                    <input
-                      type="radio"
-                      name="correct-answer"
-                      checked={correct === label}
-                      onChange={() => setCorrect(label)}
-                      className="accent-emerald-400"
-                    />
-                    Right
+            {choices.map((c, i) => (
+              <div key={i} className="rounded-xl border border-white/10 bg-black/30 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-widest text-white/50">
+                    Answer {LETTERS[i] ?? i + 1}
                   </span>
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex items-center gap-2 text-xs text-white/60">
+                      <input
+                        type={multi ? "checkbox" : "radio"}
+                        name={multi ? undefined : "correct-answer"}
+                        checked={c.is_correct}
+                        onChange={() =>
+                          setChoices((curr) =>
+                            multi
+                              ? curr.map((x, j) => (j === i ? { ...x, is_correct: !x.is_correct } : x))
+                              : curr.map((x, j) => ({ ...x, is_correct: j === i })),
+                          )
+                        }
+                        className="accent-emerald-400"
+                      />
+                      Right
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setChoices((curr) => curr.filter((_, j) => j !== i))}
+                      disabled={choices.length <= 2}
+                      title="Remove this answer"
+                      className="p-1 rounded-md text-white/40 hover:text-rose-400 hover:bg-white/10 disabled:opacity-25"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <input
-                  value={answers[label]}
-                  onChange={(e) => setAnswers((p) => ({ ...p, [label]: e.target.value }))}
-                  placeholder={`Choice ${label}`}
+                  value={c.text}
+                  onChange={(e) =>
+                    setChoices((curr) => curr.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))
+                  }
+                  placeholder={`Choice ${LETTERS[i] ?? i + 1}`}
                   className="w-full rounded-lg border border-white/15 bg-black/40 px-4 py-3 text-sm placeholder:text-white/30 outline-none focus:border-amber-400"
                 />
-              </label>
+              </div>
             ))}
           </div>
+
+          {choices.length < LETTERS.length && (
+            <button
+              type="button"
+              onClick={() => setChoices((curr) => [...curr, { text: "", is_correct: false }])}
+              className="mb-4 inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-white/70 hover:bg-white/5"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add choice
+            </button>
+          )}
+
 
           <label className="block space-y-2 mb-5">
             <span className="text-xs font-bold uppercase tracking-widest text-white/50">Explanation</span>

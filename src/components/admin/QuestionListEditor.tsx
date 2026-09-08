@@ -21,6 +21,7 @@ type Question = {
   explanation: string | null;
   sort_order: number;
   image_url: string | null;
+  answer_mode: "single" | "multiple";
   options: Option[];
 };
 
@@ -44,7 +45,7 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
     }
     setLoading(true);
     const { data, error } = await (supabase.from as any)("questions")
-      .select("id, stem, explanation, sort_order, image_url, question_options(id, label, text, is_correct, sort_order)")
+      .select("id, stem, explanation, sort_order, image_url, answer_mode, question_options(id, label, text, is_correct, sort_order)")
       .eq("subject_id", subjectId)
       .order("sort_order", { ascending: true });
     setLoading(false);
@@ -58,6 +59,7 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
       explanation: q.explanation ?? null,
       sort_order: q.sort_order ?? 0,
       image_url: q.image_url ?? null,
+      answer_mode: q.answer_mode === "multiple" ? "multiple" : "single",
       options: [...(q.question_options ?? [])]
         .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
         .map((o: any, i: number) => ({
@@ -295,8 +297,10 @@ function EditQuestionDialog({
           { label: "B", text: "", is_correct: false, sort_order: 1 },
         ],
   );
+  const [multi, setMulti] = useState(question.answer_mode === "multiple");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
 
   async function save() {
     setErr(null);
@@ -309,14 +313,23 @@ function EditQuestionDialog({
       setErr("Keep at least two answer choices.");
       return;
     }
-    if (!clean.some((o) => o.is_correct)) {
-      setErr("Mark one choice as the correct answer.");
+    const correctCount = clean.filter((o) => o.is_correct).length;
+    if (correctCount < 1) {
+      setErr("Mark at least one choice as correct.");
+      return;
+    }
+    if (multi && correctCount < 2) {
+      setErr("Mark at least two correct choices, or turn off “More than one answer”.");
       return;
     }
     setSaving(true);
     try {
       const { error: qErr } = await (supabase.from as any)("questions")
-        .update({ stem: stem.trim(), explanation: explanation.trim() || null })
+        .update({
+          stem: stem.trim(),
+          explanation: explanation.trim() || null,
+          answer_mode: multi ? "multiple" : "single",
+        })
         .eq("id", question.id);
       if (qErr) throw qErr;
 
@@ -371,15 +384,39 @@ function EditQuestionDialog({
           </label>
 
           <div className="space-y-2">
-            <span className="text-xs font-bold uppercase tracking-widest text-white/50">
-              Choices · pick the correct one
-            </span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-bold uppercase tracking-widest text-white/50">
+                {multi ? "Choices · tick every correct one" : "Choices · pick the correct one"}
+              </span>
+              <label className="inline-flex items-center gap-2 text-xs text-white/70">
+                <input
+                  type="checkbox"
+                  checked={multi}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setMulti(on);
+                    if (!on) {
+                      setOptions((curr) => {
+                        const first = curr.findIndex((x) => x.is_correct);
+                        return curr.map((x, j) => ({ ...x, is_correct: j === (first === -1 ? 0 : first) }));
+                      });
+                    }
+                  }}
+                  className="accent-emerald-400"
+                />
+                More than one answer
+              </label>
+            </div>
             {options.map((o, i) => (
               <div key={i} className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() =>
-                    setOptions((curr) => curr.map((x, j) => ({ ...x, is_correct: j === i })))
+                    setOptions((curr) =>
+                      multi
+                        ? curr.map((x, j) => (j === i ? { ...x, is_correct: !x.is_correct } : x))
+                        : curr.map((x, j) => ({ ...x, is_correct: j === i })),
+                    )
                   }
                   title="Mark as correct"
                   className={`grid place-items-center h-9 w-9 shrink-0 rounded-md border text-xs font-bold transition ${
