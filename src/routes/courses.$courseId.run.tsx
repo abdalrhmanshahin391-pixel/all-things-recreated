@@ -207,6 +207,7 @@ function RunPage() {
           explanation: q.explanation,
           image_url: q.image_url ?? null,
           answer_mode: isMultiple ? "multiple" : "single",
+          sort_order: Number(q.sort_order) || 0,
           options: shuffled,
         };
       });
