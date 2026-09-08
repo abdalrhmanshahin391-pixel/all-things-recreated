@@ -306,6 +306,7 @@ function AdminQuestionsPage() {
       setStem(""); setExplanation("");
       setChoices(emptyChoices());
       setMulti(false);
+      setImagePath(null);
       setMessage("Question and choices saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save question.");
