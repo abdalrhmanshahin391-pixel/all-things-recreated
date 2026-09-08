@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useServerFn } from "@tanstack/react-start";
-import { setSubjectAccess, type SubjectAccess } from "@/lib/subjects.functions";
+import { setSubjectAccess, setSubjectOrdered, type SubjectAccess } from "@/lib/subjects.functions";
 import { AdminBackupControls } from "@/components/course/AdminBackupControls";
 import { ensureFreeEnrollment } from "@/lib/course-access";
 import { toast } from "sonner";
@@ -104,6 +104,7 @@ type Subject = {
   sort_order: number;
   question_count: number;
   access_level: SubjectAccess;
+  ordered: boolean;
 };
 
 function CourseDetailPage() {
@@ -111,6 +112,7 @@ function CourseDetailPage() {
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
   const updateAccess = useServerFn(setSubjectAccess);
+  const updateOrdered = useServerFn(setSubjectOrdered);
 
   const [course, setCourse] = useState<Course | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
