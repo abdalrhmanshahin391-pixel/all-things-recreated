@@ -4907,6 +4907,7 @@ export type Database = {
           group_id: string
           id: string
           name: string
+          ordered: boolean
           sort_order: number
           updated_at: string
         }
@@ -4916,6 +4917,7 @@ export type Database = {
           group_id: string
           id?: string
           name: string
+          ordered?: boolean
           sort_order?: number
           updated_at?: string
         }
@@ -4925,6 +4927,7 @@ export type Database = {
           group_id?: string
           id?: string
           name?: string
+          ordered?: boolean
           sort_order?: number
           updated_at?: string
         }
