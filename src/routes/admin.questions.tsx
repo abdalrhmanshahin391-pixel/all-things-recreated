@@ -287,21 +287,22 @@ function AdminQuestionsPage() {
           stem: stem.trim(),
           explanation: explanation.trim() || null,
           sort_order: (count ?? 0) + 1,
+          answer_mode: multi ? "multiple" : "single",
         })
         .select("id").single();
       if (qErr) throw qErr;
-      const optionRows = labels.map((l, i) => ({
+      const optionRows = clean.map((c, i) => ({
         question_id: question.id,
-        label: l,
-        text: answers[l].trim(),
-        is_correct: l === correct,
+        label: LETTERS[i] ?? String(i + 1),
+        text: c.text.trim(),
+        is_correct: !!c.is_correct,
         sort_order: i + 1,
       }));
       const { error: oErr } = await (supabase.from as any)("question_options").insert(optionRows);
       if (oErr) throw oErr;
       setStem(""); setExplanation("");
-      setAnswers({ A: "", B: "", C: "", D: "" });
-      setCorrect("A");
+      setChoices(emptyChoices());
+      setMulti(false);
       setMessage("Question and choices saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save question.");
