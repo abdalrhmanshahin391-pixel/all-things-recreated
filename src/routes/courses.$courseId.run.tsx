@@ -665,9 +665,8 @@ function QuestionCard({
         )}
       </div>
       <ProtectedContent context="quiz" scope="card">
-      {q.image_url ? (
-        <div className="px-6 py-6"><QuestionImage path={q.image_url} /></div>
-      ) : (
+      {q.image_url && <div className="px-6 pt-6"><QuestionImage path={q.image_url} /></div>}
+      {(q.stem?.trim() || !q.image_url) && (
         <div className="px-6 py-6 text-lg leading-relaxed text-foreground font-medium">{q.stem}</div>
       )}
       {q.answer_mode === "multiple" && (
@@ -787,9 +786,8 @@ function ExamCard({
       </div>
       <ProtectedContent context="exam" scope="card">
       <div className="px-5 py-5">
-        {q.image_url ? (
-          <div className="mb-4"><QuestionImage path={q.image_url} /></div>
-        ) : (
+        {q.image_url && <div className="mb-4"><QuestionImage path={q.image_url} /></div>}
+        {(q.stem?.trim() || !q.image_url) && (
           <div className="text-base leading-relaxed mb-4 text-foreground">{q.stem}</div>
         )}
          <div className="text-xs italic text-muted-foreground mb-3">
