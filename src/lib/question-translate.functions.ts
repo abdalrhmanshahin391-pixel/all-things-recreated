@@ -77,8 +77,9 @@ export const translateQuestion = createServerFn({ method: "POST" })
       options: options.map((o: any) => ({ id: o.id, text: o.text ?? "" })),
     };
 
-    // 3) Translate with the site's own Gemini key pool.
-    const pool = await getGeminiPool(supabase);
+    // 3) Translate with the site's own Gemini key pool (admin-only table → service role).
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const pool = await getGeminiPool(supabaseAdmin);
     if (!pool.keys.length) {
       throw new Error("Arabic translation is not set up yet. Ask an admin to add a Gemini key.");
     }
