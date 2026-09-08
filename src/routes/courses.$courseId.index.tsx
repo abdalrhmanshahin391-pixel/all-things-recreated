@@ -514,7 +514,14 @@ function CourseDetailPage() {
                   className="magnetic-cta inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-bold text-sm"
                 >
                   <span className="relative z-10 inline-flex items-center gap-2">
-                    Unlock · ${Number(course.price ?? 0).toFixed(0)}
+                    {discountLive && (
+                      <span className="inline-flex items-center text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full text-white"
+                        style={{ background: course!.discount_ends_at ? "#8b5cf6" : "#f43f5e" }}>
+                        {course!.discount_ends_at ? "LIMITED" : "HOT OFFER"}
+                      </span>
+                    )}
+                    {discountLive && <s className="text-white/60 font-medium">${wasPrice!.toFixed(0)}</s>}
+                    Unlock · ${Number(course?.price ?? 0).toFixed(0)}
                     <ArrowRight className="w-4 h-4" />
                   </span>
                 </button>
