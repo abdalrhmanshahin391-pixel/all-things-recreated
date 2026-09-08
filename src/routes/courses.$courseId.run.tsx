@@ -8,6 +8,8 @@ import { SaveNoteDialog, type SaveNotePayload } from "@/components/SaveNoteDialo
 import { useAuth } from "@/hooks/useAuth";
 import { ProtectedContent } from "@/components/protect/ProtectedContent";
 import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
+import { ArabicToggle } from "@/components/quiz/ArabicToggle";
+import { useQuestionTranslation } from "@/hooks/useQuestionTranslation";
 import {
   Flag,
   CheckCircle2,
@@ -643,6 +645,10 @@ function QuestionCard({
   onCapture: (cap: CapturePayload) => void;
 }) {
   const isStudy = mode === "study";
+  const [ar, setAr] = useState(false);
+  const { data: tr, loading: trLoading, error: trError } = useQuestionTranslation(q.id, ar);
+  const show = ar && tr ? tr : null;
+
 
   return (
     <div className="medical-card overflow-hidden">
@@ -658,19 +664,27 @@ function QuestionCard({
           <Flag className={`w-3.5 h-3.5 ${isFlagged ? "fill-amber-400" : ""}`} />
           {isFlagged ? "Flagged" : "Flag question"}
         </button>
-        {isAdmin && isStudy && (
-          <button
-            onClick={onDelete}
-            className="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-rose-200 text-rose-700 hover:bg-rose-50"
-          >
-            <Trash2 className="w-3.5 h-3.5" /> Delete question
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <ArabicToggle on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
+          {isAdmin && isStudy && (
+            <button
+              onClick={onDelete}
+              className="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-rose-200 text-rose-700 hover:bg-rose-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Delete question
+            </button>
+          )}
+        </div>
       </div>
       <ProtectedContent context="quiz" scope="card">
       {q.image_url && <div className="px-6 pt-6"><QuestionImage path={q.image_url} /></div>}
       {(q.stem?.trim() || !q.image_url) && (
-        <div className="px-6 py-6 text-lg leading-relaxed text-foreground font-medium">{q.stem}</div>
+        <div
+          dir={show ? "rtl" : undefined}
+          className="px-6 py-6 text-lg leading-relaxed text-foreground font-medium"
+        >
+          {show ? show.stem : q.stem}
+        </div>
       )}
       {q.answer_mode === "multiple" && (
         <div className="mx-6 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
@@ -712,7 +726,9 @@ function QuestionCard({
                 >
                   {o.label}
                 </span>
-                <span className="flex-1 text-foreground">{o.text || ""}</span>
+                <span dir={show ? "rtl" : undefined} className="flex-1 text-foreground">
+                  {(show ? (show.options[o.id] ?? o.text) : o.text) || ""}
+                </span>
                 {isRight && <CheckCircle2 className="w-5 h-5 text-emerald-600" />}
                 {isWrong && <XCircle className="w-5 h-5 text-rose-600" />}
               </button>
@@ -731,8 +747,10 @@ function QuestionCard({
       </div>
       </ProtectedContent>
 
-      {submitted && q.explanation && (
-        <ExplanationPanel explanation={q.explanation} onCapture={onCapture} />
+      {submitted && (show?.explanation || q.explanation) && (
+        <div dir={show?.explanation ? "rtl" : undefined}>
+          <ExplanationPanel explanation={(show?.explanation ?? q.explanation) as string} onCapture={onCapture} />
+        </div>
       )}
 
       <div className="px-6 pb-6">
@@ -770,6 +788,9 @@ function ExamCard({
    q: Question; index: number; selected: string[] | undefined;
   onSelect: (label: string) => void; isFlagged: boolean; onToggleFlag: () => void;
 }) {
+  const [ar, setAr] = useState(false);
+  const { data: tr, loading: trLoading, error: trError } = useQuestionTranslation(q.id, ar);
+  const show = ar && tr ? tr : null;
   return (
     <div className="medical-card grid grid-cols-1 md:grid-cols-[180px_1fr] overflow-hidden">
       <div className="px-5 py-5 border-b md:border-b-0 md:border-r border-border bg-muted">
@@ -786,12 +807,15 @@ function ExamCard({
           <Flag className={`w-3.5 h-3.5 ${isFlagged ? "fill-amber-400" : ""}`} />
           {isFlagged ? "Flagged" : "Flag question"}
         </button>
+        <ArabicToggle className="mt-3" on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
       </div>
       <ProtectedContent context="exam" scope="card">
       <div className="px-5 py-5">
         {q.image_url && <div className="mb-4"><QuestionImage path={q.image_url} /></div>}
         {(q.stem?.trim() || !q.image_url) && (
-          <div className="text-base leading-relaxed mb-4 text-foreground">{q.stem}</div>
+          <div dir={show ? "rtl" : undefined} className="text-base leading-relaxed mb-4 text-foreground">
+            {show ? show.stem : q.stem}
+          </div>
         )}
          <div className="text-xs italic text-muted-foreground mb-3">
            {q.answer_mode === "multiple" ? "More than one answer — select all that apply:" : "Select one:"}
@@ -812,7 +836,9 @@ function ExamCard({
                 className="accent-indigo-600"
               />
               <span className="font-semibold text-sm w-5 text-muted-foreground">{o.label.toLowerCase()}.</span>
-              <span className="text-sm text-foreground">{o.text || (q.image_url ? "" : "")}</span>
+              <span dir={show ? "rtl" : undefined} className="text-sm text-foreground">
+                {(show ? (show.options[o.id] ?? o.text) : o.text) || ""}
+              </span>
             </label>
           ))}
         </div>
@@ -823,15 +849,23 @@ function ExamCard({
 }
 
 function ReviewCard({ q, userAnswer }: { q: Question; userAnswer: string[] | undefined }) {
+  const [ar, setAr] = useState(false);
+  const { data: tr, loading: trLoading, error: trError } = useQuestionTranslation(q.id, ar);
+  const show = ar && tr ? tr : null;
   return (
     <div className="medical-card overflow-hidden">
-      <div className="px-6 py-4 border-b border-border flex items-center gap-2">
-        <Pencil className="w-4 h-4 text-rose-500" />
-        <span className="text-xs uppercase tracking-widest font-bold text-rose-600">Wrong answer</span>
+      <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-2">
+          <Pencil className="w-4 h-4 text-rose-500" />
+          <span className="text-xs uppercase tracking-widest font-bold text-rose-600">Wrong answer</span>
+        </span>
+        <ArabicToggle on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
       </div>
       {q.image_url && <div className="px-6 pt-6"><QuestionImage path={q.image_url} /></div>}
       {(q.stem?.trim() || !q.image_url) && (
-        <div className="px-6 py-6 text-base leading-relaxed text-foreground">{q.stem}</div>
+        <div dir={show ? "rtl" : undefined} className="px-6 py-6 text-base leading-relaxed text-foreground">
+          {show ? show.stem : q.stem}
+        </div>
       )}
       <div className="px-6 pb-6 space-y-3">
         {q.options.map((o) => {
@@ -859,7 +893,9 @@ function ReviewCard({ q, userAnswer }: { q: Question; userAnswer: string[] | und
               >
                 {o.label}
               </span>
-              <span className="flex-1 text-foreground">{o.text || ""}</span>
+              <span dir={show ? "rtl" : undefined} className="flex-1 text-foreground">
+                {(show ? (show.options[o.id] ?? o.text) : o.text) || ""}
+              </span>
               {isRight && (
                 <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
                   <CheckCircle2 className="w-4 h-4" /> Correct
@@ -874,8 +910,10 @@ function ReviewCard({ q, userAnswer }: { q: Question; userAnswer: string[] | und
           );
         })}
       </div>
-      {q.explanation && (
-        <ExplanationPanel explanation={q.explanation} onCapture={() => {}} />
+      {(show?.explanation || q.explanation) && (
+        <div dir={show?.explanation ? "rtl" : undefined}>
+          <ExplanationPanel explanation={(show?.explanation ?? q.explanation) as string} onCapture={() => {}} />
+        </div>
       )}
     </div>
   );
