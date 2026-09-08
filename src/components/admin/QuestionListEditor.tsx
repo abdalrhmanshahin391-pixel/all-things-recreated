@@ -59,6 +59,7 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
       explanation: q.explanation ?? null,
       sort_order: q.sort_order ?? 0,
       image_url: q.image_url ?? null,
+      answer_mode: q.answer_mode === "multiple" ? "multiple" : "single",
       options: [...(q.question_options ?? [])]
         .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
         .map((o: any, i: number) => ({
