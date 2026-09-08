@@ -234,6 +234,33 @@ function RunPage() {
         }
       }
 
+      // Subjects marked "in order" (cases) stay together as one block, in the
+      // exact order their questions were arranged. Everything else is untouched.
+      const orderedIds = new Set(
+        Array.from(subjectInfo.entries()).filter(([, v]) => v.ordered).map(([id]) => id),
+      );
+      if (orderedIds.size) {
+        const blocks = new Map<string, Question[]>();
+        const rest: (Question | { __block: string })[] = [];
+        for (const q of list) {
+          if (orderedIds.has(q.subject_id)) {
+            if (!blocks.has(q.subject_id)) {
+              blocks.set(q.subject_id, []);
+              rest.push({ __block: q.subject_id });
+            }
+            blocks.get(q.subject_id)!.push(q);
+          } else {
+            rest.push(q);
+          }
+        }
+        for (const arr of blocks.values()) {
+          arr.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+        }
+        list = rest.flatMap((item) =>
+          "__block" in (item as any) ? blocks.get((item as any).__block)! : [item as Question],
+        );
+      }
+
       setQuestions(list);
       setLoading(false);
     })();
