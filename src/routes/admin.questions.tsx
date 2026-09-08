@@ -13,6 +13,7 @@ import { PdfImportButton } from "@/components/admin/PdfImporter";
 import { BatchPdfImportButton } from "@/components/admin/BatchPdfImporter";
 import { GermanImportButton } from "@/components/admin/GermanImportButton";
 import { QuestionListEditor } from "@/components/admin/QuestionListEditor";
+import { QuestionImagePicker } from "@/components/admin/QuestionImagePicker";
 
 export const Route = createFileRoute("/admin/questions")({
   head: () => ({ meta: [{ title: "Q add choice — AquaQBank" }] }),
@@ -49,6 +50,7 @@ function AdminQuestionsPage() {
   const [stem, setStem] = useState("");
   const [explanation, setExplanation] = useState("");
   const [choices, setChoices] = useState<NewChoice[]>(emptyChoices);
+  const [imagePath, setImagePath] = useState<string | null>(null);
   const [multi, setMulti] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -267,8 +269,8 @@ function AdminQuestionsPage() {
     e.preventDefault();
     setError(null); setMessage(null);
     const clean = choices.filter((c) => c.text.trim());
-    if (!subjectId || !stem.trim() || clean.length < 2) {
-      setError("Choose a subject, write the question, and fill at least two answers.");
+    if (!subjectId || (!stem.trim() && !imagePath) || clean.length < 2) {
+      setError("Choose a subject, write the question (or add a picture), and fill at least two answers.");
       return;
     }
     const uniq = new Set(clean.map((c) => c.text.trim().toLowerCase()));
@@ -288,6 +290,7 @@ function AdminQuestionsPage() {
           explanation: explanation.trim() || null,
           sort_order: (count ?? 0) + 1,
           answer_mode: multi ? "multiple" : "single",
+          image_url: imagePath,
         })
         .select("id").single();
       if (qErr) throw qErr;
@@ -303,6 +306,7 @@ function AdminQuestionsPage() {
       setStem(""); setExplanation("");
       setChoices(emptyChoices());
       setMulti(false);
+      setImagePath(null);
       setMessage("Question and choices saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save question.");
@@ -473,6 +477,10 @@ function AdminQuestionsPage() {
               className="min-h-32 w-full rounded-lg border border-white/15 bg-black/40 px-4 py-3 text-sm placeholder:text-white/30 outline-none focus:border-amber-400"
             />
           </label>
+
+          <div className="mb-4">
+            <QuestionImagePicker path={imagePath} onChange={setImagePath} />
+          </div>
 
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-bold uppercase tracking-widest text-white/50">
