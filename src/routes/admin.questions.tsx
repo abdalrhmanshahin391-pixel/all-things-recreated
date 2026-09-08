@@ -24,7 +24,14 @@ type SubjectGroup = { id: string; course_id: string; name: string; sort_order: n
 type Subject = { id: string; group_id: string; name: string; sort_order: number };
 type University = { id: string; name: string; short_name: string | null };
 
-const labels = ["A", "B", "C", "D"] as const;
+const LETTERS = "ABCDEFGHIJ".split("");
+type NewChoice = { text: string; is_correct: boolean };
+const emptyChoices = (): NewChoice[] => [
+  { text: "", is_correct: true },
+  { text: "", is_correct: false },
+  { text: "", is_correct: false },
+  { text: "", is_correct: false },
+];
 
 function AdminQuestionsPage() {
   const { user, isAdmin, loading } = useAuth();
