@@ -462,7 +462,7 @@ function AdminQuestionsPage() {
         <form onSubmit={addQuestion} className="rounded-2xl border border-white/10 bg-zinc-900 p-6">
           <div className="flex items-center gap-2 mb-5">
             <Save className="w-5 h-5 text-emerald-400" />
-            <h2 className="font-bold text-lg">Question and four choices</h2>
+            <h2 className="font-bold text-lg">Question and choices</h2>
           </div>
           <label className="block space-y-2 mb-4">
             <span className="text-xs font-bold uppercase tracking-widest text-white/50">Question</span>
