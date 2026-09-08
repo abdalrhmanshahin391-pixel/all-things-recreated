@@ -21,6 +21,7 @@ type Question = {
   explanation: string | null;
   sort_order: number;
   image_url: string | null;
+  answer_mode: "single" | "multiple";
   options: Option[];
 };
 
