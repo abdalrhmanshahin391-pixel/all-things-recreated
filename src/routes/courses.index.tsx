@@ -65,6 +65,12 @@ type Course = {
   questions_count_mid: number;
   questions_count_final: number;
   published: boolean;
+  badge?: string | null;
+  badge_color?: string | null;
+  badge_expires_at?: string | null;
+  compare_at_price?: number | null;
+  discount_active?: boolean | null;
+  discount_ends_at?: string | null;
 };
 
 const YEAR_ICONS = [Stethoscope, Heart, Pill, Microscope, Activity, Syringe];
