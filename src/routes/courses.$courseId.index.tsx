@@ -342,6 +342,18 @@ function CourseDetailPage() {
     });
   };
 
+  const handleToggleOrdered = async (subjectId: string, next: boolean) => {
+    const prev = subjects;
+    setSubjects((cur) => cur.map((s) => (s.id === subjectId ? { ...s, ordered: next } : s)));
+    try {
+      await updateOrdered({ data: { subjectId, ordered: next } });
+      toast.success(next ? "Questions will stay in order" : "Order lock removed");
+    } catch (e: any) {
+      setSubjects(prev);
+      toast.error(e?.message ?? "Failed to update");
+    }
+  };
+
   const handleSetAccess = async (subjectId: string, level: SubjectAccess) => {
     const prev = subjects;
     setSubjects((cur) =>
@@ -696,6 +708,18 @@ function CourseDetailPage() {
                                   </label>
                                   <AccessStatePill value={s.access_level} />
                                   <AccessToggle value={s.access_level} onChange={(v) => handleSetAccess(s.id, v)} />
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleToggleOrdered(s.id, !s.ordered); }}
+                                    title="Keep these questions together and in order (cases)"
+                                    className={`text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-1 border transition-colors ${
+                                      s.ordered
+                                        ? "bg-indigo-600 text-white border-indigo-600"
+                                        : "bg-card text-muted-foreground border-border hover:border-indigo-300"
+                                    }`}
+                                  >
+                                    In order
+                                  </button>
                                 </div>
                               ) : sLocked ? (
                                 <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted border border-border rounded-full px-2 py-1">
