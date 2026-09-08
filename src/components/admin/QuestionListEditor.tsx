@@ -45,7 +45,7 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
     }
     setLoading(true);
     const { data, error } = await (supabase.from as any)("questions")
-      .select("id, stem, explanation, sort_order, image_url, question_options(id, label, text, is_correct, sort_order)")
+      .select("id, stem, explanation, sort_order, image_url, answer_mode, question_options(id, label, text, is_correct, sort_order)")
       .eq("subject_id", subjectId)
       .order("sort_order", { ascending: true });
     setLoading(false);
