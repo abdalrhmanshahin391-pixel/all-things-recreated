@@ -3901,6 +3901,47 @@ export type Database = {
           },
         ]
       }
+      question_translations: {
+        Row: {
+          created_at: string
+          explanation: string | null
+          id: string
+          lang: string
+          options: Json
+          question_id: string
+          stem: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          explanation?: string | null
+          id?: string
+          lang?: string
+          options?: Json
+          question_id: string
+          stem?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          explanation?: string | null
+          id?: string
+          lang?: string
+          options?: Json
+          question_id?: string
+          stem?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_translations_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       questions: {
         Row: {
           answer_mode: string
