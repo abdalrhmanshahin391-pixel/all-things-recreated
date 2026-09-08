@@ -53,6 +53,7 @@ type Question = {
   explanation: string | null;
   image_url: string | null;
   answer_mode: "single" | "multiple";
+  sort_order?: number;
   options: Option[];
 };
 
@@ -164,6 +165,13 @@ function RunPage() {
         return;
       }
 
+      const { data: subjMeta } = await (supabase.from as any)("subjects")
+        .select("id,sort_order,ordered")
+        .in("id", subjectIds);
+      const subjectInfo = new Map<string, { sort: number; ordered: boolean }>(
+        ((subjMeta ?? []) as any[]).map((r) => [r.id as string, { sort: Number(r.sort_order) || 0, ordered: Boolean(r.ordered) }]),
+      );
+
       const { data: qs } = await (supabase.from as any)("questions")
         .select(
           "id,subject_id,stem,explanation,image_url,answer_mode,sort_order,question_options(id,label,text,is_correct,sort_order)",
@@ -199,6 +207,7 @@ function RunPage() {
           explanation: q.explanation,
           image_url: q.image_url ?? null,
           answer_mode: isMultiple ? "multiple" : "single",
+          sort_order: Number(q.sort_order) || 0,
           options: shuffled,
         };
       });
@@ -223,6 +232,33 @@ function RunPage() {
           }
           list = list.filter((q) => latest.get(q.id) === false);
         }
+      }
+
+      // Subjects marked "in order" (cases) stay together as one block, in the
+      // exact order their questions were arranged. Everything else is untouched.
+      const orderedIds = new Set(
+        Array.from(subjectInfo.entries()).filter(([, v]) => v.ordered).map(([id]) => id),
+      );
+      if (orderedIds.size) {
+        const blocks = new Map<string, Question[]>();
+        const rest: (Question | { __block: string })[] = [];
+        for (const q of list) {
+          if (orderedIds.has(q.subject_id)) {
+            if (!blocks.has(q.subject_id)) {
+              blocks.set(q.subject_id, []);
+              rest.push({ __block: q.subject_id });
+            }
+            blocks.get(q.subject_id)!.push(q);
+          } else {
+            rest.push(q);
+          }
+        }
+        for (const arr of blocks.values()) {
+          arr.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+        }
+        list = rest.flatMap((item) =>
+          "__block" in (item as any) ? blocks.get((item as any).__block)! : [item as Question],
+        );
       }
 
       setQuestions(list);
