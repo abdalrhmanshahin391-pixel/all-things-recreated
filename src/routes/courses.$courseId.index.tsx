@@ -254,6 +254,15 @@ function CourseDetailPage() {
   }, [user?.id, courseId, course?.price]);
 
   const isFree = (course?.price ?? 0) <= 0;
+
+  /** A discount counts only while it is switched on, cheaper than the original, and not expired. */
+  const discountLive =
+    !!course &&
+    !!course.discount_active &&
+    !!course.compare_at_price &&
+    Number(course.compare_at_price) > Number(course.price ?? 0) &&
+    (!course.discount_ends_at || new Date(course.discount_ends_at).getTime() > Date.now());
+  const wasPrice = discountLive ? Number(course!.compare_at_price) : null;
   const isSubjectLocked = (s: Subject) => {
     if (enrolled || isFree) return false;
     if (s.access_level === "free_public") return false;
