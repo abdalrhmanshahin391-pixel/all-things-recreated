@@ -88,6 +88,12 @@ type Course = {
   questions_count_mid: number;
   questions_count_final: number;
   published: boolean;
+  compare_at_price?: number | null;
+  discount_active?: boolean | null;
+  discount_ends_at?: string | null;
+  badge?: string | null;
+  badge_color?: string | null;
+  badge_expires_at?: string | null;
 };
 
 type Group = { id: string; name: string; sort_order: number };
