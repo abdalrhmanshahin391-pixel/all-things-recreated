@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { QuestionImagePicker } from "@/components/admin/QuestionImagePicker";
 
 type Option = { id?: string; label: string; text: string; is_correct: boolean; sort_order: number };
 type Question = {
@@ -298,6 +299,7 @@ function EditQuestionDialog({
         ],
   );
   const [multi, setMulti] = useState(question.answer_mode === "multiple");
+  const [imagePath, setImagePath] = useState<string | null>(question.image_url);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
