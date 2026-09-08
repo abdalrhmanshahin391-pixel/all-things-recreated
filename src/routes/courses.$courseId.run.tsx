@@ -432,7 +432,10 @@ function RunPage() {
               {reviewIndex + 1} <span className="text-muted-foreground">/ {wrongQuestions.length}</span>
             </div>
           </div>
-          <ReviewCard q={q} userAnswer={answers[q.id]} />
+          <ProtectionNotice className="mb-6" />
+          <ProtectedContent context="exam" scope="card">
+            <ReviewCard q={q} userAnswer={answers[q.id]} />
+          </ProtectedContent>
           <div className="mt-6 flex items-center justify-between gap-3">
             <button onClick={() => setReviewIndex((i) => Math.max(0, i - 1))} disabled={reviewIndex === 0}
               className="px-5 py-2.5 rounded-xl border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 font-semibold text-sm">
