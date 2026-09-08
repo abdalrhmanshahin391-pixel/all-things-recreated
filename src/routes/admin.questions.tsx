@@ -290,6 +290,7 @@ function AdminQuestionsPage() {
           explanation: explanation.trim() || null,
           sort_order: (count ?? 0) + 1,
           answer_mode: multi ? "multiple" : "single",
+          image_url: imagePath,
         })
         .select("id").single();
       if (qErr) throw qErr;
