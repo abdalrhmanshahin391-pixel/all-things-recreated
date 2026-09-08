@@ -27,6 +27,9 @@ type Course = {
   university_id: string;
   category: string | null;
   currency?: string | null;
+  badge?: string | null;
+  badge_color?: string | null;
+  badge_expires_at?: string | null;
   compare_at_price?: number | null;
   discount_active?: boolean | null;
   discount_ends_at?: string | null;
