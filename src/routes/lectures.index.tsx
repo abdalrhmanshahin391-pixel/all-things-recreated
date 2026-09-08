@@ -272,9 +272,21 @@ function LectureCard({ course, active }: { course: Course; active: boolean }) {
         ) : (
           <div className="mt-auto flex flex-col gap-1.5">
             {offerLive(course) && (
-              <span className="text-center text-xs text-muted-foreground">
-                was <s>${Number(course.compare_at_price).toFixed(0)}</s>
-              </span>
+              <div className="flex flex-col items-center gap-1">
+                <span className="inline-flex items-center text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full text-white"
+                  style={{ background: course.discount_ends_at ? "#8b5cf6" : "#f43f5e" }}>
+                  {course.discount_ends_at ? "LIMITED OFFER" : "HOT OFFER"}
+                </span>
+                <span className="text-center text-xs text-muted-foreground">
+                  <s>${Number(course.compare_at_price).toFixed(0)}</s>{" "}
+                  <span className="font-bold text-foreground">now ${Number(course.price).toFixed(0)}</span>
+                  {course.discount_ends_at && (
+                    <span className="ms-1 normal-case text-neutral-500">
+                      · ends {new Date(course.discount_ends_at).toLocaleDateString()}
+                    </span>
+                  )}
+                </span>
+              </div>
             )}
             <Link
               to="/lectures/$courseId"

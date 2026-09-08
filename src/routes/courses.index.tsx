@@ -65,6 +65,12 @@ type Course = {
   questions_count_mid: number;
   questions_count_final: number;
   published: boolean;
+  badge?: string | null;
+  badge_color?: string | null;
+  badge_expires_at?: string | null;
+  compare_at_price?: number | null;
+  discount_active?: boolean | null;
+  discount_ends_at?: string | null;
 };
 
 const YEAR_ICONS = [Stethoscope, Heart, Pill, Microscope, Activity, Syringe];
@@ -264,6 +270,12 @@ function CourseSection({
                 image_url: c.image_url,
                 price: c.price,
                 currency: c.currency,
+                badge: c.badge,
+                badge_color: c.badge_color,
+                badge_expires_at: c.badge_expires_at,
+                compare_at_price: c.compare_at_price,
+                discount_active: c.discount_active,
+                discount_ends_at: c.discount_ends_at,
               }}
               counts={{ subjects: c.subjects_count ?? 0, questions: total }}
               unlocked={active}

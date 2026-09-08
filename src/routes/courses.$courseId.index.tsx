@@ -88,6 +88,12 @@ type Course = {
   questions_count_mid: number;
   questions_count_final: number;
   published: boolean;
+  compare_at_price?: number | null;
+  discount_active?: boolean | null;
+  discount_ends_at?: string | null;
+  badge?: string | null;
+  badge_color?: string | null;
+  badge_expires_at?: string | null;
 };
 
 type Group = { id: string; name: string; sort_order: number };
@@ -248,6 +254,15 @@ function CourseDetailPage() {
   }, [user?.id, courseId, course?.price]);
 
   const isFree = (course?.price ?? 0) <= 0;
+
+  /** A discount counts only while it is switched on, cheaper than the original, and not expired. */
+  const discountLive =
+    !!course &&
+    !!course.discount_active &&
+    !!course.compare_at_price &&
+    Number(course.compare_at_price) > Number(course.price ?? 0) &&
+    (!course.discount_ends_at || new Date(course.discount_ends_at).getTime() > Date.now());
+  const wasPrice = discountLive ? Number(course!.compare_at_price) : null;
   const isSubjectLocked = (s: Subject) => {
     if (enrolled || isFree) return false;
     if (s.access_level === "free_public") return false;
@@ -499,7 +514,14 @@ function CourseDetailPage() {
                   className="magnetic-cta inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-bold text-sm"
                 >
                   <span className="relative z-10 inline-flex items-center gap-2">
-                    Unlock · ${Number(course.price ?? 0).toFixed(0)}
+                    {discountLive && (
+                      <span className="inline-flex items-center text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full text-white"
+                        style={{ background: course!.discount_ends_at ? "#8b5cf6" : "#f43f5e" }}>
+                        {course!.discount_ends_at ? "LIMITED" : "HOT OFFER"}
+                      </span>
+                    )}
+                    {discountLive && <s className="text-white/60 font-medium">${wasPrice!.toFixed(0)}</s>}
+                    Unlock · ${Number(course?.price ?? 0).toFixed(0)}
                     <ArrowRight className="w-4 h-4" />
                   </span>
                 </button>
@@ -719,6 +741,13 @@ function CourseDetailPage() {
                     className="magnetic-cta mt-5 w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl text-white font-bold text-sm"
                   >
                     <span className="relative z-10 inline-flex items-center gap-2">
+                      {discountLive && (
+                        <span className="inline-flex items-center text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full text-white"
+                          style={{ background: course!.discount_ends_at ? "#8b5cf6" : "#f43f5e" }}>
+                          {course!.discount_ends_at ? "LIMITED" : "HOT OFFER"}
+                        </span>
+                      )}
+                      {discountLive && <s className="text-white/60 font-medium">${wasPrice!.toFixed(0)}</s>}
                       Unlock · ${Number(course.price ?? 0).toFixed(0)} <ArrowRight className="w-4 h-4" />
                     </span>
                   </button>
