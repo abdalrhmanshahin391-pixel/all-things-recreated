@@ -384,15 +384,39 @@ function EditQuestionDialog({
           </label>
 
           <div className="space-y-2">
-            <span className="text-xs font-bold uppercase tracking-widest text-white/50">
-              Choices · pick the correct one
-            </span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-bold uppercase tracking-widest text-white/50">
+                {multi ? "Choices · tick every correct one" : "Choices · pick the correct one"}
+              </span>
+              <label className="inline-flex items-center gap-2 text-xs text-white/70">
+                <input
+                  type="checkbox"
+                  checked={multi}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setMulti(on);
+                    if (!on) {
+                      setOptions((curr) => {
+                        const first = curr.findIndex((x) => x.is_correct);
+                        return curr.map((x, j) => ({ ...x, is_correct: j === (first === -1 ? 0 : first) }));
+                      });
+                    }
+                  }}
+                  className="accent-emerald-400"
+                />
+                More than one answer
+              </label>
+            </div>
             {options.map((o, i) => (
               <div key={i} className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() =>
-                    setOptions((curr) => curr.map((x, j) => ({ ...x, is_correct: j === i })))
+                    setOptions((curr) =>
+                      multi
+                        ? curr.map((x, j) => (j === i ? { ...x, is_correct: !x.is_correct } : x))
+                        : curr.map((x, j) => ({ ...x, is_correct: j === i })),
+                    )
                   }
                   title="Mark as correct"
                   className={`grid place-items-center h-9 w-9 shrink-0 rounded-md border text-xs font-bold transition ${
