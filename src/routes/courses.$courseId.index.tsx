@@ -741,6 +741,13 @@ function CourseDetailPage() {
                     className="magnetic-cta mt-5 w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl text-white font-bold text-sm"
                   >
                     <span className="relative z-10 inline-flex items-center gap-2">
+                      {discountLive && (
+                        <span className="inline-flex items-center text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full text-white"
+                          style={{ background: course!.discount_ends_at ? "#8b5cf6" : "#f43f5e" }}>
+                          {course!.discount_ends_at ? "LIMITED" : "HOT OFFER"}
+                        </span>
+                      )}
+                      {discountLive && <s className="text-white/60 font-medium">${wasPrice!.toFixed(0)}</s>}
                       Unlock · ${Number(course.price ?? 0).toFixed(0)} <ArrowRight className="w-4 h-4" />
                     </span>
                   </button>
