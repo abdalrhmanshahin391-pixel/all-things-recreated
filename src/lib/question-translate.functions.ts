@@ -16,20 +16,57 @@ Rules:
 - Keep any numbered statements (1, 2, 3, 4) and their numbering exactly as they are.
 - Do NOT reveal or change which answer is correct.
 - Return ONLY JSON in this exact shape:
-{"stem":"...","explanation":"...","options":{"<option id>":"..."}}
+{"stem":"...","explanation":"...","options":[{"id":"<option id>","text":"..."}]}
 - "options" must contain one entry for every option id given, with the Arabic text only (no letter prefix).
+- Produce valid JSON. Escape quotation marks and line breaks inside translated strings.
 - If explanation is empty, return "" for it.`;
 
-function parseJson(raw: string): any {
-  const cleaned = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    const start = cleaned.indexOf("{");
-    const end = cleaned.lastIndexOf("}");
-    if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));
-    throw new Error("Translation service returned an unexpected answer. Please try again.");
+const RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    stem: { type: "STRING" },
+    explanation: { type: "STRING" },
+    options: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          id: { type: "STRING" },
+          text: { type: "STRING" },
+        },
+        required: ["id", "text"],
+      },
+    },
+  },
+  required: ["stem", "explanation", "options"],
+};
+
+function parseJson(raw: string): unknown | null {
+  const cleaned = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+    .trim();
+  if (!cleaned) return null;
+
+  const candidates = [cleaned];
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start >= 0 && end > start) candidates.push(cleaned.slice(start, end + 1));
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      try {
+        return JSON.parse(candidate.replace(/,(\s*[}\]])/g, "$1"));
+      } catch {
+        // Try the next safely extracted candidate.
+      }
+    }
   }
+  return null;
 }
 
 export const translateQuestion = createServerFn({ method: "POST" })
@@ -84,11 +121,12 @@ export const translateQuestion = createServerFn({ method: "POST" })
       throw new Error("Arabic translation is not set up yet. Ask an admin to add a Gemini key.");
     }
 
-    let raw: string;
-    try {
-      raw = await callGeminiJSON({
+    const requestTranslation = (isRecovery: boolean) =>
+      callGeminiJSON({
         pool,
-        systemPrompt: SYSTEM,
+        systemPrompt: isRecovery
+          ? `${SYSTEM}\nThis is a recovery attempt. Return one complete JSON object and no other text.`
+          : SYSTEM,
         userParts: [{ text: JSON.stringify(payload) }],
         allowTextOnly: true,
         timeoutMs: 120_000,
@@ -96,8 +134,16 @@ export const translateQuestion = createServerFn({ method: "POST" })
           temperature: 0.2,
           maxOutputTokens: 8192,
           responseMimeType: "application/json",
+          responseSchema: RESPONSE_SCHEMA,
         },
       });
+
+    let parsed: any = null;
+    try {
+      parsed = parseJson(await requestTranslation(false));
+      if (!parsed || typeof parsed !== "object" || typeof parsed.stem !== "string") {
+        parsed = parseJson(await requestTranslation(true));
+      }
     } catch (e: any) {
       const msg = String(e?.message || e);
       if (/quota|429|rate|timed out|unavailable/i.test(msg)) {
@@ -105,20 +151,23 @@ export const translateQuestion = createServerFn({ method: "POST" })
       }
       throw new Error("Translation failed. Please try again.");
     }
-
-    const parsed = parseJson(raw);
+    if (!parsed || typeof parsed !== "object" || typeof parsed.stem !== "string") {
+      throw new Error("Translation could not be prepared. Please try again.");
+    }
     // Gemini sometimes returns options as an array of {id,text} instead of a map.
     const optMap: Record<string, string> = {};
+    const validOptionIds = new Set(options.map((option: any) => String(option.id)));
     const rawOpts = parsed?.options;
     if (Array.isArray(rawOpts)) {
       for (let i = 0; i < rawOpts.length; i++) {
         const item = rawOpts[i] as any;
         const id = typeof item?.id === "string" ? item.id : options[i]?.id;
         const text = typeof item?.text === "string" ? item.text : typeof item === "string" ? item : "";
-        if (id) optMap[id] = text;
+        if (id && validOptionIds.has(String(id))) optMap[String(id)] = text;
       }
     } else if (rawOpts && typeof rawOpts === "object") {
       for (const [k, v] of Object.entries(rawOpts as Record<string, unknown>)) {
+        if (!validOptionIds.has(k)) continue;
         if (typeof v === "string") optMap[k] = v;
         else if (v && typeof (v as any).text === "string") optMap[k] = (v as any).text;
       }
