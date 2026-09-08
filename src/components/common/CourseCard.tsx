@@ -82,11 +82,29 @@ export function CourseCard({
           alt={course.title}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
-        <CourseBadge
-          label={course.badge}
-          color={course.badge_color}
-          expiresAt={course.badge_expires_at}
-        />
+        {(() => {
+          // Manual badge wins; otherwise a live discount auto-gets a HOT/LIMITED OFFER tag.
+          const manualBadge = !!course.badge && badgeIsLive(course.badge_expires_at);
+          if (manualBadge) {
+            return (
+              <CourseBadge
+                label={course.badge}
+                color={course.badge_color}
+                expiresAt={course.badge_expires_at}
+              />
+            );
+          }
+          if (offerLive) {
+            const isLimited = !!course.discount_ends_at;
+            return (
+              <CourseBadge
+                label={isLimited ? "LIMITED OFFER" : "HOT OFFER"}
+                color={isLimited ? "#8b5cf6" : "#f43f5e"}
+              />
+            );
+          }
+          return null;
+        })()}
         {showPrice && (
           <span
             className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full text-white"
