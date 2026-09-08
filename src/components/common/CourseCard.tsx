@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, BookOpen, ListChecks, Lock, Sparkles } from "lucide-react";
 import { CourseImage } from "@/components/common/CourseImage";
-import { CourseBadge } from "@/components/common/CourseBadge";
+import { CourseBadge, badgeIsLive } from "@/components/common/CourseBadge";
 
 type CourseLike = {
   id: string;
