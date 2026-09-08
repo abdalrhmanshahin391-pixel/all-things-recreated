@@ -154,7 +154,7 @@ function CourseDetailPage() {
       setOpenGroups(Object.fromEntries(gs.map((x) => [x.id, true])));
       if (gs.length) {
         const { data: s } = await (supabase.from as any)("subjects")
-          .select("id,group_id,name,sort_order,access_level")
+          .select("id,group_id,name,sort_order,access_level,ordered")
           .in(
             "group_id",
             gs.map((x) => x.id),
@@ -175,6 +175,7 @@ function CourseDetailPage() {
           name: row.name,
           sort_order: row.sort_order,
           access_level: (row.access_level ?? "paid") as SubjectAccess,
+          ordered: Boolean(row.ordered),
           question_count: countsBySubject.get(row.id) ?? 0,
         }));
         setSubjects(subs);
