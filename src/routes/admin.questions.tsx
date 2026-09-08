@@ -48,10 +48,8 @@ function AdminQuestionsPage() {
   const [newSubject, setNewSubject] = useState("");
   const [stem, setStem] = useState("");
   const [explanation, setExplanation] = useState("");
-  const [answers, setAnswers] = useState<Record<(typeof labels)[number], string>>({
-    A: "", B: "", C: "", D: "",
-  });
-  const [correct, setCorrect] = useState<(typeof labels)[number]>("A");
+  const [choices, setChoices] = useState<NewChoice[]>(emptyChoices);
+  const [multi, setMulti] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
