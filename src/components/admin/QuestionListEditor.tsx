@@ -297,8 +297,10 @@ function EditQuestionDialog({
           { label: "B", text: "", is_correct: false, sort_order: 1 },
         ],
   );
+  const [multi, setMulti] = useState(question.answer_mode === "multiple");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
 
   async function save() {
     setErr(null);
