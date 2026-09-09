@@ -950,3 +950,101 @@ export const setAqvResource = createServerFn({ method: "POST" })
     }
     return { resource };
   });
+// ---------------- sub-subject sorting ----------------
+
+/** Set how this job's questions are sorted into sub-subjects (none | text | pdf | ai). */
+export const setAqvSortMode = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    jobId: z.string().uuid(),
+    mode: z.enum(["none", "text", "pdf", "ai"]),
+    topicsText: z.string().max(20_000).optional(),
+    pdfBase64: z.string().max(28_000_000).optional(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+
+    if (data.mode === "none") {
+      const { error } = await supabase.from(JOBS)
+        .update({ sort_mode: "none", sort_topics: [] }).eq("id", data.jobId);
+      if (error) throw error;
+      return { mode: "none", topics: [] as string[] };
+    }
+
+    let topics: string[] = [];
+    if (data.mode === "text") {
+      topics = parseTopicList(data.topicsText ?? "");
+      if (topics.length < 2) throw new Error("Enter at least two topics, one per line.");
+    } else if (data.mode === "pdf") {
+      if (!data.pdfBase64) throw new Error("Choose a contents / syllabus PDF first.");
+      const apiKey = await getGeminiKey(supabase);
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: SORT_TOPICS_SYSTEM }] },
+            contents: [{
+              role: "user",
+              parts: [
+                { inlineData: { mimeType: "application/pdf", data: data.pdfBase64 } },
+                { text: "List the topics of this document as JSON." },
+              ],
+            }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 2048, responseMimeType: "application/json" },
+          }),
+        },
+      );
+      const json = await res.json().catch(() => ({} as any));
+      if (!res.ok) throw new Error(`Reading the topic PDF failed (${res.status}).`);
+      const parsed = parseJsonObject(responseText(json));
+      topics = parseTopicList(parsed?.topics ?? []);
+      if (topics.length < 2) throw new Error("No topic list could be read from that PDF. Paste the topics instead.");
+    }
+
+    const { error } = await supabase.from(JOBS)
+      .update({ sort_mode: data.mode, sort_topics: topics }).eq("id", data.jobId);
+    if (error) throw error;
+    return { mode: data.mode, topics };
+  });
+
+/** Change one question's sub-subject before import. */
+export const setAqvItemTopic = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    itemId: z.string().uuid(),
+    topic: z.string().max(80).nullable(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const topic = cleanTopicName(data.topic) || null;
+    const { error } = await supabase.from(ITEMS).update({ topic }).eq("id", data.itemId);
+    if (error) throw error;
+    return { topic };
+  });
+
+/** Rename one sub-subject across every question of this job. */
+export const renameAqvTopic = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    jobId: z.string().uuid(),
+    from: z.string().min(1).max(80),
+    to: z.string().min(1).max(80),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const to = cleanTopicName(data.to);
+    if (!to) throw new Error("Enter the new topic name.");
+    const { error } = await supabase.from(ITEMS)
+      .update({ topic: to }).eq("job_id", data.jobId).eq("topic", data.from);
+    if (error) throw error;
+
+    const { data: job } = await supabase.from(JOBS).select("sort_topics").eq("id", data.jobId).maybeSingle();
+    const topics = parseTopicList(job?.sort_topics);
+    if (topics.length) {
+      const next = parseTopicList(topics.map((t) => (t === data.from ? to : t)));
+      await supabase.from(JOBS).update({ sort_topics: next }).eq("id", data.jobId);
+    }
+    return { topic: to };
+  });
