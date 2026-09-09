@@ -578,9 +578,15 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
 
     const apiKey = await getGeminiKey(supabase);
     const { data: jobRow } = await supabase.from(JOBS)
-      .select("reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime").eq("id", data.jobId).maybeSingle();
+      .select("reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime, sort_mode, sort_topics").eq("id", data.jobId).maybeSingle();
     const refBlock = buildReferenceBlock(jobRow?.reference_book);
     const resourceParts = await buildResourceParts(supabase, jobRow);
+    const sortMode = String(jobRow?.sort_mode ?? "none");
+    const sortTopics = parseTopicList(jobRow?.sort_topics);
+    const topicBlock = sortMode === "none" ? ""
+      : sortTopics.length
+        ? `TOPIC — also return a "topic" field. Choose EXACTLY one name from this list (or "Other"):\n${sortTopics.map((t) => `- ${t}`).join("\n")}\n`
+        : `TOPIC — also return a "topic" field: a short (1-3 words) sub-subject name for this question.\n`;
     const requests = todo.map((it: any) => {
       const opts = Array.isArray(it.options) ? it.options : [];
       const optText = opts.length
