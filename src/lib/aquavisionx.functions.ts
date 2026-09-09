@@ -733,11 +733,39 @@ export const importAqvJob = createServerFn({ method: "POST" })
     const importable = data.allowPartial ? items.filter((it: any) => it.solved) : items;
     if (!importable.length) throw new Error("No solved question to import yet.");
 
-    const { count } = await supabase.from("questions")
-      .select("id", { count: "exact", head: true }).eq("subject_id", job.subject_id);
-    let sort = (count ?? 0) + 1;
     let inserted = 0, skipped = 0, failed = 0;
     const errors: string[] = [];
+    const createdSubjects = new Set<string>();
+    const targets = new Map<string, { id: string; sort: number }>();
+
+    async function targetFor(topic: string | null): Promise<{ id: string; sort: number }> {
+      const name = sorting ? (cleanTopicName(topic) || "Other") : "";
+      const cacheKey = name || "__default__";
+      const cached = targets.get(cacheKey);
+      if (cached) return cached;
+
+      let subjectId = job.subject_id as string;
+      if (name) {
+        const { data: existing } = await supabase.from("subjects")
+          .select("id").eq("group_id", job.group_id).ilike("name", name).limit(1).maybeSingle();
+        if (existing?.id) subjectId = existing.id;
+        else {
+          const { count: subjectCount } = await supabase.from("subjects")
+            .select("id", { count: "exact", head: true }).eq("group_id", job.group_id);
+          const { data: created, error: sErr } = await supabase.from("subjects")
+            .insert({ group_id: job.group_id, name, sort_order: (subjectCount ?? 0) + 1 })
+            .select("id").single();
+          if (sErr || !created) throw new Error(sErr?.message ?? `Could not create the subject "${name}".`);
+          subjectId = created.id;
+          createdSubjects.add(name);
+        }
+      }
+      const { count } = await supabase.from("questions")
+        .select("id", { count: "exact", head: true }).eq("subject_id", subjectId);
+      const entry = { id: subjectId, sort: (count ?? 0) + 1 };
+      targets.set(cacheKey, entry);
+      return entry;
+    }
 
     for (const it of importable) {
       if (it.imported) { skipped++; continue; }
