@@ -815,7 +815,7 @@ export const importAqvJob = createServerFn({ method: "POST" })
       error: errors.length ? errors.slice(0, 3).join(" | ") : null,
     }).eq("id", data.jobId);
 
-    return { inserted, skipped, failed, leftOut: unsolved, errors: errors.slice(0, 5) };
+    return { inserted, skipped, failed, leftOut: unsolved, errors: errors.slice(0, 5), subjectsCreated: [...createdSubjects] };
   });
 
 // ---------------- listing / housekeeping ----------------
