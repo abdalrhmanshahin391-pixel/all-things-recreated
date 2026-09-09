@@ -625,8 +625,10 @@ export const pollAqvAnswers = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
     const { data: job, error } = await supabase.from(JOBS)
-      .select("id, stage, answer_batch_id").eq("id", data.jobId).single();
+      .select("id, stage, answer_batch_id, sort_mode, sort_topics").eq("id", data.jobId).single();
     if (error) throw error;
+    const sortMode = String(job?.sort_mode ?? "none");
+    const allowedTopics = parseTopicList(job?.sort_topics);
     if (!job.answer_batch_id || job.stage === "solved" || job.stage === "imported") {
       return { stage: job.stage as string };
     }
