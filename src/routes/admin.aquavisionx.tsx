@@ -432,6 +432,18 @@ function Page() {
                       {it.answer_letter && <span className="ml-auto font-black text-emerald-600">{it.answer_letter}</span>}
                     </div>
                     <p className="text-sm mt-1 line-clamp-2">{it.stem}</p>
+                    {((job.sort_mode as string) || "none") !== "none" && (
+                      <TopicPicker
+                        value={it.topic ?? ""}
+                        options={Array.isArray(job.sort_topics) ? (job.sort_topics as string[]) : []}
+                        onChange={async (topic) => {
+                          try {
+                            await setItemTopic({ data: { itemId: it.id, topic: topic || null } });
+                            setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, topic: topic || null } : x)));
+                          } catch (e: any) { toast.error(e?.message || "Could not save the sub-subject"); }
+                        }}
+                      />
+                    )}
                     {it.concept && <p className="text-[11px] text-muted-foreground mt-0.5">{it.concept}</p>}
                     {it.error && <p className="text-[11px] text-destructive mt-0.5">{it.error}</p>}
                     {it.status === "needs_combinations" && (
