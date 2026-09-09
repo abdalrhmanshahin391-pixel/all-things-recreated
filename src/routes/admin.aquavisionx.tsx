@@ -360,6 +360,30 @@ function Page() {
               />
             </div>
 
+            <SortCard
+              mode={(job.sort_mode as string) || "none"}
+              topics={Array.isArray(job.sort_topics) ? (job.sort_topics as string[]) : []}
+              locked={stage === "solving" || solvedCount > 0}
+              onSave={async (mode, topicsText, pdf) => {
+                let pdfBase64: string | undefined;
+                if (mode === "pdf") {
+                  if (!pdf) throw new Error("Choose a contents / syllabus PDF first.");
+                  if (pdf.size > 20_000_000) throw new Error("That PDF must be 20 MB or smaller.");
+                  pdfBase64 = await blobToBase64(pdf);
+                }
+                const r: any = await setSortMode({ data: { jobId: job.id, mode, topicsText, pdfBase64 } });
+                await openJob(job.id);
+                toast.success(mode === "none" ? "Sorting turned off" : `Sorting on · ${r.topics.length || "AI-chosen"} topic(s)`);
+              }}
+              onRename={async (from, to) => {
+                await renameTopic({ data: { jobId: job.id, from, to } });
+                await openJob(job.id);
+                toast.success("Sub-subject renamed");
+              }}
+            />
+
+
+
             {missingComboCount > 0 && (
               <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm text-amber-800 dark:text-amber-300">
                 <p className="font-black">{missingComboCount} combination question(s) need the printed A–D sets.</p>
