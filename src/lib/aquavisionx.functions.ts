@@ -331,7 +331,43 @@ Rules:
 - Keep the given options verbatim and in the given order.
 - If the question came with no options, INVENT exactly 4 plausible options A-D where exactly one is correct.
 - answer_letter MUST match the option you marked is_correct.
+- If (and only if) the user message contains a TOPIC block, also return a "topic" field: a short sub-subject name for this question. When a topic list is given you MUST copy one of the listed names EXACTLY, or "Other" if none fits. When no list is given, invent a short (1-3 words) topic name and reuse the same wording for questions about the same area.
 - Output JSON only.`;
+
+const SORT_TOPICS_SYSTEM = `You read a medical syllabus / contents / topic list and return its topics.
+Return STRICT JSON only: {"topics":["Arrhythmias","Valvular disease"]}.
+Rules: 5-40 topics, each 1-5 words, no numbering, no duplicates, in the document's own wording and order.`;
+
+function cleanTopicName(value: unknown): string {
+  return String(value ?? "").replace(/[\r\n\t]+/g, " ").replace(/^\s*[\d.)\-•]+\s*/, "").replace(/\s+/g, " ").trim().slice(0, 80);
+}
+
+function parseTopicList(source: unknown): string[] {
+  const raw = Array.isArray(source) ? source : String(source ?? "").split(/\r?\n/);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    const name = cleanTopicName(entry);
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+    if (out.length >= 60) break;
+  }
+  return out;
+}
+
+/** Map a returned topic onto the allowed list (case/spacing tolerant). */
+function matchTopic(value: unknown, allowed: string[]): string | null {
+  const name = cleanTopicName(value);
+  if (!name) return null;
+  if (!allowed.length) return name;
+  const key = name.toLowerCase();
+  const hit = allowed.find((t) => t.toLowerCase() === key)
+    ?? allowed.find((t) => t.toLowerCase().includes(key) || key.includes(t.toLowerCase()));
+  return hit ?? "Other";
+}
 
 // ---------------- 1. create job ----------------
 
