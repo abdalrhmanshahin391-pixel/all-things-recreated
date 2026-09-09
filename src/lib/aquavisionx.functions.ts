@@ -716,12 +716,13 @@ export const importAqvJob = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
     const { data: job, error } = await supabase.from(JOBS)
-      .select("id, subject_id").eq("id", data.jobId).single();
+      .select("id, subject_id, group_id, sort_mode").eq("id", data.jobId).single();
     if (error) throw error;
     if (!job.subject_id) throw new Error("This job has no target subject.");
+    const sorting = String(job.sort_mode ?? "none") !== "none" && !!job.group_id;
 
     const { data: items, error: iErr } = await supabase.from(ITEMS)
-      .select("id, stem, options, answer_mode, question_type, combo_sets, status, explanation, summary_table, solved, imported")
+      .select("id, stem, options, answer_mode, question_type, combo_sets, status, explanation, summary_table, solved, imported, topic")
       .eq("job_id", data.jobId).order("item_index");
     if (iErr) throw iErr;
     if (!items?.length) throw new Error("Nothing to import.");
