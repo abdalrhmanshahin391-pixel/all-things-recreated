@@ -802,7 +802,7 @@ export const importAqvJob = createServerFn({ method: "POST" })
         if (oErr) throw oErr;
         await supabase.from(ITEMS).update({ imported: true, status: "imported" }).eq("id", it.id);
         inserted++;
-        sort++;
+        target.sort++;
       } catch (e: any) {
         failed++;
         errors.push(String(e?.message || e).slice(0, 160));
