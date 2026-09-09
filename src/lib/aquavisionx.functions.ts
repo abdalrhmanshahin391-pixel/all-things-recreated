@@ -684,9 +684,11 @@ export const pollAqvAnswers = createServerFn({ method: "POST" })
         }).eq("id", itemId);
         continue;
       }
+      const topic = sortMode === "none" ? null : matchTopic(parsed?.topic, allowedTopics);
       await supabase.from(ITEMS).update({
         options: opts.map((o: any) => ({ ...o, is_correct: correctLabels.has(o.letter) })),
         answer_letter: answer,
+        ...(sortMode === "none" ? {} : { topic: topic || "Other" }),
         concept: String(parsed?.concept || "").slice(0, 200) || null,
         explanation,
         summary_table: String(parsed?.summary_table || "") || null,
