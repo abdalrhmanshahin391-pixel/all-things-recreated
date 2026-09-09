@@ -100,6 +100,9 @@ function Page() {
   const setCombos = useServerFn(setAqvComboSets);
   const releaseCombos = useServerFn(releaseAqvCombinations);
   const setResource = useServerFn(setAqvResource);
+  const setSortMode = useServerFn(setAqvSortMode);
+  const setItemTopic = useServerFn(setAqvItemTopic);
+  const renameTopic = useServerFn(renameAqvTopic);
 
   const say = (m: string) => setLog((p) => [`${new Date().toLocaleTimeString()} · ${m}`, ...p].slice(0, 120));
 
