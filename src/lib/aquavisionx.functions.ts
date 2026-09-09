@@ -837,9 +837,9 @@ export const getAqvJob = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
     const [{ data: job, error: e1 }, { data: pages, error: e2 }, { data: items, error: e3 }] = await Promise.all([
-      supabase.from(JOBS).select("id, pdf_name, total_pages, stage, status, imported_count, error, course_id, group_id, subject_id, reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime, created_at").eq("id", data.jobId).single(),
+      supabase.from(JOBS).select("id, pdf_name, total_pages, stage, status, imported_count, error, course_id, group_id, subject_id, reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime, sort_mode, sort_topics, created_at").eq("id", data.jobId).single(),
       supabase.from(PAGES).select("id, page_number, status, question_count, error").eq("job_id", data.jobId).order("page_number"),
-      supabase.from(ITEMS).select("id, item_index, number, stem, options, answer_mode, question_type, combo_sets, printed_choices, answer_letter, concept, explanation, summary_table, solved, imported, status, error").eq("job_id", data.jobId).order("item_index"),
+      supabase.from(ITEMS).select("id, item_index, number, stem, options, answer_mode, question_type, combo_sets, printed_choices, answer_letter, concept, explanation, summary_table, solved, imported, status, error, topic").eq("job_id", data.jobId).order("item_index"),
     ]);
     if (e1) throw e1; if (e2) throw e2; if (e3) throw e3;
     return { job, pages: pages ?? [], items: items ?? [] };
