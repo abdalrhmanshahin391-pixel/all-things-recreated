@@ -559,3 +559,101 @@ function StagePill({ stage }: { stage: string }) {
     </span>
   );
 }
+function SortCard({ mode, topics, locked, onSave, onRename }: {
+  mode: string;
+  topics: string[];
+  locked: boolean;
+  onSave: (mode: "none" | "text" | "pdf" | "ai", topicsText?: string, pdf?: File | null) => Promise<void>;
+  onRename: (from: string, to: string) => Promise<void>;
+}) {
+  const [choice, setChoice] = useState<"none" | "text" | "pdf" | "ai">((mode as any) || "none");
+  const [text, setText] = useState(topics.join("\n"));
+  const [pdf, setPdf] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setChoice((mode as any) || "none"); }, [mode]);
+
+  const options: Array<{ id: "none" | "text" | "pdf" | "ai"; label: string; hint: string }> = [
+    { id: "none", label: "No sorting", hint: "All questions go to the subject you picked." },
+    { id: "text", label: "Paste topics", hint: "One topic per line." },
+    { id: "pdf", label: "Topics PDF", hint: "Upload a contents / syllabus page." },
+    { id: "ai", label: "Let AI choose", hint: "The AI names the sub-subjects itself." },
+  ];
+
+  return (
+    <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
+      <p className="text-xs font-black uppercase tracking-wider text-muted-foreground mb-2">Sort into sub-subjects</p>
+      <div className="grid gap-2 sm:grid-cols-4">
+        {options.map((o) => (
+          <button key={o.id} type="button" disabled={locked} onClick={() => setChoice(o.id)}
+            className={`rounded-xl border px-3 py-2 text-left text-xs disabled:opacity-50 ${choice === o.id ? "border-primary bg-primary/10" : "border-border bg-background"}`}>
+            <span className="block font-black">{o.label}</span>
+            <span className="block text-[11px] text-muted-foreground">{o.hint}</span>
+          </button>
+        ))}
+      </div>
+
+      {choice === "text" && (
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={5} disabled={locked}
+          placeholder={"Arrhythmias\nValvular disease\nHeart failure"}
+          className="mt-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+      )}
+      {choice === "pdf" && (
+        <label className="mt-3 block cursor-pointer rounded-xl border-2 border-dashed border-border bg-background p-4 text-center text-xs">
+          <Upload className="mx-auto text-muted-foreground" size={16} />
+          <span className="mt-1 block font-bold">{pdf ? pdf.name : "Choose the contents / syllabus PDF"}</span>
+          <input type="file" accept="application/pdf" className="hidden" disabled={locked}
+            onChange={(e) => setPdf(e.target.files?.[0] ?? null)} />
+        </label>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button type="button" disabled={locked || saving}
+          onClick={async () => {
+            setSaving(true);
+            try { await onSave(choice, text, pdf); } catch (e: any) { toast.error(e?.message || "Could not save"); }
+            finally { setSaving(false); }
+          }}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground disabled:opacity-40">
+          {saving ? <Loader2 className="animate-spin" size={13} /> : <Check size={13} />} Save sorting
+        </button>
+        {locked && <span className="text-[11px] text-muted-foreground">Sorting is locked once solving starts.</span>}
+      </div>
+
+      {topics.length > 0 && (
+        <ul className="mt-3 flex flex-wrap gap-1.5">
+          {topics.map((t) => (
+            <li key={t}>
+              <button type="button" onClick={async () => {
+                const next = window.prompt("Rename this sub-subject", t);
+                if (!next || next === t) return;
+                try { await onRename(t, next); } catch (e: any) { toast.error(e?.message || "Could not rename"); }
+              }} className="rounded-full bg-background border border-border px-2.5 py-1 text-[11px] font-bold">
+                {t}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function TopicPicker({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
+  const list = [...new Set([...options, "Other", ...(value ? [value] : [])])];
+  return (
+    <div className="mt-1.5 flex items-center gap-2">
+      <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Sub-subject</span>
+      {options.length ? (
+        <select value={value} onChange={(e) => onChange(e.target.value)}
+          className="rounded-lg border border-border bg-background px-2 py-1 text-[11px]">
+          <option value="">— not set —</option>
+          {list.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      ) : (
+        <input defaultValue={value} onBlur={(e) => { if (e.target.value !== value) onChange(e.target.value); }}
+          placeholder="topic" className="rounded-lg border border-border bg-background px-2 py-1 text-[11px]" />
+      )}
+    </div>
+  );
+}
