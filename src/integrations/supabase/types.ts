@@ -285,6 +285,7 @@ export type Database = {
           status: string
           stem: string
           summary_table: string | null
+          topic: string | null
         }
         Insert: {
           answer_letter?: string | null
@@ -307,6 +308,7 @@ export type Database = {
           status?: string
           stem: string
           summary_table?: string | null
+          topic?: string | null
         }
         Update: {
           answer_letter?: string | null
@@ -329,6 +331,7 @@ export type Database = {
           status?: string
           stem?: string
           summary_table?: string | null
+          topic?: string | null
         }
         Relationships: [
           {
@@ -365,6 +368,8 @@ export type Database = {
           resource_storage_path: string | null
           resource_text: string | null
           resource_url: string | null
+          sort_mode: string
+          sort_topics: Json
           stage: string
           status: string
           subject_id: string | null
@@ -389,6 +394,8 @@ export type Database = {
           resource_storage_path?: string | null
           resource_text?: string | null
           resource_url?: string | null
+          sort_mode?: string
+          sort_topics?: Json
           stage?: string
           status?: string
           subject_id?: string | null
@@ -413,6 +420,8 @@ export type Database = {
           resource_storage_path?: string | null
           resource_text?: string | null
           resource_url?: string | null
+          sort_mode?: string
+          sort_topics?: Json
           stage?: string
           status?: string
           subject_id?: string | null
