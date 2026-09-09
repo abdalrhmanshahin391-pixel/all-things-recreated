@@ -780,8 +780,9 @@ export const importAqvJob = createServerFn({ method: "POST" })
           if (!valid) throw new Error("The solved answer is not one of the paper's printed combinations.");
         }
         const explanation = [it.explanation || "", it.summary_table ? `\n\n${it.summary_table}` : ""].join("").trim() || null;
+        const target = await targetFor(it.topic ?? null);
         const { data: q, error: qErr } = await supabase.from("questions").upsert(
-          { subject_id: job.subject_id, stem: it.stem, explanation, answer_mode: it.answer_mode ?? "single", sort_order: sort },
+          { subject_id: target.id, stem: it.stem, explanation, answer_mode: it.answer_mode ?? "single", sort_order: target.sort },
           { onConflict: "subject_id,stem_hash", ignoreDuplicates: true },
         ).select("id").maybeSingle();
         if (qErr) throw qErr;
