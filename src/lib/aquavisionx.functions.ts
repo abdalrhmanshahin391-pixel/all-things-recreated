@@ -331,7 +331,43 @@ Rules:
 - Keep the given options verbatim and in the given order.
 - If the question came with no options, INVENT exactly 4 plausible options A-D where exactly one is correct.
 - answer_letter MUST match the option you marked is_correct.
+- If (and only if) the user message contains a TOPIC block, also return a "topic" field: a short sub-subject name for this question. When a topic list is given you MUST copy one of the listed names EXACTLY, or "Other" if none fits. When no list is given, invent a short (1-3 words) topic name and reuse the same wording for questions about the same area.
 - Output JSON only.`;
+
+const SORT_TOPICS_SYSTEM = `You read a medical syllabus / contents / topic list and return its topics.
+Return STRICT JSON only: {"topics":["Arrhythmias","Valvular disease"]}.
+Rules: 5-40 topics, each 1-5 words, no numbering, no duplicates, in the document's own wording and order.`;
+
+function cleanTopicName(value: unknown): string {
+  return String(value ?? "").replace(/[\r\n\t]+/g, " ").replace(/^\s*[\d.)\-•]+\s*/, "").replace(/\s+/g, " ").trim().slice(0, 80);
+}
+
+function parseTopicList(source: unknown): string[] {
+  const raw = Array.isArray(source) ? source : String(source ?? "").split(/\r?\n/);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    const name = cleanTopicName(entry);
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+    if (out.length >= 60) break;
+  }
+  return out;
+}
+
+/** Map a returned topic onto the allowed list (case/spacing tolerant). */
+function matchTopic(value: unknown, allowed: string[]): string | null {
+  const name = cleanTopicName(value);
+  if (!name) return null;
+  if (!allowed.length) return name;
+  const key = name.toLowerCase();
+  const hit = allowed.find((t) => t.toLowerCase() === key)
+    ?? allowed.find((t) => t.toLowerCase().includes(key) || key.includes(t.toLowerCase()));
+  return hit ?? "Other";
+}
 
 // ---------------- 1. create job ----------------
 
@@ -542,9 +578,15 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
 
     const apiKey = await getGeminiKey(supabase);
     const { data: jobRow } = await supabase.from(JOBS)
-      .select("reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime").eq("id", data.jobId).maybeSingle();
+      .select("reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime, sort_mode, sort_topics").eq("id", data.jobId).maybeSingle();
     const refBlock = buildReferenceBlock(jobRow?.reference_book);
     const resourceParts = await buildResourceParts(supabase, jobRow);
+    const sortMode = String(jobRow?.sort_mode ?? "none");
+    const sortTopics = parseTopicList(jobRow?.sort_topics);
+    const topicBlock = sortMode === "none" ? ""
+      : sortTopics.length
+        ? `TOPIC — also return a "topic" field. Choose EXACTLY one name from this list (or "Other"):\n${sortTopics.map((t) => `- ${t}`).join("\n")}\n`
+        : `TOPIC — also return a "topic" field: a short (1-3 words) sub-subject name for this question.\n`;
     const requests = todo.map((it: any) => {
       const opts = Array.isArray(it.options) ? it.options : [];
       const optText = opts.length
@@ -557,7 +599,7 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
       return {
         request: {
           systemInstruction: { parts: [{ text: SOLVE_SYSTEM }] },
-          contents: [{ role: "user", parts: [...resourceParts, { text: `${refBlock}${resourceParts.length ? "RESOURCE RULE: Base the answer and explanation on the supplied source. If it does not contain enough evidence, return an error field instead of guessing.\n" : ""}ANSWER MODE: ${it.answer_mode === "multiple" ? "MULTIPLE — select every correct numbered statement" : "SINGLE — select exactly one answer"}\n${comboBlock}--- QUESTION ---\n${it.stem}\n\n${optText}\n--- END ---` }] }],
+          contents: [{ role: "user", parts: [...resourceParts, { text: `${refBlock}${resourceParts.length ? "RESOURCE RULE: Base the answer and explanation on the supplied source. If it does not contain enough evidence, return an error field instead of guessing.\n" : ""}ANSWER MODE: ${it.answer_mode === "multiple" ? "MULTIPLE — select every correct numbered statement" : "SINGLE — select exactly one answer"}\n${comboBlock}${topicBlock}--- QUESTION ---\n${it.stem}\n\n${optText}\n--- END ---` }] }],
           generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json" },
         },
         metadata: { key: `i-${it.id}` },
@@ -583,8 +625,10 @@ export const pollAqvAnswers = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
     const { data: job, error } = await supabase.from(JOBS)
-      .select("id, stage, answer_batch_id").eq("id", data.jobId).single();
+      .select("id, stage, answer_batch_id, sort_mode, sort_topics").eq("id", data.jobId).single();
     if (error) throw error;
+    const sortMode = String(job?.sort_mode ?? "none");
+    const allowedTopics = parseTopicList(job?.sort_topics);
     if (!job.answer_batch_id || job.stage === "solved" || job.stage === "imported") {
       return { stage: job.stage as string };
     }
@@ -640,9 +684,11 @@ export const pollAqvAnswers = createServerFn({ method: "POST" })
         }).eq("id", itemId);
         continue;
       }
+      const topic = sortMode === "none" ? null : matchTopic(parsed?.topic, allowedTopics);
       await supabase.from(ITEMS).update({
         options: opts.map((o: any) => ({ ...o, is_correct: correctLabels.has(o.letter) })),
         answer_letter: answer,
+        ...(sortMode === "none" ? {} : { topic: topic || "Other" }),
         concept: String(parsed?.concept || "").slice(0, 200) || null,
         explanation,
         summary_table: String(parsed?.summary_table || "") || null,
@@ -670,12 +716,13 @@ export const importAqvJob = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
     const { data: job, error } = await supabase.from(JOBS)
-      .select("id, subject_id").eq("id", data.jobId).single();
+      .select("id, subject_id, group_id, sort_mode").eq("id", data.jobId).single();
     if (error) throw error;
     if (!job.subject_id) throw new Error("This job has no target subject.");
+    const sorting = String(job.sort_mode ?? "none") !== "none" && !!job.group_id;
 
     const { data: items, error: iErr } = await supabase.from(ITEMS)
-      .select("id, stem, options, answer_mode, question_type, combo_sets, status, explanation, summary_table, solved, imported")
+      .select("id, stem, options, answer_mode, question_type, combo_sets, status, explanation, summary_table, solved, imported, topic")
       .eq("job_id", data.jobId).order("item_index");
     if (iErr) throw iErr;
     if (!items?.length) throw new Error("Nothing to import.");
@@ -686,11 +733,39 @@ export const importAqvJob = createServerFn({ method: "POST" })
     const importable = data.allowPartial ? items.filter((it: any) => it.solved) : items;
     if (!importable.length) throw new Error("No solved question to import yet.");
 
-    const { count } = await supabase.from("questions")
-      .select("id", { count: "exact", head: true }).eq("subject_id", job.subject_id);
-    let sort = (count ?? 0) + 1;
     let inserted = 0, skipped = 0, failed = 0;
     const errors: string[] = [];
+    const createdSubjects = new Set<string>();
+    const targets = new Map<string, { id: string; sort: number }>();
+
+    async function targetFor(topic: string | null): Promise<{ id: string; sort: number }> {
+      const name = sorting ? (cleanTopicName(topic) || "Other") : "";
+      const cacheKey = name || "__default__";
+      const cached = targets.get(cacheKey);
+      if (cached) return cached;
+
+      let subjectId = job.subject_id as string;
+      if (name) {
+        const { data: existing } = await supabase.from("subjects")
+          .select("id").eq("group_id", job.group_id).ilike("name", name).limit(1).maybeSingle();
+        if (existing?.id) subjectId = existing.id;
+        else {
+          const { count: subjectCount } = await supabase.from("subjects")
+            .select("id", { count: "exact", head: true }).eq("group_id", job.group_id);
+          const { data: created, error: sErr } = await supabase.from("subjects")
+            .insert({ group_id: job.group_id, name, sort_order: (subjectCount ?? 0) + 1 })
+            .select("id").single();
+          if (sErr || !created) throw new Error(sErr?.message ?? `Could not create the subject "${name}".`);
+          subjectId = created.id;
+          createdSubjects.add(name);
+        }
+      }
+      const { count } = await supabase.from("questions")
+        .select("id", { count: "exact", head: true }).eq("subject_id", subjectId);
+      const entry = { id: subjectId, sort: (count ?? 0) + 1 };
+      targets.set(cacheKey, entry);
+      return entry;
+    }
 
     for (const it of importable) {
       if (it.imported) { skipped++; continue; }
@@ -705,8 +780,9 @@ export const importAqvJob = createServerFn({ method: "POST" })
           if (!valid) throw new Error("The solved answer is not one of the paper's printed combinations.");
         }
         const explanation = [it.explanation || "", it.summary_table ? `\n\n${it.summary_table}` : ""].join("").trim() || null;
+        const target = await targetFor(it.topic ?? null);
         const { data: q, error: qErr } = await supabase.from("questions").upsert(
-          { subject_id: job.subject_id, stem: it.stem, explanation, answer_mode: it.answer_mode ?? "single", sort_order: sort },
+          { subject_id: target.id, stem: it.stem, explanation, answer_mode: it.answer_mode ?? "single", sort_order: target.sort },
           { onConflict: "subject_id,stem_hash", ignoreDuplicates: true },
         ).select("id").maybeSingle();
         if (qErr) throw qErr;
@@ -726,7 +802,7 @@ export const importAqvJob = createServerFn({ method: "POST" })
         if (oErr) throw oErr;
         await supabase.from(ITEMS).update({ imported: true, status: "imported" }).eq("id", it.id);
         inserted++;
-        sort++;
+        target.sort++;
       } catch (e: any) {
         failed++;
         errors.push(String(e?.message || e).slice(0, 160));
@@ -739,7 +815,7 @@ export const importAqvJob = createServerFn({ method: "POST" })
       error: errors.length ? errors.slice(0, 3).join(" | ") : null,
     }).eq("id", data.jobId);
 
-    return { inserted, skipped, failed, leftOut: unsolved, errors: errors.slice(0, 5) };
+    return { inserted, skipped, failed, leftOut: unsolved, errors: errors.slice(0, 5), subjectsCreated: [...createdSubjects] };
   });
 
 // ---------------- listing / housekeeping ----------------
@@ -761,9 +837,9 @@ export const getAqvJob = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
     const [{ data: job, error: e1 }, { data: pages, error: e2 }, { data: items, error: e3 }] = await Promise.all([
-      supabase.from(JOBS).select("id, pdf_name, total_pages, stage, status, imported_count, error, course_id, group_id, subject_id, reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime, created_at").eq("id", data.jobId).single(),
+      supabase.from(JOBS).select("id, pdf_name, total_pages, stage, status, imported_count, error, course_id, group_id, subject_id, reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime, sort_mode, sort_topics, created_at").eq("id", data.jobId).single(),
       supabase.from(PAGES).select("id, page_number, status, question_count, error").eq("job_id", data.jobId).order("page_number"),
-      supabase.from(ITEMS).select("id, item_index, number, stem, options, answer_mode, question_type, combo_sets, printed_choices, answer_letter, concept, explanation, summary_table, solved, imported, status, error").eq("job_id", data.jobId).order("item_index"),
+      supabase.from(ITEMS).select("id, item_index, number, stem, options, answer_mode, question_type, combo_sets, printed_choices, answer_letter, concept, explanation, summary_table, solved, imported, status, error, topic").eq("job_id", data.jobId).order("item_index"),
     ]);
     if (e1) throw e1; if (e2) throw e2; if (e3) throw e3;
     return { job, pages: pages ?? [], items: items ?? [] };
@@ -873,4 +949,102 @@ export const setAqvResource = createServerFn({ method: "POST" })
       await supabase.storage.from("aquavision-resources").remove([existing.resource_storage_path]);
     }
     return { resource };
+  });
+// ---------------- sub-subject sorting ----------------
+
+/** Set how this job's questions are sorted into sub-subjects (none | text | pdf | ai). */
+export const setAqvSortMode = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    jobId: z.string().uuid(),
+    mode: z.enum(["none", "text", "pdf", "ai"]),
+    topicsText: z.string().max(20_000).optional(),
+    pdfBase64: z.string().max(28_000_000).optional(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+
+    if (data.mode === "none") {
+      const { error } = await supabase.from(JOBS)
+        .update({ sort_mode: "none", sort_topics: [] }).eq("id", data.jobId);
+      if (error) throw error;
+      return { mode: "none", topics: [] as string[] };
+    }
+
+    let topics: string[] = [];
+    if (data.mode === "text") {
+      topics = parseTopicList(data.topicsText ?? "");
+      if (topics.length < 2) throw new Error("Enter at least two topics, one per line.");
+    } else if (data.mode === "pdf") {
+      if (!data.pdfBase64) throw new Error("Choose a contents / syllabus PDF first.");
+      const apiKey = await getGeminiKey(supabase);
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: SORT_TOPICS_SYSTEM }] },
+            contents: [{
+              role: "user",
+              parts: [
+                { inlineData: { mimeType: "application/pdf", data: data.pdfBase64 } },
+                { text: "List the topics of this document as JSON." },
+              ],
+            }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 2048, responseMimeType: "application/json" },
+          }),
+        },
+      );
+      const json = await res.json().catch(() => ({} as any));
+      if (!res.ok) throw new Error(`Reading the topic PDF failed (${res.status}).`);
+      const parsed = parseJsonObject(responseText(json));
+      topics = parseTopicList(parsed?.topics ?? []);
+      if (topics.length < 2) throw new Error("No topic list could be read from that PDF. Paste the topics instead.");
+    }
+
+    const { error } = await supabase.from(JOBS)
+      .update({ sort_mode: data.mode, sort_topics: topics }).eq("id", data.jobId);
+    if (error) throw error;
+    return { mode: data.mode, topics };
+  });
+
+/** Change one question's sub-subject before import. */
+export const setAqvItemTopic = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    itemId: z.string().uuid(),
+    topic: z.string().max(80).nullable(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const topic = cleanTopicName(data.topic) || null;
+    const { error } = await supabase.from(ITEMS).update({ topic }).eq("id", data.itemId);
+    if (error) throw error;
+    return { topic };
+  });
+
+/** Rename one sub-subject across every question of this job. */
+export const renameAqvTopic = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    jobId: z.string().uuid(),
+    from: z.string().min(1).max(80),
+    to: z.string().min(1).max(80),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const to = cleanTopicName(data.to);
+    if (!to) throw new Error("Enter the new topic name.");
+    const { error } = await supabase.from(ITEMS)
+      .update({ topic: to }).eq("job_id", data.jobId).eq("topic", data.from);
+    if (error) throw error;
+
+    const { data: job } = await supabase.from(JOBS).select("sort_topics").eq("id", data.jobId).maybeSingle();
+    const topics = parseTopicList(job?.sort_topics);
+    if (topics.length) {
+      const next = parseTopicList(topics.map((t) => (t === data.from ? to : t)));
+      await supabase.from(JOBS).update({ sort_topics: next }).eq("id", data.jobId);
+    }
+    return { topic: to };
   });
