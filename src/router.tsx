@@ -36,7 +36,7 @@ export const getRouter = () => {
 
   // Dehydrate server-fetched queries into the HTML so pages render with their
   // data on the first frame instead of refetching after hydration.
-  setupRouterSsrQueryIntegration({ router, queryClient });
+  setupRouterSsrQueryIntegration({ router, queryClient: queryClient as any });
 
   return router;
 };

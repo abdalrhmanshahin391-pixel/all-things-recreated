@@ -112,7 +112,9 @@ function AdminCoursesPage() {
     setError(null);
     try {
       const res = await syncAllCoursesToPaddle({ data: { environment: "live" } });
-      toast.success(`Successfully synced ${res.synced} of ${res.total} courses to Paddle!`);
+      const syncedCount = (res as any)?.synced ?? (res as any)?.reconciled ?? 0;
+      const totalCount = (res as any)?.total ?? 0;
+      toast.success(`Successfully synced ${syncedCount} of ${totalCount} courses to Paddle!`);
       await refresh();
     } catch (e: any) {
       toast.error(e?.message || "Bulk Paddle sync failed");
@@ -857,7 +859,7 @@ function EditCourseModal({
         });
         if (res.paddlePriceId) {
           finalPaddlePriceId = res.paddlePriceId;
-          setPaddlePriceId(finalPaddlePriceId);
+          setPaddlePriceId(finalPaddlePriceId || "");
         }
       } catch (err) {
         console.warn("Auto-sync on save failed:", err);

@@ -196,7 +196,7 @@ export const autoReconcileCoursesToPaddle = createServerFn({ method: "POST" })
     const list = courses || [];
     // Identify courses that need Paddle synchronization (missing or not starting with "pri_")
     const needSync = list.filter(
-      (c) =>
+      (c: any) =>
         data?.force ||
         !c.paddle_price_id ||
         typeof c.paddle_price_id !== "string" ||
@@ -204,7 +204,7 @@ export const autoReconcileCoursesToPaddle = createServerFn({ method: "POST" })
     );
 
     if (needSync.length === 0) {
-      return { ok: true, message: "All courses are already synced with Paddle", reconciled: 0, total: list.length };
+      return { ok: true, message: "All courses are already synced with Paddle", reconciled: 0, synced: 0, total: list.length };
     }
 
     const reconciled: Array<{ id: string; title: string; paddlePriceId?: string; error?: string }> = [];
@@ -213,25 +213,27 @@ export const autoReconcileCoursesToPaddle = createServerFn({ method: "POST" })
       try {
         const syncRes = await syncPaddleCoursePrice({
           data: {
-            courseId: c.id,
-            title: c.title,
-            price: Number(c.price),
-            currency: c.currency || "USD",
+            courseId: (c as any).id,
+            title: (c as any).title,
+            price: Number((c as any).price),
+            currency: (c as any).currency || "USD",
             environment: env,
           },
         });
-        reconciled.push({ id: c.id, title: c.title, paddlePriceId: syncRes.paddlePriceId });
+        reconciled.push({ id: (c as any).id, title: (c as any).title, paddlePriceId: syncRes.paddlePriceId });
       } catch (err: any) {
-        console.warn(`[autoReconcileCoursesToPaddle] Failed for course "${c.title}":`, err?.message || err);
-        reconciled.push({ id: c.id, title: c.title, error: err?.message || String(err) });
+        console.warn(`[autoReconcileCoursesToPaddle] Failed for course "${(c as any).title}":`, err?.message || err);
+        reconciled.push({ id: (c as any).id, title: (c as any).title, error: err?.message || String(err) });
       }
     }
 
+    const syncedCount = reconciled.filter((r) => r.paddlePriceId).length;
     return {
       ok: true,
       total: list.length,
       needsSyncCount: needSync.length,
-      reconciled: reconciled.filter((r) => r.paddlePriceId).length,
+      reconciled: syncedCount,
+      synced: syncedCount,
       results: reconciled,
     };
   });
@@ -397,8 +399,6 @@ export const verifyAndFulfillTransaction = createServerFn({ method: "POST" })
     if (!isOwner) {
       throw new Error("Transaction does not belong to the current authenticated user");
     }
-
-    const adminDb = getAdminSupabase();
 
     // Cache customer ID into user_metadata for future 1-click / saved card checkout
     const customerId = txn.customer_id || txn.customer?.id;
