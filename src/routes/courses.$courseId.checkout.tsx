@@ -27,6 +27,38 @@ import {
 } from "@/utils/payments.functions";
 import { toast } from "sonner";
 
+function CheckoutErrorFallback({ error, reset }: { error: Error; reset: () => void }) {
+  return (
+    <div className="min-h-screen bg-[#06080F] text-white">
+      <SiteHeader />
+      <div className="mx-auto max-w-md px-6 pt-36 text-center">
+        <div className="mx-auto w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 grid place-items-center mb-4">
+          <AlertCircle className="w-6 h-6 text-rose-400" />
+        </div>
+        <h1 className="text-2xl font-black text-white">Unable to Load Checkout</h1>
+        <p className="mt-2 text-sm text-slate-300">
+          {error?.message || "Something went wrong while initializing secure checkout."}
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => reset()}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-bold text-sm shadow-md hover:scale-[1.02] transition-transform cursor-pointer"
+          >
+            Try Again
+          </button>
+          <Link
+            to="/courses"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-cyan-300 hover:text-white font-bold text-sm border border-white/10 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" /> Return to Courses
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const Route = createFileRoute("/courses/$courseId/checkout")({
   head: () => ({
     meta: [
@@ -39,6 +71,7 @@ export const Route = createFileRoute("/courses/$courseId/checkout")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
+  errorComponent: CheckoutErrorFallback,
   component: CheckoutPage,
 });
 

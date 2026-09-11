@@ -20,6 +20,7 @@ function CourseLayout() {
   useEffect(() => {
     if (loading) return;
     if (!user || isAdmin) return;
+    if (typeof window !== "undefined" && window.location.pathname.endsWith("/checkout")) return;
     let cancelled = false;
 
     (async () => {
