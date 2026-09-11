@@ -155,3 +155,55 @@ export async function createPaddleCustomerPortalSession(
   return portalUrl;
 }
 
+export interface CreateTransactionParams {
+  env: PaddleEnv;
+  items: Array<{ priceId: string; quantity: number }>;
+  customer?: { email?: string; name?: string };
+  customData?: Record<string, any>;
+  checkoutSuccessUrl?: string;
+}
+
+/** Pre-creates a transaction directly with Paddle API with collection_mode=automatic */
+export async function createPaddleTransaction(
+  params: CreateTransactionParams,
+): Promise<{ id: string; url?: string }> {
+  const { env, items, customer, customData, checkoutSuccessUrl } = params;
+  const payload: any = {
+    items: items.map((i) => ({ price_id: i.priceId, quantity: i.quantity })),
+    collection_mode: "automatic",
+  };
+  if (customData) {
+    payload.custom_data = customData;
+  }
+  if (customer?.email) {
+    payload.customer = {
+      email: customer.email.trim().toLowerCase(),
+      ...(customer.name ? { name: customer.name.trim() } : {}),
+    };
+  }
+  if (checkoutSuccessUrl) {
+    payload.checkout = {
+      url: checkoutSuccessUrl,
+    };
+  }
+
+  const res = await gatewayFetch(env, `/transactions`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Failed to initialize Paddle transaction (${res.status}): ${text.slice(0, 250)}`);
+  }
+
+  const json = JSON.parse(text);
+  const txnId = json.data?.id;
+  if (!txnId) throw new Error("Paddle did not return a transaction ID");
+
+  return {
+    id: txnId,
+    url: json.data?.checkout?.url,
+  };
+}
+

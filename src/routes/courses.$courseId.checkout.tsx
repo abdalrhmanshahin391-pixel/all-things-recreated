@@ -21,11 +21,15 @@ import { ensureFreeEnrollment, hasCourseAccess, isFreeCourse } from "@/lib/cours
 import {
   syncPaddleCoursePrice,
   resolvePaddleCheckoutPrice,
+  createCheckoutTransaction,
   verifyAndFulfillTransaction,
 } from "@/utils/payments.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/courses/$courseId/checkout")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    sandbox: search.sandbox === "1" || search.sandbox === "true" || search.test === "1",
+  }),
   head: () => ({
     meta: [
       { title: "Checkout — AquaQBank" },
@@ -64,6 +68,9 @@ const COUPON_ERRORS: Record<string, string> = {
 
 function CheckoutPage() {
   const { courseId } = Route.useParams();
+  const { sandbox: isSandboxQuery } = Route.useSearch();
+  const isSandbox = Boolean(isSandboxQuery);
+  const checkoutEnv = isSandbox ? "sandbox" : "live";
   const navigate = useNavigate();
   const { user, profile, loading: authLoading } = useAuth();
 
@@ -77,6 +84,7 @@ function CheckoutPage() {
   const validateFn = useServerFn(validateCoupon);
   const applyFn = useServerFn(applyCoupon);
   const resolvePriceFn = useServerFn(resolvePaddleCheckoutPrice);
+  const createTxnFn = useServerFn(createCheckoutTransaction);
   const fulfillFn = useServerFn(verifyAndFulfillTransaction);
   const [couponInput, setCouponInput] = useState("");
   const [couponBusy, setCouponBusy] = useState(false);
@@ -204,81 +212,52 @@ function CheckoutPage() {
         return;
       }
 
-      // 3. Paid checkout — resolve exact price ID in Paddle
-      let targetPriceId: string | null = null;
-      try {
-        const priceRes = await resolvePriceFn({
-          data: {
-            courseId: course.id,
-            title: course.title,
-            finalPrice: currentTotal,
-            originalPrice: course.price,
-            couponCode: activeCode,
-            currency,
-          },
-        });
-        targetPriceId = priceRes?.paddlePriceId || null;
-      } catch (priceErr: any) {
-        console.warn("[checkout] resolvePaddleCheckoutPrice failed, fallback to course price:", priceErr);
+      // 3. Paid checkout — pre-create verified transaction with Paddle API on server side
+      const checkoutRes = await createTxnFn({
+        data: {
+          courseId: course.id,
+          finalPrice: currentTotal,
+          originalPrice: course.price,
+          couponCode: activeCode,
+          currency,
+          environment: checkoutEnv,
+          returnUrl: `${window.location.origin}/checkout/success?courseId=${course.id}`,
+        },
+      });
+
+      if (!checkoutRes?.transactionId) {
+        throw new Error("Could not initialize payment transaction with Paddle. Please try again.");
       }
 
-      if (!targetPriceId || !targetPriceId.startsWith("pri_")) {
-        targetPriceId =
-          course.paddle_price_id && course.paddle_price_id.startsWith("pri_")
-            ? course.paddle_price_id
-            : null;
-      }
-
-      if (!targetPriceId && Number(course.price) > 0) {
-        try {
-          const syncRes = await syncPaddleCoursePrice({
-            data: {
-              courseId: course.id,
-              title: course.title,
-              price: Number(course.price),
-              currency: course.currency || "USD",
-            },
-          });
-          targetPriceId = syncRes.paddlePriceId;
-        } catch (syncErr: any) {
-          console.warn("[checkout] auto sync Paddle price failed:", syncErr);
+      // Initialize Paddle with eventCallback for immediate full course unlocking
+      await initializePaddle(checkoutEnv, async (eventData: any) => {
+        if (eventData?.name === "checkout.completed") {
+          const completedTxnId = eventData?.data?.transaction_id || checkoutRes.transactionId;
+          toast.success("Payment confirmed — unlocking course!");
+          try {
+            await fulfillFn({
+              data: {
+                transactionId: completedTxnId,
+                courseId: course.id,
+                environment: checkoutEnv,
+              },
+            });
+          } catch (err) {
+            console.warn("Fast fulfill on checkout.completed:", err);
+          }
+          const targetPath = course.kind === "lectures" ? "/lectures/$courseId" : "/courses/$courseId";
+          navigate({ to: targetPath, params: { courseId: course.id }, replace: true });
         }
-      }
-
-      if (!targetPriceId) {
-        setError(
-          "This course isn't ready for purchase yet — its payment price hasn't been set. Please contact support.",
-        );
-        setOpening(false);
-        return;
-      }
-
-      await initializePaddle();
-      const paddlePriceId = await getPaddlePriceId(targetPriceId);
-      const savedCustomerId = (user.user_metadata as any)?.paddle_customer_id || undefined;
+      });
 
       window.Paddle.Checkout.open({
-        items: [{ priceId: paddlePriceId, quantity: 1 }],
-        customer: {
-          email: user.email ?? undefined,
-          name:
-            profile?.full_name ||
-            (user.user_metadata?.full_name as string) ||
-            (user.user_metadata?.name as string) ||
-            undefined,
-          ...(savedCustomerId ? { id: savedCustomerId } : {}),
-        },
-        customData: {
-          userId: user.id,
-          courseId: course.id,
-          ...(activeCode ? { couponCode: activeCode } : {}),
-        },
+        transactionId: checkoutRes.transactionId,
         settings: {
           displayMode: "overlay",
           theme: "light",
+          allowedPaymentMethods: ["card", "paypal", "saved_payment_methods"],
           successUrl: `${window.location.origin}/checkout/success?courseId=${course.id}`,
           allowLogout: false,
-          variant: "express",
           showAddDiscounts: false,
         },
       });
@@ -332,6 +311,18 @@ function CheckoutPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           One-time payment. Access is granted the moment your payment clears.
         </p>
+
+        {isSandbox && (
+          <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-300">
+            <div className="font-semibold flex items-center gap-1.5 mb-1">
+              <span>🧪 Paddle Sandbox Test Mode</span>
+            </div>
+            <p className="text-amber-200/80">
+              Testing with fake cards is enabled. Use Paddle test card:{" "}
+              <strong className="font-mono text-white">4242 4242 4242 4242</strong>, any future date (e.g. 12/28), CVV <strong className="font-mono text-white">123</strong>.
+            </p>
+          </div>
+        )}
 
         <section className="mt-8 rounded-lg border border-border bg-card shadow-[var(--shadow-card)] overflow-hidden">
           {/* Item */}

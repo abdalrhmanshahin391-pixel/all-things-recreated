@@ -24,13 +24,21 @@ function tokenFor(env: "sandbox" | "live"): string | undefined {
 }
 
 let paddleInitialized = false;
+let currentEnv: "sandbox" | "live" | null = null;
 let initPromise: Promise<void> | null = null;
+let activeEventCallback: ((data: any) => void) | null = null;
 
-export async function initializePaddle(): Promise<void> {
-  if (paddleInitialized && window.Paddle) return;
-  if (initPromise) return initPromise;
+export async function initializePaddle(
+  targetEnv?: "sandbox" | "live",
+  onEvent?: (data: any) => void,
+): Promise<void> {
+  const env = targetEnv || getPaddleEnvironment();
+  if (onEvent) {
+    activeEventCallback = onEvent;
+  }
+  if (paddleInitialized && window.Paddle && currentEnv === env) return;
+  if (initPromise && currentEnv === env) return initPromise;
 
-  const env = getPaddleEnvironment();
   const token = tokenFor(env);
   if (!token) throw new Error("Payments are not configured");
 
@@ -46,8 +54,16 @@ export async function initializePaddle(): Promise<void> {
       try {
         const paddleJsEnv = env === "sandbox" ? "sandbox" : "production";
         window.Paddle.Environment.set(paddleJsEnv);
-        window.Paddle.Initialize({ token });
+        window.Paddle.Initialize({
+          token,
+          eventCallback: (eventData: any) => {
+            if (activeEventCallback) {
+              activeEventCallback(eventData);
+            }
+          },
+        });
         paddleInitialized = true;
+        currentEnv = env;
         resolve();
       } catch (e) {
         initPromise = null;

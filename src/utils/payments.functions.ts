@@ -5,6 +5,7 @@ import {
   getPaddleTransaction,
   findPaddleCustomerByEmail,
   createPaddleCustomerPortalSession,
+  createPaddleTransaction,
   type PaddleEnv,
 } from "@/lib/paddle.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -659,6 +660,92 @@ export const syncPaddlePackagePrice = createServerFn({ method: "POST" })
         .eq("id", data.packageId);
     }
     return { ok: true, paddlePriceId, productId };
+  });
+
+export interface CreateCheckoutInput {
+  courseId: string;
+  priceId?: string;
+  finalPrice?: number;
+  originalPrice?: number;
+  couponCode?: string;
+  currency?: string;
+  environment?: PaddleEnv;
+  returnUrl?: string;
+}
+
+/**
+ * Pre-creates a verified Paddle transaction on the server side.
+ * Directly communicates with Paddle API to guarantee accurate pricing,
+ * valid items, and explicit redirect URLs, bypassing client-side iframe failures.
+ */
+export const createCheckoutTransaction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: CreateCheckoutInput) => data)
+  .handler(async ({ data, context }) => {
+    const { user, userId } = context;
+    const env: PaddleEnv = data.environment || "live";
+    const adminDb = getAdminSupabase();
+
+    // 1. Fetch course details
+    const { data: course, error: cErr } = await (adminDb.from("courses") as any)
+      .select("id, title, price, currency, paddle_price_id")
+      .eq("id", data.courseId)
+      .maybeSingle();
+
+    if (cErr || !course) {
+      throw new Error("Course not found");
+    }
+
+    // 2. Resolve genuine Paddle Price ID (must start with pri_)
+    let paddlePriceId = data.priceId;
+    if (!paddlePriceId || !paddlePriceId.startsWith("pri_")) {
+      const resolved = await resolvePaddleCheckoutPrice({
+        data: {
+          courseId: course.id,
+          title: course.title,
+          finalPrice: data.finalPrice ?? Number(course.price),
+          originalPrice: data.originalPrice ?? Number(course.price),
+          couponCode: data.couponCode,
+          currency: data.currency || course.currency || "USD",
+          environment: env,
+        },
+      });
+      paddlePriceId = resolved.paddlePriceId;
+    }
+
+    if (!paddlePriceId || !paddlePriceId.startsWith("pri_")) {
+      throw new Error("Failed to prepare a valid payment price for this course.");
+    }
+
+    const checkoutSuccessUrl =
+      data.returnUrl ||
+      `https://aquaqbank.com/checkout/success?courseId=${course.id}`;
+
+    // 3. Pre-create transaction in Paddle API
+    const txn = await createPaddleTransaction({
+      env,
+      items: [{ priceId: paddlePriceId, quantity: 1 }],
+      customer: {
+        email: user.email || undefined,
+        name:
+          (user.user_metadata as any)?.full_name ||
+          (user.user_metadata as any)?.name ||
+          undefined,
+      },
+      customData: {
+        userId,
+        courseId: course.id,
+        ...(data.couponCode ? { couponCode: data.couponCode } : {}),
+      },
+      checkoutSuccessUrl,
+    });
+
+    return {
+      ok: true,
+      transactionId: txn.id,
+      checkoutUrl: txn.url,
+      paddlePriceId,
+    };
   });
 
 
