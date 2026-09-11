@@ -18,6 +18,7 @@ import { initializePaddle, getPaddlePriceId } from "@/lib/paddle";
 import { resolveCourseImageUrl } from "@/lib/course-image";
 import { validateCoupon, applyCoupon } from "@/lib/coupons.functions";
 import { ensureFreeEnrollment, hasCourseAccess, isFreeCourse } from "@/lib/course-access";
+import { syncPaddleCoursePrice } from "@/utils/payments.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/courses/$courseId/checkout")({
@@ -164,17 +165,36 @@ function CheckoutPage() {
 
   async function handlePay() {
     if (!course || !user) return;
-    if (!course.paddle_price_id) {
-      setError(
-        "This course isn't ready for purchase yet — its payment price hasn't been set. Please contact support.",
-      );
-      return;
-    }
     setOpening(true);
     setError(null);
     try {
+      let targetPriceId = course.paddle_price_id;
+      if (!targetPriceId && Number(course.price) > 0) {
+        try {
+          const syncRes = await syncPaddleCoursePrice({
+            data: {
+              courseId: course.id,
+              title: course.title,
+              price: Number(course.price),
+              currency: course.currency || "USD",
+            },
+          });
+          targetPriceId = syncRes.paddlePriceId;
+        } catch (syncErr: any) {
+          console.warn("[checkout] auto sync Paddle price failed:", syncErr);
+        }
+      }
+
+      if (!targetPriceId) {
+        setError(
+          "This course isn't ready for purchase yet — its payment price hasn't been set. Please contact support.",
+        );
+        setOpening(false);
+        return;
+      }
+
       await initializePaddle();
-      const paddlePriceId = await getPaddlePriceId(course.paddle_price_id);
+      const paddlePriceId = await getPaddlePriceId(targetPriceId);
       window.Paddle.Checkout.open({
         items: [{ priceId: paddlePriceId, quantity: 1 }],
         customer: { email: user.email ?? undefined },

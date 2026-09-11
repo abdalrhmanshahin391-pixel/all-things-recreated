@@ -23,6 +23,8 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { resolveCourseImageUrl } from "@/lib/course-image";
 import { useCourseOptions } from "@/lib/course-options";
 import { CourseOptionsManager } from "@/components/admin/CourseOptionsManager";
+import { syncPaddleCoursePrice } from "@/utils/payments.functions";
+import { toast } from "sonner";
 
 function CourseThumb({ value, className }: { value: string | null; className?: string }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -191,6 +193,24 @@ function AdminCoursesPage() {
       university_id: universityId,
       created_by: user!.id,
     };
+
+    if (payload.price > 0 && !payload.paddle_price_id) {
+      try {
+        const syncRes = await syncPaddleCoursePrice({
+          data: {
+            title: payload.title,
+            price: payload.price,
+            environment: "live",
+          },
+        });
+        if (syncRes.paddlePriceId) {
+          payload.paddle_price_id = syncRes.paddlePriceId;
+        }
+      } catch (syncErr) {
+        console.warn("Auto-sync to Paddle failed:", syncErr);
+      }
+    }
+
     const { error } = await (supabase.from("courses") as any).insert(payload);
     setSubmitting(false);
     if (error) {
@@ -703,7 +723,35 @@ function EditCourseModal({
   const [published, setPublished] = useState(course.published);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncingPaddle, setSyncingPaddle] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handleAutoGeneratePrice() {
+    if (Number(price) <= 0) {
+      setError("Please set a price greater than 0 first.");
+      return;
+    }
+    setSyncingPaddle(true);
+    setError(null);
+    try {
+      const res = await syncPaddleCoursePrice({
+        data: {
+          courseId: course.id,
+          title: title.trim(),
+          price: Number(price),
+          environment: "live",
+        },
+      });
+      if (res.paddlePriceId) {
+        setPaddlePriceId(res.paddlePriceId);
+        toast.success(`Paddle price generated: ${res.paddlePriceId}`);
+      }
+    } catch (err: any) {
+      setError(err?.message || "Failed to generate Paddle price");
+    } finally {
+      setSyncingPaddle(false);
+    }
+  }
 
   async function uploadImage(file: File) {
     setUploading(true);
@@ -727,12 +775,33 @@ function EditCourseModal({
     setSaving(true);
     setError(null);
     const finalPublished = nextPublished ?? published;
+    let finalPaddlePriceId = paddlePriceId.trim() || null;
+
+    if (Number(price) > 0 && !finalPaddlePriceId) {
+      try {
+        const res = await syncPaddleCoursePrice({
+          data: {
+            courseId: course.id,
+            title: title.trim(),
+            price: Number(price),
+            environment: "live",
+          },
+        });
+        if (res.paddlePriceId) {
+          finalPaddlePriceId = res.paddlePriceId;
+          setPaddlePriceId(finalPaddlePriceId);
+        }
+      } catch (err) {
+        console.warn("Auto-sync on save failed:", err);
+      }
+    }
+
     const { error } = await supabase
       .from("courses")
       .update({
         title: title.trim(),
         price: Number(price) || 0,
-        paddle_price_id: paddlePriceId.trim() || null,
+        paddle_price_id: finalPaddlePriceId,
         year,
         category,
         exam_type: examType,
@@ -833,15 +902,26 @@ function EditCourseModal({
               />
             </Field>
             <Field label="Payment price ID">
-              <input
-                value={paddlePriceId}
-                onChange={(e) => setPaddlePriceId(e.target.value)}
-                placeholder="Leave empty for free courses"
-                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  value={paddlePriceId}
+                  onChange={(e) => setPaddlePriceId(e.target.value)}
+                  placeholder="Leave empty to auto-generate"
+                  className="flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50"
+                />
+                <button
+                  type="button"
+                  onClick={handleAutoGeneratePrice}
+                  disabled={syncingPaddle || Number(price) <= 0}
+                  className="px-2.5 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-40"
+                  title="Generate or sync price in Paddle"
+                >
+                  {syncingPaddle ? "Syncing…" : "⚡ Auto-Generate"}
+                </button>
+              </div>
               {Number(price) > 0 && !paddlePriceId.trim() && (
-                <p className="mt-1 text-[11px] text-amber-400">
-                  Paid course without a payment price ID — checkout will fail.
+                <p className="mt-1 text-[11px] text-emerald-400">
+                  ⚡ Will be automatically generated in Paddle upon saving.
                 </p>
               )}
             </Field>
