@@ -1,6 +1,8 @@
 import { resolvePaddlePrice } from "@/utils/payments.functions";
 
-const clientToken = import.meta.env.VITE_PAYMENTS_CLIENT_TOKEN as string | undefined;
+const liveClientToken = import.meta.env.VITE_PAYMENTS_CLIENT_TOKEN as string | undefined;
+const testClientToken = import.meta.env.VITE_PAYMENTS_TEST_CLIENT_TOKEN as string | undefined;
+const forceTest = String(import.meta.env.VITE_PAYMENTS_FORCE_TEST ?? "") === "1";
 
 declare global {
   interface Window {
@@ -9,16 +11,28 @@ declare global {
 }
 
 export function getPaddleEnvironment(): "sandbox" | "live" {
-  return clientToken?.startsWith("test_") ? "sandbox" : "live";
+  if (forceTest) return "sandbox";
+  if (testClientToken && !liveClientToken?.startsWith("live_")) return "sandbox";
+  return liveClientToken?.startsWith("live_") ? "live" : "sandbox";
+}
+
+function tokenFor(env: "sandbox" | "live"): string | undefined {
+  if (env === "sandbox") {
+    return testClientToken || (liveClientToken?.startsWith("test_") ? liveClientToken : undefined);
+  }
+  return liveClientToken?.startsWith("live_") ? liveClientToken : testClientToken;
 }
 
 let paddleInitialized = false;
 let initPromise: Promise<void> | null = null;
 
 export async function initializePaddle(): Promise<void> {
-  if (paddleInitialized) return;
+  if (paddleInitialized && window.Paddle) return;
   if (initPromise) return initPromise;
-  if (!clientToken) throw new Error("Payments are not configured");
+
+  const env = getPaddleEnvironment();
+  const token = tokenFor(env);
+  if (!token) throw new Error("Payments are not configured");
 
   initPromise = new Promise<void>((resolve, reject) => {
     if (typeof window === "undefined") {
@@ -30,12 +44,13 @@ export async function initializePaddle(): Promise<void> {
     );
     const onReady = () => {
       try {
-        const paddleJsEnv = getPaddleEnvironment() === "sandbox" ? "sandbox" : "production";
+        const paddleJsEnv = env === "sandbox" ? "sandbox" : "production";
         window.Paddle.Environment.set(paddleJsEnv);
-        window.Paddle.Initialize({ token: clientToken });
+        window.Paddle.Initialize({ token });
         paddleInitialized = true;
         resolve();
       } catch (e) {
+        initPromise = null;
         reject(e);
       }
     };
@@ -43,15 +58,34 @@ export async function initializePaddle(): Promise<void> {
       onReady();
       return;
     }
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+    };
+
     const script = existing ?? document.createElement("script");
     if (!existing) {
       script.src = "https://cdn.paddle.com/paddle/v2/paddle.js";
+      script.async = true;
       document.head.appendChild(script);
     }
-    script.addEventListener("load", onReady, { once: true });
-    script.addEventListener("error", () => reject(new Error("Paddle.js failed to load")), {
-      once: true,
-    });
+
+    timer = setTimeout(() => {
+      cleanup();
+      initPromise = null;
+      reject(new Error("Paddle payment connection timed out. Please check your network and try again."));
+    }, 12000);
+
+    script.addEventListener("load", () => {
+      cleanup();
+      onReady();
+    }, { once: true });
+    script.addEventListener("error", () => {
+      cleanup();
+      initPromise = null;
+      reject(new Error("Paddle.js failed to load. Please check if an ad-blocker is blocking Paddle."));
+    }, { once: true });
   });
   return initPromise;
 }

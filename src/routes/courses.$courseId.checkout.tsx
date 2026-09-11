@@ -188,7 +188,8 @@ function CheckoutPage() {
           theme: "light",
           successUrl: `${window.location.origin}/checkout/success?courseId=${course.id}`,
           allowLogout: false,
-          variant: "one-page",
+          variant: "express",
+          showAddDiscounts: false,
         },
       });
     } catch (e: any) {
