@@ -15,6 +15,8 @@ import {
   Eye,
   EyeOff,
   Save,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { compressImage } from "@/lib/image-compress";
@@ -23,7 +25,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { resolveCourseImageUrl } from "@/lib/course-image";
 import { useCourseOptions } from "@/lib/course-options";
 import { CourseOptionsManager } from "@/components/admin/CourseOptionsManager";
-import { syncPaddleCoursePrice } from "@/utils/payments.functions";
+import { syncPaddleCoursePrice, syncAllCoursesToPaddle } from "@/utils/payments.functions";
 import { toast } from "sonner";
 
 function CourseThumb({ value, className }: { value: string | null; className?: string }) {
@@ -99,8 +101,22 @@ function AdminCoursesPage() {
   const [universityId, setUniversityId] = useState<string>("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [submitting, setSubmitting] = useState(false);
+  const [bulkSyncing, setBulkSyncing] = useState(false);
 
-
+  async function handleSyncAllPaddle() {
+    setBulkSyncing(true);
+    setError(null);
+    try {
+      const res = await syncAllCoursesToPaddle({ data: { environment: "live" } });
+      toast.success(`Successfully synced ${res.synced} of ${res.total} courses to Paddle!`);
+      await refresh();
+    } catch (e: any) {
+      toast.error(e?.message || "Bulk Paddle sync failed");
+      setError(e?.message || "Failed to sync courses to Paddle");
+    } finally {
+      setBulkSyncing(false);
+    }
+  }
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
@@ -273,11 +289,29 @@ function AdminCoursesPage() {
     <div className="min-h-screen bg-black text-white">
       <SiteHeader />
       <main className="mx-auto max-w-6xl px-6 pt-32 pb-20">
-        <div className="mb-10">
-          <h1 className="font-serif text-4xl md:text-5xl font-bold mb-2">Courses Control</h1>
-          <p className="text-white/60">
-            Create courses, upload covers, set details and publish them for students.
-          </p>
+        <div className="mb-10 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-serif text-4xl md:text-5xl font-bold mb-2">Courses Control</h1>
+            <p className="text-white/60">
+              Create courses, upload covers, set details and publish them for students.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleSyncAllPaddle}
+            disabled={bulkSyncing}
+            className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 text-black px-4 py-2.5 text-sm font-semibold hover:bg-emerald-400 disabled:opacity-50 transition shadow-sm"
+          >
+            {bulkSyncing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Syncing with Paddle…
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4" /> Sync All with Paddle
+              </>
+            )}
+          </button>
         </div>
 
         {error && (
@@ -519,6 +553,18 @@ function AdminCoursesPage() {
                         <span className="rounded-full bg-emerald-500/15 text-emerald-300 px-2 py-0.5 font-medium">
                           ${Number(c.price).toFixed(2)}
                         </span>
+                        {c.paddle_price_id ? (
+                          <span
+                            className="rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 font-medium"
+                            title={`Paddle Price ID: ${c.paddle_price_id}`}
+                          >
+                            ✓ Paddle Synced
+                          </span>
+                        ) : Number(c.price) > 0 ? (
+                          <span className="rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 font-medium">
+                            Not in Paddle
+                          </span>
+                        ) : null}
                         {c.university_id && (
                           <span className="rounded-full bg-white/10 text-white/80 px-2 py-0.5 font-medium">
                             {universities.find((u) => u.id === c.university_id)?.short_name ??
@@ -777,7 +823,9 @@ function EditCourseModal({
     const finalPublished = nextPublished ?? published;
     let finalPaddlePriceId = paddlePriceId.trim() || null;
 
-    if (Number(price) > 0 && !finalPaddlePriceId) {
+    const priceChanged = Number(price) !== Number(course.price);
+    const titleChanged = title.trim() !== course.title.trim();
+    if (Number(price) > 0 && (!finalPaddlePriceId || priceChanged || titleChanged)) {
       try {
         const res = await syncPaddleCoursePrice({
           data: {

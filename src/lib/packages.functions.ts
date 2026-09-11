@@ -276,6 +276,25 @@ export const openPackageCheckoutData = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw error;
     if (!pkg) throw new Error("Package not found or not published");
+    if (!pkg.paddle_price_id && Number(pkg.price) > 0) {
+      try {
+        const { syncPaddlePackagePrice } = await import("@/utils/payments.functions");
+        const syncRes = await syncPaddlePackagePrice({
+          data: {
+            packageId: pkg.id,
+            name: pkg.name,
+            price: Number(pkg.price),
+            currency: pkg.currency || "USD",
+          },
+        });
+        if (syncRes?.paddlePriceId) {
+          pkg.paddle_price_id = syncRes.paddlePriceId;
+        }
+      } catch (syncErr) {
+        console.warn("Auto-sync package to Paddle failed:", syncErr);
+      }
+    }
+
     if (!pkg.paddle_price_id)
       throw new Error("This package isn't connected to payments yet. Ask an admin.");
     const buyerId: string = context.userId;

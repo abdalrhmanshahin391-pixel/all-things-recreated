@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Search, Plus, Trash2, BookOpen, Users as UsersIcon, X, Check, Pencil, Upload,
-  Eye, EyeOff, Save, Home, Lock, Tag, BadgeCheck, Loader2, SlidersHorizontal,
+  Eye, EyeOff, Save, Home, Lock, Tag, BadgeCheck, Loader2, SlidersHorizontal, RefreshCw,
 } from "lucide-react";
 import { guardRedirect } from "@/lib/guard-redirect";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,7 +14,7 @@ import { resolveCourseImageUrl } from "@/lib/course-image";
 import { useCourseOptions } from "@/lib/course-options";
 import { CourseOptionsManager } from "@/components/admin/CourseOptionsManager";
 import { BADGE_PRESETS } from "@/components/common/CourseBadge";
-import { syncPaddleCoursePrice } from "@/utils/payments.functions";
+import { syncPaddleCoursePrice, syncAllCoursesToPaddle } from "@/utils/payments.functions";
 
 export const Route = createFileRoute("/admin/courses-hub")({
   head: () => ({
@@ -122,6 +122,22 @@ function CoursesHubPage() {
   // control tab state
   const [dirty, setDirty] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState<string | null>(null);
+  const [bulkSyncing, setBulkSyncing] = useState(false);
+
+  async function handleSyncAllPaddle() {
+    setBulkSyncing(true);
+    setError(null);
+    try {
+      const res = await syncAllCoursesToPaddle({ data: { environment: "live" } });
+      toast.success(`Successfully synced ${res.synced} of ${res.total} courses to Paddle!`);
+      await refresh();
+    } catch (e: any) {
+      toast.error(e?.message || "Bulk Paddle sync failed");
+      setError(e?.message || "Failed to sync courses to Paddle");
+    } finally {
+      setBulkSyncing(false);
+    }
+  }
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
@@ -267,7 +283,11 @@ function CoursesHubPage() {
   async function saveControl(row: Course) {
     setSaving(row.id);
     let effectivePaddlePriceId = row.paddle_price_id;
-    if (Number(row.price ?? 0) > 0 && !effectivePaddlePriceId) {
+    const orig = courses.find((c) => c.id === row.id);
+    const priceChanged = orig && Number(orig.price) !== Number(row.price);
+    const titleChanged = orig && orig.title.trim() !== row.title.trim();
+
+    if (Number(row.price ?? 0) > 0 && (!effectivePaddlePriceId || priceChanged || titleChanged)) {
       try {
         const syncRes = await syncPaddleCoursePrice({
           data: {
@@ -326,11 +346,29 @@ function CoursesHubPage() {
     <div className="min-h-screen bg-black text-white">
       <SiteHeader />
       <main className="mx-auto max-w-6xl px-6 pt-32 pb-20">
-        <div className="mb-6">
-          <h1 className="font-serif text-4xl md:text-5xl font-bold mb-2">CoursesHub</h1>
-          <p className="text-white/60">
-            Create courses, control price · discount · badges · visibility, and manage who can study them — all here.
-          </p>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-serif text-4xl md:text-5xl font-bold mb-2">CoursesHub</h1>
+            <p className="text-white/60">
+              Create courses, control price · discount · badges · visibility, and manage who can study them — all here.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleSyncAllPaddle}
+            disabled={bulkSyncing}
+            className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 text-black px-4 py-2.5 text-sm font-semibold hover:bg-emerald-400 disabled:opacity-50 transition shadow-sm"
+          >
+            {bulkSyncing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Syncing with Paddle…
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4" /> Sync All with Paddle
+              </>
+            )}
+          </button>
         </div>
 
         <div className="mb-8 inline-flex rounded-xl border border-white/15 bg-white/[0.03] p-1">
@@ -1033,8 +1071,10 @@ function EditCourseModal({
     setSaving(true);
     setError(null);
     let effectivePaddlePriceId = paddlePriceId.trim() || null;
+    const priceChanged = Number(price) !== Number(course.price);
+    const titleChanged = title.trim() !== course.title.trim();
 
-    if (Number(price) > 0 && !effectivePaddlePriceId) {
+    if (Number(price) > 0 && (!effectivePaddlePriceId || priceChanged || titleChanged)) {
       try {
         const syncRes = await syncPaddleCoursePrice({
           data: {

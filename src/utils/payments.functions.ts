@@ -43,6 +43,7 @@ export const syncPaddleCoursePrice = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const env: PaddleEnv = data.environment || "live";
     const title = (data.title || "Course").trim();
+    const paddleProductName = title.startsWith("AquaQBank") ? title : `AquaQBank — ${title}`;
     const price = Number(data.price) || 0;
     if (price <= 0) {
       throw new Error("Cannot create Paddle price for free course (price must be > 0)");
@@ -58,7 +59,12 @@ export const syncPaddleCoursePrice = createServerFn({ method: "POST" })
         const prodData: any = await prodRes.json();
         const found = (prodData.data ?? []).find((p: any) => {
           const matchCourseId = data.courseId && p.custom_data?.course_id === data.courseId;
-          const matchName = p.name && p.name.trim().toLowerCase() === title.toLowerCase();
+          const pName = (p.name || "").trim().toLowerCase();
+          const matchName =
+            pName === title.toLowerCase() ||
+            pName === paddleProductName.toLowerCase() ||
+            pName === `aquaqbank: ${title.toLowerCase()}` ||
+            pName === `aquaqbank - ${title.toLowerCase()}`;
           return matchCourseId || matchName;
         });
         if (found) {
@@ -74,11 +80,12 @@ export const syncPaddleCoursePrice = createServerFn({ method: "POST" })
       const createProdRes = await gatewayFetch(env, `/products`, {
         method: "POST",
         body: JSON.stringify({
-          name: title,
+          name: paddleProductName,
           tax_category: "standard",
           description: `AquaQBank Course: ${title}`,
           custom_data: {
             course_id: data.courseId || "",
+            platform: "aquaqbank",
           },
         }),
       });
@@ -93,6 +100,34 @@ export const syncPaddleCoursePrice = createServerFn({ method: "POST" })
       if (!productId) {
         throw new Error("Paddle did not return a product ID");
       }
+    }
+
+    // 2b. Check if an active price for this product already matches the amount & currency
+    try {
+      const pricesRes = await gatewayFetch(
+        env,
+        `/prices?product_id=${productId}&status=active&per_page=50`,
+      );
+      if (pricesRes.ok) {
+        const pricesData: any = await pricesRes.json();
+        const matchingPrice = (pricesData.data ?? []).find((pr: any) => {
+          return (
+            pr.unit_price?.amount === amountInCents &&
+            pr.unit_price?.currency_code?.toUpperCase() === currency
+          );
+        });
+        if (matchingPrice) {
+          if (data.courseId) {
+            const supabase = getAdminSupabase();
+            await (supabase.from("courses") as any)
+              .update({ paddle_price_id: matchingPrice.id })
+              .eq("id", data.courseId);
+          }
+          return { ok: true, paddlePriceId: matchingPrice.id, productId };
+        }
+      }
+    } catch (priceLookupErr) {
+      console.warn("Could not query existing Paddle prices:", priceLookupErr);
     }
 
     // 3. Create price for this product in Paddle
@@ -136,6 +171,50 @@ export const syncPaddleCoursePrice = createServerFn({ method: "POST" })
     }
 
     return { ok: true, paddlePriceId, productId };
+  });
+
+/**
+ * Bulk synchronizes all paid courses in AquaQBank with Paddle.
+ * Immediately provisions active Products & Prices in Paddle Dashboard
+ * and saves generated paddle_price_id onto every course.
+ */
+export const syncAllCoursesToPaddle = createServerFn({ method: "POST" })
+  .inputValidator((data?: { environment?: PaddleEnv; force?: boolean }) => data || {})
+  .handler(async ({ data }) => {
+    const env: PaddleEnv = data?.environment || "live";
+    const supabase = getAdminSupabase();
+    const { data: courses, error } = await (supabase.from("courses") as any)
+      .select("id, title, price, currency, paddle_price_id")
+      .gt("price", 0);
+
+    if (error) throw new Error(error.message);
+
+    const list = courses || [];
+    const results: Array<{ id: string; title: string; paddlePriceId?: string; error?: string }> = [];
+
+    for (const c of list) {
+      try {
+        const syncRes = await syncPaddleCoursePrice({
+          data: {
+            courseId: c.id,
+            title: c.title,
+            price: Number(c.price),
+            currency: c.currency || "USD",
+            environment: env,
+          },
+        });
+        results.push({ id: c.id, title: c.title, paddlePriceId: syncRes.paddlePriceId });
+      } catch (err: any) {
+        results.push({ id: c.id, title: c.title, error: err?.message || String(err) });
+      }
+    }
+
+    return {
+      ok: true,
+      total: list.length,
+      synced: results.filter((r) => r.paddlePriceId).length,
+      results,
+    };
   });
 
 /**
@@ -457,4 +536,85 @@ export const resolvePaddleCheckoutPrice = createServerFn({ method: "POST" })
 
     return { paddlePriceId: syncRes.paddlePriceId };
   });
+
+export const syncPaddlePackagePrice = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: {
+      packageId?: string;
+      name: string;
+      price: number;
+      currency?: string;
+      environment?: PaddleEnv;
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    const env: PaddleEnv = data.environment || "live";
+    const title = data.name.trim();
+    const paddleProductName = title.startsWith("AquaQBank")
+      ? title
+      : `AquaQBank — ${title} (Package)`;
+    const price = Number(data.price) || 0;
+    if (price <= 0) throw new Error("Price must be > 0");
+    const currency = (data.currency || "USD").toUpperCase();
+    const amountInCents = Math.round(price * 100).toString();
+
+    // 1. Search existing product
+    let productId: string | null = null;
+    try {
+      const prodRes = await gatewayFetch(env, `/products?status=active&per_page=100`);
+      if (prodRes.ok) {
+        const prodData: any = await prodRes.json();
+        const found = (prodData.data ?? []).find((p: any) => {
+          const matchPkgId = data.packageId && p.custom_data?.package_id === data.packageId;
+          const pName = (p.name || "").trim().toLowerCase();
+          return (
+            matchPkgId ||
+            pName === title.toLowerCase() ||
+            pName === paddleProductName.toLowerCase()
+          );
+        });
+        if (found) productId = found.id;
+      }
+    } catch (e) {
+      console.warn("Could not query existing Paddle products for package:", e);
+    }
+
+    if (!productId) {
+      const createProdRes = await gatewayFetch(env, `/products`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: paddleProductName,
+          tax_category: "standard",
+          description: `AquaQBank Package: ${title}`,
+          custom_data: { package_id: data.packageId || "", platform: "aquaqbank" },
+        }),
+      });
+      const prodJson: any = await createProdRes.json();
+      productId = prodJson?.data?.id;
+    }
+
+    if (!productId) throw new Error("Could not create Paddle product for package");
+
+    // 2. Create price
+    const createPriceRes = await gatewayFetch(env, `/prices`, {
+      method: "POST",
+      body: JSON.stringify({
+        product_id: productId,
+        description: `${title} Access`,
+        unit_price: { amount: amountInCents, currency_code: currency },
+        custom_data: { package_id: data.packageId || "", external_id: data.packageId || title },
+      }),
+    });
+    const priceJson: any = await createPriceRes.json();
+    const paddlePriceId = priceJson?.data?.id;
+
+    if (data.packageId && paddlePriceId) {
+      const supabase = getAdminSupabase();
+      await (supabase.from("packages") as any)
+        .update({ paddle_price_id: paddlePriceId })
+        .eq("id", data.packageId);
+    }
+    return { ok: true, paddlePriceId, productId };
+  });
+
 
