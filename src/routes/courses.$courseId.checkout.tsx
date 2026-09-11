@@ -79,7 +79,6 @@ function CheckoutPage() {
 
   const validateFn = useServerFn(validateCoupon);
   const applyFn = useServerFn(applyCoupon);
-  const resolvePriceFn = useServerFn(resolvePaddleCheckoutPrice);
   const createTxnFn = useServerFn(createCheckoutTransaction);
   const fulfillFn = useServerFn(verifyAndFulfillTransaction);
   const [couponInput, setCouponInput] = useState("");
