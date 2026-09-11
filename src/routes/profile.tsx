@@ -11,13 +11,19 @@ import {
   AlertCircle,
   Bell,
   CheckCircle2,
+  CreditCard,
+  ExternalLink,
   Eye,
   EyeOff,
   KeyRound,
+  Loader2,
   Save,
   ShieldCheck,
   UserRound,
 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { getCustomerPortalUrl } from "@/utils/payments.functions";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({
@@ -70,6 +76,23 @@ function ProfilePage() {
     );
   }
 
+
+  const portalFn = useServerFn(getCustomerPortalUrl);
+  const [openingPortal, setOpeningPortal] = useState(false);
+
+  async function handleOpenPortal() {
+    setOpeningPortal(true);
+    try {
+      const res = await portalFn({ data: { returnUrl: window.location.href } });
+      if (res?.portalUrl) {
+        window.open(res.portalUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (e: any) {
+      toast.info(e?.message ?? "Could not open billing portal.");
+    } finally {
+      setOpeningPortal(false);
+    }
+  }
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
@@ -372,6 +395,34 @@ function ProfilePage() {
           </form>
         </SectionCard>
 
+        {/* Billing & Payment Methods */}
+        <SectionCard icon={<CreditCard size={18} />} title="Billing & Saved Payment Methods">
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Manage your saved credit cards, remove payment methods you no longer use, or view and download official invoices and receipts securely through the official Paddle Customer Portal.
+            </p>
+            <div>
+              <button
+                type="button"
+                onClick={handleOpenPortal}
+                disabled={openingPortal}
+                className="inline-flex items-center gap-2 rounded-xl bg-muted border border-border px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-accent/10 disabled:opacity-60"
+              >
+                {openingPortal ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <CreditCard size={16} />
+                )}
+                <span>Manage Payment Methods & Invoices</span>
+                <ExternalLink size={14} className="opacity-60 ml-0.5" />
+              </button>
+            </div>
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <ShieldCheck size={13} className="text-accent shrink-0" />
+              Card credentials and PCI data are securely managed by Paddle and never stored on AquaQBank servers.
+            </p>
+          </div>
+        </SectionCard>
 
         <div className="mt-10 text-center">
           <Link

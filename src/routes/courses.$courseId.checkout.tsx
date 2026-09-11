@@ -18,7 +18,11 @@ import { initializePaddle, getPaddlePriceId } from "@/lib/paddle";
 import { resolveCourseImageUrl } from "@/lib/course-image";
 import { validateCoupon, applyCoupon } from "@/lib/coupons.functions";
 import { ensureFreeEnrollment, hasCourseAccess, isFreeCourse } from "@/lib/course-access";
-import { syncPaddleCoursePrice } from "@/utils/payments.functions";
+import {
+  syncPaddleCoursePrice,
+  resolvePaddleCheckoutPrice,
+  verifyAndFulfillTransaction,
+} from "@/utils/payments.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/courses/$courseId/checkout")({
@@ -72,6 +76,8 @@ function CheckoutPage() {
 
   const validateFn = useServerFn(validateCoupon);
   const applyFn = useServerFn(applyCoupon);
+  const resolvePriceFn = useServerFn(resolvePaddleCheckoutPrice);
+  const fulfillFn = useServerFn(verifyAndFulfillTransaction);
   const [couponInput, setCouponInput] = useState("");
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -132,32 +138,37 @@ function CheckoutPage() {
   const total = applied ? applied.priceAfter : price;
   const fmt = (n: number) => `$${n.toFixed(2)}`;
 
-  async function handleApplyCoupon() {
-    if (!course || !couponInput.trim()) return;
+  async function handleApplyCoupon(overrideCode?: string) {
+    const codeToTest = (overrideCode ?? couponInput).trim().toUpperCase();
+    if (!course || !codeToTest) return null;
     setCouponBusy(true);
     setCouponError(null);
     try {
-      const res = await validateFn({ data: { code: couponInput, courseId: course.id } });
+      const res = await validateFn({ data: { code: codeToTest, courseId: course.id } });
       if (!res.valid) {
         setCouponError(COUPON_ERRORS[res.reason ?? ""] ?? "Coupon not valid.");
-        return;
+        return null;
       }
       if ((res.price_after ?? 0) <= 0) {
-        const applyRes = await applyFn({ data: { code: couponInput, courseId: course.id } });
+        const applyRes = await applyFn({ data: { code: codeToTest, courseId: course.id } });
         if (applyRes.valid) {
+          if (user) await ensureFreeEnrollment(user.id, course.id, course.kind);
           toast.success("Coupon applied — the course is yours!");
-          navigate({ to: "/courses/$courseId", params: { courseId: course.id }, replace: true });
-          return;
+          const targetPath = course.kind === "lectures" ? "/lectures/$courseId" : "/courses/$courseId";
+          navigate({ to: targetPath, params: { courseId: course.id }, replace: true });
+          return res;
         }
       }
       setApplied({
-        code: res.code ?? couponInput.trim().toUpperCase(),
+        code: res.code ?? codeToTest,
         priceBefore: res.price_before ?? price,
         priceAfter: res.price_after ?? price,
       });
       toast.success(`Coupon ${res.code} applied`);
+      return res;
     } catch (e) {
       setCouponError(e instanceof Error ? e.message : "Failed to apply coupon");
+      return null;
     } finally {
       setCouponBusy(false);
     }
@@ -168,7 +179,53 @@ function CheckoutPage() {
     setOpening(true);
     setError(null);
     try {
-      let targetPriceId = course.paddle_price_id;
+      // 1. Auto-apply coupon if user typed a code but didn't press "Apply" yet
+      let currentTotal = total;
+      let activeCode = applied?.code;
+      if (!applied && couponInput.trim()) {
+        const validated = await handleApplyCoupon(couponInput);
+        if (!validated) {
+          setOpening(false);
+          return;
+        }
+        currentTotal = validated.price_after ?? total;
+        activeCode = validated.code;
+      }
+
+      // 2. 100% discount / free claim — zero payment required
+      if (currentTotal <= 0) {
+        if (activeCode) {
+          await applyFn({ data: { code: activeCode, courseId: course.id } });
+        }
+        await ensureFreeEnrollment(user.id, course.id, course.kind);
+        toast.success("Access activated — enjoy your course!");
+        const targetPath = course.kind === "lectures" ? "/lectures/$courseId" : "/courses/$courseId";
+        navigate({ to: targetPath, params: { courseId: course.id }, replace: true });
+        return;
+      }
+
+      // 3. Paid checkout — resolve exact price ID in Paddle
+      let targetPriceId: string | null = null;
+      try {
+        const priceRes = await resolvePriceFn({
+          data: {
+            courseId: course.id,
+            title: course.title,
+            finalPrice: currentTotal,
+            originalPrice: course.price,
+            couponCode: activeCode,
+            currency,
+          },
+        });
+        targetPriceId = priceRes?.paddlePriceId || null;
+      } catch (priceErr: any) {
+        console.warn("[checkout] resolvePaddleCheckoutPrice failed, fallback to course price:", priceErr);
+      }
+
+      if (!targetPriceId) {
+        targetPriceId = course.paddle_price_id;
+      }
+
       if (!targetPriceId && Number(course.price) > 0) {
         try {
           const syncRes = await syncPaddleCoursePrice({
@@ -195,16 +252,23 @@ function CheckoutPage() {
 
       await initializePaddle();
       const paddlePriceId = await getPaddlePriceId(targetPriceId);
+      const savedCustomerId = (user.user_metadata as any)?.paddle_customer_id || undefined;
+
       window.Paddle.Checkout.open({
         items: [{ priceId: paddlePriceId, quantity: 1 }],
         customer: {
           email: user.email ?? undefined,
-          name: profile?.full_name || (user.user_metadata?.full_name as string) || (user.user_metadata?.name as string) || undefined,
+          name:
+            profile?.full_name ||
+            (user.user_metadata?.full_name as string) ||
+            (user.user_metadata?.name as string) ||
+            undefined,
+          ...(savedCustomerId ? { id: savedCustomerId } : {}),
         },
         customData: {
           userId: user.id,
           courseId: course.id,
-          ...(applied ? { couponCode: applied.code } : {}),
+          ...(activeCode ? { couponCode: activeCode } : {}),
         },
         settings: {
           displayMode: "overlay",
@@ -387,8 +451,11 @@ function CheckoutPage() {
               >
                 {opening ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> Opening secure checkout…
+                    <Loader2 className="w-4 h-4 animate-spin" />{" "}
+                    {total <= 0 ? "Activating access…" : "Opening secure checkout…"}
                   </>
+                ) : total <= 0 ? (
+                  <>Claim free access</>
                 ) : (
                   <>Pay {fmt(total)}</>
                 )}

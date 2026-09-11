@@ -27,6 +27,16 @@ async function handleTransactionCompleted(event: any, env: PaddleEnv) {
   }
 
   const supabase = getSupabase();
+  if (data.customerId) {
+    try {
+      await supabase.auth.admin.updateUserById(userId, {
+        user_metadata: { paddle_customer_id: data.customerId },
+      });
+    } catch (metaErr) {
+      console.warn("[webhook] could not update user metadata with paddle_customer_id:", metaErr);
+    }
+  }
+
   const amount_cents = data.details?.totals?.grandTotal
     ? Number(data.details.totals.grandTotal)
     : null;
@@ -164,10 +174,11 @@ async function handleAdjustment(event: any, env: PaddleEnv) {
   console.log("Revoked access after", action, { transactionId });
 }
 
-async function handleWebhook(req: Request, env: PaddleEnv) {
-  const event = await verifyWebhook(req, env);
+async function handleWebhook(req: Request, requestedEnv?: string | null) {
+  const { event, env } = await verifyWebhookAuto(req, requestedEnv);
   switch (event.eventType) {
     case EventName.TransactionCompleted:
+    case EventName.TransactionPaid:
       await handleTransactionCompleted(event, env);
       break;
     case EventName.AdjustmentCreated:
@@ -183,13 +194,13 @@ export const Route = createFileRoute("/api/public/payments/webhook")({
     handlers: {
       POST: async ({ request }) => {
         const url = new URL(request.url);
-        const env = (url.searchParams.get("env") || "sandbox") as PaddleEnv;
+        const requestedEnv = url.searchParams.get("env");
         try {
-          await handleWebhook(request, env);
+          await handleWebhook(request, requestedEnv);
           return Response.json({ received: true });
-        } catch (e) {
-          console.error("Webhook error:", e);
-          return new Response("Webhook error", { status: 400 });
+        } catch (e: any) {
+          console.error("Webhook error:", e?.message || e);
+          return new Response(`Webhook error: ${e?.message || "verification failed"}`, { status: 400 });
         }
       },
     },

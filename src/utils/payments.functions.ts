@@ -1,6 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
-import { gatewayFetch, type PaddleEnv } from "@/lib/paddle.server";
+import {
+  gatewayFetch,
+  getPaddleTransaction,
+  findPaddleCustomerByEmail,
+  createPaddleCustomerPortalSession,
+  type PaddleEnv,
+} from "@/lib/paddle.server";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 let _adminSupabase: ReturnType<typeof createClient> | null = null;
 function getAdminSupabase() {
@@ -214,3 +221,240 @@ export const resolvePaddlePrice = createServerFn({ method: "GET" })
     }
     return match.id;
   });
+
+export interface VerifyTransactionInput {
+  transactionId: string;
+  courseId?: string;
+  packageId?: string;
+  environment?: PaddleEnv;
+}
+
+/**
+ * Instant server-side fulfillment and verification.
+ * Directly queries Paddle API for transaction status and grants access in <1 second
+ * without waiting on webhook delivery or polling timeouts.
+ */
+export const verifyAndFulfillTransaction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: VerifyTransactionInput) => data)
+  .handler(async ({ data, context }) => {
+    const { user, userId } = context;
+    const env: PaddleEnv = data.environment || "live";
+    const txnId = (data.transactionId || "").trim();
+    if (!txnId) throw new Error("Missing transaction ID");
+
+    // 1. Fetch transaction directly from Paddle API
+    const txn = await getPaddleTransaction(env, txnId);
+    if (!txn) throw new Error(`Transaction ${txnId} not found in Paddle`);
+
+    const status = txn.status?.toLowerCase();
+    if (status !== "completed" && status !== "paid") {
+      return { ok: false, status, message: `Transaction status is ${status}` };
+    }
+
+    const customData = txn.custom_data || {};
+    const effectiveUserId = customData.userId || customData.user_id || userId;
+    const courseId = data.courseId || customData.courseId || customData.course_id;
+    const packageId = data.packageId || customData.packageId || customData.package_id;
+    const memberIds: string[] = Array.isArray(customData.memberIds) ? customData.memberIds : [];
+
+    // Security check: ensure transaction customer or customData corresponds to current user
+    const txnCustomerEmail = (txn.customer?.email || "").toLowerCase();
+    const userEmail = (user.email || "").toLowerCase();
+    const isOwner = effectiveUserId === userId || (txnCustomerEmail && txnCustomerEmail === userEmail);
+    if (!isOwner) {
+      throw new Error("Transaction does not belong to the current authenticated user");
+    }
+
+    const adminDb = getAdminSupabase();
+
+    // Cache customer ID into user_metadata for future 1-click / saved card checkout
+    const customerId = txn.customer_id || txn.customer?.id;
+    if (customerId) {
+      try {
+        await adminDb.auth.admin.updateUserById(userId, {
+          user_metadata: { paddle_customer_id: customerId },
+        });
+      } catch (e) {
+        console.warn("[verify] could not store customerId in user_metadata:", e);
+      }
+    }
+
+    const amount_cents = txn.details?.totals?.grand_total
+      ? Number(txn.details.totals.grand_total)
+      : null;
+    const currency = txn.currency_code?.toLowerCase() ?? null;
+
+    // A. Package Fulfillment
+    if (packageId) {
+      await (adminDb.from("package_purchases") as any).upsert(
+        {
+          package_id: packageId,
+          buyer_id: userId,
+          member_user_ids: memberIds,
+          paddle_transaction_id: txn.id,
+          environment: env,
+          amount_cents,
+          currency,
+        },
+        { onConflict: "paddle_transaction_id", ignoreDuplicates: true },
+      );
+
+      const { data: links } = await (adminDb.from("package_courses") as any)
+        .select("course_id")
+        .eq("package_id", packageId);
+
+      const courseIds = ((links ?? []) as any[]).map((l) => l.course_id);
+      const grantees = Array.from(new Set([userId, ...memberIds.filter(Boolean)]));
+      const rows: Array<{ user_id: string; course_id: string }> = [];
+      for (const uid of grantees) {
+        for (const cid of courseIds) {
+          rows.push({ user_id: uid, course_id: cid });
+        }
+      }
+      if (rows.length > 0) {
+        await (adminDb.from("user_courses") as any).upsert(rows, {
+          onConflict: "user_id,course_id",
+          ignoreDuplicates: true,
+        });
+      }
+
+      return { ok: true, granted: true, type: "package", packageId };
+    }
+
+    // B. Course Fulfillment
+    if (courseId) {
+      // Record payment event
+      await (adminDb.from("payment_events") as any).upsert(
+        {
+          paddle_transaction_id: txn.id,
+          user_id: userId,
+          course_id: courseId,
+          amount_cents,
+          currency,
+          environment: env,
+          status: txn.status,
+          raw: txn,
+        },
+        { onConflict: "paddle_transaction_id", ignoreDuplicates: true },
+      );
+
+      // Check course kind (lectures vs questions)
+      const { data: courseRow } = await (adminDb.from("courses") as any)
+        .select("kind")
+        .eq("id", courseId)
+        .maybeSingle();
+
+      const kind = (courseRow as any)?.kind ?? "questions";
+      const accessTable = kind === "lectures" ? "user_lecture_courses" : "user_courses";
+
+      await (adminDb.from(accessTable) as any).upsert(
+        { user_id: userId, course_id: courseId },
+        { onConflict: "user_id,course_id", ignoreDuplicates: true },
+      );
+
+      return { ok: true, granted: true, type: "course", courseId, kind };
+    }
+
+    return { ok: true, granted: false, message: "No course or package specified in transaction" };
+  });
+
+/**
+ * Generates an authenticated Customer Portal link allowing the student to
+ * manage saved cards, remove payment methods, and download invoices.
+ */
+export const getCustomerPortalUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data?: { returnUrl?: string; environment?: PaddleEnv }) => data || {})
+  .handler(async ({ data, context }) => {
+    const { user, userId } = context;
+    const env: PaddleEnv = data?.environment || "live";
+
+    // 1. Check user_metadata
+    let customerId: string | null = (user?.user_metadata as any)?.paddle_customer_id || null;
+
+    // 2. Check payment_events
+    if (!customerId) {
+      const adminDb = getAdminSupabase();
+      const { data: events } = await (adminDb.from("payment_events") as any)
+        .select("raw")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      for (const ev of events || []) {
+        const ctm = ev.raw?.customer_id || ev.raw?.data?.customer_id || ev.raw?.data?.customerId;
+        if (ctm) {
+          customerId = ctm;
+          break;
+        }
+      }
+    }
+
+    // 3. Check direct Paddle customer lookup by email
+    if (!customerId && user?.email) {
+      customerId = await findPaddleCustomerByEmail(env, user.email);
+    }
+
+    if (!customerId) {
+      throw new Error(
+        "No saved payment profile found yet. A billing profile is automatically created once you make your first purchase.",
+      );
+    }
+
+    const returnUrl = data?.returnUrl || "https://aquaqbank.com/profile";
+    const portalUrl = await createPaddleCustomerPortalSession(env, customerId, returnUrl);
+    return { ok: true, portalUrl };
+  });
+
+/**
+ * Resolves or dynamically syncs a Paddle price for checkout.
+ * If a coupon reduces the price, this ensures Paddle charges the exact discounted amount.
+ */
+export const resolvePaddleCheckoutPrice = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: {
+      courseId: string;
+      title: string;
+      finalPrice: number;
+      originalPrice: number;
+      couponCode?: string;
+      currency?: string;
+      environment?: PaddleEnv;
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    const env: PaddleEnv = data.environment || "live";
+    const finalPrice = Number(data.finalPrice);
+    const originalPrice = Number(data.originalPrice);
+
+    // If no discount is active, use the course's stored paddle_price_id
+    if (!data.couponCode || Math.abs(finalPrice - originalPrice) < 0.01) {
+      const adminDb = getAdminSupabase();
+      const { data: c } = await (adminDb.from("courses") as any)
+        .select("paddle_price_id")
+        .eq("id", data.courseId)
+        .maybeSingle();
+      if (c?.paddle_price_id) {
+        return { paddlePriceId: c.paddle_price_id };
+      }
+    }
+
+    // If discounted, sync a price matching the discounted amount
+    const discountedTitle = data.couponCode
+      ? `${data.title} (${data.couponCode} Discount)`
+      : data.title;
+
+    const syncRes = await syncPaddleCoursePrice({
+      data: {
+        courseId: data.courseId,
+        title: discountedTitle,
+        price: finalPrice,
+        currency: data.currency || "USD",
+        environment: env,
+      },
+    });
+
+    return { paddlePriceId: syncRes.paddlePriceId };
+  });
+

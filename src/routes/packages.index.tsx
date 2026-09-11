@@ -85,7 +85,14 @@ function PackagesPage() {
         items: [{ priceId: resolvedPriceId, quantity: 1 }],
         customer: {
           email: user.email ?? undefined,
-          name: profile?.full_name || (user.user_metadata?.full_name as string) || (user.user_metadata?.name as string) || undefined,
+          name:
+            profile?.full_name ||
+            (user.user_metadata?.full_name as string) ||
+            (user.user_metadata?.name as string) ||
+            undefined,
+          ...((user.user_metadata as any)?.paddle_customer_id
+            ? { id: (user.user_metadata as any).paddle_customer_id }
+            : {}),
         },
         customData: { userId: user.id, ...customData },
         settings: {

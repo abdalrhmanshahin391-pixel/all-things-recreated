@@ -56,3 +56,88 @@ export async function verifyWebhook(req: Request, env: PaddleEnv) {
   const paddle = getPaddleClient(env);
   return await paddle.webhooks.unmarshal(body, secret, signature);
 }
+
+/**
+ * Robust webhook verifier that gracefully tries live first, then sandbox,
+ * preventing failed webhooks if the webhook URL omitted '?env=live'.
+ */
+export async function verifyWebhookAuto(req: Request, requestedEnv?: string | null): Promise<{ event: any; env: PaddleEnv }> {
+  const signature = req.headers.get("paddle-signature");
+  const body = await req.text();
+  if (!signature || !body) throw new Error("Missing signature or body");
+
+  // Determine priority: if specifically requested 'sandbox', test sandbox first. Otherwise try live first.
+  const envOrder: PaddleEnv[] = requestedEnv === "sandbox" ? ["sandbox", "live"] : ["live", "sandbox"];
+
+  let lastError: any = null;
+  for (const env of envOrder) {
+    try {
+      const secret = getWebhookSecret(env);
+      const paddle = getPaddleClient(env);
+      const event = await paddle.webhooks.unmarshal(body, secret, signature);
+      return { event, env };
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw lastError ?? new Error("Webhook signature verification failed for all environments");
+}
+
+/** Fetch transaction directly from Paddle API to verify status and items */
+export async function getPaddleTransaction(env: PaddleEnv, transactionId: string): Promise<any> {
+  const cleanId = transactionId.trim();
+  if (!cleanId) throw new Error("Missing transaction ID");
+  const res = await gatewayFetch(env, `/transactions/${cleanId}?include=customer,items`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to fetch Paddle transaction ${cleanId} (${res.status}): ${text.slice(0, 150)}`);
+  }
+  const json: any = await res.json();
+  return json.data;
+}
+
+/** Find customer in Paddle by email */
+export async function findPaddleCustomerByEmail(env: PaddleEnv, email: string): Promise<string | null> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail) return null;
+  try {
+    const res = await gatewayFetch(env, `/customers?email=${encodeURIComponent(cleanEmail)}&per_page=1`);
+    if (res.ok) {
+      const json: any = await res.json();
+      const first = json?.data?.[0];
+      return first?.id ?? null;
+    }
+  } catch (e) {
+    console.warn("[paddle] find customer by email failed:", e);
+  }
+  return null;
+}
+
+/** Generate an authenticated Customer Portal session URL for viewing/removing saved payment methods */
+export async function createPaddleCustomerPortalSession(
+  env: PaddleEnv,
+  customerId: string,
+  returnUrl?: string,
+): Promise<string> {
+  const cleanId = customerId.trim();
+  if (!cleanId) throw new Error("Missing customer ID");
+  const bodyPayload: any = {};
+  if (returnUrl) bodyPayload.return_url = returnUrl;
+
+  const res = await gatewayFetch(env, `/customers/${cleanId}/portal-sessions`, {
+    method: "POST",
+    body: JSON.stringify(bodyPayload),
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Failed to create Paddle portal session (${res.status}): ${text.slice(0, 150)}`);
+  }
+
+  const json: any = JSON.parse(text);
+  const portalUrl = json?.data?.urls?.general?.overview || json?.data?.url;
+  if (!portalUrl) throw new Error("Paddle did not return a portal overview URL");
+  return portalUrl;
+}
+

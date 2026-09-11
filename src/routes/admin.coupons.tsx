@@ -11,6 +11,7 @@ import {
   adminListCoupons,
   adminSaveCoupon,
   adminDeleteCoupon,
+  adminQuickCreateTestCoupon,
   type CouponRow,
 } from "@/lib/coupons.functions";
 
@@ -27,12 +28,27 @@ function AdminCouponsPage() {
   const list = useServerFn(adminListCoupons);
   const save = useServerFn(adminSaveCoupon);
   const del = useServerFn(adminDeleteCoupon);
+  const quickTest = useServerFn(adminQuickCreateTestCoupon);
 
   const [coupons, setCoupons] = useState<CouponRow[]>([]);
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [fetching, setFetching] = useState(true);
   const [editing, setEditing] = useState<CouponRow | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [creatingTest, setCreatingTest] = useState(false);
+
+  async function handleQuickCreateTest() {
+    setCreatingTest(true);
+    try {
+      const res = await quickTest();
+      toast.success(res.message);
+      refresh();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to create test coupon");
+    } finally {
+      setCreatingTest(false);
+    }
+  }
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
@@ -89,24 +105,42 @@ function AdminCouponsPage() {
               </p>
             </div>
           </div>
-          <button
-            onClick={() => {
-              setEditing(null);
-              setShowForm(true);
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
-          >
-            <Plus size={16} /> New coupon
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleQuickCreateTest}
+              disabled={creatingTest}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-amber-300 bg-amber-50 text-amber-900 text-sm font-semibold hover:bg-amber-100 disabled:opacity-60"
+            >
+              <Ticket size={15} /> {creatingTest ? "Creating…" : "+ 100% Test Coupon (FREE100)"}
+            </button>
+            <button
+              onClick={() => {
+                setEditing(null);
+                setShowForm(true);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
+            >
+              <Plus size={16} /> New coupon
+            </button>
+          </div>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
           {fetching ? (
             <div className="p-8 text-center text-slate-500 text-sm">Loading…</div>
           ) : coupons.length === 0 ? (
-            <div className="p-12 text-center">
-              <Ticket size={32} className="mx-auto text-slate-300 mb-3" />
+            <div className="p-12 text-center space-y-3">
+              <Ticket size={32} className="mx-auto text-slate-300 mb-1" />
               <p className="text-slate-500 text-sm">No coupons yet. Create your first one.</p>
+              <div>
+                <button
+                  onClick={handleQuickCreateTest}
+                  disabled={creatingTest}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-amber-300 bg-amber-50 text-amber-900 text-xs font-semibold hover:bg-amber-100 disabled:opacity-60"
+                >
+                  <Ticket size={14} /> {creatingTest ? "Creating…" : "Create 100% Free Test Coupon (FREE100)"}
+                </button>
+              </div>
             </div>
           ) : (
             <ul className="divide-y divide-slate-100">

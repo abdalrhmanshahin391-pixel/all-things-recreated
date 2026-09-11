@@ -1,9 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { CheckCircle2, Loader2, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
+import { verifyAndFulfillTransaction } from "@/utils/payments.functions";
 
 export const Route = createFileRoute("/checkout/success")({
   head: () => ({
@@ -19,14 +21,21 @@ export const Route = createFileRoute("/checkout/success")({
   validateSearch: (search: Record<string, unknown>) => ({
     courseId: typeof search.courseId === "string" ? search.courseId : undefined,
     packageId: typeof search.packageId === "string" ? search.packageId : undefined,
+    ptxn:
+      typeof search._ptxn === "string"
+        ? (search._ptxn as string)
+        : typeof search.transaction_id === "string"
+          ? (search.transaction_id as string)
+          : undefined,
   }),
   component: SuccessPage,
 });
 
 function SuccessPage() {
-  const { courseId, packageId } = Route.useSearch();
+  const { courseId, packageId, ptxn } = Route.useSearch();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const fulfillFn = useServerFn(verifyAndFulfillTransaction);
   const [polling, setPolling] = useState(true);
   const [granted, setGranted] = useState(false);
   const [targetCourseId, setTargetCourseId] = useState<string | null>(courseId ?? null);
@@ -39,6 +48,20 @@ function SuccessPage() {
     }
     let cancelled = false;
     let attempts = 0;
+
+    // Fast-path: If transaction ID is in URL (from Paddle redirect), fulfill immediately
+    if (ptxn) {
+      fulfillFn({ data: { transactionId: ptxn, courseId, packageId } })
+        .then((res) => {
+          if (!cancelled && res?.granted) {
+            setGranted(true);
+            setPolling(false);
+          }
+        })
+        .catch((err) => {
+          console.warn("[checkout.success] direct fulfillment attempt:", err);
+        });
+    }
 
     const check = async (): Promise<boolean> => {
       if (courseId) {
@@ -82,6 +105,21 @@ function SuccessPage() {
         setPolling(false);
         return;
       }
+
+      // If still not granted after attempt 3 and ptxn is available, re-attempt fulfillment
+      if (attempts === 3 && ptxn) {
+        try {
+          const res = await fulfillFn({ data: { transactionId: ptxn, courseId, packageId } });
+          if (!cancelled && res?.granted) {
+            setGranted(true);
+            setPolling(false);
+            return;
+          }
+        } catch (e) {
+          console.warn("[checkout.success] retry fulfillment:", e);
+        }
+      }
+
       if (attempts < 15) setTimeout(tick, 1500);
       else setPolling(false);
     };
@@ -89,7 +127,7 @@ function SuccessPage() {
     return () => {
       cancelled = true;
     };
-  }, [courseId, packageId, user]);
+  }, [courseId, packageId, user, ptxn, fulfillFn]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">

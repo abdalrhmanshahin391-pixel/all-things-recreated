@@ -171,3 +171,30 @@ export const applyCoupon = createServerFn({ method: "POST" })
       price_after?: number;
     };
   });
+
+export const adminQuickCreateTestCoupon = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const { supabase, userId } = context;
+    const testCode = "FREE100";
+    const { data: existing } = await supabase
+      .from("coupons")
+      .select("id")
+      .eq("code", testCode)
+      .maybeSingle();
+
+    if (existing) {
+      return { ok: true, message: `Coupon ${testCode} already exists`, code: testCode };
+    }
+
+    const { error } = await supabase.from("coupons").insert({
+      code: testCode,
+      discount_type: "percent",
+      discount_value: 100,
+      is_active: true,
+      created_by: userId,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true, message: `Created 100% discount coupon ${testCode}`, code: testCode };
+  });
