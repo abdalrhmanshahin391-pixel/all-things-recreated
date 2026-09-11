@@ -61,7 +61,7 @@ const COUPON_ERRORS: Record<string, string> = {
 function CheckoutPage() {
   const { courseId } = Route.useParams();
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
 
   const [course, setCourse] = useState<Course | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
@@ -197,7 +197,10 @@ function CheckoutPage() {
       const paddlePriceId = await getPaddlePriceId(targetPriceId);
       window.Paddle.Checkout.open({
         items: [{ priceId: paddlePriceId, quantity: 1 }],
-        customer: { email: user.email ?? undefined },
+        customer: {
+          email: user.email ?? undefined,
+          name: profile?.full_name || (user.user_metadata?.full_name as string) || (user.user_metadata?.name as string) || undefined,
+        },
         customData: {
           userId: user.id,
           courseId: course.id,

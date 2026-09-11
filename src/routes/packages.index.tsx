@@ -45,7 +45,7 @@ export const Route = createFileRoute("/packages/")({
 function PackagesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const load = useServerFn(listPublishedPackages);
   const validate = useServerFn(openPackageCheckoutData);
 
@@ -83,7 +83,10 @@ function PackagesPage() {
       const resolvedPriceId = await getPaddlePriceId(paddlePriceId);
       window.Paddle.Checkout.open({
         items: [{ priceId: resolvedPriceId, quantity: 1 }],
-        customer: { email: user.email ?? undefined },
+        customer: {
+          email: user.email ?? undefined,
+          name: profile?.full_name || (user.user_metadata?.full_name as string) || (user.user_metadata?.name as string) || undefined,
+        },
         customData: { userId: user.id, ...customData },
         settings: {
           displayMode: "overlay",
