@@ -130,26 +130,36 @@ function SuccessPage() {
   }, [courseId, packageId, user, ptxn, fulfillFn]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <SiteHeader variant="light" />
-      <main className="mx-auto max-w-md px-6 pt-28 pb-24 text-center">
-        <div className="mx-auto w-16 h-16 rounded-full bg-accent/10 border border-accent/30 grid place-items-center">
-          <CheckCircle2 className="w-8 h-8 text-accent" />
+    <div className="min-h-screen bg-[#06080F] text-white relative overflow-hidden">
+      {/* Subtle Ambient Cosmic Glows */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-gradient-to-b from-cyan-500/15 via-emerald-500/10 to-transparent blur-3xl opacity-60 rounded-full"
+      />
+
+      <SiteHeader />
+
+      <main className="relative z-10 mx-auto max-w-md px-6 pt-24 pb-24 text-center">
+        <div className="mx-auto w-20 h-20 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 grid place-items-center shadow-lg shadow-emerald-500/10">
+          <CheckCircle2 className="w-10 h-10 text-emerald-400" />
         </div>
-        <h1 className="mt-6 text-3xl font-semibold tracking-tight">Payment received</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Thanks for your purchase — a receipt is on its way to your email.
+        <h1 className="mt-6 text-3xl font-black tracking-tight text-white">Payment Received!</h1>
+        <p className="mt-2 text-sm text-slate-200 font-medium">
+          Thank you for your purchase. An official receipt has been sent to your email.
         </p>
 
-        <div className="mt-8 rounded-lg border border-border bg-card p-6 text-left shadow-[var(--shadow-card)]">
+        <div className="mt-8 rounded-2xl border border-white/15 bg-[#0C1222]/90 backdrop-blur-xl p-6 text-left shadow-[0_20px_50px_rgba(0,0,0,0.6)]">
           {polling && !granted ? (
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin text-accent" />
-              Activating your access…
+            <div className="flex items-center gap-3 text-sm text-slate-200">
+              <Loader2 className="w-5 h-5 animate-spin text-cyan-400" />
+              <span className="font-medium">Activating full course & question bank access…</span>
             </div>
           ) : granted ? (
-            <div className="space-y-3">
-              <div className="text-sm font-medium">Your access is ready.</div>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-bold text-emerald-400">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Your full access is unlocked & ready!</span>
+              </div>
               {targetCourseId ? (
                 <button
                   type="button"
@@ -159,30 +169,29 @@ function SuccessPage() {
                       params: { courseId: targetCourseId },
                     })
                   }
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground font-semibold py-3 text-sm hover:opacity-90"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 text-slate-950 font-black py-3.5 text-sm shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/35 hover:scale-[1.01] transition-all cursor-pointer"
                 >
-                  Go to my course <ArrowRight className="w-4 h-4" />
+                  Start Learning Now <ArrowRight className="w-4 h-4" />
                 </button>
               ) : (
                 <Link
                   to="/my/courses"
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground font-semibold py-3 text-sm hover:opacity-90"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 text-slate-950 font-black py-3.5 text-sm shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/35 hover:scale-[1.01] transition-all"
                 >
-                  Open my courses <ArrowRight className="w-4 h-4" />
+                  Open My Courses <ArrowRight className="w-4 h-4" />
                 </Link>
               )}
             </div>
           ) : (
-            <div className="space-y-3 text-sm text-muted-foreground">
+            <div className="space-y-4 text-sm text-slate-300">
               <p>
-                Your payment went through. Access can take a few seconds to appear — refresh this
-                page in a moment, or check My Courses.
+                Your payment went through. Access is activating — please refresh this page in a moment or visit your dashboard.
               </p>
               <Link
                 to="/my/courses"
-                className="inline-flex items-center gap-2 text-primary font-semibold hover:underline"
+                className="inline-flex items-center gap-2 text-cyan-300 font-bold hover:text-white transition-colors"
               >
-                My courses <ArrowRight className="w-4 h-4" />
+                Go to My Courses <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
           )}
