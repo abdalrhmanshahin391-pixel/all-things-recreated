@@ -10,7 +10,10 @@ export { EventName };
 
 export type PaddleEnv = "sandbox" | "live";
 
-const GATEWAY_BASE_URL = "https://connector-gateway.lovable.dev/paddle";
+/** Direct Paddle API base for the customer's own verified Paddle account. */
+export function getApiBaseUrl(env: PaddleEnv): string {
+  return env === "sandbox" ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+}
 
 export function getConnectionApiKey(env: PaddleEnv): string {
   return env === "sandbox"
@@ -19,14 +22,8 @@ export function getConnectionApiKey(env: PaddleEnv): string {
 }
 
 export function getPaddleClient(env: PaddleEnv): Paddle {
-  const connectionApiKey = getConnectionApiKey(env);
-  const lovableApiKey = getEnv("LOVABLE_API_KEY");
-  return new Paddle(connectionApiKey, {
-    environment: GATEWAY_BASE_URL as unknown as Environment,
-    customHeaders: {
-      "X-Connection-Api-Key": connectionApiKey,
-      "Lovable-API-Key": lovableApiKey,
-    },
+  return new Paddle(getConnectionApiKey(env), {
+    environment: env === "sandbox" ? Environment.sandbox : Environment.production,
   });
 }
 
@@ -35,14 +32,11 @@ export async function gatewayFetch(
   path: string,
   init?: RequestInit,
 ): Promise<Response> {
-  const connectionApiKey = getConnectionApiKey(env);
-  const lovableApiKey = getEnv("LOVABLE_API_KEY");
-  return fetch(`${GATEWAY_BASE_URL}${path}`, {
+  return fetch(`${getApiBaseUrl(env)}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      "X-Connection-Api-Key": connectionApiKey,
-      "Lovable-API-Key": lovableApiKey,
+      Authorization: `Bearer ${getConnectionApiKey(env)}`,
       ...init?.headers,
     },
   });
