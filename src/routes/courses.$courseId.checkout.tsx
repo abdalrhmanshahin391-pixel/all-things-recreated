@@ -218,6 +218,12 @@ function CheckoutPage() {
           currency,
           environment: checkoutEnv,
           returnUrl: `${window.location.origin}/checkout/success?courseId=${course.id}`,
+          customerEmail: user.email || undefined,
+          customerName:
+            (profile as any)?.full_name ||
+            (profile as any)?.username ||
+            (user.user_metadata as any)?.full_name ||
+            undefined,
         },
       });
 

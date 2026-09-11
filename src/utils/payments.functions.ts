@@ -358,7 +358,7 @@ export const verifyAndFulfillTransaction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: VerifyTransactionInput) => data)
   .handler(async ({ data, context }) => {
-    const { user, userId } = context;
+    const { userId, claims } = context as any;
     const env: PaddleEnv = data.environment || "live";
     const txnId = (data.transactionId || "").trim();
     if (!txnId) throw new Error("Missing transaction ID");
@@ -378,9 +378,21 @@ export const verifyAndFulfillTransaction = createServerFn({ method: "POST" })
     const packageId = data.packageId || customData.packageId || customData.package_id;
     const memberIds: string[] = Array.isArray(customData.memberIds) ? customData.memberIds : [];
 
+    const adminDb = getAdminSupabase();
+
+    // Resiliently resolve user email
+    let userEmail = ((claims?.email as string) || "").toLowerCase();
+    try {
+      const { data: userData } = await adminDb.auth.admin.getUserById(userId);
+      if (userData?.user?.email) {
+        userEmail = userData.user.email.toLowerCase();
+      }
+    } catch (e) {
+      console.warn("[verify] getUserById fallback:", e);
+    }
+
     // Security check: ensure transaction customer or customData corresponds to current user
     const txnCustomerEmail = (txn.customer?.email || "").toLowerCase();
-    const userEmail = (user.email || "").toLowerCase();
     const isOwner = effectiveUserId === userId || (txnCustomerEmail && txnCustomerEmail === userEmail);
     if (!isOwner) {
       throw new Error("Transaction does not belong to the current authenticated user");
@@ -487,15 +499,23 @@ export const getCustomerPortalUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data?: { returnUrl?: string; environment?: PaddleEnv }) => data || {})
   .handler(async ({ data, context }) => {
-    const { user, userId } = context;
+    const { userId, claims } = context as any;
     const env: PaddleEnv = data?.environment || "live";
+    const adminDb = getAdminSupabase();
+
+    let authUser: any = null;
+    try {
+      const { data: userData } = await adminDb.auth.admin.getUserById(userId);
+      authUser = userData?.user;
+    } catch (e) {
+      console.warn("[getCustomerPortalUrl] getUserById fallback:", e);
+    }
 
     // 1. Check user_metadata
-    let customerId: string | null = (user?.user_metadata as any)?.paddle_customer_id || null;
+    let customerId: string | null = (authUser?.user_metadata as any)?.paddle_customer_id || null;
 
     // 2. Check payment_events
     if (!customerId) {
-      const adminDb = getAdminSupabase();
       const { data: events } = await (adminDb.from("payment_events") as any)
         .select("raw")
         .eq("user_id", userId)
@@ -512,8 +532,9 @@ export const getCustomerPortalUrl = createServerFn({ method: "POST" })
     }
 
     // 3. Check direct Paddle customer lookup by email
-    if (!customerId && user?.email) {
-      customerId = await findPaddleCustomerByEmail(env, user.email);
+    const emailToLookup = authUser?.email || claims?.email;
+    if (!customerId && emailToLookup) {
+      customerId = await findPaddleCustomerByEmail(env, emailToLookup);
     }
 
     if (!customerId) {
@@ -671,6 +692,8 @@ export interface CreateCheckoutInput {
   currency?: string;
   environment?: PaddleEnv;
   returnUrl?: string;
+  customerEmail?: string;
+  customerName?: string;
 }
 
 /**
@@ -682,9 +705,33 @@ export const createCheckoutTransaction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: CreateCheckoutInput) => data)
   .handler(async ({ data, context }) => {
-    const { user, userId } = context;
+    const { userId, claims } = context as any;
     const env: PaddleEnv = data.environment || "live";
     const adminDb = getAdminSupabase();
+
+    // Resiliently resolve customer email and name from claims, auth admin, or payload
+    let userEmail: string | undefined = (claims?.email as string) || undefined;
+    let userName: string | undefined = undefined;
+
+    try {
+      const { data: userData } = await adminDb.auth.admin.getUserById(userId);
+      if (userData?.user) {
+        userEmail = userData.user.email || userEmail;
+        userName =
+          (userData.user.user_metadata as any)?.full_name ||
+          (userData.user.user_metadata as any)?.name ||
+          undefined;
+      }
+    } catch (e) {
+      console.warn("[createCheckoutTransaction] getUserById fallback to claims:", e);
+    }
+
+    if (!userEmail && data.customerEmail) {
+      userEmail = data.customerEmail;
+    }
+    if (!userName && data.customerName) {
+      userName = data.customerName;
+    }
 
     // 1. Fetch course details
     const { data: course, error: cErr } = await (adminDb.from("courses") as any)
@@ -726,11 +773,8 @@ export const createCheckoutTransaction = createServerFn({ method: "POST" })
       env,
       items: [{ priceId: paddlePriceId, quantity: 1 }],
       customer: {
-        email: user.email || undefined,
-        name:
-          (user.user_metadata as any)?.full_name ||
-          (user.user_metadata as any)?.name ||
-          undefined,
+        email: userEmail || undefined,
+        name: userName || undefined,
       },
       customData: {
         userId,
