@@ -1,9 +1,11 @@
 import { Environment, Paddle, EventName } from "@paddle/paddle-node-sdk";
 
-const getEnv = (key: string): string => {
-  const value = process.env[key];
-  if (!value) throw new Error(`${key} is not configured`);
-  return value;
+const getFirstEnv = (keys: string[]): string => {
+  for (const k of keys) {
+    const v = process.env[k];
+    if (v && v.trim()) return v.trim();
+  }
+  throw new Error(`Payment secret is not configured. Expected one of: ${keys.join(", ")}`);
 };
 
 export { EventName };
@@ -17,8 +19,15 @@ export function getApiBaseUrl(env: PaddleEnv): string {
 
 export function getConnectionApiKey(env: PaddleEnv): string {
   return env === "sandbox"
-    ? getEnv("PADDLE_SANDBOX_API_KEY")
-    : getEnv("PADDLE_LIVE_API_KEY");
+    ? getFirstEnv(["PADDLE_SANDBOX_API_KEY", "PADDLE_TEST_API_KEY", "PAYMENTS_TEST_API_KEY"])
+    : getFirstEnv([
+        "PADDLE_LIVE_API_KEY",
+        "PADDLE_API_KEY",
+        "PAYMENTS_LIVE_API_KEY",
+        "PAYMENTS_API_KEY",
+        "PADDLE_SECRET_KEY",
+        "PADDLE_KEY",
+      ]);
 }
 
 export function getPaddleClient(env: PaddleEnv): Paddle {
@@ -44,8 +53,13 @@ export async function gatewayFetch(
 
 export function getWebhookSecret(env: PaddleEnv): string {
   return env === "sandbox"
-    ? getEnv("PAYMENTS_SANDBOX_WEBHOOK_SECRET")
-    : getEnv("PAYMENTS_LIVE_WEBHOOK_SECRET");
+    ? getFirstEnv(["PAYMENTS_SANDBOX_WEBHOOK_SECRET", "PADDLE_SANDBOX_WEBHOOK_SECRET", "PADDLE_TEST_WEBHOOK_SECRET"])
+    : getFirstEnv([
+        "PAYMENTS_LIVE_WEBHOOK_SECRET",
+        "PADDLE_LIVE_WEBHOOK_SECRET",
+        "PADDLE_WEBHOOK_SECRET",
+        "PAYMENTS_WEBHOOK_SECRET",
+      ]);
 }
 
 export async function verifyWebhook(req: Request, env: PaddleEnv) {

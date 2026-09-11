@@ -174,11 +174,11 @@ export const syncPaddleCoursePrice = createServerFn({ method: "POST" })
   });
 
 /**
- * Bulk synchronizes all paid courses in AquaQBank with Paddle.
- * Immediately provisions active Products & Prices in Paddle Dashboard
- * and saves generated paddle_price_id onto every course.
+ * Zero-click background reconciliation for all courses.
+ * Scans every paid course and automatically generates authentic Paddle Products & Prices
+ * if paddle_price_id is missing or contains invalid legacy test values (e.g. not starting with "pri_").
  */
-export const syncAllCoursesToPaddle = createServerFn({ method: "POST" })
+export const autoReconcileCoursesToPaddle = createServerFn({ method: "POST" })
   .inputValidator((data?: { environment?: PaddleEnv; force?: boolean }) => data || {})
   .handler(async ({ data }) => {
     const env: PaddleEnv = data?.environment || "live";
@@ -187,12 +187,28 @@ export const syncAllCoursesToPaddle = createServerFn({ method: "POST" })
       .select("id, title, price, currency, paddle_price_id")
       .gt("price", 0);
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.warn("[autoReconcileCoursesToPaddle] Error fetching courses:", error.message);
+      return { ok: false, error: error.message, reconciled: 0 };
+    }
 
     const list = courses || [];
-    const results: Array<{ id: string; title: string; paddlePriceId?: string; error?: string }> = [];
+    // Identify courses that need Paddle synchronization (missing or not starting with "pri_")
+    const needSync = list.filter(
+      (c) =>
+        data?.force ||
+        !c.paddle_price_id ||
+        typeof c.paddle_price_id !== "string" ||
+        !c.paddle_price_id.startsWith("pri_"),
+    );
 
-    for (const c of list) {
+    if (needSync.length === 0) {
+      return { ok: true, message: "All courses are already synced with Paddle", reconciled: 0, total: list.length };
+    }
+
+    const reconciled: Array<{ id: string; title: string; paddlePriceId?: string; error?: string }> = [];
+
+    for (const c of needSync) {
       try {
         const syncRes = await syncPaddleCoursePrice({
           data: {
@@ -203,18 +219,31 @@ export const syncAllCoursesToPaddle = createServerFn({ method: "POST" })
             environment: env,
           },
         });
-        results.push({ id: c.id, title: c.title, paddlePriceId: syncRes.paddlePriceId });
+        reconciled.push({ id: c.id, title: c.title, paddlePriceId: syncRes.paddlePriceId });
       } catch (err: any) {
-        results.push({ id: c.id, title: c.title, error: err?.message || String(err) });
+        console.warn(`[autoReconcileCoursesToPaddle] Failed for course "${c.title}":`, err?.message || err);
+        reconciled.push({ id: c.id, title: c.title, error: err?.message || String(err) });
       }
     }
 
     return {
       ok: true,
       total: list.length,
-      synced: results.filter((r) => r.paddlePriceId).length,
-      results,
+      needsSyncCount: needSync.length,
+      reconciled: reconciled.filter((r) => r.paddlePriceId).length,
+      results: reconciled,
     };
+  });
+
+/**
+ * Bulk synchronizes all paid courses in AquaQBank with Paddle.
+ * Immediately provisions active Products & Prices in Paddle Dashboard
+ * and saves generated paddle_price_id onto every course.
+ */
+export const syncAllCoursesToPaddle = createServerFn({ method: "POST" })
+  .inputValidator((data?: { environment?: PaddleEnv; force?: boolean }) => data || {})
+  .handler(async ({ data }) => {
+    return autoReconcileCoursesToPaddle({ data: { ...data, force: true } });
   });
 
 /**
@@ -268,13 +297,24 @@ export const resolvePaddlePrice = createServerFn({ method: "GET" })
     });
 
     if (!match) {
-      // Auto-provision fallback: if the price was not found, check if wanted is a course ID or title in DB
+      // Auto-provision fallback: if the price was not found, check if wanted is a course ID, title, or stored legacy price ID
       try {
         const supabase = getAdminSupabase();
-        const { data: courseRow } = await (supabase.from("courses") as any)
-          .select("id, title, price, currency")
-          .or(`id.eq.${wanted},title.ilike.${wanted}`)
-          .maybeSingle();
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(wanted);
+        let courseRow: any = null;
+        if (isUuid) {
+          const { data } = await (supabase.from("courses") as any)
+            .select("id, title, price, currency, paddle_price_id")
+            .eq("id", wanted)
+            .maybeSingle();
+          courseRow = data;
+        } else {
+          const { data } = await (supabase.from("courses") as any)
+            .select("id, title, price, currency, paddle_price_id")
+            .or(`title.ilike.%${wanted}%,paddle_price_id.eq.${wanted}`)
+            .maybeSingle();
+          courseRow = data;
+        }
 
         if (courseRow && Number(courseRow.price) > 0) {
           const syncRes = await syncPaddleCoursePrice({
@@ -507,14 +547,18 @@ export const resolvePaddleCheckoutPrice = createServerFn({ method: "POST" })
     const finalPrice = Number(data.finalPrice);
     const originalPrice = Number(data.originalPrice);
 
-    // If no discount is active, use the course's stored paddle_price_id
+    // If no discount is active, use the course's stored paddle_price_id IF valid (starts with "pri_")
     if (!data.couponCode || Math.abs(finalPrice - originalPrice) < 0.01) {
       const adminDb = getAdminSupabase();
       const { data: c } = await (adminDb.from("courses") as any)
         .select("paddle_price_id")
         .eq("id", data.courseId)
         .maybeSingle();
-      if (c?.paddle_price_id) {
+      if (
+        c?.paddle_price_id &&
+        typeof c.paddle_price_id === "string" &&
+        c.paddle_price_id.startsWith("pri_")
+      ) {
         return { paddlePriceId: c.paddle_price_id };
       }
     }

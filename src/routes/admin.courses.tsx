@@ -25,7 +25,11 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { resolveCourseImageUrl } from "@/lib/course-image";
 import { useCourseOptions } from "@/lib/course-options";
 import { CourseOptionsManager } from "@/components/admin/CourseOptionsManager";
-import { syncPaddleCoursePrice, syncAllCoursesToPaddle } from "@/utils/payments.functions";
+import {
+  syncPaddleCoursePrice,
+  syncAllCoursesToPaddle,
+  autoReconcileCoursesToPaddle,
+} from "@/utils/payments.functions";
 import { toast } from "sonner";
 
 function CourseThumb({ value, className }: { value: string | null; className?: string }) {
@@ -122,6 +126,22 @@ function AdminCoursesPage() {
     if (!loading && !user) navigate({ to: "/login" });
     else if (!loading && user && !isAdmin) guardRedirect(navigate);
   }, [loading, user, isAdmin, navigate]);
+
+  // Zero-click background auto-reconciliation: automatically provisions active Paddle products & prices
+  useEffect(() => {
+    if (!loading && user && isAdmin) {
+      autoReconcileCoursesToPaddle({ data: { environment: "live" } })
+        .then((res) => {
+          if (res?.reconciled && res.reconciled > 0) {
+            toast.success(`Automatically synced ${res.reconciled} courses with Paddle!`);
+            refresh();
+          }
+        })
+        .catch((err) => {
+          console.warn("Background Paddle sync auto-check:", err);
+        });
+    }
+  }, [loading, user, isAdmin]);
 
   async function refresh() {
     const [c, u, e, un] = await Promise.all([
@@ -553,7 +573,7 @@ function AdminCoursesPage() {
                         <span className="rounded-full bg-emerald-500/15 text-emerald-300 px-2 py-0.5 font-medium">
                           ${Number(c.price).toFixed(2)}
                         </span>
-                        {c.paddle_price_id ? (
+                        {c.paddle_price_id && c.paddle_price_id.startsWith("pri_") ? (
                           <span
                             className="rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 font-medium"
                             title={`Paddle Price ID: ${c.paddle_price_id}`}

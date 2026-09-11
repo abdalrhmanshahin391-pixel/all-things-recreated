@@ -14,7 +14,11 @@ import { resolveCourseImageUrl } from "@/lib/course-image";
 import { useCourseOptions } from "@/lib/course-options";
 import { CourseOptionsManager } from "@/components/admin/CourseOptionsManager";
 import { BADGE_PRESETS } from "@/components/common/CourseBadge";
-import { syncPaddleCoursePrice, syncAllCoursesToPaddle } from "@/utils/payments.functions";
+import {
+  syncPaddleCoursePrice,
+  syncAllCoursesToPaddle,
+  autoReconcileCoursesToPaddle,
+} from "@/utils/payments.functions";
 
 export const Route = createFileRoute("/admin/courses-hub")({
   head: () => ({
@@ -143,6 +147,22 @@ function CoursesHubPage() {
     if (!loading && !user) navigate({ to: "/login" });
     else if (!loading && user && !isAdmin) guardRedirect(navigate);
   }, [loading, user, isAdmin, navigate]);
+
+  // Zero-click background auto-reconciliation: automatically provisions active Paddle products & prices
+  useEffect(() => {
+    if (!loading && user && isAdmin) {
+      autoReconcileCoursesToPaddle({ data: { environment: "live" } })
+        .then((res) => {
+          if (res?.reconciled && res.reconciled > 0) {
+            toast.success(`Automatically synced ${res.reconciled} courses with Paddle!`);
+            refresh();
+          }
+        })
+        .catch((err) => {
+          console.warn("Background Paddle sync auto-check:", err);
+        });
+    }
+  }, [loading, user, isAdmin]);
 
   async function refresh() {
     setFetching(true);
@@ -287,7 +307,13 @@ function CoursesHubPage() {
     const priceChanged = orig && Number(orig.price) !== Number(row.price);
     const titleChanged = orig && orig.title.trim() !== row.title.trim();
 
-    if (Number(row.price ?? 0) > 0 && (!effectivePaddlePriceId || priceChanged || titleChanged)) {
+    if (
+      Number(row.price ?? 0) > 0 &&
+      (!effectivePaddlePriceId ||
+        !effectivePaddlePriceId.startsWith("pri_") ||
+        priceChanged ||
+        titleChanged)
+    ) {
       try {
         const syncRes = await syncPaddleCoursePrice({
           data: {
@@ -1074,7 +1100,13 @@ function EditCourseModal({
     const priceChanged = Number(price) !== Number(course.price);
     const titleChanged = title.trim() !== course.title.trim();
 
-    if (Number(price) > 0 && (!effectivePaddlePriceId || priceChanged || titleChanged)) {
+    if (
+      Number(price) > 0 &&
+      (!effectivePaddlePriceId ||
+        !effectivePaddlePriceId.startsWith("pri_") ||
+        priceChanged ||
+        titleChanged)
+    ) {
       try {
         const syncRes = await syncPaddleCoursePrice({
           data: {

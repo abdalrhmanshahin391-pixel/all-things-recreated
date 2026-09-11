@@ -222,8 +222,11 @@ function CheckoutPage() {
         console.warn("[checkout] resolvePaddleCheckoutPrice failed, fallback to course price:", priceErr);
       }
 
-      if (!targetPriceId) {
-        targetPriceId = course.paddle_price_id;
+      if (!targetPriceId || !targetPriceId.startsWith("pri_")) {
+        targetPriceId =
+          course.paddle_price_id && course.paddle_price_id.startsWith("pri_")
+            ? course.paddle_price_id
+            : null;
       }
 
       if (!targetPriceId && Number(course.price) > 0) {
