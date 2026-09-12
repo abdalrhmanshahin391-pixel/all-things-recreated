@@ -157,7 +157,7 @@ function CourseDetailPage() {
         .order("sort_order");
       const gs = (g ?? []) as Group[];
       setGroups(gs);
-      setOpenGroups(Object.fromEntries(gs.map((x) => [x.id, true])));
+      setOpenGroups(Object.fromEntries(gs.map((x) => [x.id, false])));
       if (gs.length) {
         const { data: s } = await (supabase.from as any)("subjects")
           .select("id,group_id,name,sort_order,access_level,ordered")
@@ -613,6 +613,25 @@ function CourseDetailPage() {
                 <div className="text-[11px] uppercase tracking-widest font-bold text-indigo-600">Curriculum</div>
                 <h2 className="text-xl font-bold text-foreground">Subjects · {selected.size} selected</h2>
               </div>
+              {groupedSubjects.length > 0 && (
+                <div className="flex items-center gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroups(Object.fromEntries(groups.map((g) => [g.id, true])))}
+                    className="text-muted-foreground hover:text-indigo-600 hover:underline font-semibold transition-colors"
+                  >
+                    Expand all
+                  </button>
+                  <span className="text-muted-foreground/40">•</span>
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroups(Object.fromEntries(groups.map((g) => [g.id, false])))}
+                    className="text-muted-foreground hover:text-indigo-600 hover:underline font-semibold transition-colors"
+                  >
+                    Collapse all
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className={`relative space-y-3 ${locked ? "lock-veil" : ""}`}>
@@ -622,14 +641,16 @@ function CourseDetailPage() {
                 </div>
               )}
               {groupedSubjects.map(({ group, items }, gi) => {
-                const open = openGroups[group.id];
+                const open = Boolean(openGroups[group.id]);
                 const selectedCount = items.filter((s) => selected.has(s.id)).length;
                 const GroupIcon = [Stethoscope, Pill, Heart, BookOpen][gi % 4];
                 return (
                   <div key={group.id}>
                     <button
+                      type="button"
                       onClick={() => setOpenGroups((p) => ({ ...p, [group.id]: !p[group.id] }))}
                       className="w-full flex items-center justify-between gap-3 px-4 py-2.5 bg-card border border-border rounded-xl hover:border-indigo-300 transition-colors"
+                      aria-expanded={open}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="w-1 h-8 rounded-full bg-primary" />
