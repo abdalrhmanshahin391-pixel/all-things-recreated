@@ -11,7 +11,13 @@ import { compressImage } from "@/lib/image-compress";
 import { useAuth, type Profile } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
 import { resolveCourseImageUrl } from "@/lib/course-image";
-import { useCourseOptions, isAllYearsCourse, yearLabel } from "@/lib/course-options";
+import {
+  useCourseOptions,
+  isAllYearsCourse,
+  isZeroCourse,
+  yearLabel,
+  getYearSortPriority,
+} from "@/lib/course-options";
 import { CourseOptionsManager } from "@/components/admin/CourseOptionsManager";
 import { BADGE_PRESETS } from "@/components/common/CourseBadge";
 import {
@@ -497,9 +503,15 @@ function CoursesHubPage() {
                   onChange={(e) => setYear(Number(e.target.value))}
                   className="md:col-span-2 rounded-lg border border-white/15 bg-black/40 px-3 py-3 text-sm outline-none focus:border-white/50"
                 >
-                  {options.year.map((o) => (
-                    <option key={o.id} value={Number(o.value)}>{o.label}</option>
-                  ))}
+                  {[...options.year]
+                    .sort(
+                      (a, b) =>
+                        getYearSortPriority(Number(a.value), options) -
+                        getYearSortPriority(Number(b.value), options),
+                    )
+                    .map((o) => (
+                      <option key={o.id} value={Number(o.value)}>{o.label}</option>
+                    ))}
                 </select>
                 {kind === "questions" && (
                   <select
@@ -631,12 +643,18 @@ function CoursesHubPage() {
                           )}
                           <span
                             className={`rounded-full px-2 py-0.5 font-medium ${
-                              isAllYearsCourse(c.year, options)
-                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                                : "bg-blue-500/15 text-blue-300"
+                              isZeroCourse(c.year, options)
+                                ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                                : isAllYearsCourse(c.year, options)
+                                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                  : "bg-blue-500/15 text-blue-300"
                             }`}
                           >
-                            {isAllYearsCourse(c.year, options) ? "All Years" : `Y${c.year}`}
+                            {isZeroCourse(c.year, options)
+                              ? "Zero Course"
+                              : isAllYearsCourse(c.year, options)
+                                ? "All Years"
+                                : `Y${c.year}`}
                           </span>
                           <span className="rounded-full bg-emerald-500/15 text-emerald-300 px-2 py-0.5 font-medium">
                             ${Number(c.price).toFixed(2)}
@@ -1247,11 +1265,17 @@ function EditCourseModal({
             <Field label="Year">
               <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50">
                 {options.year.some((o) => Number(o.value) === year) ? null : (
-                  <option value={year}>{year === 0 ? "For all years" : `Year ${year}`}</option>
+                  <option value={year}>{yearLabel(year, options)}</option>
                 )}
-                {options.year.map((o) => (
-                  <option key={o.id} value={Number(o.value)}>{o.label}</option>
-                ))}
+                {[...options.year]
+                  .sort(
+                    (a, b) =>
+                      getYearSortPriority(Number(a.value), options) -
+                      getYearSortPriority(Number(b.value), options),
+                  )
+                  .map((o) => (
+                    <option key={o.id} value={Number(o.value)}>{o.label}</option>
+                  ))}
               </select>
             </Field>
             <Field label="Exam type / badge">

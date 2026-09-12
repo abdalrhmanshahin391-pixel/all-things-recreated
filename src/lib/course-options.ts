@@ -20,19 +20,26 @@ export const FALLBACK_COURSE_OPTIONS: CourseOptionGroups = {
     { id: "f-minor", kind: "category", value: "minor", label: "Minor", sort_order: 1 },
   ],
   year: [
+    {
+      id: "f-year-zero",
+      kind: "year" as const,
+      value: "7",
+      label: "Zero Course",
+      sort_order: 0,
+    },
     ...[1, 2, 3, 4, 5, 6].map((y, i) => ({
       id: `f-year-${y}`,
       kind: "year" as const,
       value: String(y),
       label: `Year ${y}`,
-      sort_order: i,
+      sort_order: i + 1,
     })),
     {
       id: "f-year-0",
       kind: "year" as const,
       value: "0",
       label: "For all years",
-      sort_order: 6,
+      sort_order: 7,
     },
   ],
   exam_type: ["MINI-OSCE", "FINAL", "MID", "OSCE"].map((t, i) => ({
@@ -83,13 +90,33 @@ const ORDINAL: Record<number, string> = {
   6: "6th",
 };
 
+/** Checks whether a course or year option represents "Zero Course" (Preparatory year). */
+export function isZeroCourse(
+  year: number | null | undefined,
+  options?: CourseOptionGroups,
+): boolean {
+  if (year === null || year === undefined) return false;
+  const custom = options?.year.find((o) => Number(o.value) === year);
+  if (custom) {
+    const lower = custom.label.toLowerCase();
+    return (
+      lower.includes("zero") ||
+      lower.includes("تحضير") ||
+      lower.includes("preparatory") ||
+      lower.includes("foundation")
+    );
+  }
+  return false;
+}
+
 /** Checks whether a course or year option represents "All years" / universal. */
 export function isAllYearsCourse(
   year: number | null | undefined,
   options?: CourseOptionGroups,
 ): boolean {
-  if (year === 0) return true;
   if (year === null || year === undefined) return false;
+  if (isZeroCourse(year, options)) return false;
+
   const custom = options?.year.find((o) => Number(o.value) === year);
   if (custom) {
     const lower = custom.label.toLowerCase();
@@ -101,10 +128,20 @@ export function isAllYearsCourse(
       lower.includes("general")
     );
   }
-  return false;
+  return year === 0;
 }
 
-/** Label for a year number, falling back to "1st year" style ordinals or "For all years". */
+/** Returns a numerical sort priority so years order: Zero Course (0), Years 1-6 (1-6), All years (999). */
+export function getYearSortPriority(
+  year: number,
+  options?: CourseOptionGroups,
+): number {
+  if (isZeroCourse(year, options)) return 0;
+  if (isAllYearsCourse(year, options)) return 999;
+  return year;
+}
+
+/** Label for a year number, properly distinguishing Zero Course, All Years, and standard years. */
 export function yearLabel(
   year: number | null | undefined,
   options?: CourseOptionGroups,
@@ -113,6 +150,7 @@ export function yearLabel(
   if (year === null || year === undefined) return otherLabel;
   const custom = options?.year.find((o) => Number(o.value) === year);
   if (custom) return custom.label;
-  if (year === 0) return "For all years";
+  if (isZeroCourse(year, options)) return "Zero Course";
+  if (isAllYearsCourse(year, options) || year === 0) return "For all years";
   return `${ORDINAL[year] ?? `${year}th`} year`;
 }

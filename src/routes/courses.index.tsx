@@ -1,7 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useCourseOptions, isAllYearsCourse } from "@/lib/course-options";
+import {
+  useCourseOptions,
+  isAllYearsCourse,
+  isZeroCourse,
+  getYearSortPriority,
+} from "@/lib/course-options";
 import {
   Stethoscope,
   Pill,
@@ -11,6 +16,7 @@ import {
   Syringe,
   Sparkles,
   Globe,
+  GraduationCap,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -164,10 +170,9 @@ function CoursesPage() {
       map.get(c.year)!.push(c);
     });
     return Array.from(map.entries()).sort((a, b) => {
-      const aAll = isAllYearsCourse(a[0], options);
-      const bAll = isAllYearsCourse(b[0], options);
-      if (aAll && !bAll) return 1;
-      if (!aAll && bAll) return -1;
+      const pA = getYearSortPriority(a[0], options);
+      const pB = getYearSortPriority(b[0], options);
+      if (pA !== pB) return pA - pB;
       return a[0] - b[0];
     });
   }, [courses, options]);
@@ -247,26 +252,35 @@ function CourseSection({
   const { t } = useTranslation();
   const options = useCourseOptions();
   const isAllYears = isAllYearsCourse(year, options);
+  const isZero = isZeroCourse(year, options);
   // An admin-defined year label wins over the generic "Nth year" heading.
   const custom = options.year.find((o) => Number(o.value) === year);
-  const SectionIcon = isAllYears ? Globe : Icon;
+  const SectionIcon = isAllYears ? Globe : isZero ? GraduationCap : Icon;
+
+  const sectionTitle = isAllYears
+    ? custom?.label || "For all years"
+    : isZero
+      ? custom?.label || "Zero Course"
+      : custom
+        ? custom.label
+        : t("cms.coursesPage.yearHeading", { ordinal: ordinal(year) });
 
   return (
     <section>
       <div className="flex items-center gap-3 mb-6">
         <div
           className={`grid place-items-center h-9 w-9 rounded-lg ${
-            isAllYears ? "bg-amber-500/10 text-amber-500" : "bg-muted text-primary"
+            isAllYears
+              ? "bg-amber-500/10 text-amber-500"
+              : isZero
+                ? "bg-purple-500/10 text-purple-500"
+                : "bg-muted text-primary"
           }`}
         >
           <SectionIcon size={18} strokeWidth={2} />
         </div>
         <h2 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground">
-          {isAllYears
-            ? custom?.label || "For all years"
-            : custom
-              ? custom.label
-              : t("cms.coursesPage.yearHeading", { ordinal: ordinal(year) })}
+          {sectionTitle}
         </h2>
         <span className="inline-flex items-center text-[11px] font-semibold uppercase tracking-widest text-muted-foreground bg-card border border-border rounded-full px-2.5 py-1">
           {courses.length === 1

@@ -23,7 +23,13 @@ import { compressImage } from "@/lib/image-compress";
 import { useAuth, type Profile } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
 import { resolveCourseImageUrl } from "@/lib/course-image";
-import { useCourseOptions, isAllYearsCourse, yearLabel } from "@/lib/course-options";
+import {
+  useCourseOptions,
+  isAllYearsCourse,
+  isZeroCourse,
+  yearLabel,
+  getYearSortPriority,
+} from "@/lib/course-options";
 import { CourseOptionsManager } from "@/components/admin/CourseOptionsManager";
 import {
   syncPaddleCoursePrice,
@@ -93,6 +99,7 @@ function AdminCoursesPage() {
   const [error, setError] = useState<string | null>(null);
   const [universities, setUniversities] = useState<University[]>([]);
   const [uniFilter, setUniFilter] = useState<string>("all");
+  const [yearFilter, setYearFilter] = useState<string>("all");
 
   // new course form
   const [title, setTitle] = useState("");
@@ -188,11 +195,25 @@ function AdminCoursesPage() {
     let list = courses;
     if (kindFilter !== "all") list = list.filter((c) => (c.kind ?? "questions") === kindFilter);
     if (uniFilter !== "all") list = list.filter((c) => c.university_id === uniFilter);
-    if (!q) return list;
-    return list.filter(
-      (c) => c.title.toLowerCase().includes(q) || String(c.year).includes(q),
-    );
-  }, [courses, courseQuery, kindFilter, uniFilter]);
+    if (yearFilter !== "all") {
+      list = list.filter((c) => {
+        if (yearFilter === "zero") return isZeroCourse(c.year, options);
+        if (yearFilter === "all_years") return isAllYearsCourse(c.year, options);
+        return String(c.year) === yearFilter;
+      });
+    }
+    if (q) {
+      list = list.filter(
+        (c) => c.title.toLowerCase().includes(q) || String(c.year).includes(q),
+      );
+    }
+    return [...list].sort((a, b) => {
+      const pA = getYearSortPriority(a.year, options);
+      const pB = getYearSortPriority(b.year, options);
+      if (pA !== pB) return pA - pB;
+      return a.title.localeCompare(b.title);
+    });
+  }, [courses, courseQuery, kindFilter, uniFilter, yearFilter, options]);
 
 
 
@@ -418,11 +439,17 @@ function AdminCoursesPage() {
               onChange={(e) => setYear(Number(e.target.value))}
               className="md:col-span-2 rounded-lg border border-white/15 bg-black/40 px-3 py-3 text-sm outline-none focus:border-white/50"
             >
-              {options.year.map((o) => (
-                <option key={o.id} value={Number(o.value)}>
-                  {o.label}
-                </option>
-              ))}
+              {[...options.year]
+                .sort(
+                  (a, b) =>
+                    getYearSortPriority(Number(a.value), options) -
+                    getYearSortPriority(Number(b.value), options),
+                )
+                .map((o) => (
+                  <option key={o.id} value={Number(o.value)}>
+                    {o.label}
+                  </option>
+                ))}
             </select>
             {kind === "questions" && (
               <select
@@ -494,18 +521,70 @@ function AdminCoursesPage() {
               </button>
             ))}
           </div>
-          <div className="mb-3 flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">University</span>
-            <select
-              value={uniFilter}
-              onChange={(e) => setUniFilter(e.target.value)}
-              className="rounded-lg border border-white/15 bg-black/30 px-2.5 py-1.5 text-xs outline-none focus:border-white/40"
-            >
-              <option value="all">All</option>
-              {universities.map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
+          <div className="mb-3 flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">University</span>
+              <select
+                value={uniFilter}
+                onChange={(e) => setUniFilter(e.target.value)}
+                className="rounded-lg border border-white/15 bg-black/30 px-2.5 py-1.5 text-xs outline-none focus:border-white/40"
+              >
+                <option value="all">All universities</option>
+                {universities.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">Year</span>
+              <div className="inline-flex rounded-lg border border-white/15 bg-black/30 p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setYearFilter("all")}
+                  className={`px-2.5 py-1 rounded transition-colors ${
+                    yearFilter === "all" ? "bg-white/20 text-white font-bold" : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setYearFilter("zero")}
+                  className={`px-2.5 py-1 rounded transition-colors ${
+                    yearFilter === "zero"
+                      ? "bg-purple-500 text-white font-bold"
+                      : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  Zero Course
+                </button>
+                {[1, 2, 3, 4, 5, 6].map((y) => (
+                  <button
+                    key={y}
+                    type="button"
+                    onClick={() => setYearFilter(String(y))}
+                    className={`px-2 py-1 rounded transition-colors ${
+                      yearFilter === String(y)
+                        ? "bg-blue-500 text-white font-bold"
+                        : "text-white/60 hover:text-white"
+                    }`}
+                  >
+                    Y{y}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setYearFilter("all_years")}
+                  className={`px-2.5 py-1 rounded transition-colors ${
+                    yearFilter === "all_years"
+                      ? "bg-amber-500 text-black font-bold"
+                      : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  All Years
+                </button>
+              </div>
+            </div>
           </div>
           <div className="relative mb-4">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
@@ -571,12 +650,18 @@ function AdminCoursesPage() {
                         )}
                         <span
                           className={`rounded-full px-2 py-0.5 font-medium ${
-                            isAllYearsCourse(c.year, options)
-                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                              : "bg-blue-500/15 text-blue-300"
+                            isZeroCourse(c.year, options)
+                              ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                              : isAllYearsCourse(c.year, options)
+                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                : "bg-blue-500/15 text-blue-300"
                           }`}
                         >
-                          {isAllYearsCourse(c.year, options) ? "All Years" : `Y${c.year}`}
+                          {isZeroCourse(c.year, options)
+                            ? "Zero Course"
+                            : isAllYearsCourse(c.year, options)
+                              ? "All Years"
+                              : `Y${c.year}`}
                         </span>
                         <span className="rounded-full bg-emerald-500/15 text-emerald-300 px-2 py-0.5 font-medium">
                           ${Number(c.price).toFixed(2)}
@@ -1025,14 +1110,20 @@ function EditCourseModal({
               >
                 {options.year.some((o) => Number(o.value) === year) ? null : (
                   <option value={year}>
-                    {year === 0 ? "For all years" : `Year ${year}`}
+                    {yearLabel(year, options)}
                   </option>
                 )}
-                {options.year.map((o) => (
-                  <option key={o.id} value={Number(o.value)}>
-                    {o.label}
-                  </option>
-                ))}
+                {[...options.year]
+                  .sort(
+                    (a, b) =>
+                      getYearSortPriority(Number(a.value), options) -
+                      getYearSortPriority(Number(b.value), options),
+                  )
+                  .map((o) => (
+                    <option key={o.id} value={Number(o.value)}>
+                      {o.label}
+                    </option>
+                  ))}
               </select>
             </Field>
             <Field label="Exam type / badge">

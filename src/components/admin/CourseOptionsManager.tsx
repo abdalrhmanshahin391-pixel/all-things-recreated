@@ -187,7 +187,24 @@ export function CourseOptionsManager({ setError }: { setError: (m: string | null
                 <div className="flex items-center gap-2">
                   {kind === "year" &&
                     !rows.year.some(
-                      (r) => r.value === "0" || r.label.toLowerCase().includes("all year"),
+                      (r) =>
+                        r.label.toLowerCase().includes("zero") ||
+                        r.label.toLowerCase().includes("تحضير"),
+                    ) && (
+                      <button
+                        type="button"
+                        onClick={() => add("year", { label: "Zero Course", value: "7" })}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-400 hover:text-purple-300 bg-purple-400/10 hover:bg-purple-400/20 px-2.5 py-0.5 rounded-full border border-purple-400/30 transition-colors"
+                      >
+                        <Plus size={11} /> Add "Zero Course"
+                      </button>
+                    )}
+                  {kind === "year" &&
+                    !rows.year.some(
+                      (r) =>
+                        r.label.toLowerCase().includes("all year") ||
+                        r.label.toLowerCase().includes("جميع السنوات") ||
+                        r.label.toLowerCase().includes("لكل السنين"),
                     ) && (
                       <button
                         type="button"
@@ -225,25 +242,32 @@ export function CourseOptionsManager({ setError }: { setError: (m: string | null
                         }
                         update(kind, i, patch);
                       }}
-                      placeholder="Shown in the dropdown (e.g. Year 1, For all years)"
+                      placeholder="Shown in the dropdown (e.g. Zero Course, Year 1, For all years)"
                       className="flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50"
                     />
                     <div className="relative">
                       <input
                         value={r.value}
                         onChange={(e) => update(kind, i, { value: e.target.value })}
-                        placeholder={numeric ? "0 = All years" : "Saved value"}
+                        placeholder={numeric ? "0 or number" : "Saved value"}
                         inputMode={numeric ? "numeric" : "text"}
                         min={numeric ? "0" : undefined}
                         className="w-36 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white/70 outline-none focus:border-white/40 font-mono"
                       />
                       {kind === "year" &&
-                        (r.value === "0" ||
-                          (r.value === "8" && r.label.toLowerCase().includes("all"))) && (
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase tracking-wider text-amber-400 pointer-events-none bg-amber-400/10 px-1.5 py-0.5 rounded">
+                        (r.label.toLowerCase().includes("zero") ||
+                        r.label.toLowerCase().includes("تحضير") ? (
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase tracking-wider text-purple-400 pointer-events-none bg-purple-400/10 px-1.5 py-0.5 rounded border border-purple-400/20">
+                            Zero course
+                          </span>
+                        ) : r.label.toLowerCase().includes("all year") ||
+                          r.label.toLowerCase().includes("جميع") ||
+                          r.label.toLowerCase().includes("لكل") ||
+                          r.value === "0" ? (
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase tracking-wider text-amber-400 pointer-events-none bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/20">
                             All years
                           </span>
-                        )}
+                        ) : null)}
                     </div>
                     <button
                       type="button"

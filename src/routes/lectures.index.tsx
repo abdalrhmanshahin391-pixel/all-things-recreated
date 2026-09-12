@@ -10,12 +10,19 @@ import {
   ArrowRight,
   Sparkles,
   Play,
+  Globe,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
 import { MedicalPageBackdrop } from "@/components/common/MedicalPageBackdrop";
 import { resolveCourseImageUrl } from "@/lib/course-image";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  useCourseOptions,
+  isAllYearsCourse,
+  isZeroCourse,
+  getYearSortPriority,
+} from "@/lib/course-options";
 
 export const Route = createFileRoute("/lectures/")({
   head: () => ({
@@ -112,14 +119,21 @@ function LecturesPage() {
     };
   }, [user, authLoading]);
 
+  const options = useCourseOptions();
+
   const byYear = useMemo(() => {
     const map = new Map<number, Course[]>();
     courses.forEach((c) => {
       if (!map.has(c.year)) map.set(c.year, []);
       map.get(c.year)!.push(c);
     });
-    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
-  }, [courses]);
+    return Array.from(map.entries()).sort((a, b) => {
+      const pA = getYearSortPriority(a[0], options);
+      const pB = getYearSortPriority(b[0], options);
+      if (pA !== pB) return pA - pB;
+      return a[0] - b[0];
+    });
+  }, [courses, options]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -132,7 +146,7 @@ function LecturesPage() {
           <div className="relative mx-auto max-w-7xl px-6 md:px-10 py-16 md:py-20">
             <span className="inline-flex items-center gap-2 rounded-full bg-card border border-border px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
               <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-              Recorded lectures · Years 1–6
+              Recorded lectures · All years & courses
             </span>
             <h1 className="mt-5 text-4xl md:text-6xl font-semibold tracking-tight text-foreground max-w-3xl">
               Lectures, on your time.
@@ -189,14 +203,36 @@ function LectureSection({
   enrolledIds: Set<string>;
   Icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
 }) {
+  const options = useCourseOptions();
+  const isAllYears = isAllYearsCourse(year, options);
+  const isZero = isZeroCourse(year, options);
+  const custom = options.year.find((o) => Number(o.value) === year);
+
+  const SectionIcon = isAllYears ? Globe : isZero ? GraduationCap : Icon;
+  const sectionTitle = isAllYears
+    ? custom?.label || "For all years"
+    : isZero
+      ? custom?.label || "Zero Course"
+      : custom
+        ? custom.label
+        : `${ordinal(year)} Year`;
+
   return (
     <section>
       <div className="flex items-center gap-3 mb-6">
-        <div className="grid place-items-center h-9 w-9 rounded-lg bg-muted text-primary">
-          <Icon size={18} strokeWidth={2} />
+        <div
+          className={`grid place-items-center h-9 w-9 rounded-lg ${
+            isAllYears
+              ? "bg-amber-500/10 text-amber-500"
+              : isZero
+                ? "bg-purple-500/10 text-purple-500"
+                : "bg-muted text-primary"
+          }`}
+        >
+          <SectionIcon size={18} strokeWidth={2} />
         </div>
         <h2 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground">
-          {ordinal(year)} Year
+          {sectionTitle}
         </h2>
         <span className="inline-flex items-center text-[11px] font-semibold uppercase tracking-widest text-muted-foreground bg-card border border-border rounded-full px-2.5 py-1">
           {courses.length} lecture{courses.length === 1 ? "" : " courses"}

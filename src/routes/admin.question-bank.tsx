@@ -11,6 +11,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { QB_SEMESTERS, QB_YEARS, sortGroups, type QbMeta } from "@/lib/question-bank";
+import { useCourseOptions, yearLabel } from "@/lib/course-options";
 import {
   qbAddToCourse, qbDeleteGroup, qbExportAll, qbImportAll, qbListGroups,
   qbReorderGroups, qbSaveGroup, qbUpdateGroup,
@@ -34,6 +35,7 @@ type PickerQuestion = { id: string; stem: string };
 function QuestionBankPage() {
   const { user, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
+  const options = useCourseOptions();
 
   const listFn = useServerFn(qbListGroups);
   const saveFn = useServerFn(qbSaveGroup);
@@ -509,7 +511,11 @@ function QuestionBankPage() {
           <div className="space-y-3">
             <Field label="Course">
               <select value={targetCourse} onChange={(e) => setTargetCourse(e.target.value)} className={selectCls}>
-                {courses.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {yearLabel(c.year, options)} · {c.title}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Section">

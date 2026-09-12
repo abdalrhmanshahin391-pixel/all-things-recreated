@@ -14,6 +14,7 @@ import { BatchPdfImportButton } from "@/components/admin/BatchPdfImporter";
 import { GermanImportButton } from "@/components/admin/GermanImportButton";
 import { QuestionListEditor } from "@/components/admin/QuestionListEditor";
 import { QuestionImagePicker } from "@/components/admin/QuestionImagePicker";
+import { useCourseOptions, yearLabel, getYearSortPriority } from "@/lib/course-options";
 
 export const Route = createFileRoute("/admin/questions")({
   head: () => ({ meta: [{ title: "Q add choice — AquaQBank" }] }),
@@ -37,6 +38,7 @@ const emptyChoices = (): NewChoice[] => [
 function AdminQuestionsPage() {
   const { user, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
+  const options = useCourseOptions();
   const [courses, setCourses] = useState<Course[]>([]);
   const [universities, setUniversities] = useState<University[]>([]);
   const [universityId, setUniversityId] = useState<string>("");
@@ -99,10 +101,14 @@ function AdminQuestionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [universityId, courses]);
 
-  const filteredCourses = useMemo(
-    () => (universityId ? courses.filter((c) => c.university_id === universityId) : courses),
-    [courses, universityId],
-  );
+  const filteredCourses = useMemo(() => {
+    const list = universityId ? courses.filter((c) => c.university_id === universityId) : courses;
+    return [...list].sort(
+      (a, b) =>
+        getYearSortPriority(a.year, options) - getYearSortPriority(b.year, options) ||
+        a.title.localeCompare(b.title),
+    );
+  }, [courses, universityId, options]);
 
 
   async function loadGroups(nextCourseId: string) {
@@ -370,7 +376,9 @@ function AdminQuestionsPage() {
               >
                 {filteredCourses.length === 0 && <option value="">No courses in this university</option>}
                 {filteredCourses.map((c) => (
-                  <option key={c.id} value={c.id}>Year {c.year} · {c.title} (Q-bank)</option>
+                  <option key={c.id} value={c.id}>
+                    {yearLabel(c.year, options)} · {c.title} (Q-bank)
+                  </option>
                 ))}
               </select>
             </label>

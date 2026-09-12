@@ -25,6 +25,7 @@ export const QB_YEARS = [
   "Fourth year",
   "Fifth year",
   "Sixth year",
+  "For all years",
 ];
 
 export const QB_SEMESTERS = ["Semester 1", "Semester 2", "Summer", "Whole year"];
