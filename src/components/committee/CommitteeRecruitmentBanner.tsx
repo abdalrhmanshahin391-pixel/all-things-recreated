@@ -37,7 +37,11 @@ export function CommitteeRecruitmentCard({
     ? (settings.subtitleAr || "باب التقديم للانضمام إلى فريق لجنة الطب والجراحة مفتوح الآن. إذا كنت ترغب في المساهمة في تنظيم المكتبة والمصادر الطبية ومساعدة زملائك، يمكنك التقديم الآن.")
     : (settings.subtitleEn || "Applications to join لجنة الطب والجراحة are now open. If you want to contribute to the medical study library and help fellow students, apply now.");
 
-  const applyUrl = settings.applyLink?.trim() || "/support";
+  const rawUrl = settings.applyLink?.trim();
+  let applyUrl = rawUrl || "/support";
+  if (rawUrl && !/^https?:\/\//i.test(rawUrl) && !rawUrl.startsWith("/")) {
+    applyUrl = `https://${rawUrl}`;
+  }
   const isExternal = /^https?:\/\//i.test(applyUrl);
 
   return (
@@ -74,13 +78,13 @@ export function CommitteeRecruitmentCard({
               <ExternalLink size={16} />
             </a>
           ) : (
-            <Link
-              to={applyUrl}
+            <a
+              href={applyUrl}
               className="inline-flex items-center justify-center gap-2 rounded-2xl bg-primary px-8 py-3.5 text-base font-black text-primary-foreground shadow-md hover:opacity-95 hover:scale-[1.02] active:scale-[0.99] transition-all"
             >
               <span>{ar ? "قدّم الآن للانضمام للفريق 📝" : "Apply to Join the Team 📝"}</span>
               <ArrowRight size={16} />
-            </Link>
+            </a>
           )}
         </div>
 
