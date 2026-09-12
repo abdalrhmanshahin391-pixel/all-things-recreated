@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowRight, BookOpen, ListChecks, Lock, Sparkles } from "lucide-react";
 import { CourseImage } from "@/components/common/CourseImage";
 import { CourseBadge, badgeIsLive } from "@/components/common/CourseBadge";
+import { useCourseOptions, isAllYearsCourse } from "@/lib/course-options";
 
 type CourseLike = {
   id: string;
@@ -43,7 +44,9 @@ export function CourseCard({
 }) {
   const isPaid = !!course.price && course.price > 0;
   const category = (course.category ?? "MAJOR").toString().toUpperCase();
+  const options = useCourseOptions();
   const year = course.year ?? 0;
+  const isAllYears = isAllYearsCourse(course.year, options);
   const owned = unlocked || !isPaid;
   const priceText = fmtPrice(course.price, course.currency);
   const label = actionLabel ?? (owned ? "Study now" : `Unlock — ${priceText}`);
@@ -127,8 +130,14 @@ export function CourseCard({
 
       <div className="flex-1 flex flex-col items-center text-center px-4 md:px-5 py-4 md:py-5">
         <div className="flex items-center justify-center gap-2 mb-2">
-          <span className="inline-flex items-center text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200">
-            YEAR {year || "—"}
+          <span
+            className={`inline-flex items-center text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+              isAllYears
+                ? "bg-amber-50 text-amber-800 border-amber-300 shadow-sm"
+                : "bg-neutral-100 text-neutral-700 border-neutral-200"
+            }`}
+          >
+            {isAllYears ? "ALL YEARS" : `YEAR ${year || "—"}`}
           </span>
           <span
             className="inline-flex items-center text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full text-white"

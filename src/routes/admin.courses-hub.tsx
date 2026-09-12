@@ -11,7 +11,7 @@ import { compressImage } from "@/lib/image-compress";
 import { useAuth, type Profile } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
 import { resolveCourseImageUrl } from "@/lib/course-image";
-import { useCourseOptions } from "@/lib/course-options";
+import { useCourseOptions, isAllYearsCourse, yearLabel } from "@/lib/course-options";
 import { CourseOptionsManager } from "@/components/admin/CourseOptionsManager";
 import { BADGE_PRESETS } from "@/components/common/CourseBadge";
 import {
@@ -629,7 +629,15 @@ function CoursesHubPage() {
                           ) : (
                             <span className="rounded-full bg-indigo-500/20 text-indigo-300 px-2 py-0.5 font-bold uppercase tracking-wider">Questions</span>
                           )}
-                          <span className="rounded-full bg-blue-500/15 text-blue-300 px-2 py-0.5 font-medium">Y{c.year}</span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 font-medium ${
+                              isAllYearsCourse(c.year, options)
+                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                : "bg-blue-500/15 text-blue-300"
+                            }`}
+                          >
+                            {isAllYearsCourse(c.year, options) ? "All Years" : `Y${c.year}`}
+                          </span>
                           <span className="rounded-full bg-emerald-500/15 text-emerald-300 px-2 py-0.5 font-medium">
                             ${Number(c.price).toFixed(2)}
                           </span>
@@ -745,7 +753,7 @@ function CoursesHubPage() {
                                   {c.title}
                                 </div>
                                 <div className="text-xs text-white/50 mt-0.5">
-                                  Year {c.year} · ${Number(c.price).toFixed(2)}
+                                  {yearLabel(c.year, options)} · ${Number(c.price).toFixed(2)}
                                 </div>
                               </div>
                               {has ? (
@@ -820,7 +828,7 @@ function ControlRow({
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <h3 className="font-bold text-lg me-auto">{row.title}</h3>
         <span className="text-[11px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-white/10 text-white/70">
-          Year {row.year ?? "—"} · {row.kind ?? "questions"}
+          {yearLabel(row.year, options)} · {row.kind ?? "questions"}
         </span>
         {offerLive && (
           <span className="text-[11px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-amber-400 text-black">
@@ -1238,7 +1246,9 @@ function EditCourseModal({
             </Field>
             <Field label="Year">
               <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50">
-                {options.year.some((o) => Number(o.value) === year) ? null : <option value={year}>Year {year}</option>}
+                {options.year.some((o) => Number(o.value) === year) ? null : (
+                  <option value={year}>{year === 0 ? "For all years" : `Year ${year}`}</option>
+                )}
                 {options.year.map((o) => (
                   <option key={o.id} value={Number(o.value)}>{o.label}</option>
                 ))}

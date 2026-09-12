@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useCourseOptions } from "@/lib/course-options";
+import { useCourseOptions, isAllYearsCourse } from "@/lib/course-options";
 import {
   Stethoscope,
   Pill,
@@ -10,6 +10,7 @@ import {
   Microscope,
   Syringe,
   Sparkles,
+  Globe,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -154,14 +155,22 @@ function CoursesPage() {
     };
   }, [user, authLoading]);
 
+  const options = useCourseOptions();
+
   const byYear = useMemo(() => {
     const map = new Map<number, Course[]>();
     courses.forEach((c) => {
       if (!map.has(c.year)) map.set(c.year, []);
       map.get(c.year)!.push(c);
     });
-    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
-  }, [courses]);
+    return Array.from(map.entries()).sort((a, b) => {
+      const aAll = isAllYearsCourse(a[0], options);
+      const bAll = isAllYearsCourse(b[0], options);
+      if (aAll && !bAll) return 1;
+      if (!aAll && bAll) return -1;
+      return a[0] - b[0];
+    });
+  }, [courses, options]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -237,16 +246,27 @@ function CourseSection({
 }) {
   const { t } = useTranslation();
   const options = useCourseOptions();
+  const isAllYears = isAllYearsCourse(year, options);
   // An admin-defined year label wins over the generic "Nth year" heading.
   const custom = options.year.find((o) => Number(o.value) === year);
+  const SectionIcon = isAllYears ? Globe : Icon;
+
   return (
     <section>
       <div className="flex items-center gap-3 mb-6">
-        <div className="grid place-items-center h-9 w-9 rounded-lg bg-muted text-primary">
-          <Icon size={18} strokeWidth={2} />
+        <div
+          className={`grid place-items-center h-9 w-9 rounded-lg ${
+            isAllYears ? "bg-amber-500/10 text-amber-500" : "bg-muted text-primary"
+          }`}
+        >
+          <SectionIcon size={18} strokeWidth={2} />
         </div>
         <h2 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground">
-          {custom ? custom.label : t("cms.coursesPage.yearHeading", { ordinal: ordinal(year) })}
+          {isAllYears
+            ? custom?.label || "For all years"
+            : custom
+              ? custom.label
+              : t("cms.coursesPage.yearHeading", { ordinal: ordinal(year) })}
         </h2>
         <span className="inline-flex items-center text-[11px] font-semibold uppercase tracking-widest text-muted-foreground bg-card border border-border rounded-full px-2.5 py-1">
           {courses.length === 1

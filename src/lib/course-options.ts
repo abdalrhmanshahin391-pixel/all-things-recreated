@@ -19,13 +19,22 @@ export const FALLBACK_COURSE_OPTIONS: CourseOptionGroups = {
     { id: "f-major", kind: "category", value: "major", label: "Major", sort_order: 0 },
     { id: "f-minor", kind: "category", value: "minor", label: "Minor", sort_order: 1 },
   ],
-  year: [1, 2, 3, 4, 5, 6].map((y, i) => ({
-    id: `f-year-${y}`,
-    kind: "year" as const,
-    value: String(y),
-    label: `Year ${y}`,
-    sort_order: i,
-  })),
+  year: [
+    ...[1, 2, 3, 4, 5, 6].map((y, i) => ({
+      id: `f-year-${y}`,
+      kind: "year" as const,
+      value: String(y),
+      label: `Year ${y}`,
+      sort_order: i,
+    })),
+    {
+      id: "f-year-0",
+      kind: "year" as const,
+      value: "0",
+      label: "For all years",
+      sort_order: 6,
+    },
+  ],
   exam_type: ["MINI-OSCE", "FINAL", "MID", "OSCE"].map((t, i) => ({
     id: `f-exam-${t}`,
     kind: "exam_type" as const,
@@ -74,14 +83,36 @@ const ORDINAL: Record<number, string> = {
   6: "6th",
 };
 
-/** Label for a year number, falling back to "1st year" style ordinals. */
+/** Checks whether a course or year option represents "All years" / universal. */
+export function isAllYearsCourse(
+  year: number | null | undefined,
+  options?: CourseOptionGroups,
+): boolean {
+  if (year === 0) return true;
+  if (year === null || year === undefined) return false;
+  const custom = options?.year.find((o) => Number(o.value) === year);
+  if (custom) {
+    const lower = custom.label.toLowerCase();
+    return (
+      lower.includes("all year") ||
+      lower.includes("لكل السنين") ||
+      lower.includes("جميع السنوات") ||
+      lower.includes("لجميع السنوات") ||
+      lower.includes("general")
+    );
+  }
+  return false;
+}
+
+/** Label for a year number, falling back to "1st year" style ordinals or "For all years". */
 export function yearLabel(
   year: number | null | undefined,
   options?: CourseOptionGroups,
-  otherLabel = "other",
+  otherLabel = "For all years",
 ) {
-  if (!year || year <= 0) return otherLabel;
+  if (year === null || year === undefined) return otherLabel;
   const custom = options?.year.find((o) => Number(o.value) === year);
   if (custom) return custom.label;
+  if (year === 0) return "For all years";
   return `${ORDINAL[year] ?? `${year}th`} year`;
 }

@@ -15,7 +15,7 @@ const KINDS: Array<{ kind: CourseOptionKind; title: string; hint: string; numeri
   {
     kind: "year",
     title: "Year",
-    hint: "Second box — the number groups courses by year, the wording is what students see.",
+    hint: "Second box — year number groups courses (use 0 for 'For all years'), wording is what students see.",
     numeric: true,
   },
   { kind: "exam_type", title: "Exam type", hint: "Third box — e.g. MINI-OSCE, FINAL, MID." },
@@ -83,19 +83,30 @@ export function CourseOptionsManager({ setError }: { setError: (m: string | null
     setSaved(false);
   }
 
-  function add(kind: CourseOptionKind) {
-    setRows((prev) => ({
-      ...prev,
-      [kind]: [
-        ...prev[kind],
-        {
-          id: `new-${kind}-${Date.now()}`,
-          value: kind === "year" ? String(prev[kind].length + 1) : "",
-          label: "",
-          isNew: true,
-        },
-      ],
-    }));
+  function add(kind: CourseOptionKind, preset?: { label: string; value: string }) {
+    setRows((prev) => {
+      let defaultVal = "";
+      if (preset) {
+        defaultVal = preset.value;
+      } else if (kind === "year") {
+        // Find highest existing numeric year + 1
+        const nums = prev.year.map((r) => Number(r.value)).filter((n) => !isNaN(n) && n > 0);
+        const max = nums.length ? Math.max(...nums) : prev.year.length;
+        defaultVal = String(max + 1);
+      }
+      return {
+        ...prev,
+        [kind]: [
+          ...prev[kind],
+          {
+            id: `new-${kind}-${Date.now()}`,
+            value: defaultVal,
+            label: preset ? preset.label : "",
+            isNew: true,
+          },
+        ],
+      };
+    });
     setSaved(false);
   }
 
@@ -116,9 +127,17 @@ export function CourseOptionsManager({ setError }: { setError: (m: string | null
     for (const { kind, numeric } of KINDS) {
       rows[kind].forEach((r, i) => {
         const label = r.label.trim();
-        const value = (kind === "year" ? String(Number(r.value) || 0) : r.value.trim()) || label;
-        if (!label || !value) return;
-        if (numeric && !Number(value)) return;
+        let valStr = r.value.trim();
+        // If year and user left empty or typed "all" with "all year" in label, treat as 0
+        if (
+          kind === "year" &&
+          (valStr.toLowerCase() === "all" || (!valStr && label.toLowerCase().includes("all")))
+        ) {
+          valStr = "0";
+        }
+        const value = (kind === "year" ? String(Number(valStr) || 0) : valStr) || label;
+        if (!label) return;
+        if (numeric && (isNaN(Number(value)) || Number(value) < 0)) return;
         payload.push({ kind, value, label, sort_order: i });
       });
     }
@@ -165,13 +184,27 @@ export function CourseOptionsManager({ setError }: { setError: (m: string | null
             <div key={kind}>
               <div className="flex items-baseline justify-between mb-2">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-white/80">{title}</h3>
-                <button
-                  type="button"
-                  onClick={() => add(kind)}
-                  className="inline-flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300"
-                >
-                  <Plus size={13} /> Add option
-                </button>
+                <div className="flex items-center gap-2">
+                  {kind === "year" &&
+                    !rows.year.some(
+                      (r) => r.value === "0" || r.label.toLowerCase().includes("all year"),
+                    ) && (
+                      <button
+                        type="button"
+                        onClick={() => add("year", { label: "For all years", value: "0" })}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400 hover:text-amber-300 bg-amber-400/10 hover:bg-amber-400/20 px-2.5 py-0.5 rounded-full border border-amber-400/30 transition-colors"
+                      >
+                        <Plus size={11} /> Add "For all years"
+                      </button>
+                    )}
+                  <button
+                    type="button"
+                    onClick={() => add(kind)}
+                    className="inline-flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300"
+                  >
+                    <Plus size={13} /> Add option
+                  </button>
+                </div>
               </div>
               <p className="text-[11px] text-white/40 mb-2">{hint}</p>
               <div className="space-y-2">
@@ -179,17 +212,39 @@ export function CourseOptionsManager({ setError }: { setError: (m: string | null
                   <div key={r.id} className="flex items-center gap-2">
                     <input
                       value={r.label}
-                      onChange={(e) => update(kind, i, { label: e.target.value })}
-                      placeholder="Shown in the dropdown"
+                      onChange={(e) => {
+                        const newLabel = e.target.value;
+                        const patch: Partial<Row> = { label: newLabel };
+                        if (
+                          kind === "year" &&
+                          (newLabel.toLowerCase().includes("all year") ||
+                            newLabel.toLowerCase().includes("جميع السنوات")) &&
+                          (!r.value || r.value === "8")
+                        ) {
+                          patch.value = "0";
+                        }
+                        update(kind, i, patch);
+                      }}
+                      placeholder="Shown in the dropdown (e.g. Year 1, For all years)"
                       className="flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50"
                     />
-                    <input
-                      value={r.value}
-                      onChange={(e) => update(kind, i, { value: e.target.value })}
-                      placeholder={numeric ? "Year number" : "Saved value"}
-                      inputMode={numeric ? "numeric" : "text"}
-                      className="w-32 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white/70 outline-none focus:border-white/40"
-                    />
+                    <div className="relative">
+                      <input
+                        value={r.value}
+                        onChange={(e) => update(kind, i, { value: e.target.value })}
+                        placeholder={numeric ? "0 = All years" : "Saved value"}
+                        inputMode={numeric ? "numeric" : "text"}
+                        min={numeric ? "0" : undefined}
+                        className="w-36 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white/70 outline-none focus:border-white/40 font-mono"
+                      />
+                      {kind === "year" &&
+                        (r.value === "0" ||
+                          (r.value === "8" && r.label.toLowerCase().includes("all"))) && (
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase tracking-wider text-amber-400 pointer-events-none bg-amber-400/10 px-1.5 py-0.5 rounded">
+                            All years
+                          </span>
+                        )}
+                    </div>
                     <button
                       type="button"
                       onClick={() => move(kind, i, -1)}
