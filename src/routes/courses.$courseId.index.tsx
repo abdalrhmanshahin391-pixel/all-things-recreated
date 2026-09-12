@@ -23,7 +23,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useServerFn } from "@tanstack/react-start";
 import { setSubjectAccess, setSubjectOrdered, type SubjectAccess } from "@/lib/subjects.functions";
 import { AdminBackupControls } from "@/components/course/AdminBackupControls";
-import { CourseSessionGuide, GuideButtonTrigger, LiveTourButtonTrigger } from "@/components/course/CourseSessionGuide";
+import { CourseSessionGuide, LiveTourButtonTrigger } from "@/components/course/CourseSessionGuide";
 import { LiveCourseTour } from "@/components/course/LiveCourseTour";
 import { useLang } from "@/components/LanguageProvider";
 import { ensureFreeEnrollment } from "@/lib/course-access";
@@ -116,7 +116,6 @@ function CourseDetailPage() {
   const { user, isAdmin } = useAuth();
   const { lang } = useLang();
   const isArabic = lang === "ar";
-  const [guideModalOpen, setGuideModalOpen] = useState(false);
   const [liveTourOpen, setLiveTourOpen] = useState(false);
   const updateAccess = useServerFn(setSubjectAccess);
   const updateOrdered = useServerFn(setSubjectOrdered);
@@ -576,8 +575,6 @@ function CourseDetailPage() {
         {/* Course Session Guide Banner */}
         <CourseSessionGuide
           showInlineBanner={true}
-          modalOpen={guideModalOpen}
-          onModalOpenChange={setGuideModalOpen}
           onStartTour={handleStartLiveTour}
           className="mb-8"
         />
@@ -787,7 +784,6 @@ function CourseDetailPage() {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <LiveTourButtonTrigger onClick={handleStartLiveTour} isArabic={isArabic} />
-                  <GuideButtonTrigger onClick={() => setGuideModalOpen(true)} isArabic={isArabic} />
                 </div>
               </div>
 
