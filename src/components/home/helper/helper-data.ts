@@ -89,34 +89,24 @@ export const HELPER_TOPICS: HelperTopic[] = [
     action_label_ar: "زيارة لجنة الطب والجراحة",
     steps: [
       {
-        title_en: "Course 0 to Course 6 Coverage",
-        title_ar: "تغطية شاملة من السنة 0 إلى 6",
+        title_en: "Step 1: All Years Covered (Zero Course to Sixth Course)",
+        title_ar: "الخطوة الأولى: تغطية شاملة لجميع السنوات (من التحضيري إلى السنة السادسة)",
         description_en:
-          "The Committee archives complete study resources, verified past papers, textbooks, and summaries for every academic year — from Course 0 (Foundation) all the way to Course 6 (Clinical Graduation Year).",
+          "The Committee provides a complete academic archive for each medical year. From the main Committee page, pick your course (e.g. Sixth Course) to explore subjects, study plans, and books.",
         description_ar:
-          "توفر لجنة الطب والجراحة أرشيفاً دراسياً متكاملاً يشمل الملخصات، أسئلة السنوات السابقة، والكتب لكل سنة دراسية — من السنة التحضيرية (Course 0) وحتى سنة التخرج السادسة (Course 6).",
-        badge_en: "Course 0 → 6",
-        badge_ar: "السنة 0 ← 6",
+          "توفر لجنة الطب والجراحة أرشيفاً أكاديمياً متكاملاً لكل سنة دراسية. من صفحة اللجنة الرئيسية، اختر سنتك الدراسية (مثل السنة السادسة Sixth Course) لتصفح المواد، خطة الطب، والكتب.",
+        badge_en: "Courses 0 → 6",
+        badge_ar: "السنوات 0 ← 6",
       },
       {
-        title_en: "Example: Course 6 (Internal Medicine & Surgery)",
-        title_ar: "مثال عملي: السنة السادسة (الباطنية والجراحة)",
+        title_en: "Step 2: Best Sources of Study (Curated for Scores 9 & 10)",
+        title_ar: "الخطوة الثانية: قسم أفضل مصادر الدراسة (توصيات طلبة 9 و 10)",
         description_en:
-          "When you open Course 6, you will find clinical round summaries, oral exam guides, recall questions, and curated high-yield clinical materials.",
+          "Inside each subject (e.g. Cardiology in Sixth Course), check the crown-marked 'Best sources of study' section. These lecture notes and summaries are recommendations based on senior students who scored 9/10 and 10/10.",
         description_ar:
-          "عند فتح السنة السادسة، ستجد تفريغات الراوندات السريرية، أسئلة الاختبارات الشفوية، بنوك الأسئلة السابقة، وأقوى المراجع السريرية المركزة.",
-        badge_en: "Course 6 Example",
-        badge_ar: "مثال السنة السادسة",
-      },
-      {
-        title_en: "The 'Best Sources of Study' Section",
-        title_ar: "قسم أفضل مصادر الدراسة (Best Sources)",
-        description_en:
-          "Inside each subject, check the crown-marked 'Best Sources of Study' section. These recommendations are written by previous top-ranking students who achieved scores of 9/10 and 10/10 in that exact subject.",
-        description_ar:
-          "داخل كل مادة، ستجد قسماً مميزاً بتاج ذهبي هو 'أفضل مصادر الدراسة'. هذه التوصيات وضعها زملاؤكم الأوائل والمتفوقون الذين حققوا درجات 9/10 و 10/10 في نفس المادة لترشدكم لأقصر طريق للتفوق.",
+          "داخل كل مادة (مثل مادة القلبية في السنة السادسة)، ستجد قسماً مميزاً بتاج 'أفضل مصادر الدراسة'. هذه الملاحظات والملخصات تم ترشيحها بناءً على خبرة أوائل الدفعات الحاصلين على درجات 9/10 و 10/10.",
         badge_en: "Scores 9 & 10",
-        badge_ar: "موصى به من طلبة 9 و 10",
+        badge_ar: "طلبة 9 و 10",
       },
     ],
   },
@@ -213,54 +203,6 @@ export const HELPER_TOPICS: HelperTopic[] = [
           "احصل على نسبتك المئوية فوراً، مع تحليل لنقاط القوة والضعف في كل موضوع وإمكانية مراجعة جميع الإجابات الخاطئة.",
         badge_en: "Results",
         badge_ar: "تقرير النتيجة",
-      },
-    ],
-  },
-  {
-    id: "how-to-use-aquavisionx",
-    icon: "sparkles",
-    badge_en: "AI Tech",
-    badge_ar: "ذكاء اصطناعي",
-    badge_color: "bg-cyan-500/15 text-cyan-600 border-cyan-500/30",
-    title_en: "How AquaVisionX & AI Question Solver works?",
-    title_ar: "كيف يعمل AquaVisionX وحلال الأسئلة الذكي؟",
-    short_desc_en:
-      "Scan past exam PDFs, solve multi-answer combinations, and extract verified answers instantly.",
-    short_desc_ar:
-      "امسح أوراق الامتحانات وPDF، وحل الأسئلة التركيبية المعقدة ذات الإجابات المتعددة واستخرج الحلول الموثوقة.",
-    action_href: "/about",
-    action_label_en: "Learn About AquaVisionX",
-    action_label_ar: "تعرف على AquaVisionX",
-    steps: [
-      {
-        title_en: "Upload Exam Paper or PDF",
-        title_ar: "رفع ورقة الامتحان أو ملف PDF",
-        description_en:
-          "AquaVisionX recognizes medical text, diagram labels, and questions directly from scanned past papers.",
-        description_ar:
-          "يتعرف AquaVisionX تلقائياً على النصوص والرسومات وأسئلة الامتحانات من الأوراق المصورة والملفات.",
-        badge_en: "OCR Scan",
-        badge_ar: "المسح الضوئي",
-      },
-      {
-        title_en: "Multi-Answer Combination Solving",
-        title_ar: "حل الأسئلة التركيبية المعقدة",
-        description_en:
-          "Specialized AI logic solves combination statements (e.g. '1, 3, and 5 are correct') with textbook verification.",
-        description_ar:
-          "خوارزميات مخصصة لحل أسئلة التركيبات الطبية المعقدة (مثل: العبارات 1 و 3 و 5 صحيحة) مع التحقق من المراجع.",
-        badge_en: "Combination Logic",
-        badge_ar: "منطق التركيبات",
-      },
-      {
-        title_en: "Direct Integration into Question Bank",
-        title_ar: "دمج الأسئلة فوراً في بنك الأسئلة",
-        description_en:
-          "Solved questions are verified and added directly to your course so you can practice them anytime.",
-        description_ar:
-          "تُضاف الأسئلة المحلولة والمحققة مباشرة إلى مادتك الدراسية لتتدرب عليها في أي وقت.",
-        badge_en: "Ready to Practice",
-        badge_ar: "جاهز للتدريب",
       },
     ],
   },

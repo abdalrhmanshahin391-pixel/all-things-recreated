@@ -1,15 +1,5 @@
-import { motion } from "framer-motion";
-import {
-  Crown,
-  BookOpen,
-  FileCheck,
-  Star,
-  Award,
-  Layers,
-  Sparkles,
-  Stethoscope,
-  ChevronRight,
-} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Crown, MousePointer, Star, Award, CheckCircle2 } from "lucide-react";
 
 interface Props {
   currentStep: number;
@@ -17,233 +7,189 @@ interface Props {
 }
 
 export function CommitteeWalkthroughAnim({ currentStep, isArabic }: Props) {
-  const courses = [
-    { num: "0", title: isArabic ? "تحضيري" : "Foundation" },
-    { num: "1", title: isArabic ? "سنة 1" : "Year 1" },
-    { num: "2", title: isArabic ? "سنة 2" : "Year 2" },
-    { num: "3", title: isArabic ? "سنة 3" : "Year 3" },
-    { num: "4", title: isArabic ? "سنة 4" : "Year 4" },
-    { num: "5", title: isArabic ? "سنة 5" : "Year 5" },
-    { num: "6", title: isArabic ? "سنة 6 (تخرج)" : "Year 6 (Final)", highlight: true },
-  ];
-
   return (
-    <div className="relative w-full h-[340px] sm:h-[380px] bg-slate-950 rounded-2xl border border-slate-800 p-4 sm:p-6 overflow-hidden flex flex-col justify-between select-none shadow-2xl text-slate-100">
-      {/* Ambient background lighting */}
-      <div className="absolute -top-10 -left-10 w-60 h-60 bg-purple-500/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-10 -right-10 w-60 h-60 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
-
-      {/* Header Bar */}
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 z-10">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400">
-            <Crown size={15} />
-          </div>
-          <div>
-            <span className="text-xs font-bold text-white flex items-center gap-1.5">
-              <span>{isArabic ? "لجنة الطب والجراحة" : "Medical Committee Archive"}</span>
-              <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 text-[10px] font-semibold">
-                YSMU
-              </span>
-            </span>
-          </div>
+    <div className="relative w-full bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden flex flex-col justify-between select-none shadow-2xl text-slate-100">
+      {/* Top Browser / Window Header */}
+      <div className="flex items-center justify-between px-3.5 py-2 bg-slate-900/95 border-b border-slate-800 z-20">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
+          <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+          <span className="ml-2 text-[11px] font-mono text-slate-400">
+            {currentStep === 0
+              ? "aquaqbank.com/committee"
+              : "aquaqbank.com/committee/year-6/cardiology"}
+          </span>
         </div>
 
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold">
-          <Award size={12} />
-          <span>{isArabic ? "أفضل المصادر" : "Best Sources"}</span>
+        <div className="flex items-center gap-1.5 text-[11px] font-bold">
+          <span className="px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+            {currentStep === 0
+              ? isArabic
+                ? "1. واجهة اللجنة وسنوات الدراسة (0-6)"
+                : "1. Committee Years (0 to 6)"
+              : isArabic
+              ? "2. أفضل مصادر الدراسة (طلبة 9 و 10)"
+              : "2. Best Sources of Study (Scores 9 & 10)"}
+          </span>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="relative flex-1 flex items-center justify-center py-2 z-10">
-        {/* Step 0: Course 0 to Course 6 Grid & Coverage */}
-        {currentStep === 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full flex flex-col items-center"
-          >
-            <div className="text-center mb-3">
-              <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider">
-                {isArabic ? "أرشيف السنوات الأكاديمية" : "Complete Academic Years"}
-              </span>
-              <h4 className="text-sm sm:text-base font-black text-white mt-0.5">
-                {isArabic
-                  ? "جميع المواد والملخصات من السنة 0 إلى السنة 6"
-                  : "Every Course Covered: Course 0 to Course 6"}
-              </h4>
-            </div>
+      {/* Screen Viewport with Real Screenshots and Precise Overlays */}
+      <div className="relative w-full bg-slate-950 overflow-hidden">
+        <AnimatePresence mode="wait">
+          {/* ================= STEP 0: Real Committee Years (0-6) Screenshot ================= */}
+          {currentStep === 0 && (
+            <motion.div
+              key="step0"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="relative w-full aspect-[1024/534]"
+            >
+              <img
+                src="/helper/committee-years.png"
+                alt="Committee Home Page - Years 0 to 6"
+                className="w-full h-full block"
+              />
 
-            {/* Courses Timeline Pills */}
-            <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 sm:gap-2 w-full max-w-lg mb-3">
-              {courses.map((c) => (
-                <motion.div
-                  key={c.num}
-                  whileHover={{ scale: 1.05 }}
-                  className={`flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all ${
-                    c.highlight
-                      ? "bg-amber-500/20 border-amber-500 text-amber-300 shadow-lg shadow-amber-500/10"
-                      : "bg-slate-900/80 border-slate-800 text-slate-300"
-                  }`}
-                >
-                  <span className="text-sm font-black">Course {c.num}</span>
-                  <span className="text-[10px] font-medium opacity-80 truncate max-w-full">
-                    {c.title}
-                  </span>
-                </motion.div>
-              ))}
-            </div>
+              {/* Exact Highlight for Sixth Course Card (Left: 18.36%, Top: 78.65%, Width: 25.49%, Height: 13.3%) */}
+              <motion.div
+                animate={{
+                  boxShadow: [
+                    "0 0 0 2px #a855f7, 0 0 15px rgba(168, 85, 247, 0.6)",
+                    "0 0 0 3px #f59e0b, 0 0 25px rgba(245, 158, 11, 0.8)",
+                    "0 0 0 2px #a855f7, 0 0 15px rgba(168, 85, 247, 0.6)",
+                  ],
+                }}
+                transition={{ duration: 2, repeat: Infinity }}
+                style={{
+                  left: "18.36%",
+                  top: "78.65%",
+                  width: "25.49%",
+                  height: "13.30%",
+                  borderRadius: "14px",
+                }}
+                className="absolute pointer-events-none z-20 border-2 border-purple-400 bg-purple-500/10"
+              />
 
-            <p className="text-[11px] sm:text-xs text-slate-300 text-center max-w-md">
-              {isArabic
-                ? "تجد في كل سنة جميع ملخصات الدفعات، المراجع المعتمدة، وأسئلة الامتحانات السابقة."
-                : "Inside each year, find lecture summaries, approved textbooks, and past exam questions."}
-            </p>
-          </motion.div>
-        )}
-
-        {/* Step 1: Course 6 Material Example */}
-        {currentStep === 1 && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                <Stethoscope size={14} />
-                <span>{isArabic ? "مثال: مادة من السنة السادسة" : "Example: Course 6 Material"}</span>
-              </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                Course 6 · Final Year
-              </span>
-            </div>
-
-            {/* Subject Card Simulation */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-xl">
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2.5">
-                <div>
-                  <h5 className="font-bold text-white text-sm">
-                    {isArabic ? "الباطنية السريرية (Internal Medicine)" : "Internal Medicine - Clinical"}
-                  </h5>
-                  <p className="text-[11px] text-slate-400">
-                    {isArabic ? "السنة السادسة - YSMU" : "Course 6 Clinical Rounds & Past Recalls"}
-                  </p>
+              {/* Pointer cursor clicking Sixth Course card */}
+              <motion.div
+                animate={{
+                  x: [15, 0, 15],
+                  y: [15, 0, 15],
+                  scale: [1, 0.88, 1],
+                }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                style={{
+                  left: "31%",
+                  top: "85%",
+                }}
+                className="absolute z-30 pointer-events-none"
+              >
+                <div className="relative">
+                  <MousePointer
+                    size={24}
+                    className="text-slate-950 fill-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]"
+                  />
+                  <motion.span
+                    animate={{ scale: [0.5, 2.2], opacity: [1, 0] }}
+                    transition={{ duration: 1.2, repeat: Infinity }}
+                    className="absolute -top-1 -left-1 w-5 h-5 rounded-full border-2 border-purple-400"
+                  />
                 </div>
-                <span className="text-[10px] font-bold px-2 py-1 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                  {isArabic ? "مادة سريرية" : "Clinical"}
-                </span>
-              </div>
+              </motion.div>
+            </motion.div>
+          )}
 
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2 flex items-center gap-2">
-                  <FileCheck size={16} className="text-emerald-400 shrink-0" />
-                  <span className="text-slate-200 truncate">
-                    {isArabic ? "تفريغات وملخصات شاملة" : "Complete Round Summaries"}
-                  </span>
-                </div>
-                <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2 flex items-center gap-2">
-                  <BookOpen size={16} className="text-cyan-400 shrink-0" />
-                  <span className="text-slate-200 truncate">
-                    {isArabic ? "أسئلة السنوات السابقة" : "Past Exam Recalls"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
+          {/* ================= STEP 1: Real Best Sources of Study Screenshot ================= */}
+          {currentStep === 1 && (
+            <motion.div
+              key="step1"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="relative w-full aspect-[1024/675]"
+            >
+              <img
+                src="/helper/committee-best-sources.png"
+                alt="Sixth Course - Best Sources of Study"
+                className="w-full h-full block"
+              />
 
-        {/* Step 2: The Best Source of Study Section & Scores 9 and 10 */}
-        {currentStep === 2 && (
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-md"
-          >
-            {/* Crown Banner */}
-            <div className="bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-transparent border-2 border-amber-500/40 rounded-2xl p-3.5 shadow-xl relative overflow-hidden">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-lg shrink-0">
-                    <Crown size={20} />
-                  </div>
-                  <div>
-                    <h5 className="font-black text-amber-300 text-sm flex items-center gap-1.5">
-                      <span>{isArabic ? "أفضل مصادر الدراسة" : "Best Sources of Study"}</span>
-                      <Sparkles size={13} className="text-amber-400" />
-                    </h5>
-                    <p className="text-[11px] text-slate-300">
-                      {isArabic ? "قسم موصى به لكل مادة دراسية" : "Curated section inside each subject"}
-                    </p>
-                  </div>
-                </div>
+              {/* Exact Highlight for "Best sources of study" Section (Left: 10.74%, Top: 7.26%, Width: 64.84%, Height: 41.78%) */}
+              <motion.div
+                animate={{
+                  boxShadow: [
+                    "0 0 0 2px #f59e0b, 0 0 20px rgba(245, 158, 11, 0.5)",
+                    "0 0 0 3px #fbbf24, 0 0 35px rgba(251, 191, 36, 0.8)",
+                    "0 0 0 2px #f59e0b, 0 0 20px rgba(245, 158, 11, 0.5)",
+                  ],
+                }}
+                transition={{ duration: 2.2, repeat: Infinity }}
+                style={{
+                  left: "10.74%",
+                  top: "7.26%",
+                  width: "64.84%",
+                  height: "41.78%",
+                  borderRadius: "18px",
+                }}
+                className="absolute pointer-events-none z-20 border-2 border-amber-400 bg-amber-400/5"
+              />
 
-                {/* Score 9 & 10 Badge */}
-                <motion.div
-                  animate={{ scale: [1, 1.06, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-xs font-black shrink-0 flex items-center gap-1"
-                >
-                  <Star size={12} className="fill-emerald-400 text-emerald-400" />
-                  <span>{isArabic ? "طلبة 9 و 10" : "Scores 9 & 10"}</span>
-                </motion.div>
-              </div>
-
-              {/* Verified Source Item Demonstration */}
-              <div className="mt-3 bg-slate-950/80 border border-amber-500/30 rounded-xl p-2.5 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-6 h-6 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-                    <Award size={13} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-white truncate">
-                      {isArabic
-                        ? "ملخصات اللجنة المعتمدة - الباطنية سنة 6"
-                        : "Official Committee High-Yield - Course 6"}
-                    </p>
-                    <p className="text-[10px] text-emerald-400 font-medium truncate">
-                      {isArabic
-                        ? "موصى به من الطلاب المتفوقين الحاصلين على 9/10 و 10/10"
-                        : "Recommended by previous top students with 9/10 and 10/10 grades"}
-                    </p>
-                  </div>
+              {/* Verified Recommendations Badge */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                style={{
+                  right: "3%",
+                  top: "12%",
+                }}
+                className="absolute z-30 max-w-[210px] sm:max-w-[240px] p-2.5 sm:p-3 rounded-2xl bg-slate-950/95 border border-amber-500/50 backdrop-blur-md text-white shadow-2xl pointer-events-none"
+              >
+                <div className="flex items-center gap-1.5 text-amber-400 text-xs font-black mb-1">
+                  <Crown size={14} className="text-amber-400" />
+                  <span>{isArabic ? "توصيات الأوائل" : "Senior Top Picks"}</span>
                 </div>
-                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 shrink-0">
-                  TOP PICK
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        )}
+                <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 mb-1">
+                  <Star size={11} className="fill-emerald-400 text-emerald-400" />
+                  <span>{isArabic ? "الحاصلين على درجات 9 و 10" : "Students scoring 9 & 10"}</span>
+                </div>
+                <p className="text-[10px] text-slate-300 leading-tight">
+                  {isArabic
+                    ? "أهم الملخصات والملاحظات المعتمدة لامتحانات السنة السادسة."
+                    : "Curated high-yield notes and summaries for 6th course exams."}
+                </p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Bottom Step Indicator Bar */}
-      <div className="flex items-center justify-between border-t border-slate-800/80 pt-2 text-[11px] text-slate-400 z-10">
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/95 border-t border-slate-800 text-[11px] text-slate-400 z-20">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+          <span className="inline-block w-2 h-2 rounded-full bg-purple-400 animate-ping" />
           {isArabic
-            ? `المرحلة ${currentStep + 1} من 3: ${
+            ? `الخطوة ${currentStep + 1} من 2: ${
                 currentStep === 0
-                  ? "تغطية السنوات 0-6"
-                  : currentStep === 1
-                  ? "مثال السنة السادسة"
-                  : "أفضل مصادر الدراسة (طلبة 9 و 10)"
+                  ? "تغطية السنوات من 0 إلى 6 واختيار السنة السادسة"
+                  : "قسم أفضل مصادر الدراسة وتوصيات المتفوقين"
               }`
-            : `Step ${currentStep + 1} of 3: ${
+            : `Step ${currentStep + 1} of 2: ${
                 currentStep === 0
-                  ? "Course 0 to 6 Archive"
-                  : currentStep === 1
-                  ? "Course 6 Clinical Example"
-                  : "Best Sources (Scores 9 & 10)"
+                  ? "Courses 0 to 6 & Sixth Course Selection"
+                  : "Best Sources Section & Top Student Recommendations"
               }`}
         </span>
         <div className="flex gap-1.5">
-          {[0, 1, 2].map((step) => (
+          {[0, 1].map((step) => (
             <div
               key={step}
               className={`h-1.5 rounded-full transition-all duration-300 ${
-                currentStep === step ? "w-6 bg-amber-400" : "w-2 bg-slate-700"
+                currentStep === step ? "w-6 bg-purple-400" : "w-2 bg-slate-700"
               }`}
             />
           ))}

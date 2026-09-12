@@ -16,7 +16,6 @@ import { WebsiteWalkthroughAnim } from "./animations/WebsiteWalkthroughAnim";
 import { CommitteeWalkthroughAnim } from "./animations/CommitteeWalkthroughAnim";
 import { QuestionBankWalkthroughAnim } from "./animations/QuestionBankWalkthroughAnim";
 import { ExamWalkthroughAnim } from "./animations/ExamWalkthroughAnim";
-import { AquaVisionXAnim } from "./animations/AquaVisionXAnim";
 
 interface Props {
   topic: HelperTopic;
@@ -99,9 +98,6 @@ export function WalkthroughViewer({ topic, isArabic, onBack, onClose }: Props) {
         )}
         {topic.id === "how-to-take-exams" && (
           <ExamWalkthroughAnim currentStep={currentStep} isArabic={isArabic} />
-        )}
-        {topic.id === "how-to-use-aquavisionx" && (
-          <AquaVisionXAnim currentStep={currentStep} isArabic={isArabic} />
         )}
       </div>
 
