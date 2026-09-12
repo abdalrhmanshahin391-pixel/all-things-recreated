@@ -8,6 +8,8 @@ import { SaveNoteDialog, type SaveNotePayload } from "@/components/SaveNoteDialo
 import { useAuth } from "@/hooks/useAuth";
 import { ProtectedContent } from "@/components/protect/ProtectedContent";
 import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
+import { AntiAiText } from "@/components/protect/AntiAiText";
+import { PwaInstallBanner } from "@/components/protect/PwaInstallBanner";
 import { ArabicToggle } from "@/components/quiz/ArabicToggle";
 import { useQuestionTranslation } from "@/hooks/useQuestionTranslation";
 import {
@@ -491,7 +493,8 @@ function RunPage() {
               {reviewIndex + 1} <span className="text-muted-foreground">/ {wrongQuestions.length}</span>
             </div>
           </div>
-          <ProtectionNotice className="mb-6" />
+          <ProtectionNotice className="mb-4" />
+          <PwaInstallBanner className="mb-6" />
           <ProtectedContent context="exam" scope="card">
             <ReviewCard q={q} userAnswer={answers[q.id]} />
           </ProtectedContent>
@@ -559,7 +562,8 @@ function RunPage() {
             </div>
         </div>
 
-        <ProtectionNotice className="mb-6" />
+        <ProtectionNotice className="mb-4" />
+        <PwaInstallBanner className="mb-6" />
 
         </div>
 
@@ -578,15 +582,16 @@ function RunPage() {
                 ))}
                 <button onClick={() => setFinished(true)}
                   className="magnetic-cta w-full py-3.5 rounded-xl text-white font-bold">
-                  <span className="relative z-10">Submit Exam</span>
+                  Submit exam ({questions.filter((q) => answers[q.id]?.length).length}/{questions.length} answered)
                 </button>
               </div>
             ) : (
+              currentQ && (
               <QuestionCard
                 q={currentQ} mode={mode} isAdmin={isAdmin}
                 selected={answers[currentQ.id]}
-                submitted={!!submitted[currentQ.id] || mode === "study"}
-                isFlagged={isFlaggedCurrent}
+                submitted={submitted[currentQ.id] || mode === "study"}
+                isFlagged={flags.has(currentQ.id)}
                 isShining={isFlagShining}
                 onToggleFlag={() => toggleFlag(currentQ.id)}
                  onSelect={(opt) => setAnswers((p) => ({ ...p, [currentQ.id]: toggleSelection(p[currentQ.id], opt, currentQ.answer_mode === "multiple") }))}
@@ -608,6 +613,7 @@ function RunPage() {
                   })
                 }
               />
+              )
             )}
           </div>
 
@@ -638,13 +644,13 @@ function RunPage() {
                               : flagged
                                 ? "bg-amber-50 text-amber-700 border-amber-200"
                                 : answered
-                                  ? "bg-muted text-muted-foreground border-border"
-                                  : "bg-card text-muted-foreground border-border hover:border-indigo-300"
+                                  ? "bg-muted text-foreground border-border"
+                                  : "border-border text-muted-foreground hover:bg-muted"
                       }`}
                     >
                       {i + 1}
                       {flagged && (
-                        <Flag className="absolute -top-1 -right-1 w-3 h-3 text-amber-500 fill-amber-400" />
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border border-card" />
                       )}
                     </button>
                   );
@@ -756,7 +762,13 @@ function QuestionCard({
           dir={show ? "rtl" : undefined}
           className="px-6 py-6 text-lg leading-relaxed text-foreground font-medium"
         >
-          {show ? show.stem : q.stem}
+          <AntiAiText
+            text={show ? show.stem : q.stem}
+            dir={show ? "rtl" : "ltr"}
+            fontSize={18}
+            lineHeight={28}
+            fontWeight={600}
+          />
         </div>
       )}
       {q.answer_mode === "multiple" && (
@@ -887,7 +899,13 @@ function ExamCard({
         {q.image_url && <div className="mb-4"><QuestionImage path={q.image_url} /></div>}
         {(q.stem?.trim() || !q.image_url) && (
           <div dir={show ? "rtl" : undefined} className="text-base leading-relaxed mb-4 text-foreground">
-            {show ? show.stem : q.stem}
+            <AntiAiText
+              text={show ? show.stem : q.stem}
+              dir={show ? "rtl" : "ltr"}
+              fontSize={16}
+              lineHeight={26}
+              fontWeight={600}
+            />
           </div>
         )}
          <div className="text-xs italic text-muted-foreground mb-3">
@@ -937,7 +955,13 @@ function ReviewCard({ q, userAnswer }: { q: Question; userAnswer: string[] | und
       {q.image_url && <div className="px-6 pt-6"><QuestionImage path={q.image_url} /></div>}
       {(q.stem?.trim() || !q.image_url) && (
         <div dir={show ? "rtl" : undefined} className="px-6 py-6 text-base leading-relaxed text-foreground">
-          {show ? show.stem : q.stem}
+          <AntiAiText
+            text={show ? show.stem : q.stem}
+            dir={show ? "rtl" : "ltr"}
+            fontSize={16}
+            lineHeight={26}
+            fontWeight={600}
+          />
         </div>
       )}
       <div className="px-6 pb-6 space-y-3">

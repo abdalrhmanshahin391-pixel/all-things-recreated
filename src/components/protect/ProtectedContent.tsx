@@ -69,8 +69,16 @@ export function ProtectedContent({
         ? settings.protect_qbank !== false
         : true;
 
-  /** Deterrence + logging: everyone signed in except admins. */
-  const active = settings.protect_enabled && areaEnabled && !!user && !isAdmin && !loading;
+  /** Deterrence + logging: everyone signed in, plus admins if local test mode is toggled. */
+  const adminTestMode =
+    typeof window !== "undefined" &&
+    localStorage.getItem("aquaqbank-admin-test-protect") === "true";
+  const active =
+    settings.protect_enabled &&
+    areaEnabled &&
+    !!user &&
+    (!isAdmin || adminTestMode) &&
+    !loading;
   /** The watermark itself is shown to admins too. */
   const watermarked =
     settings.protect_enabled && areaEnabled && !!user && !loading && !!identity;

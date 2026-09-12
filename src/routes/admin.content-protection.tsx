@@ -85,6 +85,20 @@ function AdminContentProtection() {
   const [tracing, setTracing] = useState(false);
   const [stegoInfo, setStegoInfo] = useState<{ detected: boolean; resolvedCode?: string } | null>(null);
   const [q, setQ] = useState("");
+  const [adminTestMode, setAdminTestMode] = useState(() =>
+    typeof window !== "undefined" && localStorage.getItem("aquaqbank-admin-test-protect") === "true",
+  );
+
+  function toggleAdminTestMode(v: boolean) {
+    setAdminTestMode(v);
+    if (v) {
+      localStorage.setItem("aquaqbank-admin-test-protect", "true");
+      toast.success("Admin test mode enabled: Blur & alarms are now active on this device");
+    } else {
+      localStorage.removeItem("aquaqbank-admin-test-protect");
+      toast.success("Admin test mode disabled: Normal admin exemption restored");
+    }
+  }
 
   useEffect(() => {
     if (!loading && !isAdmin) guardRedirect(navigate);
@@ -208,6 +222,7 @@ function AdminContentProtection() {
             <Toggle label="Block printing" desc="Ctrl/Cmd+P and print output disabled" checked={toggles.protect_block_print} onChange={(v) => patch({ protect_block_print: v })} />
             <Toggle label="Block copying" desc="Copy is replaced with a traced warning" checked={toggles.protect_block_copy} onChange={(v) => patch({ protect_block_copy: v })} />
             <Toggle label="Developer tools guard" desc="Blur and log when devtools open" checked={toggles.protect_devtools_guard} onChange={(v) => patch({ protect_devtools_guard: v })} />
+            <Toggle label="Admin test mode (this device)" desc="Activate blur & alarms for your admin account so you can test mobile protections directly" checked={adminTestMode} onChange={toggleAdminTestMode} />
           </div>
 
           <div className="mt-6 grid gap-5 sm:grid-cols-2">
