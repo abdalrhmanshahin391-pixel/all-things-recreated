@@ -146,6 +146,41 @@ export function getArmeniaPrayerSummary(now = new Date()): ArmeniaPrayerSummary 
   };
 }
 
+export const PRAYER_NOTIFS_ENABLED_KEY = "prayer_notifications_enabled";
+
+/**
+ * Checks if silent prayer notifications are enabled in user preferences.
+ */
+export function isPrayerNotificationEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  const val = localStorage.getItem(PRAYER_NOTIFS_ENABLED_KEY);
+  if (val === "false") return false;
+  if (val === "true") {
+    if ("Notification" in window && Notification.permission === "denied") {
+      return false;
+    }
+    return true;
+  }
+  // Default: if browser permission was already granted, default to true, otherwise false
+  if ("Notification" in window && Notification.permission === "granted") {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Saves user preference to turn silent prayer notifications on or off.
+ */
+export function setPrayerNotificationEnabled(enabled: boolean) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(PRAYER_NOTIFS_ENABLED_KEY, enabled ? "true" : "false");
+  try {
+    window.dispatchEvent(new Event("prayer_notifications_toggle"));
+  } catch {
+    // Ignore
+  }
+}
+
 /**
  * Checks if browser notifications are supported and permitted.
  */
@@ -169,6 +204,7 @@ export async function requestSilentNotificationPermission(): Promise<boolean> {
  */
 export function sendSilentPrayerNotification(prayerNameAr: string, prayerKey: string) {
   if (typeof window === "undefined") return;
+  if (!isPrayerNotificationEnabled()) return;
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const storageKey = `prayer_notified_${todayStr}_${prayerKey}`;
@@ -205,3 +241,4 @@ export function sendSilentPrayerNotification(prayerNameAr: string, prayerKey: st
     // Ignore toast errors
   }
 }
+

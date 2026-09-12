@@ -3,6 +3,8 @@ import {
   getArmeniaPrayerSummary,
   sendSilentPrayerNotification,
   requestSilentNotificationPermission,
+  isPrayerNotificationEnabled,
+  setPrayerNotificationEnabled,
   type ArmeniaPrayerSummary,
 } from "@/lib/prayer-times";
 import { Bell, BellOff, VolumeX, MoonStar, Clock, ChevronDown, Check } from "lucide-react";
@@ -16,6 +18,7 @@ import { toast } from "sonner";
 export function PrayerNotificationWatcher() {
   useEffect(() => {
     function checkPrayer() {
+      if (!isPrayerNotificationEnabled()) return;
       const now = new Date();
       const summary = getArmeniaPrayerSummary(now);
 
@@ -43,13 +46,23 @@ export function PrayerNotificationWatcher() {
  */
 export function ArmeniaPrayerBar({ className = "" }: { className?: string }) {
   const [summary, setSummary] = useState<ArmeniaPrayerSummary | null>(null);
-  const [permission, setPermission] = useState<NotificationPermission>("default");
+  const [enabled, setEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return isPrayerNotificationEnabled();
+  });
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      setPermission(Notification.permission);
+    function syncState() {
+      setEnabled(isPrayerNotificationEnabled());
     }
+    syncState();
+    window.addEventListener("prayer_notifications_toggle", syncState);
+    window.addEventListener("storage", syncState);
+    return () => {
+      window.removeEventListener("prayer_notifications_toggle", syncState);
+      window.removeEventListener("storage", syncState);
+    };
   }, []);
 
   useEffect(() => {
@@ -60,22 +73,37 @@ export function ArmeniaPrayerBar({ className = "" }: { className?: string }) {
     return () => clearInterval(timer);
   }, []);
 
-  async function handleTogglePermission() {
-    if (typeof window === "undefined" || !("Notification" in window)) {
+  async function handleToggle() {
+    if (typeof window === "undefined") return;
+
+    if (enabled) {
+      setPrayerNotificationEnabled(false);
+      setEnabled(false);
+      toast.info("تم إيقاف إشعارات الأذان الصامتة 🔕");
+      return;
+    }
+
+    if (!("Notification" in window)) {
       toast.error("متصفحك لا يدعم إشعارات الويب");
       return;
     }
-    if (permission === "granted") {
-      toast.info("إشعارات الأذان الصامتة مفعلة بالفعل (بدون صوت)");
+
+    if (Notification.permission === "denied") {
+      toast.error("إشعارات المتصفح محظورة. يرجى تفعيلها من إعدادات المتصفح");
       return;
     }
-    const granted = await requestSilentNotificationPermission();
-    setPermission(granted ? "granted" : "denied");
-    if (granted) {
-      toast.success("تم تفعيل إشعارات الأذان الصامتة (بدون صوت) بنجاح 🔔");
-    } else {
-      toast.error("تم رفض إذن الإشعارات من المتصفح");
+
+    if (Notification.permission !== "granted") {
+      const granted = await requestSilentNotificationPermission();
+      if (!granted) {
+        toast.error("تم رفض إذن الإشعارات من المتصفح");
+        return;
+      }
     }
+
+    setPrayerNotificationEnabled(true);
+    setEnabled(true);
+    toast.success("تم تفعيل إشعارات الأذان الصامتة (بدون صوت) بنجاح 🔔");
   }
 
   if (!summary) return null;
@@ -101,30 +129,34 @@ export function ArmeniaPrayerBar({ className = "" }: { className?: string }) {
 
         {/* Right/End side: Actions & Details Toggle */}
         <div className="flex items-center gap-2">
-          {/* Silent notification button */}
+          {/* Silent notification toggle button */}
           <button
             type="button"
-            onClick={handleTogglePermission}
+            onClick={handleToggle}
             title={
-              permission === "granted"
-                ? "إشعارات الأذان الصامتة مفعلة"
-                : "تفعيل إشعار بدون صوت عند الأذان"
+              enabled
+                ? "إشعارات الأذان الصامتة مفعّلة — انقر للإيقاف"
+                : "إشعارات الأذان الصامتة متوقفة — انقر للتفعيل"
             }
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-medium transition-all ${
-              permission === "granted"
-                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
-                : "bg-muted text-muted-foreground hover:text-foreground border border-border"
+            aria-pressed={enabled}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold cursor-pointer transition-all ${
+              enabled
+                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 shadow-xs"
+                : "bg-muted/70 text-muted-foreground hover:text-foreground hover:bg-muted border border-border"
             }`}
           >
-            {permission === "granted" ? (
+            {enabled ? (
               <>
                 <Bell size={13} className="text-emerald-600 dark:text-emerald-400" />
                 <span className="hidden sm:inline">تنبيه صامت مفعّل</span>
+                <span className="sm:hidden">مفعّل</span>
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               </>
             ) : (
               <>
-                <VolumeX size={13} />
-                <span>تفعيل تنبيه بدون صوت</span>
+                <BellOff size={13} className="text-muted-foreground" />
+                <span className="hidden sm:inline">تنبيه صامت متوقف</span>
+                <span className="sm:hidden">متوقف</span>
               </>
             )}
           </button>
