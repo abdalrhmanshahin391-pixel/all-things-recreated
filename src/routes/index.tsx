@@ -21,6 +21,7 @@ import { AcademyHome } from "@/components/home/academy/AcademyHome";
 import { EthicsBands } from "@/components/about/EthicsBands";
 import { EventEntryButtons } from "@/components/events/EventButtons";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { StudentHelper } from "@/components/home/helper/StudentHelper";
 import ogImage from "@/assets/aquaqbank-og-gold.jpg.asset.json";
 
 
@@ -90,6 +91,7 @@ function Index() {
         <AcademyHome />
         <InstallAppBanner />
         <NotificationsPrompt />
+        <StudentHelper />
       </div>
     );
   }
@@ -154,6 +156,7 @@ function Index() {
 
       <InstallAppBanner />
       <NotificationsPrompt />
+      <StudentHelper />
     </div>
   );
 }
