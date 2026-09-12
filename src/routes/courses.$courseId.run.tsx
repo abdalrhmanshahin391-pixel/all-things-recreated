@@ -8,8 +8,6 @@ import { SaveNoteDialog, type SaveNotePayload } from "@/components/SaveNoteDialo
 import { useAuth } from "@/hooks/useAuth";
 import { ProtectedContent } from "@/components/protect/ProtectedContent";
 import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
-import { AntiAiText } from "@/components/protect/AntiAiText";
-import { PwaInstallBanner } from "@/components/protect/PwaInstallBanner";
 import { ArabicToggle } from "@/components/quiz/ArabicToggle";
 import { useQuestionTranslation } from "@/hooks/useQuestionTranslation";
 import {
@@ -493,8 +491,7 @@ function RunPage() {
               {reviewIndex + 1} <span className="text-muted-foreground">/ {wrongQuestions.length}</span>
             </div>
           </div>
-          <ProtectionNotice className="mb-4" />
-          <PwaInstallBanner className="mb-6" />
+          <ProtectionNotice className="mb-6" />
           <ProtectedContent context="exam" scope="card">
             <ReviewCard q={q} userAnswer={answers[q.id]} />
           </ProtectedContent>
@@ -560,12 +557,10 @@ function RunPage() {
             <div className="text-sm text-muted-foreground font-semibold tabular-nums">
               Q{current + 1} <span className="text-muted-foreground">/ {questions.length}</span>
             </div>
+          </div>
         </div>
 
-        <ProtectionNotice className="mb-4" />
-        <PwaInstallBanner className="mb-6" />
-
-        </div>
+        <ProtectionNotice className="mb-6" />
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
           <div>
@@ -762,13 +757,7 @@ function QuestionCard({
           dir={show ? "rtl" : undefined}
           className="px-6 py-6 text-lg leading-relaxed text-foreground font-medium"
         >
-          <AntiAiText
-            text={show ? show.stem : q.stem}
-            dir={show ? "rtl" : "ltr"}
-            fontSize={18}
-            lineHeight={28}
-            fontWeight={600}
-          />
+          {show ? show.stem : q.stem}
         </div>
       )}
       {q.answer_mode === "multiple" && (
@@ -899,13 +888,7 @@ function ExamCard({
         {q.image_url && <div className="mb-4"><QuestionImage path={q.image_url} /></div>}
         {(q.stem?.trim() || !q.image_url) && (
           <div dir={show ? "rtl" : undefined} className="text-base leading-relaxed mb-4 text-foreground">
-            <AntiAiText
-              text={show ? show.stem : q.stem}
-              dir={show ? "rtl" : "ltr"}
-              fontSize={16}
-              lineHeight={26}
-              fontWeight={600}
-            />
+            {show ? show.stem : q.stem}
           </div>
         )}
          <div className="text-xs italic text-muted-foreground mb-3">
@@ -955,13 +938,7 @@ function ReviewCard({ q, userAnswer }: { q: Question; userAnswer: string[] | und
       {q.image_url && <div className="px-6 pt-6"><QuestionImage path={q.image_url} /></div>}
       {(q.stem?.trim() || !q.image_url) && (
         <div dir={show ? "rtl" : undefined} className="px-6 py-6 text-base leading-relaxed text-foreground">
-          <AntiAiText
-            text={show ? show.stem : q.stem}
-            dir={show ? "rtl" : "ltr"}
-            fontSize={16}
-            lineHeight={26}
-            fontWeight={600}
-          />
+          {show ? show.stem : q.stem}
         </div>
       )}
       <div className="px-6 pb-6 space-y-3">

@@ -64,7 +64,7 @@ const DEFAULT_TOGGLES: Toggles = {
   protect_block_copy: true,
   protect_consent_required: true,
   protect_devtools_guard: true,
-  protect_watermark_opacity: 0.1,
+  protect_watermark_opacity: 0.06,
   protect_auto_lock_threshold: 12,
   protect_terms_en: "",
 };
@@ -117,7 +117,7 @@ function AdminContentProtection() {
           protect_block_copy: data.protect_block_copy ?? true,
           protect_consent_required: data.protect_consent_required ?? true,
           protect_devtools_guard: data.protect_devtools_guard ?? true,
-          protect_watermark_opacity: Number(data.protect_watermark_opacity ?? 0.18),
+          protect_watermark_opacity: Number(data.protect_watermark_opacity ?? 0.06),
           protect_auto_lock_threshold: Number(data.protect_auto_lock_threshold ?? 12),
           protect_terms_en: data.protect_terms_en ?? "",
         });
