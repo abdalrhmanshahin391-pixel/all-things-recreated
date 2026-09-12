@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import {
   HelpCircle,
   BookOpen,
@@ -19,6 +19,7 @@ interface CourseSessionGuideProps {
   className?: string;
   modalOpen?: boolean;
   onModalOpenChange?: (open: boolean) => void;
+  onStartTour?: () => void;
 }
 
 export function CourseSessionGuide({
@@ -26,6 +27,7 @@ export function CourseSessionGuide({
   className = "",
   modalOpen: controlledModalOpen,
   onModalOpenChange,
+  onStartTour,
 }: CourseSessionGuideProps) {
   const { lang, setLang } = useLang();
   const isArabic = lang === "ar";
@@ -78,11 +80,22 @@ export function CourseSessionGuide({
               <button
                 type="button"
                 onClick={() => setModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-black hover:bg-primary/90 transition-all cursor-pointer shadow-sm shadow-primary/20"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-background hover:bg-muted text-xs font-bold text-foreground transition-all cursor-pointer shadow-sm"
               >
-                <Sparkles size={14} />
+                <HelpCircle size={14} />
                 <span>{isArabic ? "دليل مفصل" : "Full Guide"}</span>
               </button>
+
+              {onStartTour && (
+                <button
+                  type="button"
+                  onClick={onStartTour}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-black hover:bg-primary/90 transition-all cursor-pointer shadow-sm shadow-primary/20 hover:scale-105 active:scale-95"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  <span>{isArabic ? "جولة تفاعلية حية" : "Live Tour"}</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -428,6 +441,20 @@ export function GuideButtonTrigger({ onClick, isArabic }: { onClick: () => void;
     >
       <HelpCircle size={13} className="text-primary animate-pulse" />
       <span>{isArabic ? "دليل الاستخدام" : "Guide"}</span>
+    </button>
+  );
+}
+
+export function LiveTourButtonTrigger({ onClick, isArabic }: { onClick: () => void; isArabic: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 text-xs font-black text-indigo-600 dark:text-indigo-400 transition-all shadow-sm cursor-pointer hover:scale-105 active:scale-95 shrink-0"
+      title={isArabic ? "بدء جولة تفاعلية حية على الصفحة" : "Start Interactive Live Tour"}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+      <span>{isArabic ? "جولة حية" : "Live Tour"}</span>
     </button>
   );
 }

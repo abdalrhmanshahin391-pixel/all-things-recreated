@@ -23,7 +23,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useServerFn } from "@tanstack/react-start";
 import { setSubjectAccess, setSubjectOrdered, type SubjectAccess } from "@/lib/subjects.functions";
 import { AdminBackupControls } from "@/components/course/AdminBackupControls";
-import { CourseSessionGuide, GuideButtonTrigger } from "@/components/course/CourseSessionGuide";
+import { CourseSessionGuide, GuideButtonTrigger, LiveTourButtonTrigger } from "@/components/course/CourseSessionGuide";
+import { LiveCourseTour } from "@/components/course/LiveCourseTour";
 import { useLang } from "@/components/LanguageProvider";
 import { ensureFreeEnrollment } from "@/lib/course-access";
 import { toast } from "sonner";
@@ -116,6 +117,7 @@ function CourseDetailPage() {
   const { lang } = useLang();
   const isArabic = lang === "ar";
   const [guideModalOpen, setGuideModalOpen] = useState(false);
+  const [liveTourOpen, setLiveTourOpen] = useState(false);
   const updateAccess = useServerFn(setSubjectAccess);
   const updateOrdered = useServerFn(setSubjectOrdered);
 
@@ -322,6 +324,22 @@ function CourseDetailPage() {
     if (next.has(s.id)) next.delete(s.id);
     else next.add(s.id);
     setSelected(next);
+  };
+
+  const firstFreeSubject = useMemo(
+    () => subjects.find((s) => !isSubjectLocked(s)) || subjects[0],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [subjects, enrolled, isFree, user],
+  );
+
+  const handleStartLiveTour = () => {
+    if (firstFreeSubject) {
+      setOpenGroups((prev) => ({ ...prev, [firstFreeSubject.group_id]: true }));
+      if (!enrolled) {
+        setSelected(new Set([firstFreeSubject.id]));
+      }
+    }
+    setLiveTourOpen(true);
   };
 
   const startSession = (mode: "study" | "session" | "exam") => {
@@ -560,6 +578,7 @@ function CourseDetailPage() {
           showInlineBanner={true}
           modalOpen={guideModalOpen}
           onModalOpenChange={setGuideModalOpen}
+          onStartTour={handleStartLiveTour}
           className="mb-8"
         />
 
@@ -647,11 +666,13 @@ function CourseDetailPage() {
                           const isSelected = selected.has(s.id);
                           const flaggedCount = flaggedBySubject[s.id] ?? 0;
                           const wrongCount = incorrectBySubject[s.id] ?? 0;
+                          const isTourSubject = !enrolled && firstFreeSubject ? s.id === firstFreeSubject.id : s.id === subjects[0]?.id;
                           return (
                             <div
                               key={s.id}
                               className="subject-row"
                               data-locked={sLocked}
+                              data-tour={isTourSubject ? "tour-subject" : undefined}
                             >
                               <span className="text-[11px] font-bold text-muted-foreground tabular-nums w-6">
                                 {String(idx + 1).padStart(2, "0")}
@@ -757,17 +778,20 @@ function CourseDetailPage() {
           {/* RIGHT — session panel */}
           <aside className="lg:sticky lg:top-24 self-start">
             <div className="medical-card overflow-hidden">
-              <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+              <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-indigo-600" />
                   <span className="font-bold text-foreground">
                     {isArabic ? "بدء جلسة أو امتحان" : "Start a session"}
                   </span>
                 </div>
-                <GuideButtonTrigger onClick={() => setGuideModalOpen(true)} isArabic={isArabic} />
+                <div className="flex items-center gap-1.5">
+                  <LiveTourButtonTrigger onClick={handleStartLiveTour} isArabic={isArabic} />
+                  <GuideButtonTrigger onClick={() => setGuideModalOpen(true)} isArabic={isArabic} />
+                </div>
               </div>
 
-              {locked ? (
+              {locked && !liveTourOpen && (selected.size === 0 || anySelectedLocked) ? (
                 <div className="p-6 text-center">
                   <div className="mx-auto w-12 h-12 aurora-ring mb-4">
                     <div className="relative z-10 w-12 h-12 rounded-full bg-card border border-indigo-200 grid place-items-center mx-auto">
@@ -829,39 +853,45 @@ function CourseDetailPage() {
                   })()}
 
                   <div className="px-5 py-3 space-y-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Timer className="w-4 h-4 text-indigo-600" />
-                        <span className="font-semibold text-muted-foreground">Timed (Exam)</span>
+                    <div data-tour="tour-timed" className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Timer className="w-4 h-4 text-indigo-600" />
+                          <span className="font-semibold text-muted-foreground">
+                            {isArabic ? "امتحان بوقت محدد" : "Timed (Exam)"}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => setTimed((v) => !v)}
+                          className={`relative w-11 h-6 rounded-full transition-colors ${timed ? "bg-indigo-600" : "bg-muted"}`}
+                          aria-label="Toggle timed mode"
+                        >
+                          <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform ${timed ? "translate-x-5" : ""}`} />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => setTimed((v) => !v)}
-                        className={`relative w-11 h-6 rounded-full transition-colors ${timed ? "bg-indigo-600" : "bg-muted"}`}
-                        aria-label="Toggle timed mode"
-                      >
-                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform ${timed ? "translate-x-5" : ""}`} />
-                      </button>
+                      {timed && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {[15, 30, 60, 90, 120].map((m) => (
+                            <button
+                              key={m}
+                              onClick={() => setDurationMin(m)}
+                              className={`px-3 py-1 rounded-md text-xs font-bold border transition-colors ${
+                                durationMin === m
+                                  ? "bg-indigo-600 text-white border-indigo-600"
+                                  : "border-border text-muted-foreground hover:border-indigo-300"
+                              }`}
+                            >
+                              {m < 60 ? `${m}m` : `${m / 60}h${m % 60 ? ` ${m % 60}m` : ""}`}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    {timed && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {[15, 30, 60, 90, 120].map((m) => (
-                          <button
-                            key={m}
-                            onClick={() => setDurationMin(m)}
-                            className={`px-3 py-1 rounded-md text-xs font-bold border transition-colors ${
-                              durationMin === m
-                                ? "bg-indigo-600 text-white border-indigo-600"
-                                : "border-border text-muted-foreground hover:border-indigo-300"
-                            }`}
-                          >
-                            {m < 60 ? `${m}m` : `${m / 60}h${m % 60 ? ` ${m % 60}m` : ""}`}
-                          </button>
-                        ))}
-                      </div>
-                    )}
 
-                    <div>
-                      <div className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">Question pool</div>
+                    <div data-tour="tour-pool">
+                      <div className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
+                        {isArabic ? "مجموعة الأسئلة" : "Question pool"}
+                      </div>
                       <div className="segmented w-full">
                         {(["all", "flagged", "incorrect"] as const).map((p) => (
                           <button
@@ -870,39 +900,39 @@ function CourseDetailPage() {
                             data-active={pool === p}
                             className="flex-1"
                           >
-                            {p === "all" ? "All" : p === "flagged" ? "Flagged" : "Wrong"}
+                            {p === "all" ? (isArabic ? "الكل" : "All") : p === "flagged" ? (isArabic ? "المعلمة" : "Flagged") : (isArabic ? "الأخطاء" : "Wrong")}
                           </button>
                         ))}
                       </div>
                     </div>
                   </div>
 
-                  <div className="px-5 pb-5 space-y-2">
+                  <div data-tour="tour-modes" className="px-5 pb-5 space-y-2">
                     <button
                       onClick={() => startSession("study")}
                       className="w-full py-2.5 rounded-xl border border-indigo-200 text-indigo-700 font-bold text-sm hover:bg-indigo-50 transition-colors inline-flex items-center justify-center gap-2"
                     >
-                      <BookOpen className="w-4 h-4" /> Study mode
+                      <BookOpen className="w-4 h-4" /> {isArabic ? "نمط المراجعة (Study)" : "Study mode"}
                     </button>
                     <button
                       onClick={() => startSession("session")}
                       className="magnetic-cta w-full py-3 rounded-xl text-white font-bold text-sm inline-flex items-center justify-center gap-2"
                     >
                       <span className="relative z-10 inline-flex items-center gap-2">
-                        <Sparkles className="w-4 h-4" /> Session mode
+                        <Sparkles className="w-4 h-4" /> {isArabic ? "نمط التدريب (Session)" : "Session mode"}
                       </span>
                     </button>
                     <button
                       onClick={() => startSession("exam")}
                       className="w-full py-2.5 rounded-xl bg-foreground text-white font-bold text-sm hover:opacity-90 transition-colors inline-flex items-center justify-center gap-2"
                     >
-                      <Timer className="w-4 h-4" /> Exam mode
+                      <Timer className="w-4 h-4" /> {isArabic ? "نمط الامتحان (Exam)" : "Exam mode"}
                     </button>
                     <button
                       onClick={() => { setSelected(new Set()); setTimed(false); }}
                       className="w-full py-2 rounded-xl border border-border text-muted-foreground hover:bg-muted text-xs font-semibold inline-flex items-center justify-center gap-2"
                     >
-                      <RotateCcw className="w-3.5 h-3.5" /> Reset
+                      <RotateCcw className="w-3.5 h-3.5" /> {isArabic ? "إعادة ضبط" : "Reset"}
                     </button>
                   </div>
                 </>
@@ -910,6 +940,19 @@ function CourseDetailPage() {
             </div>
           </aside>
         </div>
+
+        <LiveCourseTour
+          isOpen={liveTourOpen}
+          onClose={() => setLiveTourOpen(false)}
+          isArabic={isArabic}
+          isEnrolled={enrolled}
+          freeSubjectName={firstFreeSubject?.name}
+          onSelectFreeSubject={() => {
+            if (firstFreeSubject) {
+              setSelected(new Set([firstFreeSubject.id]));
+            }
+          }}
+        />
       </main>
     </div>
   );

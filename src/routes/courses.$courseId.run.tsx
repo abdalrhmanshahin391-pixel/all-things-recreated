@@ -89,6 +89,7 @@ function RunPage() {
   const [secondsLeft, setSecondsLeft] = useState(initialSeconds);
 
   const [finished, setFinished] = useState(false);
+  const [timeSpentOnQuestion, setTimeSpentOnQuestion] = useState(0);
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewIndex, setReviewIndex] = useState(0);
   const [pendingNote, setPendingNote] = useState<SaveNotePayload | null>(null);
@@ -496,6 +497,23 @@ function RunPage() {
 
   const currentQ = questions[current];
   const isFlaggedCurrent = currentQ ? flags.has(currentQ.id) : false;
+
+  // Reset question timer on question change
+  useEffect(() => {
+    setTimeSpentOnQuestion(0);
+  }, [current]);
+
+  // Track time spent on current active question in study/session mode
+  useEffect(() => {
+    if (finished || reviewMode || mode === "exam" || !currentQ || submitted[currentQ.id]) return;
+    const interval = setInterval(() => {
+      setTimeSpentOnQuestion((s) => s + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [finished, reviewMode, mode, currentQ?.id, submitted]);
+
+  const isFlagShining =
+    timeSpentOnQuestion >= 45 && !isFlaggedCurrent && !submitted[currentQ?.id];
   const timeLow = timed && secondsLeft <= initialSeconds * 0.1;
 
   return (
@@ -568,6 +586,7 @@ function RunPage() {
                 selected={answers[currentQ.id]}
                 submitted={!!submitted[currentQ.id] || mode === "study"}
                 isFlagged={isFlaggedCurrent}
+                isShining={isFlagShining}
                 onToggleFlag={() => toggleFlag(currentQ.id)}
                  onSelect={(opt) => setAnswers((p) => ({ ...p, [currentQ.id]: toggleSelection(p[currentQ.id], opt, currentQ.answer_mode === "multiple") }))}
                 onSubmit={() => setSubmitted((p) => ({ ...p, [currentQ.id]: true }))}
@@ -670,11 +689,11 @@ function fmtTime(s: number) {
 }
 
 function QuestionCard({
-  q, mode, isAdmin, selected, submitted, isFlagged,
+  q, mode, isAdmin, selected, submitted, isFlagged, isShining = false,
   onToggleFlag, onSelect, onSubmit, onNext, isLast, onSetCorrect, onDelete, onCapture,
 }: {
   q: Question; mode: Mode; isAdmin: boolean;
-   selected: string[] | undefined; submitted: boolean; isFlagged: boolean;
+  selected: string[] | undefined; submitted: boolean; isFlagged: boolean; isShining?: boolean;
   onToggleFlag: () => void; onSelect: (label: string) => void;
   onSubmit: () => void; onNext: () => void; isLast: boolean;
   onSetCorrect: (optionId: string) => void; onDelete: () => void;
@@ -685,21 +704,38 @@ function QuestionCard({
   const { data: tr, loading: trLoading, error: trError } = useQuestionTranslation(q.id, ar);
   const show = ar && tr ? tr : null;
 
-
   return (
     <div className="medical-card overflow-hidden">
-      <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-        <button
-          onClick={onToggleFlag}
-          className={`text-xs inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border transition-colors ${
-            isFlagged
-              ? "border-amber-200 bg-amber-50 text-amber-700"
-              : "border-border text-muted-foreground hover:text-foreground hover:border-border"
-          }`}
-        >
-          <Flag className={`w-3.5 h-3.5 ${isFlagged ? "fill-amber-400" : ""}`} />
-          {isFlagged ? "Flagged" : "Flag question"}
-        </button>
+      <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-3">
+        <div className="relative inline-flex items-center gap-2">
+          <button
+            onClick={onToggleFlag}
+            className={`text-xs inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border transition-all duration-300 ${
+              isFlagged
+                ? "border-amber-200 bg-amber-50 text-amber-700 font-bold"
+                : isShining
+                  ? "border-amber-400 bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 ring-2 ring-amber-400 ring-offset-1 animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.6)] font-bold scale-105"
+                  : "border-border text-muted-foreground hover:text-foreground hover:border-border"
+            }`}
+          >
+            <Flag
+              className={`w-3.5 h-3.5 transition-transform ${
+                isFlagged
+                  ? "fill-amber-400 text-amber-600"
+                  : isShining
+                    ? "text-amber-600 fill-amber-300 animate-bounce"
+                    : ""
+              }`}
+            />
+            {isFlagged ? "Flagged" : "Flag question"}
+          </button>
+          {isShining && !isFlagged && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 dark:text-amber-200 bg-amber-100/95 dark:bg-amber-950/90 border border-amber-300 dark:border-amber-700 px-2 py-0.5 rounded-full animate-pulse shadow-sm whitespace-nowrap">
+              <Sparkles className="w-3 h-3 text-amber-500" />
+              {show ? "سؤال يستغرق وقتاً؟ اضغط 🚩 لتعليمه" : "Taking long? Flag 🚩 to revisit"}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <ArabicToggle on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
           {isAdmin && isStudy && (
