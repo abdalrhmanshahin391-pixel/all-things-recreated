@@ -10,6 +10,7 @@ import {
   ExternalLink,
   ChevronLeft,
   ChevronRight,
+  Languages,
 } from "lucide-react";
 import type { HelperTopic } from "./helper-data";
 import { WebsiteWalkthroughAnim } from "./animations/WebsiteWalkthroughAnim";
@@ -22,9 +23,10 @@ interface Props {
   isArabic: boolean;
   onBack: () => void;
   onClose: () => void;
+  onToggleLang?: () => void;
 }
 
-export function WalkthroughViewer({ topic, isArabic, onBack, onClose }: Props) {
+export function WalkthroughViewer({ topic, isArabic, onBack, onClose, onToggleLang }: Props) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
 
@@ -58,20 +60,33 @@ export function WalkthroughViewer({ topic, isArabic, onBack, onClose }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Top Header with Back Navigation */}
+      {/* Top Header with Back Navigation & Prominent Language Switcher */}
       <div className="flex items-center justify-between pb-3 border-b border-border/80">
         <button
+          type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-muted-foreground hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
         >
           {isArabic ? <ArrowRight size={16} /> : <ArrowLeft size={16} />}
           <span>{isArabic ? "الرجوع لجميع الأسئلة" : "All Questions"}</span>
         </button>
 
-        <div className="flex items-center gap-2">
-          <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${topic.badge_color}`}>
+        <div className="flex items-center gap-2 mr-8 rtl:mr-0 rtl:ml-8">
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${topic.badge_color}`}>
             {isArabic ? topic.badge_ar : topic.badge_en}
           </span>
+
+          {onToggleLang && (
+            <button
+              type="button"
+              onClick={onToggleLang}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border-2 border-primary/50 bg-primary/10 hover:bg-primary/20 text-xs font-black text-primary transition-all shadow-sm cursor-pointer hover:scale-105 active:scale-95 shrink-0"
+              title={isArabic ? "Switch to English" : "التحويل إلى العربية"}
+            >
+              <Languages size={15} className="text-primary" />
+              <span>{isArabic ? "English" : "العربية"}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -129,37 +144,47 @@ export function WalkthroughViewer({ topic, isArabic, onBack, onClose }: Props) {
       {/* Playback Controls & Action CTA */}
       <div className="mt-4 pt-3 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3">
         {/* Step Navigation & Playback */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Back Button */}
           <button
+            type="button"
             onClick={handlePrev}
-            className="p-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border hover:bg-muted text-xs font-bold text-foreground transition-colors shadow-sm cursor-pointer"
             title={isArabic ? "الخطوة السابقة" : "Previous Step"}
           >
-            {isArabic ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+            {isArabic ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+            <span>{isArabic ? "السابق" : "Back"}</span>
           </button>
 
+          {/* Play/Pause Button */}
           <button
+            type="button"
             onClick={() => setIsPlaying(!isPlaying)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border hover:bg-muted text-xs font-semibold text-foreground transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border hover:bg-muted text-xs font-bold text-foreground transition-colors shadow-sm cursor-pointer"
           >
             {isPlaying ? <Pause size={14} /> : <Play size={14} />}
             <span>{isPlaying ? (isArabic ? "إيقاف" : "Pause") : isArabic ? "تشغيل" : "Play"}</span>
           </button>
 
+          {/* Next Button */}
           <button
+            type="button"
             onClick={handleNext}
-            className="p-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-primary/40 bg-primary/10 hover:bg-primary/20 text-xs font-bold text-primary transition-colors shadow-sm cursor-pointer"
             title={isArabic ? "الخطوة التالية" : "Next Step"}
           >
-            {isArabic ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+            <span>{isArabic ? "التالي" : "Next"}</span>
+            {isArabic ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}
           </button>
 
+          {/* Replay Button */}
           <button
+            type="button"
             onClick={handleReplay}
-            className="p-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors ml-1"
+            className="p-1.5 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer ml-1 rtl:ml-0 rtl:mr-1"
             title={isArabic ? "إعادة العرض" : "Replay"}
           >
-            <RotateCcw size={16} />
+            <RotateCcw size={15} />
           </button>
         </div>
 

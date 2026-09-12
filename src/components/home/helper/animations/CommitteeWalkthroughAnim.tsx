@@ -54,13 +54,33 @@ export function CommitteeWalkthroughAnim({ currentStep, isArabic }: Props) {
                 className="w-full h-full block"
               />
 
+              {/* Outer Orange Container Box framing Medicine Study Plan + All Courses: Left: 18.36%, Top: 42.70%, Width: 59.28%, Height: 50.00% */}
+              <motion.div
+                animate={{
+                  boxShadow: [
+                    "0 0 0 2.5px #f97316, 0 0 20px rgba(249, 115, 22, 0.6)",
+                    "0 0 0 3.5px #ea580c, 0 0 30px rgba(234, 88, 12, 0.85)",
+                    "0 0 0 2.5px #f97316, 0 0 20px rgba(249, 115, 22, 0.6)",
+                  ],
+                }}
+                transition={{ duration: 2.2, repeat: Infinity }}
+                style={{
+                  left: "18.36%",
+                  top: "42.70%",
+                  width: "59.28%",
+                  height: "50.00%",
+                  borderRadius: "20px",
+                }}
+                className="absolute pointer-events-none z-20 border-2 border-orange-500 bg-orange-500/5"
+              />
+
               {/* Exact Highlight for Sixth Course Card (Left: 18.36%, Top: 78.65%, Width: 25.49%, Height: 13.3%) */}
               <motion.div
                 animate={{
                   boxShadow: [
-                    "0 0 0 2px #a855f7, 0 0 15px rgba(168, 85, 247, 0.6)",
-                    "0 0 0 3px #f59e0b, 0 0 25px rgba(245, 158, 11, 0.8)",
-                    "0 0 0 2px #a855f7, 0 0 15px rgba(168, 85, 247, 0.6)",
+                    "0 0 0 2px #a855f7, 0 0 15px rgba(168, 85, 247, 0.7)",
+                    "0 0 0 3px #c084fc, 0 0 25px rgba(192, 132, 252, 0.9)",
+                    "0 0 0 2px #a855f7, 0 0 15px rgba(168, 85, 247, 0.7)",
                   ],
                 }}
                 transition={{ duration: 2, repeat: Infinity }}
@@ -71,7 +91,7 @@ export function CommitteeWalkthroughAnim({ currentStep, isArabic }: Props) {
                   height: "13.30%",
                   borderRadius: "14px",
                 }}
-                className="absolute pointer-events-none z-20 border-2 border-purple-400 bg-purple-500/10"
+                className="absolute pointer-events-none z-20 border-2 border-purple-400 bg-purple-500/20"
               />
 
               {/* Pointer cursor clicking Sixth Course card */}
@@ -119,24 +139,24 @@ export function CommitteeWalkthroughAnim({ currentStep, isArabic }: Props) {
                 className="w-full h-full block"
               />
 
-              {/* Exact Highlight for "Best sources of study" Section (Left: 10.74%, Top: 7.26%, Width: 64.84%, Height: 41.78%) */}
+              {/* Exact Highlight for "Best sources of study" Section (all cards enclosed): Left: 9.28%, Top: 6.20%, Width: 77.50%, Height: 51.50% */}
               <motion.div
                 animate={{
                   boxShadow: [
-                    "0 0 0 2px #f59e0b, 0 0 20px rgba(245, 158, 11, 0.5)",
-                    "0 0 0 3px #fbbf24, 0 0 35px rgba(251, 191, 36, 0.8)",
-                    "0 0 0 2px #f59e0b, 0 0 20px rgba(245, 158, 11, 0.5)",
+                    "0 0 0 2.5px #f97316, 0 0 20px rgba(249, 115, 22, 0.6)",
+                    "0 0 0 3.5px #ea580c, 0 0 35px rgba(234, 88, 12, 0.85)",
+                    "0 0 0 2.5px #f97316, 0 0 20px rgba(249, 115, 22, 0.6)",
                   ],
                 }}
                 transition={{ duration: 2.2, repeat: Infinity }}
                 style={{
-                  left: "10.74%",
-                  top: "7.26%",
-                  width: "64.84%",
-                  height: "41.78%",
-                  borderRadius: "18px",
+                  left: "9.28%",
+                  top: "6.20%",
+                  width: "77.50%",
+                  height: "51.50%",
+                  borderRadius: "22px",
                 }}
-                className="absolute pointer-events-none z-20 border-2 border-amber-400 bg-amber-400/5"
+                className="absolute pointer-events-none z-20 border-2 border-orange-500 bg-orange-500/5"
               />
 
               {/* Verified Recommendations Badge */}
@@ -144,23 +164,23 @@ export function CommitteeWalkthroughAnim({ currentStep, isArabic }: Props) {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 style={{
-                  right: "3%",
-                  top: "12%",
+                  right: "2.5%",
+                  top: "10%",
                 }}
-                className="absolute z-30 max-w-[210px] sm:max-w-[240px] p-2.5 sm:p-3 rounded-2xl bg-slate-950/95 border border-amber-500/50 backdrop-blur-md text-white shadow-2xl pointer-events-none"
+                className="absolute z-30 max-w-[200px] sm:max-w-[230px] p-2.5 rounded-2xl bg-slate-950/95 border border-amber-500/60 backdrop-blur-md text-white shadow-2xl pointer-events-none"
               >
-                <div className="flex items-center gap-1.5 text-amber-400 text-xs font-black mb-1">
+                <div className="flex items-center gap-1.5 text-amber-400 text-xs font-black mb-0.5">
                   <Crown size={14} className="text-amber-400" />
                   <span>{isArabic ? "توصيات الأوائل" : "Senior Top Picks"}</span>
                 </div>
-                <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 mb-1">
+                <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 mb-0.5">
                   <Star size={11} className="fill-emerald-400 text-emerald-400" />
                   <span>{isArabic ? "الحاصلين على درجات 9 و 10" : "Students scoring 9 & 10"}</span>
                 </div>
                 <p className="text-[10px] text-slate-300 leading-tight">
                   {isArabic
-                    ? "أهم الملخصات والملاحظات المعتمدة لامتحانات السنة السادسة."
-                    : "Curated high-yield notes and summaries for 6th course exams."}
+                    ? "أهم الملخصات والملاحظات المعتمدة للسنة السادسة."
+                    : "Curated high-yield notes and summaries for 6th course."}
                 </p>
               </motion.div>
             </motion.div>

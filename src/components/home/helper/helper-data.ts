@@ -64,9 +64,9 @@ export const HELPER_TOPICS: HelperTopic[] = [
         title_en: "Step 3: Understand Courses, Resources & Lectures",
         title_ar: "الخطوة الثالثة: التعرف على الكورسات، المصادر، والمحاضرات",
         description_en:
-          "• Courses: Question bank for each subject with study & test modes.\n• Resources: Committee (لجنة الطب والجراحة) with free books, past papers & study material.\n• Lectures: Video or PDF for certain material that makes it easier to study.",
+          "• Courses: Question bank for each material with study & test modes.\n• Resources: Committee (لجنة الطب والجراحة) with medical books, summaries & essential study resources.\n• Lectures: Video or PDF explanations for each material to make studying easier.",
         description_ar:
-          "• الكورسات (Courses): بنك الأسئلة لكل مادة مع أنماط تدريب وامتحانات.\n• المصادر (Resources): أرشيف لجنة الطب والجراحة للكتب، أسئلة السنوات السابقة، والملخصات.\n• المحاضرات (Lectures): فيديوهات أو ملفات PDF لشرح المواد المعقدة وتسهيل دراستها.",
+          "• الكورسات (Courses): بنك الأسئلة لكل مادة مع أنماط تدريب وامتحانات.\n• المصادر (Resources): أرشيف لجنة الطب والجراحة للكتب، الملخصات، والمصادر المعتمدة.\n• المحاضرات (Lectures): فيديوهات وملفات PDF لشرح المواد وتسهيل دراستها.",
         badge_en: "3 Core Pillars",
         badge_ar: "3 أقسام رئيسية",
       },

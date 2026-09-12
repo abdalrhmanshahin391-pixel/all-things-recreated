@@ -100,15 +100,15 @@ export function WebsiteWalkthroughAnim({ currentStep, isArabic }: Props) {
             {activeCard === "courses" && (
               <span className="font-semibold text-amber-400">
                 {isArabic
-                  ? "الكورسات: بنك الأسئلة لكل مادة مقسم حسب السنوات"
-                  : "Courses: Subject question banks year-by-year"}
+                  ? "الكورسات: بنك الأسئلة لكل مادة (أسئلة واختبارات)"
+                  : "Courses: Question bank for each material"}
               </span>
             )}
             {activeCard === "resources" && (
               <span className="font-semibold text-amber-400">
                 {isArabic
-                  ? "المصادر: لجنة الطب والجراحة (ملخصات، كتب، وأسئلة سنوات)"
-                  : "Resources: Committee archives (summaries, books & past papers)"}
+                  ? "المصادر: أرشيف لجنة الطب والجراحة للكتب والملخصات المعتمدة"
+                  : "Resources: Committee archives for medical books & approved summaries"}
               </span>
             )}
             {activeCard === "lectures" && (
@@ -207,24 +207,24 @@ export function WebsiteWalkthroughAnim({ currentStep, isArabic }: Props) {
                 className="w-full h-full block"
               />
 
-              {/* Exact Bounding Box for YSMU Card: Left: 13.87%, Top: 36.47%, Width: 21.29%, Height: 61.13% */}
+              {/* Exact Bounding Box for YSMU Card: Left: 13.87%, Top: 52.57%, Width: 21.29%, Height: 45.03% */}
               <motion.div
                 animate={{
                   boxShadow: [
-                    "0 0 0 2px #38bdf8, 0 0 15px rgba(56, 189, 248, 0.6)",
-                    "0 0 0 3px #f59e0b, 0 0 30px rgba(245, 158, 11, 0.8)",
-                    "0 0 0 2px #38bdf8, 0 0 15px rgba(56, 189, 248, 0.6)",
+                    "0 0 0 2px #f97316, 0 0 15px rgba(249, 115, 22, 0.6)",
+                    "0 0 0 3.5px #ea580c, 0 0 30px rgba(234, 88, 12, 0.85)",
+                    "0 0 0 2px #f97316, 0 0 15px rgba(249, 115, 22, 0.6)",
                   ],
                 }}
                 transition={{ duration: 2.2, repeat: Infinity }}
                 style={{
                   left: "13.87%",
-                  top: "36.47%",
+                  top: "52.57%",
                   width: "21.29%",
-                  height: "61.13%",
+                  height: "45.03%",
                   borderRadius: "24px",
                 }}
-                className="absolute pointer-events-none z-20 border-2 border-amber-400 bg-amber-400/5"
+                className="absolute pointer-events-none z-20 border-2 border-orange-500 bg-orange-500/10"
               />
 
               {/* Pointer cursor clicking inside YSMU Card */}
@@ -237,7 +237,7 @@ export function WebsiteWalkthroughAnim({ currentStep, isArabic }: Props) {
                 transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
                 style={{
                   left: "24.5%",
-                  top: "67%",
+                  top: "75%",
                 }}
                 className="absolute z-30 pointer-events-none"
               >

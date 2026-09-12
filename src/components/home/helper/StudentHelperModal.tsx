@@ -73,12 +73,13 @@ export function StudentHelperModal({ open, onOpenChange, initialTopicId }: Props
             isArabic={isArabic}
             onBack={() => setSelectedTopicId(null)}
             onClose={handleClose}
+            onToggleLang={() => setLang(isArabic ? "en" : "ar")}
           />
         ) : (
           /* Question Selection Grid */
           <div>
-            {/* Header with Title & Language Switcher */}
-            <div className="flex items-start justify-between pb-4 border-b border-border/80">
+            {/* Header with Title & Prominent Language Switcher */}
+            <div className="flex items-start justify-between pb-4 border-b border-border/80 gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 shadow-inner">
                   <HelpCircle size={24} />
@@ -95,13 +96,14 @@ export function StudentHelperModal({ open, onOpenChange, initialTopicId }: Props
                 </div>
               </div>
 
-              {/* Language Switcher Button */}
+              {/* Prominent Language Switcher Button (Always Visible at Top) */}
               <button
                 type="button"
                 onClick={() => setLang(isArabic ? "en" : "ar")}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background hover:bg-muted text-xs font-bold text-foreground transition-colors mr-8"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border-2 border-primary/50 bg-primary/10 hover:bg-primary/20 text-xs sm:text-sm font-black text-primary transition-all shadow-sm mr-8 rtl:mr-0 rtl:ml-8 shrink-0 hover:scale-105 active:scale-95 cursor-pointer"
+                title={isArabic ? "Switch to English" : "التحويل إلى العربية"}
               >
-                <Languages size={14} className="text-primary" />
+                <Languages size={16} className="text-primary" />
                 <span>{isArabic ? "English" : "العربية"}</span>
               </button>
             </div>
@@ -155,15 +157,6 @@ export function StudentHelperModal({ open, onOpenChange, initialTopicId }: Props
                     : "Interactive demonstrations tailored for medical students"}
                 </span>
               </span>
-
-              <button
-                type="button"
-                onClick={() => setLang(isArabic ? "en" : "ar")}
-                className="sm:hidden inline-flex items-center gap-1 text-xs font-bold text-primary"
-              >
-                <Languages size={12} />
-                <span>{isArabic ? "English" : "العربية"}</span>
-              </button>
             </div>
           </div>
         )}
