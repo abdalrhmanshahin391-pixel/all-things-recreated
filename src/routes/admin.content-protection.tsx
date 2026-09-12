@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft, ShieldAlert, Search, Lock, Unlock, Activity, Fingerprint, Loader2,
+  ArrowLeft, ShieldAlert, Search, Lock, Unlock, Activity, Fingerprint, Loader2, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +16,7 @@ import {
   adminSetContentLock,
   adminTraceWatermarkCode,
 } from "@/lib/content-protection.functions";
+import { decodeZeroWidth } from "@/components/protect/watermark";
 
 export const Route = createFileRoute("/admin/content-protection")({
   head: () => ({
@@ -82,6 +83,7 @@ function AdminContentProtection() {
   const [code, setCode] = useState("");
   const [matches, setMatches] = useState<any[] | null>(null);
   const [tracing, setTracing] = useState(false);
+  const [stegoInfo, setStegoInfo] = useState<{ detected: boolean; resolvedCode?: string } | null>(null);
   const [q, setQ] = useState("");
 
   useEffect(() => {
@@ -101,7 +103,7 @@ function AdminContentProtection() {
           protect_block_copy: data.protect_block_copy ?? true,
           protect_consent_required: data.protect_consent_required ?? true,
           protect_devtools_guard: data.protect_devtools_guard ?? true,
-          protect_watermark_opacity: Number(data.protect_watermark_opacity ?? 0.1),
+          protect_watermark_opacity: Number(data.protect_watermark_opacity ?? 0.18),
           protect_auto_lock_threshold: Number(data.protect_auto_lock_threshold ?? 12),
           protect_terms_en: data.protect_terms_en ?? "",
         });
@@ -128,10 +130,21 @@ function AdminContentProtection() {
 
   async function trace() {
     setTracing(true);
+    setStegoInfo(null);
     try {
-      const res = await traceFn({ data: { code } });
+      const extracted = decodeZeroWidth(code);
+      const queryCode = extracted || code;
+      const res = await traceFn({ data: { code: queryCode } });
       setMatches(res.matches);
-      if (!res.matches.length) toast.error("No account matches that code");
+      setStegoInfo({
+        detected: !!(extracted || res.extractedFromStego),
+        resolvedCode: res.resolvedCode || queryCode.trim().toUpperCase(),
+      });
+      if (!res.matches.length) {
+        toast.error("No account matches that code");
+      } else {
+        toast.success(`Found ${res.matches.length} matching account(s)`);
+      }
     } catch (e: any) {
       toast.error(e?.message || "Trace failed");
     } finally {
@@ -242,21 +255,30 @@ function AdminContentProtection() {
 
         {/* Trace a leak */}
         <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
-          <h2 className="font-black text-lg flex items-center gap-2"><Fingerprint size={18} className="text-indigo-600" /> Trace a leaked screenshot</h2>
+          <h2 className="font-black text-lg flex items-center gap-2"><Fingerprint size={18} className="text-indigo-600" /> Trace a leaked screenshot or text</h2>
           <p className="text-sm text-slate-500 mt-1">
-            Read the code printed in the watermark of the leaked image and paste it here to find the account.
+            Enter the code from the watermark (e.g. <span className="font-mono font-bold">3F9A21B0</span>), or paste any leaked question text copied from chat or Telegram. Invisible steganographic fingerprints are detected automatically.
           </p>
           <div className="mt-4 flex gap-2">
             <input
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="e.g. 3F9A21B0"
-              className="flex-1 rounded-xl border border-slate-200 px-3 py-2 font-mono uppercase"
+              placeholder="Paste code or leaked text snippet…"
+              className="flex-1 rounded-xl border border-slate-200 px-3 py-2 font-mono text-sm"
             />
             <button onClick={trace} disabled={tracing} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 text-white px-4 py-2 text-xs font-black uppercase tracking-widest disabled:opacity-50">
               {tracing ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} Trace
             </button>
           </div>
+
+          {stegoInfo?.detected && (
+            <div className="mt-3 flex items-center gap-2 rounded-xl bg-indigo-50 border border-indigo-200 p-3 text-xs font-bold text-indigo-900">
+              <Sparkles size={16} className="text-indigo-600 shrink-0" />
+              <span>
+                Detected invisible zero-width fingerprint: <code className="font-mono text-indigo-700 bg-white px-2 py-0.5 rounded border border-indigo-200">{stegoInfo.resolvedCode}</code>
+              </span>
+            </div>
+          )}
           {matches?.map((m) => (
             <div key={m.id} className="mt-3 rounded-2xl border border-rose-100 bg-rose-50 p-4">
               <div className="font-black">{m.full_name || m.username}</div>

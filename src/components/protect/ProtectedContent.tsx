@@ -5,7 +5,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { acceptContentTerms, logContentEvent } from "@/lib/content-protection.functions";
-import { fingerprintPattern, tiledWatermark, type WatermarkIdentity } from "./watermark";
+import {
+  fingerprintPattern,
+  tiledWatermark,
+  encodeZeroWidth,
+  injectZeroWidthFingerprint,
+  type WatermarkIdentity,
+} from "./watermark";
 
 const DEFAULT_TERMS_EN =
   "Everything on this page is watermarked with your name, account code, time and IP address. " +
@@ -130,9 +136,9 @@ export function ProtectedContent({
         e.preventDefault();
         raiseAlarm("Screenshot attempt recorded", "screenshot_attempt");
         try {
-          void navigator.clipboard?.writeText(
-            `Protected content — captured by ${identity?.username ?? ""} (${identity?.code ?? ""}). This attempt was logged.`,
-          );
+          const code = identity?.code ?? "";
+          const msg = `Protected content — captured by ${identity?.username || identity?.name || "user"} (${code}). This attempt was logged.`;
+          void navigator.clipboard?.writeText(injectZeroWidthFingerprint(msg, code));
         } catch {
           /* clipboard not permitted */
         }
@@ -173,10 +179,9 @@ export function ProtectedContent({
     const onCopy = (e: ClipboardEvent) => {
       if (!settings.protect_block_copy) return;
       e.preventDefault();
-      e.clipboardData?.setData(
-        "text/plain",
-        `Copying is disabled. Traced to ${identity?.username ?? ""} (${identity?.code ?? ""}).`,
-      );
+      const code = identity?.code ?? "";
+      const msg = `Copying is disabled. Traced to ${identity?.username || identity?.name || "user"} (${code}).`;
+      e.clipboardData?.setData("text/plain", injectZeroWidthFingerprint(msg, code));
       log("copy_attempt");
     };
 
@@ -188,6 +193,7 @@ export function ProtectedContent({
     window.addEventListener("keydown", onKey, true);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("blur", onBlur);
+    window.addEventListener("pagehide", onBlur);
     window.addEventListener("focus", onFocus);
     document.addEventListener("contextmenu", onContext);
     document.addEventListener("copy", onCopy);
@@ -198,6 +204,7 @@ export function ProtectedContent({
       window.removeEventListener("keydown", onKey, true);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("blur", onBlur);
+      window.removeEventListener("pagehide", onBlur);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("contextmenu", onContext);
       document.removeEventListener("copy", onCopy);
@@ -254,7 +261,7 @@ export function ProtectedContent({
 
   if (!active && !watermarked) return <>{children}</>;
 
-  const opacity = Math.min(Math.max(settings.protect_watermark_opacity ?? 0.1, 0.02), 0.4);
+  const opacity = Math.min(Math.max(settings.protect_watermark_opacity ?? 0.18, 0.02), 0.4);
   const terms = settings.protect_terms_en?.trim() || DEFAULT_TERMS_EN;
 
   if (active && settings.protect_consent_required && consented === false) {
@@ -313,6 +320,16 @@ export function ProtectedContent({
         {children}
       </div>
 
+      {/* invisible steganography DOM trap */}
+      {identity?.code && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -left-[9999px] top-0 select-text text-[0px] opacity-0"
+        >
+          {encodeZeroWidth(identity.code)}
+        </span>
+      )}
+
       {/* forensic watermark layers */}
       {watermarked && (
         <>
@@ -321,7 +338,7 @@ export function ProtectedContent({
             aria-hidden
             className={`pointer-events-none absolute inset-0 ${scope === "card" ? "z-20" : "z-30"}`}
             style={{
-              backgroundImage: tiledWatermark(identity!, opacity),
+              backgroundImage: tiledWatermark(identity!, opacity, tick),
               backgroundRepeat: "repeat",
             }}
           />

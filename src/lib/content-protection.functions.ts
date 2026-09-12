@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader, getRequestIP } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { decodeZeroWidth } from "@/components/protect/watermark";
 
 export const CONTENT_EVENT_KINDS = [
   "screenshot_attempt",
@@ -192,13 +193,17 @@ export const adminContentProtectionOverview = createServerFn({ method: "POST" })
     };
   });
 
-/** Trace a leaked screenshot back to an account using the code in its watermark. */
+/** Trace a leaked screenshot or text snippet back to an account using its code or hidden steganography. */
 export const adminTraceWatermarkCode = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { code: string }) => {
-    const code = (d?.code ?? "").trim().replace(/[^0-9a-fA-F-]/g, "");
-    if (code.length < 4) throw new Error("Enter at least 4 characters of the code");
-    return { code: code.toLowerCase() };
+    const raw = d?.code ?? "";
+    const stegoCode = decodeZeroWidth(raw);
+    const target = (stegoCode || raw).trim().replace(/[^0-9a-fA-F-]/g, "");
+    if (target.length < 4) {
+      throw new Error("Enter at least 4 characters of the code, or paste text containing a hidden trace");
+    }
+    return { code: target.toLowerCase(), extractedFromStego: !!stegoCode, targetCode: target.toUpperCase() };
   })
   .handler(async ({ data, context }) => {
     const { data: isAdmin } = await context.supabase.rpc("has_role", {
@@ -214,7 +219,11 @@ export const adminTraceWatermarkCode = createServerFn({ method: "POST" })
     const matches = (profiles ?? []).filter((p: any) =>
       p.id.replace(/-/g, "").startsWith(data.code.replace(/-/g, "")),
     );
-    return { matches };
+    return {
+      matches,
+      extractedFromStego: data.extractedFromStego,
+      resolvedCode: data.targetCode,
+    };
   });
 
 export const adminSetContentLock = createServerFn({ method: "POST" })
