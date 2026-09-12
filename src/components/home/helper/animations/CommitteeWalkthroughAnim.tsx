@@ -74,26 +74,6 @@ export function CommitteeWalkthroughAnim({ currentStep, isArabic }: Props) {
                 className="absolute pointer-events-none z-20 border-2 border-orange-500 bg-orange-500/5"
               />
 
-              {/* Exact Highlight for Sixth Course Card (Left: 18.36%, Top: 78.65%, Width: 25.49%, Height: 13.3%) */}
-              <motion.div
-                animate={{
-                  boxShadow: [
-                    "0 0 0 2px #a855f7, 0 0 15px rgba(168, 85, 247, 0.7)",
-                    "0 0 0 3px #c084fc, 0 0 25px rgba(192, 132, 252, 0.9)",
-                    "0 0 0 2px #a855f7, 0 0 15px rgba(168, 85, 247, 0.7)",
-                  ],
-                }}
-                transition={{ duration: 2, repeat: Infinity }}
-                style={{
-                  left: "18.36%",
-                  top: "78.65%",
-                  width: "25.49%",
-                  height: "13.30%",
-                  borderRadius: "14px",
-                }}
-                className="absolute pointer-events-none z-20 border-2 border-purple-400 bg-purple-500/20"
-              />
-
               {/* Pointer cursor clicking Sixth Course card */}
               <motion.div
                 animate={{
@@ -116,7 +96,7 @@ export function CommitteeWalkthroughAnim({ currentStep, isArabic }: Props) {
                   <motion.span
                     animate={{ scale: [0.5, 2.2], opacity: [1, 0] }}
                     transition={{ duration: 1.2, repeat: Infinity }}
-                    className="absolute -top-1 -left-1 w-5 h-5 rounded-full border-2 border-purple-400"
+                    className="absolute -top-1 -left-1 w-5 h-5 rounded-full border-2 border-orange-400"
                   />
                 </div>
               </motion.div>
