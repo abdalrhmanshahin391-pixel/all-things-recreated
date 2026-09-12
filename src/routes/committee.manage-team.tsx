@@ -7,6 +7,12 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { useCommitteeRole } from "@/hooks/useCommitteeRole";
 import { guardRedirect } from "@/lib/guard-redirect";
 import { supabase } from "@/integrations/supabase/client";
+import { CommitteeVisibilityAdminToolbar } from "@/components/committee/CommitteeRecruitmentBanner";
+import {
+  getCommitteeRecruitmentSettings,
+  DEFAULT_RECRUITMENT_SETTINGS,
+  type CommitteeRecruitmentSettings,
+} from "@/lib/committee-recruitment.functions";
 
 export const Route = createFileRoute("/committee/manage-team")({
   head: () => ({
@@ -32,6 +38,14 @@ function ManageTeamPage() {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const debounceRef = useRef<number | null>(null);
+
+  const { data: recruitmentData } = useQuery({
+    queryKey: ["committee-recruitment-settings"],
+    queryFn: () => getCommitteeRecruitmentSettings(),
+    staleTime: 10 * 1000,
+  });
+  const [localSettings, setLocalSettings] = useState<CommitteeRecruitmentSettings | null>(null);
+  const settings: CommitteeRecruitmentSettings = localSettings || recruitmentData || DEFAULT_RECRUITMENT_SETTINGS;
 
   useEffect(() => {
     // Only decide access once roles are actually known, otherwise a head is
@@ -106,9 +120,17 @@ function ManageTeamPage() {
         <h1 className="mb-2 inline-flex items-center gap-3 text-3xl font-black tracking-tight">
           <ShieldCheck size={26} className="text-primary" /> Committee team
         </h1>
-        <p className="mb-8 text-muted-foreground" dir="rtl">
-          إضافة أو إزالة أعضاء لجنة الطب والجراحة.
+        <p className="mb-6 text-muted-foreground" dir="rtl">
+          إضافة أو إزالة أعضاء لجنة الطب والجراحة والتحكم في حالة ظهور الفريق للطلاب.
         </p>
+
+        <CommitteeVisibilityAdminToolbar
+          settings={settings}
+          onUpdated={(newS) => {
+            setLocalSettings(newS);
+            qc.invalidateQueries({ queryKey: ["committee-recruitment-settings"] });
+          }}
+        />
 
         <div className="relative mb-6 rounded-2xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 focus-within:border-primary">

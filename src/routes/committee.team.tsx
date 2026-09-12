@@ -10,6 +10,15 @@ import { useLang } from "@/components/LanguageProvider";
 import { MemberCard } from "@/components/members/MemberCard";
 import { MemberForm } from "@/components/members/MemberForm";
 import { JoinTeamNote } from "@/components/committee/JoinTeamNote";
+import {
+  CommitteeRecruitmentCard,
+  CommitteeVisibilityAdminToolbar,
+} from "@/components/committee/CommitteeRecruitmentBanner";
+import {
+  getCommitteeRecruitmentSettings,
+  DEFAULT_RECRUITMENT_SETTINGS,
+  type CommitteeRecruitmentSettings,
+} from "@/lib/committee-recruitment.functions";
 import { membersQuery, type Member } from "@/lib/members";
 
 export const Route = createFileRoute("/committee/team")({
@@ -39,10 +48,20 @@ function TeamPage() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Member | null>(null);
 
+  const { data: recruitmentData } = useQuery({
+    queryKey: ["committee-recruitment-settings"],
+    queryFn: () => getCommitteeRecruitmentSettings(),
+    staleTime: 10 * 1000,
+  });
+
+  const [localSettings, setLocalSettings] = useState<CommitteeRecruitmentSettings | null>(null);
+  const settings: CommitteeRecruitmentSettings = localSettings || recruitmentData || DEFAULT_RECRUITMENT_SETTINGS;
+
   const list = members ?? [];
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ["committee-members"] });
+    qc.invalidateQueries({ queryKey: ["committee-recruitment-settings"] });
   }
 
   async function del(m: Member) {
@@ -68,6 +87,16 @@ function TeamPage() {
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto max-w-6xl px-5 md:px-8 pt-28 pb-24">
+        {canManage && (
+          <CommitteeVisibilityAdminToolbar
+            settings={settings}
+            onUpdated={(newS) => {
+              setLocalSettings(newS);
+              qc.invalidateQueries({ queryKey: ["committee-recruitment-settings"] });
+            }}
+          />
+        )}
+
         <Link
           to="/committee"
           className="inline-flex items-center gap-1.5 text-sm font-bold text-muted-foreground hover:text-foreground"
@@ -89,7 +118,7 @@ function TeamPage() {
               ? "الطلاب الذين يجمعون المصادر ويرتّبونها سنةً بعد سنة."
               : "The students who gather, check and organise the library, year after year."}
           </p>
-          {canManage && (
+          {canManage && settings.teamVisible && (
             <button
               type="button"
               onClick={() => setAdding(true)}
@@ -100,32 +129,89 @@ function TeamPage() {
           )}
         </header>
 
-        <JoinTeamNote />
+        {!settings.teamVisible ? (
+          <div>
+            <CommitteeRecruitmentCard settings={settings} />
 
-        {isLoading ? (
-          <div className="mt-12 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="aspect-square animate-pulse rounded-[1.4rem] bg-card" />
-            ))}
+            {canManage && (
+              <div className="mt-16 pt-10 border-t border-dashed border-border/80">
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-foreground flex items-center gap-2">
+                      <ShieldCheck size={16} className="text-primary" />
+                      {ar ? "معاينة قائمة الأعضاء (خاصة بالمشرف — مخفية عن الطلاب)" : "Members List Preview (Admin view only — hidden from public)"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {ar ? "يمكنك الاستمرار في إضافة وتعديل وترتيب الأعضاء أثناء فترة الاختيار." : "You can continue managing, adding and sorting members during selection mode."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAdding(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-black text-primary-foreground hover:opacity-90"
+                  >
+                    <Plus size={14} /> {ar ? "إضافة عضو" : "Add member"}
+                  </button>
+                </div>
+
+                {isLoading ? (
+                  <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="aspect-square animate-pulse rounded-[1.4rem] bg-card" />
+                    ))}
+                  </div>
+                ) : list.length === 0 ? (
+                  <p className="py-10 text-center text-muted-foreground text-sm">
+                    {ar ? "لا يوجد أعضاء بعد." : "No members yet."}
+                  </p>
+                ) : (
+                  <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+                    {list.map((m) => (
+                      <MemberCard
+                        key={m.id}
+                        member={m}
+                        ar={ar}
+                        canManage={canManage}
+                        onEdit={() => setEditing(m)}
+                        onDelete={() => del(m)}
+                        onMove={(d) => move(m, d)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        ) : list.length === 0 ? (
-          <p className="mt-14 text-center text-muted-foreground">
-            {ar ? "لا يوجد أعضاء بعد." : "No members yet."}
-          </p>
         ) : (
-          <div className="mt-12 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-            {list.map((m) => (
-              <MemberCard
-                key={m.id}
-                member={m}
-                ar={ar}
-                canManage={canManage}
-                onEdit={() => setEditing(m)}
-                onDelete={() => del(m)}
-                onMove={(d) => move(m, d)}
-              />
-            ))}
-          </div>
+          <>
+            <JoinTeamNote />
+
+            {isLoading ? (
+              <div className="mt-12 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="aspect-square animate-pulse rounded-[1.4rem] bg-card" />
+                ))}
+              </div>
+            ) : list.length === 0 ? (
+              <p className="mt-14 text-center text-muted-foreground">
+                {ar ? "لا يوجد أعضاء بعد." : "No members yet."}
+              </p>
+            ) : (
+              <div className="mt-12 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+                {list.map((m) => (
+                  <MemberCard
+                    key={m.id}
+                    member={m}
+                    ar={ar}
+                    canManage={canManage}
+                    onEdit={() => setEditing(m)}
+                    onDelete={() => del(m)}
+                    onMove={(d) => move(m, d)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </main>
 
