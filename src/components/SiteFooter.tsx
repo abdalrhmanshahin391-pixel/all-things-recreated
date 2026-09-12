@@ -32,7 +32,6 @@ export function SiteFooter() {
     {
       heading: ar ? "الأدوات" : "Tools",
       links: [
-        { label: ar ? "الملخّصات" : "Summaries", to: "/summaries" },
         { label: ar ? "ملاحظاتي" : "My Notes", to: "/notes" },
         { label: ar ? "اللجنة" : "Committee", to: "/committee" },
         { label: "My Mentor", to: "/mentor" },
