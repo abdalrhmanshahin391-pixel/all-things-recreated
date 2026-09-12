@@ -161,7 +161,7 @@ export const CONTENT_GROUPS: ContentGroup[] = [
         ar: "انضم إلى طلاب نجحوا بالتدرب كل يوم.",
       },
       { key: "cms.home.footer.ctaGuest", label: "Button — visitor", en: "Get Started — it's free", ar: "ابدأ الآن — مجاناً" },
-      { key: "cms.home.footer.ctaUser", label: "Button — signed in", en: "Go to My Courses", ar: "إلى دوراتي" },
+      { key: "cms.home.footer.ctaUser", label: "Button — signed in", en: "Explore available university", ar: "استكشف الجامعات المتاحة" },
     ],
   },
   {
