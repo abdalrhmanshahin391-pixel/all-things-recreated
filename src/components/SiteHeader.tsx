@@ -16,6 +16,7 @@ import {
   History,
   Bell,
   GraduationCap,
+  Package as PackageIcon,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -261,6 +262,9 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                 <span className="text-muted-foreground"><Bell size={16} /></span>
                 {t("cms.header.notifications", { defaultValue: "Notifications" })}
               </Link>
+              <MenuLink to="/packages" icon={<PackageIcon size={16} />} onClick={() => setOpen(false)}>
+                {t("cms.header.packages", { defaultValue: "Packages" })}
+              </MenuLink>
               <InstallAppButton />
               {isLectureStaff && !isAdmin && (
                 <>

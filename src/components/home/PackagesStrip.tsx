@@ -52,75 +52,7 @@ export function PackagesStrip() {
   const packages = data?.packages ?? [];
   const courseCounts = data?.courseCounts ?? {};
 
-  // Coming Soon state when no packages are published yet
-  if (packages.length === 0) {
-    return (
-      <section
-        className="py-20 md:py-28 relative overflow-hidden"
-        style={{ background: "linear-gradient(180deg, #f7fbf8 0%, #eef7f1 100%)" }}
-      >
-        <div className="mx-auto max-w-4xl px-4 md:px-8 relative text-center">
-          <span
-            className="inline-flex items-center gap-2 rounded-full bg-card border-2 px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] mb-4"
-            style={{
-              borderColor: "var(--primary-soft)",
-              color: "var(--primary)",
-              boxShadow: "0 3px 0 var(--primary-soft)",
-            }}
-          >
-            <Sparkles size={12} strokeWidth={3} />
-            {t("cms.home.packages.badge", "Packages · الباقات")}
-          </span>
-          <h2
-            className="font-display font-black text-foreground lowercase leading-[1.05]"
-            style={{ fontSize: "clamp(1.75rem, 4vw, 2.75rem)" }}
-          >
-            {t("cms.home.packages.title", "Study Packages & Bundles")}
-          </h2>
-          <p className="mt-4 text-base text-muted-foreground max-w-xl mx-auto">
-            {t("cms.home.packages.subtitle", "Special bundled subscriptions designed to save money while covering all your curriculum.")}
-          </p>
-
-          <div
-            className="mt-10 rounded-3xl border-2 border-dashed p-8 md:p-12 max-w-2xl mx-auto text-center"
-            style={{
-              borderColor: "var(--primary-soft)",
-              background: "linear-gradient(160deg, #ffffff 0%, #f0fdf4 100%)",
-              boxShadow: "0 6px 0 var(--primary-soft)",
-            }}
-          >
-            <div
-              className="w-14 h-14 rounded-2xl text-white grid place-items-center mx-auto mb-4"
-              style={{ background: "var(--primary)", boxShadow: "0 4px 0 color-mix(in oklab, var(--primary) 60%, black)" }}
-            >
-              <PackageIcon size={26} strokeWidth={2.5} />
-            </div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-black uppercase tracking-wider mb-2">
-              <Sparkles size={12} /> Coming Soon · قريباً
-            </div>
-            <h3 className="font-display font-black text-2xl text-foreground mt-2">
-              Exclusive Bundles Coming Soon · باقات حصرية قادمة قريباً
-            </h3>
-            <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-              We are finalizing exciting multi-course discount packages and custom study passes. Stay tuned for massive bundle discounts!
-            </p>
-            <div className="mt-6">
-              <Link
-                to="/packages"
-                className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-extrabold text-white transition-transform hover:-translate-y-0.5"
-                style={{
-                  background: "var(--primary)",
-                  boxShadow: "0 4px 0 color-mix(in oklab, var(--primary) 70%, black)",
-                }}
-              >
-                Explore Packages Page <ArrowRight size={15} />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-    );
-  }
+  if (packages.length === 0) return null;
 
   // Highlight cheapest per-course package as BEST DEAL
   let bestId: string | null = null;
@@ -137,7 +69,7 @@ export function PackagesStrip() {
   }
 
   return (
-    <section className="py-20 md:py-28 relative overflow-hidden" style={{ background: "linear-gradient(180deg, #f7fbf8 0%, #eef7f1 100%)" }}>
+    <section className="py-20 md:py-28 bg-muted relative overflow-hidden">
       <div className="mx-auto max-w-6xl px-4 md:px-8 relative">
         <div className="text-center mb-14">
           <span
@@ -171,14 +103,12 @@ export function PackagesStrip() {
               <Link
                 key={p.id}
                 to="/packages"
-                className="group relative block rounded-3xl overflow-hidden border-2 hover:-translate-y-1 transition-transform"
+                className={`group relative block rounded-3xl overflow-hidden bg-card border-2 hover:-translate-y-1 transition-transform ${
+                  isBest ? "border-primary" : "border-border"
+                }`}
                 style={{
-                  background: isBest
-                    ? "linear-gradient(160deg, #ffffff 0%, #ecfdf5 100%)"
-                    : "linear-gradient(160deg, #ffffff 0%, #f0f9ff 100%)",
-                  borderColor: isBest ? "var(--primary)" : "var(--border)",
                   boxShadow: isBest
-                    ? "0 6px 0 color-mix(in oklab, var(--primary) 40%, white)"
+                    ? "0 6px 0 color-mix(in oklab, var(--primary) 40%, transparent)"
                     : "0 4px 0 var(--border)",
                 }}
               >
@@ -282,7 +212,7 @@ export function PackagesStrip() {
                         </span>
                       )}
                       {hasDiscount && (
-                        <span className="text-[11px] font-bold text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                        <span className="text-[11px] font-bold text-rose-500 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
                           Save {discountPct}%
                         </span>
                       )}
