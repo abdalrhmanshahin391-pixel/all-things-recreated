@@ -343,6 +343,26 @@ function RunPage() {
     }
   }
 
+  // Reset question timer on question change
+  useEffect(() => {
+    setTimeSpentOnQuestion(0);
+  }, [current]);
+
+  const currentQ = questions[current];
+  const isFlaggedCurrent = currentQ ? flags.has(currentQ.id) : false;
+
+  // Track time spent on current active question in study/session mode
+  useEffect(() => {
+    if (finished || reviewMode || mode === "exam" || !currentQ || submitted[currentQ?.id]) return;
+    const interval = setInterval(() => {
+      setTimeSpentOnQuestion((s) => s + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [finished, reviewMode, mode, currentQ?.id, submitted]);
+
+  const isFlagShining =
+    timeSpentOnQuestion >= 45 && !isFlaggedCurrent && !submitted[currentQ?.id];
+
   if (accessDenied) {
     return (
       <div className="min-h-screen bg-background text-foreground">
@@ -495,25 +515,6 @@ function RunPage() {
     );
   }
 
-  const currentQ = questions[current];
-  const isFlaggedCurrent = currentQ ? flags.has(currentQ.id) : false;
-
-  // Reset question timer on question change
-  useEffect(() => {
-    setTimeSpentOnQuestion(0);
-  }, [current]);
-
-  // Track time spent on current active question in study/session mode
-  useEffect(() => {
-    if (finished || reviewMode || mode === "exam" || !currentQ || submitted[currentQ.id]) return;
-    const interval = setInterval(() => {
-      setTimeSpentOnQuestion((s) => s + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [finished, reviewMode, mode, currentQ?.id, submitted]);
-
-  const isFlagShining =
-    timeSpentOnQuestion >= 45 && !isFlaggedCurrent && !submitted[currentQ?.id];
   const timeLow = timed && secondsLeft <= initialSeconds * 0.1;
 
   return (
