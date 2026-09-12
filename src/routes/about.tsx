@@ -348,10 +348,10 @@ function AboutPage() {
           </h2>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Link
-              to="/courses"
+              to="/universities"
               className="inline-block rounded-xl bg-primary px-6 py-3 text-sm font-black text-primary-foreground"
             >
-              {ar ? "تصفّح الدورات" : "Browse courses"}
+              {ar ? "تصفّح الجامعات" : "Browse universities"}
             </Link>
           </div>
         </section>
