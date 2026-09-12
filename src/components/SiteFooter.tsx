@@ -80,15 +80,6 @@ export function SiteFooter() {
                   aquaqbank@gmail.com
                 </a>
               </div>
-              <div>
-                <a
-                  href="tel:0798890962"
-                  dir="ltr"
-                  className="inline-block font-bold text-foreground transition-colors hover:text-primary"
-                >
-                  0798890962
-                </a>
-              </div>
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
               <a

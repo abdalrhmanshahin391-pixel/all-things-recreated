@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Send, Users } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
-import { SiteFooter } from "@/components/SiteFooter";
 import { useLang } from "@/components/LanguageProvider";
 import { resolveMemberPhoto } from "@/lib/members";
 import {
@@ -115,8 +114,6 @@ function EventPage() {
           </main>
         </>
       )}
-
-      <SiteFooter />
     </div>
   );
 }
