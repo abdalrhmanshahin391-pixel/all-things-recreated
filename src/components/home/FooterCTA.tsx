@@ -10,10 +10,15 @@ export function FooterCTA() {
 
   const userCtaText = (() => {
     const text = t("cms.home.footer.ctaUser");
-    if (text === "Go to My Courses" || text === "إلى دوراتي" || !text) {
+    if (
+      text === "Go to My Courses" ||
+      text === "إلى دوراتي" ||
+      text === "Explore available university" ||
+      !text
+    ) {
       return (i18n.language || "").startsWith("ar")
         ? "استكشف الجامعات المتاحة"
-        : "Explore available university";
+        : "Explore available universities";
     }
     return text;
   })();
