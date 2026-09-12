@@ -58,6 +58,7 @@ import {
   RotateCcw,
   BedDouble,
   Calendar,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -1361,9 +1362,9 @@ function TreasureEditDialog({
       } else {
         await addTreasureFn({
           data: {
-            title: title.trim() || null,
+            title: title.trim() || undefined,
             body: trimmedBody,
-            source: source.trim() || null,
+            source: source.trim() || undefined,
             tags: ["كنوزي"],
           },
         });

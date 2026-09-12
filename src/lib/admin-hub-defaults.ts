@@ -38,8 +38,8 @@ export type HubGroup = {
 
 export type HubLayout = { groups: HubGroup[] };
 
-function t(to: string, label: string, icon: string): HubTile {
-  return { id: to, to, label, icon };
+function t(to: string, label: string, icon: string, labelAr?: string): HubTile {
+  return { id: to, to, label, icon, labelAr };
 }
 
 export const DEFAULT_LAYOUT: HubLayout = {
@@ -71,7 +71,7 @@ export const DEFAULT_LAYOUT: HubLayout = {
         t("/admin/question-generator", "Questions Generator", "Sparkles"),
         t("/admin/question-bank", "Question Bank", "Library"),
 
-        t("/admin/packages", "Packages Table", "Package"),
+        t("/admin/packages", "Packages Center", "Package", "مركز الباقات"),
         t("/admin/committee", "Committee Hub", "FolderTree"),
         t("/admin/committee-log", "Committee Log", "History"),
         t("/committee/manage-team", "Committee Team", "UsersRound"),

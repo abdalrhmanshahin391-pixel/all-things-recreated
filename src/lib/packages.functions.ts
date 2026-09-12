@@ -2,6 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export type PackageType = "individual" | "group";
+export type PackageKind = "courses" | "lectures" | "mixed";
+export type PackageSelectionMode = "fixed" | "student_choice";
 
 export type PackageRow = {
   id: string;
@@ -14,6 +16,16 @@ export type PackageRow = {
   paddle_price_id: string | null;
   published: boolean;
   sort_order: number;
+  image_url?: string | null;
+  notes?: string | null;
+  original_price?: number | null;
+  badge_text?: string | null;
+  package_kind?: PackageKind;
+  selection_mode?: PackageSelectionMode;
+  choice_count?: number;
+  features?: string[] | any;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type PackageCourseLink = {
@@ -29,6 +41,8 @@ export type PackageWithCourses = PackageRow & {
     id: string;
     title: string;
     year: number;
+    kind?: string;
+    image_url?: string | null;
     questions_count_mid: number;
     questions_count_final: number;
     note: string | null;
@@ -59,7 +73,7 @@ export const listPublishedPackages = createServerFn({ method: "GET" }).handler(
     if (list.length === 0) return [] as PackageWithCourses[];
     const ids = list.map((p) => p.id);
     const { data: links } = await (supabaseAdmin.from("package_courses") as any)
-      .select("id,package_id,course_id,note,sort_order,courses(id,title,year,questions_count_mid,questions_count_final)")
+      .select("id,package_id,course_id,note,sort_order,courses(id,title,year,kind,image_url,questions_count_mid,questions_count_final)")
       .in("package_id", ids)
       .order("sort_order");
     // Patch in real subject/question counts so package cards never show stale totals.
@@ -68,12 +82,16 @@ export const listPublishedPackages = createServerFn({ method: "GET" }).handler(
     );
     const realCounts = new Map<string, number>();
     if (courseIds.length) {
-      const { data: counts } = await (supabaseAdmin.rpc as any)("get_course_real_counts", {
-        _course_ids: courseIds,
-      });
-      (counts ?? []).forEach((r: any) => {
-        realCounts.set(r.course_id, Number(r.questions_count) || 0);
-      });
+      try {
+        const { data: counts } = await (supabaseAdmin.rpc as any)("get_course_real_counts", {
+          _course_ids: courseIds,
+        });
+        (counts ?? []).forEach((r: any) => {
+          realCounts.set(r.course_id, Number(r.questions_count) || 0);
+        });
+      } catch (countErr) {
+        console.warn("Could not fetch real counts for courses in packages:", countErr);
+      }
     }
     return list.map((p) => ({
       ...p,
@@ -85,6 +103,8 @@ export const listPublishedPackages = createServerFn({ method: "GET" }).handler(
             id: l.courses.id,
             title: l.courses.title,
             year: l.courses.year,
+            kind: l.courses.kind ?? "questions",
+            image_url: l.courses.image_url ?? null,
             // Put real count in mid bucket, zero out final — UI sums them.
             questions_count_mid:
               real !== undefined ? real : l.courses.questions_count_mid ?? 0,
@@ -112,7 +132,7 @@ export const adminListPackages = createServerFn({ method: "GET" })
     if (list.length === 0) return [] as PackageWithCourses[];
     const ids = list.map((p) => p.id);
     const { data: links } = await (supabaseAdmin.from("package_courses") as any)
-      .select("id,package_id,course_id,note,sort_order,courses(id,title,year,questions_count_mid,questions_count_final)")
+      .select("id,package_id,course_id,note,sort_order,courses(id,title,year,kind,image_url,questions_count_mid,questions_count_final)")
       .in("package_id", ids)
       .order("sort_order");
     return list.map((p) => ({
@@ -123,6 +143,8 @@ export const adminListPackages = createServerFn({ method: "GET" })
           id: l.courses.id,
           title: l.courses.title,
           year: l.courses.year,
+          kind: l.courses.kind ?? "questions",
+          image_url: l.courses.image_url ?? null,
           questions_count_mid: l.courses.questions_count_mid ?? 0,
           questions_count_final: l.courses.questions_count_final ?? 0,
           note: l.note,
@@ -144,6 +166,15 @@ export const adminUpsertPackage = createServerFn({ method: "POST" })
       group_size: number;
       published?: boolean;
       sort_order?: number;
+      image_url?: string | null;
+      notes?: string | null;
+      original_price?: number | null;
+      badge_text?: string | null;
+      package_kind?: PackageKind;
+      selection_mode?: PackageSelectionMode;
+      choice_count?: number;
+      features?: string[];
+      paddle_price_id?: string | null;
     }) => {
       if (!data.name?.trim()) throw new Error("name required");
       if (data.price < 0) throw new Error("price must be >= 0");
@@ -166,7 +197,19 @@ export const adminUpsertPackage = createServerFn({ method: "POST" })
       group_size: data.package_type === "individual" ? 1 : data.group_size,
       published: data.published ?? false,
       sort_order: data.sort_order ?? 0,
+      image_url: data.image_url ?? null,
+      notes: data.notes ?? null,
+      original_price: data.original_price != null && data.original_price > 0 ? data.original_price : null,
+      badge_text: data.badge_text?.trim() || null,
+      package_kind: data.package_kind ?? "courses",
+      selection_mode: data.selection_mode ?? "fixed",
+      choice_count: data.choice_count && data.choice_count > 0 ? data.choice_count : 3,
+      features: Array.isArray(data.features) ? data.features : [],
     };
+    if (data.paddle_price_id !== undefined) {
+      payload.paddle_price_id = data.paddle_price_id || null;
+    }
+
     if (data.id) {
       const { data: row, error } = await (supabaseAdmin.from("packages") as any)
         .update(payload)
@@ -259,10 +302,11 @@ export const searchUsersForGroup = createServerFn({ method: "POST" })
  * Auth: validate a package buy intent.
  * Returns the package's paddle_price_id + sanitized customData for Paddle.Checkout.open.
  * For group packages, validates member count and that all member ids exist.
+ * For student-choice packages, validates selected course IDs.
  */
 export const openPackageCheckoutData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { packageId: string; memberIds: string[] }) => {
+  .inputValidator((data: { packageId: string; memberIds: string[]; selectedCourseIds?: string[] }) => {
     if (!data?.packageId) throw new Error("packageId required");
     if (!Array.isArray(data.memberIds)) throw new Error("memberIds array required");
     return data;
@@ -276,6 +320,8 @@ export const openPackageCheckoutData = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw error;
     if (!pkg) throw new Error("Package not found or not published");
+
+    // Auto-sync Paddle price if missing
     if (!pkg.paddle_price_id && Number(pkg.price) > 0) {
       try {
         const { syncPaddlePackagePrice } = await import("@/utils/payments.functions");
@@ -314,8 +360,34 @@ export const openPackageCheckoutData = createServerFn({ method: "POST" })
     } else if (memberIds.length > 0) {
       throw new Error("Individual packages cannot include extra members.");
     }
+
+    const selectedCourseIds = Array.isArray(data.selectedCourseIds)
+      ? Array.from(new Set(data.selectedCourseIds.filter(Boolean)))
+      : [];
+
+    if (pkg.selection_mode === "student_choice") {
+      const needed = pkg.choice_count || 3;
+      if (selectedCourseIds.length !== needed) {
+        throw new Error(`Please select exactly ${needed} courses/lectures for this package.`);
+      }
+      // Verify chosen courses exist
+      const { data: foundCourses, error: cErr } = await (supabaseAdmin.from("courses") as any)
+        .select("id")
+        .in("id", selectedCourseIds);
+      if (cErr) throw cErr;
+      if ((foundCourses ?? []).length !== needed) {
+        throw new Error("One or more selected courses are invalid.");
+      }
+    }
+
     return {
       paddlePriceId: pkg.paddle_price_id as string,
-      customData: { packageId: pkg.id, memberIds, buyerId },
+      customData: {
+        packageId: pkg.id,
+        memberIds,
+        buyerId,
+        selectedCourseIds: selectedCourseIds.length > 0 ? selectedCourseIds : undefined,
+      },
     };
   });
+

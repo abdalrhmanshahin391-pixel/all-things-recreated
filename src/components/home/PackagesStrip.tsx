@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Package as PackageIcon, Users, User, Sparkles, Check } from "lucide-react";
+import { ArrowRight, Package as PackageIcon, Users, User, Sparkles, Check, Flame, Percent } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type Package = {
@@ -9,6 +9,9 @@ type Package = {
   name: string;
   description: string | null;
   price: number;
+  original_price?: number | null;
+  badge_text?: string | null;
+  image_url?: string | null;
   currency: string;
   package_type: string;
   group_size: number;
@@ -24,7 +27,7 @@ export const homePackagesQuery = queryOptions({
   queryFn: async (): Promise<{ packages: Package[]; courseCounts: Record<string, number> }> => {
     const { data } = await supabase
       .from("packages")
-      .select("id, name, description, price, currency, package_type, group_size")
+      .select("id, name, description, price, original_price, badge_text, image_url, currency, package_type, group_size")
       .eq("published", true)
       .order("sort_order", { ascending: true })
       .order("name", { ascending: true });
@@ -49,7 +52,75 @@ export function PackagesStrip() {
   const packages = data?.packages ?? [];
   const courseCounts = data?.courseCounts ?? {};
 
-  if (packages.length === 0) return null;
+  // Coming Soon state when no packages are published yet
+  if (packages.length === 0) {
+    return (
+      <section
+        className="py-20 md:py-28 relative overflow-hidden"
+        style={{ background: "linear-gradient(180deg, #f7fbf8 0%, #eef7f1 100%)" }}
+      >
+        <div className="mx-auto max-w-4xl px-4 md:px-8 relative text-center">
+          <span
+            className="inline-flex items-center gap-2 rounded-full bg-card border-2 px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] mb-4"
+            style={{
+              borderColor: "var(--primary-soft)",
+              color: "var(--primary)",
+              boxShadow: "0 3px 0 var(--primary-soft)",
+            }}
+          >
+            <Sparkles size={12} strokeWidth={3} />
+            {t("cms.home.packages.badge", "Packages · الباقات")}
+          </span>
+          <h2
+            className="font-display font-black text-foreground lowercase leading-[1.05]"
+            style={{ fontSize: "clamp(1.75rem, 4vw, 2.75rem)" }}
+          >
+            {t("cms.home.packages.title", "Study Packages & Bundles")}
+          </h2>
+          <p className="mt-4 text-base text-muted-foreground max-w-xl mx-auto">
+            {t("cms.home.packages.subtitle", "Special bundled subscriptions designed to save money while covering all your curriculum.")}
+          </p>
+
+          <div
+            className="mt-10 rounded-3xl border-2 border-dashed p-8 md:p-12 max-w-2xl mx-auto text-center"
+            style={{
+              borderColor: "var(--primary-soft)",
+              background: "linear-gradient(160deg, #ffffff 0%, #f0fdf4 100%)",
+              boxShadow: "0 6px 0 var(--primary-soft)",
+            }}
+          >
+            <div
+              className="w-14 h-14 rounded-2xl text-white grid place-items-center mx-auto mb-4"
+              style={{ background: "var(--primary)", boxShadow: "0 4px 0 color-mix(in oklab, var(--primary) 60%, black)" }}
+            >
+              <PackageIcon size={26} strokeWidth={2.5} />
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-black uppercase tracking-wider mb-2">
+              <Sparkles size={12} /> Coming Soon · قريباً
+            </div>
+            <h3 className="font-display font-black text-2xl text-foreground mt-2">
+              Exclusive Bundles Coming Soon · باقات حصرية قادمة قريباً
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
+              We are finalizing exciting multi-course discount packages and custom study passes. Stay tuned for massive bundle discounts!
+            </p>
+            <div className="mt-6">
+              <Link
+                to="/packages"
+                className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-extrabold text-white transition-transform hover:-translate-y-0.5"
+                style={{
+                  background: "var(--primary)",
+                  boxShadow: "0 4px 0 color-mix(in oklab, var(--primary) 70%, black)",
+                }}
+              >
+                Explore Packages Page <ArrowRight size={15} />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   // Highlight cheapest per-course package as BEST DEAL
   let bestId: string | null = null;
@@ -74,13 +145,13 @@ export function PackagesStrip() {
             style={{ borderColor: "var(--primary-soft)", color: "var(--primary)", boxShadow: "0 3px 0 var(--primary-soft)" }}
           >
             <Sparkles size={12} strokeWidth={3} />
-            {t("cms.home.packages.badge")}
+            {t("cms.home.packages.badge", "Packages · الباقات")}
           </span>
           <h2 className="font-display font-black text-foreground lowercase leading-[1.05]" style={{ fontSize: "clamp(1.75rem, 4vw, 2.75rem)" }}>
-            {t("cms.home.packages.title")}
+            {t("cms.home.packages.title", "Study Packages & Bundles")}
           </h2>
           <p className="mt-4 text-base text-muted-foreground max-w-2xl mx-auto">
-            {t("cms.home.packages.subtitle")}
+            {t("cms.home.packages.subtitle", "Save big by bundling your subjects and lecture courses.")}
           </p>
         </div>
 
@@ -91,6 +162,10 @@ export function PackagesStrip() {
             const n = courseCounts[p.id] ?? 0;
             const isBest = bestId === p.id;
             const perStudent = isGroup && p.group_size > 0 ? Number(p.price) / p.group_size : null;
+            const hasDiscount = p.original_price && Number(p.original_price) > Number(p.price);
+            const discountPct = hasDiscount
+              ? Math.round(((Number(p.original_price) - Number(p.price)) / Number(p.original_price)) * 100)
+              : 0;
 
             return (
               <Link
@@ -107,12 +182,27 @@ export function PackagesStrip() {
                     : "0 4px 0 var(--border)",
                 }}
               >
-                {isBest && (
+                {/* Floating Badges */}
+                {p.badge_text ? (
                   <div
-                    className="absolute top-0 right-0 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-white rounded-bl-2xl"
+                    className="absolute top-0 right-0 px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-white rounded-bl-2xl shadow flex items-center gap-1 z-10"
+                    style={{ background: "#ef4444" }}
+                  >
+                    <Flame size={12} /> {p.badge_text}
+                  </div>
+                ) : isBest ? (
+                  <div
+                    className="absolute top-0 right-0 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-white rounded-bl-2xl z-10"
                     style={{ background: "var(--primary)" }}
                   >
-                    {t("cms.home.packages.bestDeal")}
+                    {t("cms.home.packages.bestDeal", "Best Deal")}
+                  </div>
+                ) : null}
+
+                {/* Optional Cover image */}
+                {p.image_url && (
+                  <div className="h-32 w-full overflow-hidden bg-muted/40 border-b border-border/60">
+                    <img src={p.image_url} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   </div>
                 )}
 
@@ -178,31 +268,44 @@ export function PackagesStrip() {
                   <div className="mt-6 pt-5 border-t-2 border-dashed border-border w-full">
                     <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
                       {isGroup
-                        ? t("cms.home.packages.groupPrice")
-                        : t("cms.home.packages.oneTimePrice")}
+                        ? t("cms.home.packages.groupPrice", { count: p.group_size })
+                        : t("cms.home.packages.totalInvestment")}
                     </p>
-                    <p className="font-display font-black text-4xl text-foreground leading-none mt-1">
-                      {sym}
-                      {Number(p.price).toFixed(0)}
-                    </p>
+                    <div className="flex items-baseline justify-center gap-2 mt-1">
+                      <span className="font-display font-black text-4xl text-foreground">
+                        {sym}
+                        {Number(p.price).toFixed(0)}
+                      </span>
+                      {hasDiscount && (
+                        <span className="text-sm text-muted-foreground line-through font-serif">
+                          {sym}{Number(p.original_price).toFixed(0)}
+                        </span>
+                      )}
+                      {hasDiscount && (
+                        <span className="text-[11px] font-bold text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                          Save {discountPct}%
+                        </span>
+                      )}
+                    </div>
                     {perStudent !== null && (
-                      <p className="mt-1 text-xs font-bold" style={{ color: "var(--primary)" }}>
-                        ≈ {sym}
-                        {perStudent.toFixed(0)} {t("cms.home.packages.perStudent")}
+                      <p className="text-xs font-bold mt-1 text-muted-foreground">
+                        {t("cms.home.packages.perStudent", {
+                          amount: `${sym}${perStudent.toFixed(0)}`,
+                        })}
                       </p>
                     )}
-
-                    <div
-                      className="mt-5 w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-full text-sm font-black uppercase tracking-wider text-white"
-                      style={{
-                        background: "var(--primary)",
-                        boxShadow: "0 4px 0 color-mix(in oklab, var(--primary) 60%, black)",
-                      }}
-                    >
-                      {t("cms.home.packages.cta")}
-                      <ArrowRight size={14} strokeWidth={3} />
-                    </div>
                   </div>
+
+                  <span
+                    className="mt-6 w-full inline-flex items-center justify-center gap-2 rounded-2xl py-3 text-xs font-black uppercase tracking-wider text-white"
+                    style={{
+                      background: "var(--primary)",
+                      boxShadow: "0 4px 0 color-mix(in oklab, var(--primary) 70%, black)",
+                    }}
+                  >
+                    {t("cms.home.packages.viewPackage")}
+                    <ArrowRight size={14} strokeWidth={3} />
+                  </span>
                 </div>
               </Link>
             );

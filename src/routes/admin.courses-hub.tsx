@@ -838,6 +838,7 @@ function ControlRow({
   const was = Number(row.compare_at_price ?? 0);
   const now = Number(row.price ?? 0);
   const cur = (row.currency ?? "usd").toUpperCase();
+  const options = useCourseOptions();
   const offerLive =
     row.discount_active && was > now && (!row.discount_ends_at || new Date(row.discount_ends_at).getTime() > Date.now());
 

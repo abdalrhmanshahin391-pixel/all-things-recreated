@@ -59,37 +59,74 @@ async function handleTransactionCompleted(event: any, env: PaddleEnv) {
       { onConflict: "paddle_event_id" },
     );
 
-    // Fetch courses included in this package
-    const { data: links, error: linkErr } = await (supabase.from("package_courses") as any)
-      .select("course_id")
-      .eq("package_id", packageId);
-    if (linkErr) {
-      console.error("Failed to load package_courses", linkErr);
-      throw linkErr;
+    const selectedCourseIds: string[] = Array.isArray(customData.selectedCourseIds)
+      ? customData.selectedCourseIds.filter(Boolean)
+      : [];
+
+    let courseIds: string[] = [];
+    if (selectedCourseIds.length > 0) {
+      courseIds = selectedCourseIds;
+    } else {
+      // Fetch fixed courses configured in this package
+      const { data: links, error: linkErr } = await (supabase.from("package_courses") as any)
+        .select("course_id")
+        .eq("package_id", packageId);
+      if (linkErr) {
+        console.error("Failed to load package_courses", linkErr);
+        throw linkErr;
+      }
+      courseIds = ((links ?? []) as any[]).map((l) => l.course_id);
     }
-    const courseIds = ((links ?? []) as any[]).map((l) => l.course_id);
+
     if (courseIds.length === 0) {
       console.warn("Package has no courses; nothing to grant", { packageId });
       return;
     }
 
+    // Determine course kinds (lectures vs questions) so access goes to the right table
+    const { data: coursesMeta } = await (supabase.from("courses") as any)
+      .select("id, kind")
+      .in("id", courseIds);
+    const kindMap = new Map<string, string>();
+    (coursesMeta ?? []).forEach((c: any) => kindMap.set(c.id, c.kind || "questions"));
+
     const grantees = Array.from(new Set([userId, ...memberIds.filter(Boolean)]));
-    const rows: Array<{ user_id: string; course_id: string }> = [];
+    const questionRows: Array<{ user_id: string; course_id: string }> = [];
+    const lectureRows: Array<{ user_id: string; course_id: string }> = [];
+
     for (const uid of grantees) {
       for (const cid of courseIds) {
-        rows.push({ user_id: uid, course_id: cid });
+        const k = kindMap.get(cid) || "questions";
+        if (k === "lectures") {
+          lectureRows.push({ user_id: uid, course_id: cid });
+        } else {
+          questionRows.push({ user_id: uid, course_id: cid });
+        }
       }
     }
-    if (rows.length > 0) {
-      const { error } = await (supabase.from("user_courses") as any).upsert(rows, {
+
+    if (questionRows.length > 0) {
+      const { error } = await (supabase.from("user_courses") as any).upsert(questionRows, {
         onConflict: "user_id,course_id",
         ignoreDuplicates: true,
       });
       if (error) {
-        console.error("Failed to grant package course access", error);
+        console.error("Failed to grant package user_courses access", error);
         throw error;
       }
     }
+
+    if (lectureRows.length > 0) {
+      const { error } = await (supabase.from("user_lecture_courses") as any).upsert(lectureRows, {
+        onConflict: "user_id,course_id",
+        ignoreDuplicates: true,
+      });
+      if (error) {
+        console.error("Failed to grant package user_lecture_courses access", error);
+        throw error;
+      }
+    }
+
     return;
   }
 
