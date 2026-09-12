@@ -23,6 +23,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useServerFn } from "@tanstack/react-start";
 import { setSubjectAccess, setSubjectOrdered, type SubjectAccess } from "@/lib/subjects.functions";
 import { AdminBackupControls } from "@/components/course/AdminBackupControls";
+import { CourseSessionGuide, GuideButtonTrigger } from "@/components/course/CourseSessionGuide";
+import { useLang } from "@/components/LanguageProvider";
 import { ensureFreeEnrollment } from "@/lib/course-access";
 import { toast } from "sonner";
 import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
@@ -111,6 +113,9 @@ function CourseDetailPage() {
   const { courseId } = Route.useParams();
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
+  const { lang } = useLang();
+  const isArabic = lang === "ar";
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
   const updateAccess = useServerFn(setSubjectAccess);
   const updateOrdered = useServerFn(setSubjectOrdered);
 
@@ -550,6 +555,14 @@ function CourseDetailPage() {
 
         <ProtectionNotice className="mb-6" />
 
+        {/* Course Session Guide Banner */}
+        <CourseSessionGuide
+          showInlineBanner={true}
+          modalOpen={guideModalOpen}
+          onModalOpenChange={setGuideModalOpen}
+          className="mb-8"
+        />
+
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
           {/* LEFT — curriculum */}
           <section>
@@ -744,9 +757,14 @@ function CourseDetailPage() {
           {/* RIGHT — session panel */}
           <aside className="lg:sticky lg:top-24 self-start">
             <div className="medical-card overflow-hidden">
-              <div className="px-5 py-4 border-b border-border flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-600" />
-                <span className="font-bold text-foreground">Start a session</span>
+              <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-600" />
+                  <span className="font-bold text-foreground">
+                    {isArabic ? "بدء جلسة أو امتحان" : "Start a session"}
+                  </span>
+                </div>
+                <GuideButtonTrigger onClick={() => setGuideModalOpen(true)} isArabic={isArabic} />
               </div>
 
               {locked ? (
