@@ -72,6 +72,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { ArmeniaPrayerBar } from "@/components/prayer/PrayerNotificationWatcher";
+import { SurahKahfReaderModal } from "@/components/mentor/SurahKahfReaderModal";
 
 export const Route = createFileRoute("/mentor")({
   head: () => ({
@@ -148,8 +150,10 @@ function MentorPage() {
   const [activeMainTab, setActiveMainTab] = useState<"athkar_treasures" | "duas" | "tasks">(
     "athkar_treasures"
   );
+  const [surahKahfOpen, setSurahKahfOpen] = useState(false);
 
   const now = useMemo(() => new Date(), []);
+  const isFriday = useMemo(() => now.getDay() === 5, [now]);
   const date = useMemo(() => formatDateAr(now), [now]);
 
   useEffect(() => {
@@ -169,6 +173,17 @@ function MentorPage() {
       <SiteHeader />
 
       <main className="mx-auto max-w-6xl px-3 sm:px-4 md:px-6 py-4 md:py-8 space-y-6 md:space-y-8">
+        {/* Armenia Prayer Times Live Bar with Silent Adhan Notification */}
+        <ArmeniaPrayerBar className="shadow-xs" />
+
+        {/* Friday Special Surah Al-Kahf Banner */}
+        {isFriday && (
+          <FridayKahfBanner
+            onOpenReader={() => setSurahKahfOpen(true)}
+            onOpenAthkar={() => setActiveMainTab("athkar_treasures")}
+          />
+        )}
+
         {/* Welcome Greeting Banner */}
         <section
           className="relative overflow-hidden rounded-3xl border border-primary/25 p-5 md:p-8 shadow-sm transition-all"
@@ -252,11 +267,99 @@ function MentorPage() {
         </div>
 
         {/* Tab Content Panels */}
-        {activeMainTab === "athkar_treasures" && <AthkarAndTreasuresSection />}
+        {activeMainTab === "athkar_treasures" && (
+          <AthkarAndTreasuresSection onOpenSurahKahf={() => setSurahKahfOpen(true)} />
+        )}
         {activeMainTab === "duas" && <DuasSection />}
-        {activeMainTab === "tasks" && <TasksSection />}
+        {activeMainTab === "tasks" && (
+          <TasksSection onOpenSurahKahf={() => setSurahKahfOpen(true)} />
+        )}
+
+        {/* Surah Al-Kahf Reader Modal */}
+        <SurahKahfReaderModal
+          open={surahKahfOpen}
+          onClose={() => setSurahKahfOpen(false)}
+        />
       </main>
     </div>
+  );
+}
+
+function FridayKahfBanner({
+  onOpenReader,
+  onOpenAthkar,
+}: {
+  onOpenReader: () => void;
+  onOpenAthkar?: () => void;
+}) {
+  const qc = useQueryClient();
+  const addTaskFn = useServerFn(mentorAddTask);
+  const [added, setAdded] = useState(false);
+
+  async function handleAddKahfTask() {
+    try {
+      await addTaskFn({
+        data: {
+          kind: "religious",
+          title: "قراءة سورة الكهف (سنة يوم الجمعة)",
+          is_daily: false,
+        },
+      });
+      setAdded(true);
+      toast.success("تمت إضافة قراءة سورة الكهف إلى مهامك اليوم بنجاح 📖");
+      await qc.invalidateQueries({ queryKey: ["mentor_tasks"] });
+      await qc.invalidateQueries({ queryKey: ["mentor_overview_stats"] });
+    } catch (err: any) {
+      toast.error(err?.message || "تعذر إضافة المهمة");
+    }
+  }
+
+  return (
+    <section className="relative overflow-hidden rounded-3xl border border-amber-500/40 bg-gradient-to-l from-amber-500/15 via-amber-500/5 to-card p-5 md:p-6 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 text-xs font-bold">
+            <Sparkles size={13} />
+            <span>نورٌ ما بين الجمعتين 🌟</span>
+          </div>
+          <h2 className="text-xl md:text-2xl font-extrabold text-foreground">
+            سُنّة قراءة سورة الكهف اليوم 📖
+          </h2>
+          <p className="text-xs sm:text-sm text-muted-foreground max-w-xl leading-relaxed">
+            قال رسول الله ﷺ: «مَنْ قَرَأَ سُورَةَ الْكَهْفِ فِي يَوْمِ الْجُمُعَةِ أَضَاءَ لَهُ مِنَ النُّورِ مَا بَيْنَ الْجُمُعَتَيْنِ».
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            onClick={onOpenReader}
+            className="rounded-xl font-bold gap-2 text-xs sm:text-sm bg-primary text-primary-foreground shadow-sm"
+          >
+            <BookOpen size={16} />
+            <span>قراءة سورة الكهف الآن</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={handleAddKahfTask}
+            disabled={added}
+            className="rounded-xl font-bold gap-1.5 text-xs sm:text-sm border-amber-500/40 hover:bg-amber-500/10"
+          >
+            {added ? (
+              <>
+                <Check size={14} className="text-emerald-500" />
+                <span>مضافة لمهامك</span>
+              </>
+            ) : (
+              <>
+                <Plus size={14} />
+                <span>إضافة لمهام الجمعة</span>
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -652,9 +755,12 @@ function ProgressChip({
 /*            TAB 1: ATHKAR & TREASURES (SUGGESTED + CUSTOM)     */
 /* ============================================================ */
 
-function AthkarAndTreasuresSection() {
+function AthkarAndTreasuresSection({ onOpenSurahKahf }: { onOpenSurahKahf?: () => void }) {
+  const isFriday = useMemo(() => new Date().getDay() === 5, []);
   const [subTab, setSubTab] = useState<"suggested_athkar" | "my_treasures">("suggested_athkar");
-  const [activeGroupId, setActiveGroupId] = useState<AthkarGroup["id"]>("morning");
+  const [activeGroupId, setActiveGroupId] = useState<AthkarGroup["id"]>(() =>
+    isFriday ? "friday" : "morning"
+  );
 
   const today = useMemo(() => todayUtcDate(), []);
   const [progress, setProgress] = useState<Record<string, number>>(() => loadAthkarProgress(today));
@@ -749,7 +855,7 @@ function AthkarAndTreasuresSection() {
       {subTab === "suggested_athkar" ? (
         <div className="space-y-6">
           {/* Athkar Groups Selector Tabs */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
             {SUGGESTED_ATHKAR_GROUPS.map((grp) => {
               const active = grp.id === activeGroupId;
               const grpCompleted = grp.items.filter(
@@ -773,9 +879,15 @@ function AthkarAndTreasuresSection() {
                     {grp.id === "evening" && <Moon size={17} className={active ? "text-indigo-400" : ""} />}
                     {grp.id === "post_prayer" && <CheckCircle2 size={17} className={active ? "text-emerald-500" : ""} />}
                     {grp.id === "sleep" && <BedDouble size={17} className={active ? "text-purple-400" : ""} />}
+                    {grp.id === "friday" && <Sparkles size={17} className={active ? "text-amber-500" : "text-amber-400"} />}
                     <span>{grp.title}</span>
                   </div>
                   <span className="text-[11px] font-normal opacity-80">
+                    {grp.id === "friday" && isFriday && (
+                      <span className="text-amber-600 dark:text-amber-400 font-bold block mb-0.5">
+                        سُنّة اليوم 🌟
+                      </span>
+                    )}
                     {allDone ? (
                       <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
                         مكتملة ✓
@@ -826,6 +938,7 @@ function AthkarAndTreasuresSection() {
                   isCompleted={isCompleted}
                   onCount={() => updateCount(item.id, item.count)}
                   onReset={() => resetItem(item.id)}
+                  onOpenSurahKahf={onOpenSurahKahf}
                 />
               );
             })}
@@ -844,12 +957,14 @@ function AthkarCard({
   isCompleted,
   onCount,
   onReset,
+  onOpenSurahKahf,
 }: {
   item: AthkarItem;
   currentCount: number;
   isCompleted: boolean;
   onCount: () => void;
   onReset: () => void;
+  onOpenSurahKahf?: () => void;
 }) {
   const qc = useQueryClient();
   const addTreasureFn = useServerFn(mentorAddTreasure);
@@ -913,7 +1028,19 @@ function AthkarCard({
 
       {/* Counter & Action Bar */}
       <div className="flex items-center justify-between gap-2 border-t border-border/70 pt-3 mt-auto">
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
+          {item.id === "f-1" && onOpenSurahKahf && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onOpenSurahKahf}
+              className="rounded-xl h-9 text-xs gap-1.5 text-primary border-primary/30 hover:bg-primary/10 font-bold"
+            >
+              <BookOpen size={14} />
+              <span>قراءة السورة 📖</span>
+            </Button>
+          )}
+
           <Button
             size="sm"
             variant="ghost"
@@ -1957,9 +2084,10 @@ function CategoryEntriesModal({
 /*            TAB 3: TASKS (MODERNIZED CHECKLIST & HABITS)       */
 /* ============================================================ */
 
-function TasksSection() {
+function TasksSection({ onOpenSurahKahf }: { onOpenSurahKahf?: () => void }) {
   const qc = useQueryClient();
   const today = useMemo(() => todayUtcDate(), []);
+  const isFriday = useMemo(() => new Date().getDay() === 5, []);
 
   const [newTitle, setNewTitle] = useState("");
   const [newIsDaily, setNewIsDaily] = useState(true);
@@ -2151,6 +2279,29 @@ function TasksSection() {
             </Button>
           )}
         </div>
+
+        {/* Friday Sunnah reminder banner */}
+        {isFriday && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs sm:text-sm">
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-amber-500 shrink-0" />
+              <span className="font-bold text-foreground">
+                سُنّة الجمعة: قراءة سورة الكهف والإكثار من الصلاة على النبي ﷺ
+              </span>
+            </div>
+            {onOpenSurahKahf && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onOpenSurahKahf}
+                className="rounded-xl h-8 text-xs font-bold gap-1 border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 self-start sm:self-auto shrink-0"
+              >
+                <BookOpen size={13} />
+                <span>قراءة سورة الكهف الآن</span>
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Progress Bar */}
         {tasks.length > 0 && (

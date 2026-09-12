@@ -31,6 +31,7 @@ import { RaziWordmark } from "@/components/brand/RaziWordmark";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { resolveHeaderSkin } from "@/components/header/header-designs";
 import { InstallAppButton } from "@/components/InstallAppButton";
+import { CompactPrayerBadge } from "@/components/prayer/CompactPrayerBadge";
 import {
   useNavItems,
   canSee,
@@ -336,6 +337,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
             skin.rail ? "lg:ps-6 lg:border-s lg:border-border" : ""
           }`}
         >
+          <CompactPrayerBadge />
           {user && (
             <Link
               to="/mentor"

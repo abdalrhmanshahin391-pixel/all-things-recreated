@@ -56,6 +56,7 @@
     "@tanstack/react-router-ssr-query": "1.167.1",
     "@tanstack/react-start": "1.168.39",
     "@tanstack/router-plugin": "1.168.27",
+    "adhan": "^4.4.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

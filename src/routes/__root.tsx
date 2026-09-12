@@ -27,8 +27,8 @@ import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { SiteFooter } from "@/components/SiteFooter";
 import { useAuth } from "@/hooks/useAuth";
 import { needsOnboarding } from "@/lib/onboarding";
-import "@/i18n";
 import { Toaster } from "@/components/ui/sonner";
+import { PrayerNotificationWatcher } from "@/components/prayer/PrayerNotificationWatcher";
 
 // Language only — the seasonal theme comes from the server-rendered head script
 // so it can never flash a stale value from localStorage.
@@ -271,6 +271,7 @@ function RootComponent() {
           <OnboardingGate />
           <PaymentTestModeBanner />
           <AnnouncementBar />
+          <PrayerNotificationWatcher />
           {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
           <Outlet />
           <GlobalFooter />
