@@ -1,7 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import {
+  mentorGetTasks,
+  mentorAddTask,
+  mentorUpdateTask,
+  mentorDeleteTask,
+  mentorToggleTask,
+  mentorGetCompletions,
+  mentorGetOverviewStats,
+} from "@/lib/mentor.functions";
 import {
   Plus,
   Pencil,
@@ -508,45 +518,21 @@ function TreasuresManager({ onClose }: { onClose: () => void }) {
 
 function StatsStrip() {
   const today = todayUtcDate();
+  const getOverviewStatsFn = useServerFn(mentorGetOverviewStats);
 
-  const { data: tasks = [] } = useQuery({
-    queryKey: ["mentor_tasks_all"],
+  const { data } = useQuery({
+    queryKey: ["mentor_overview_stats"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("mentor_tasks")
-        .select("id,kind,title,is_daily,sort_order");
-      if (error) throw error;
-      return (data as Task[]) ?? [];
+      return await getOverviewStatsFn();
     },
-  });
-  const taskIds = tasks.map((t) => t.id);
-  const { data: completions = [] } = useQuery({
-    queryKey: ["mentor_completions_all", taskIds.join(",")],
-    queryFn: async () => {
-      if (taskIds.length === 0) return [] as { task_id: string; completed_on: string }[];
-      const { data, error } = await supabase
-        .from("mentor_task_completions")
-        .select("task_id,completed_on")
-        .in("task_id", taskIds);
-      if (error) throw error;
-      return (data as { task_id: string; completed_on: string }[]) ?? [];
-    },
-    enabled: taskIds.length > 0,
   });
 
-  const { data: counts } = useQuery({
-    queryKey: ["mentor_counts"],
-    queryFn: async () => {
-      const [duas, treasures] = await Promise.all([
-        supabase.from("mentor_entries").select("id", { count: "exact", head: true }),
-        supabase.from("mentor_treasures").select("id", { count: "exact", head: true }),
-      ]);
-      return {
-        duas: duas.count ?? 0,
-        treasures: treasures.count ?? 0,
-      };
-    },
-  });
+  const tasks = (data?.tasks ?? []) as Task[];
+  const completions = data?.completions ?? [];
+  const counts = {
+    duas: data?.entriesTotal ?? 0,
+    treasures: data?.treasuresTotal ?? 0,
+  };
 
   // Streak: consecutive days (ending today or yesterday) where all daily tasks done
   const streak = useMemo(() => {
@@ -1129,18 +1115,21 @@ function ChecklistPanel({ kind, heading }: { kind: TaskKind; heading: string }) 
   const [editing, setEditing] = useState<Task | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editIsDaily, setEditIsDaily] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isEditingSaving, setIsEditingSaving] = useState(false);
+
+  const getTasksFn = useServerFn(mentorGetTasks);
+  const addTaskFn = useServerFn(mentorAddTask);
+  const updateTaskFn = useServerFn(mentorUpdateTask);
+  const deleteTaskFn = useServerFn(mentorDeleteTask);
+  const toggleTaskFn = useServerFn(mentorToggleTask);
+  const getCompletionsFn = useServerFn(mentorGetCompletions);
 
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ["mentor_tasks", kind],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("mentor_tasks")
-        .select("id,kind,title,is_daily,sort_order")
-        .eq("kind", kind)
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return (data as Task[]) ?? [];
+      const res = await getTasksFn({ data: { kind } });
+      return (res as Task[]) ?? [];
     },
   });
 
@@ -1149,12 +1138,8 @@ function ChecklistPanel({ kind, heading }: { kind: TaskKind; heading: string }) 
     queryKey: ["mentor_completions", kind, today, taskIds.join(",")],
     queryFn: async () => {
       if (taskIds.length === 0) return [] as { task_id: string; completed_on: string }[];
-      const { data, error } = await supabase
-        .from("mentor_task_completions")
-        .select("task_id,completed_on")
-        .in("task_id", taskIds);
-      if (error) throw error;
-      return (data as { task_id: string; completed_on: string }[]) ?? [];
+      const res = await getCompletionsFn({ data: { taskIds } });
+      return (res as { task_id: string; completed_on: string }[]) ?? [];
     },
     enabled: taskIds.length > 0,
   });
@@ -1176,71 +1161,82 @@ function ChecklistPanel({ kind, heading }: { kind: TaskKind; heading: string }) 
 
   async function addTask() {
     const t = newTitle.trim();
-    if (!t) return;
-    const { data: u } = await supabase.auth.getUser();
-    const uid = u.user?.id;
-    if (!uid) return;
-    const { error } = await supabase.from("mentor_tasks").insert({
-      user_id: uid,
-      kind,
-      title: t,
-      is_daily: newIsDaily,
-      sort_order: tasks.length,
-    });
-    if (error) return toast.error(error.message);
-    setNewTitle("");
-    setNewIsDaily(true);
-    setAddOpen(false);
-    qc.invalidateQueries({ queryKey: ["mentor_tasks", kind] });
-    qc.invalidateQueries({ queryKey: ["mentor_tasks_all"] });
+    if (!t) {
+      toast.error("يرجى كتابة عنوان المهمة");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await addTaskFn({ data: { kind, title: t, is_daily: newIsDaily } });
+      setNewTitle("");
+      setNewIsDaily(true);
+      setAddOpen(false);
+      await qc.invalidateQueries({ queryKey: ["mentor_tasks"] });
+      await qc.invalidateQueries({ queryKey: ["mentor_tasks_all"] });
+      await qc.invalidateQueries({ queryKey: ["mentor_overview_stats"] });
+      toast.success("تم حفظ المهمة بنجاح");
+    } catch (err: any) {
+      console.error("Failed to add task:", err);
+      toast.error(err?.message || "فشل حفظ المهمة");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   async function saveEdit() {
     if (!editing) return;
     const t = editTitle.trim();
-    if (!t) return;
-    const { error } = await supabase
-      .from("mentor_tasks")
-      .update({ title: t, is_daily: editIsDaily })
-      .eq("id", editing.id);
-    if (error) return toast.error(error.message);
-    setEditing(null);
-    qc.invalidateQueries({ queryKey: ["mentor_tasks", kind] });
+    if (!t) {
+      toast.error("يرجى كتابة عنوان المهمة");
+      return;
+    }
+    setIsEditingSaving(true);
+    try {
+      await updateTaskFn({ data: { id: editing.id, title: t, is_daily: editIsDaily } });
+      setEditing(null);
+      await qc.invalidateQueries({ queryKey: ["mentor_tasks"] });
+      await qc.invalidateQueries({ queryKey: ["mentor_tasks_all"] });
+      await qc.invalidateQueries({ queryKey: ["mentor_overview_stats"] });
+      toast.success("تم تعديل المهمة بنجاح");
+    } catch (err: any) {
+      console.error("Failed to update task:", err);
+      toast.error(err?.message || "فشل تعديل المهمة");
+    } finally {
+      setIsEditingSaving(false);
+    }
   }
 
   async function deleteTask(t: Task) {
     if (!confirm(`حذف "${t.title}"؟`)) return;
-    const { error } = await supabase.from("mentor_tasks").delete().eq("id", t.id);
-    if (error) return toast.error(error.message);
-    qc.invalidateQueries({ queryKey: ["mentor_tasks", kind] });
-    qc.invalidateQueries({ queryKey: ["mentor_completions", kind] });
-    qc.invalidateQueries({ queryKey: ["mentor_tasks_all"] });
+    try {
+      await deleteTaskFn({ data: { id: t.id } });
+      await qc.invalidateQueries({ queryKey: ["mentor_tasks"] });
+      await qc.invalidateQueries({ queryKey: ["mentor_completions"] });
+      await qc.invalidateQueries({ queryKey: ["mentor_tasks_all"] });
+      await qc.invalidateQueries({ queryKey: ["mentor_overview_stats"] });
+      toast.success("تم حذف المهمة");
+    } catch (err: any) {
+      console.error("Failed to delete task:", err);
+      toast.error(err?.message || "فشل حذف المهمة");
+    }
   }
 
   async function toggle(task: Task) {
-    const isDone = doneSet.has(task.id);
-    const { data: u } = await supabase.auth.getUser();
-    const uid = u.user?.id;
-    if (!uid) return;
-    if (isDone) {
-      let q = supabase
-        .from("mentor_task_completions")
-        .delete()
-        .eq("task_id", task.id)
-        .eq("user_id", uid);
-      if (task.is_daily) q = q.eq("completed_on", today);
-      const { error } = await q;
-      if (error) return toast.error(error.message);
-    } else {
-      const { error } = await supabase.from("mentor_task_completions").insert({
-        user_id: uid,
-        task_id: task.id,
-        completed_on: today,
+    try {
+      await toggleTaskFn({
+        data: {
+          taskId: task.id,
+          isDaily: task.is_daily,
+          completedOn: today,
+        },
       });
-      if (error) return toast.error(error.message);
+      await qc.invalidateQueries({ queryKey: ["mentor_completions"] });
+      await qc.invalidateQueries({ queryKey: ["mentor_completions_all"] });
+      await qc.invalidateQueries({ queryKey: ["mentor_overview_stats"] });
+    } catch (err: any) {
+      console.error("Failed to toggle task:", err);
+      toast.error(err?.message || "تعذر تحديث حالة المهمة");
     }
-    qc.invalidateQueries({ queryKey: ["mentor_completions", kind] });
-    qc.invalidateQueries({ queryKey: ["mentor_completions_all"] });
   }
 
   return (
@@ -1327,21 +1323,31 @@ function ChecklistPanel({ kind, heading }: { kind: TaskKind; heading: string }) 
               placeholder="عنوان المهمة"
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !isSaving) {
+                  e.preventDefault();
+                  addTask();
+                }
+              }}
               autoFocus
+              disabled={isSaving}
             />
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
               <Checkbox
                 checked={newIsDaily}
                 onCheckedChange={(v) => setNewIsDaily(v === true)}
+                disabled={isSaving}
               />
               مهمة يومية (تعاد كل يوم)
             </label>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setAddOpen(false)}>
+            <Button variant="ghost" onClick={() => setAddOpen(false)} disabled={isSaving}>
               إلغاء
             </Button>
-            <Button onClick={addTask}>حفظ</Button>
+            <Button onClick={addTask} disabled={isSaving || !newTitle.trim()}>
+              {isSaving ? "جارٍ الحفظ…" : "حفظ"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1352,20 +1358,34 @@ function ChecklistPanel({ kind, heading }: { kind: TaskKind; heading: string }) 
             <DialogTitle>تعديل المهمة</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} autoFocus />
-            <label className="flex items-center gap-2 text-sm">
+            <Input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !isEditingSaving) {
+                  e.preventDefault();
+                  saveEdit();
+                }
+              }}
+              autoFocus
+              disabled={isEditingSaving}
+            />
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
               <Checkbox
                 checked={editIsDaily}
                 onCheckedChange={(v) => setEditIsDaily(v === true)}
+                disabled={isEditingSaving}
               />
               مهمة يومية
             </label>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setEditing(null)}>
+            <Button variant="ghost" onClick={() => setEditing(null)} disabled={isEditingSaving}>
               إلغاء
             </Button>
-            <Button onClick={saveEdit}>حفظ</Button>
+            <Button onClick={saveEdit} disabled={isEditingSaving || !editTitle.trim()}>
+              {isEditingSaving ? "جارٍ الحفظ…" : "حفظ"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
