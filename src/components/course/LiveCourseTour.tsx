@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Sparkles,
@@ -47,6 +47,17 @@ export function LiveCourseTour({
   const isArabic = lang === "ar";
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile device
+  useEffect(() => {
+    function checkMobile() {
+      setIsMobile(window.innerWidth < 640);
+    }
+    checkMobile();
+    window.addEventListener("resize", checkMobile, { passive: true });
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const steps: TourStep[] = [
     {
@@ -115,22 +126,24 @@ export function LiveCourseTour({
 
   const currentStep = steps[currentStepIndex];
 
-  // Update target bounding box on step change, resize, scroll, or language direction switch
+  // High-performance target tracking: smooth scroll + RAF debounced measuring
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !currentStep) return;
 
-    function update() {
-      if (!currentStep) return;
-      const el = document.querySelector(currentStep.targetSelector);
+    let isCancelled = false;
+    const el = document.querySelector(currentStep.targetSelector) as HTMLElement | null;
+
+    function measure() {
+      if (isCancelled) return;
       if (el) {
         const rect = el.getBoundingClientRect();
         setTargetRect((prev) => {
           if (
             !prev ||
-            Math.abs(prev.top - rect.top) > 1 ||
-            Math.abs(prev.left - rect.left) > 1 ||
-            Math.abs(prev.width - rect.width) > 1 ||
-            Math.abs(prev.height - rect.height) > 1
+            Math.abs(prev.top - rect.top) > 2 ||
+            Math.abs(prev.left - rect.left) > 2 ||
+            Math.abs(prev.width - rect.width) > 2 ||
+            Math.abs(prev.height - rect.height) > 2
           ) {
             return rect;
           }
@@ -141,34 +154,53 @@ export function LiveCourseTour({
       }
     }
 
-    // Scroll into center view smoothly
-    const el = document.querySelector(currentStep?.targetSelector);
     if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      const mobile = window.innerWidth < 640;
+      if (mobile) {
+        // On mobile: scroll the target into the UPPER half (leaving lower half 100% free for the bottom sheet card)
+        const headerOffset = 90;
+        const elementTop = el.getBoundingClientRect().top + window.scrollY;
+        window.scrollTo({
+          top: Math.max(0, elementTop - headerOffset),
+          behavior: "smooth",
+        });
+      } else {
+        el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      }
+
+      // Initial measure
+      measure();
+      // Re-measure when smooth scroll finishes
+      const t1 = setTimeout(measure, 150);
+      const t2 = setTimeout(measure, 350);
+
+      // Throttled RAF handler for user manual scrolling/resizing
+      let rafId: number | null = null;
+      const onScrollOrResize = () => {
+        if (rafId) return;
+        rafId = requestAnimationFrame(() => {
+          measure();
+          rafId = null;
+        });
+      };
+
+      window.addEventListener("scroll", onScrollOrResize, { passive: true });
+      window.addEventListener("resize", onScrollOrResize, { passive: true });
+
+      // Observe only target element for size changes
+      const ro = new ResizeObserver(() => measure());
+      ro.observe(el);
+
+      return () => {
+        isCancelled = true;
+        clearTimeout(t1);
+        clearTimeout(t2);
+        if (rafId) cancelAnimationFrame(rafId);
+        window.removeEventListener("scroll", onScrollOrResize);
+        window.removeEventListener("resize", onScrollOrResize);
+        ro.disconnect();
+      };
     }
-
-    update();
-    const t1 = setTimeout(update, 60);
-    const t2 = setTimeout(update, 180);
-    const t3 = setTimeout(update, 360);
-    const t4 = setTimeout(update, 600);
-
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-
-    const ro = new ResizeObserver(() => update());
-    ro.observe(document.body);
-    if (el) ro.observe(el);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-      ro.disconnect();
-    };
   }, [isOpen, currentStepIndex, currentStep?.targetSelector, lang]);
 
   // Handle auto-selection of free subject on Step 1 if user is not enrolled
@@ -195,7 +227,7 @@ export function LiveCourseTour({
   }
 
   // Precise cutout dimensions with padding so target is completely UNBLURRED and clear
-  const pad = 8;
+  const pad = isMobile ? 6 : 8;
   const cutoutTop = targetRect ? Math.max(0, targetRect.top - pad) : 0;
   const cutoutLeft = targetRect ? Math.max(0, targetRect.left - pad) : 0;
   const cutoutWidth = targetRect ? targetRect.width + pad * 2 : 0;
@@ -203,13 +235,13 @@ export function LiveCourseTour({
   const cutoutRight = cutoutLeft + cutoutWidth;
   const cutoutBottom = cutoutTop + cutoutHeight;
 
-  // Safe floating card coordinates (mirrors automatically for RTL)
-  const cardWidth = Math.min(390, typeof window !== "undefined" ? window.innerWidth - 32 : 390);
-  const cardHeight = 360;
-  let cardTop = 100;
-  let cardLeft = 100;
+  // Positioning calculations
+  const cardWidth = Math.min(420, typeof window !== "undefined" ? window.innerWidth - 24 : 390);
+  const cardHeight = 320;
+  let desktopCardTop = 100;
+  let desktopCardLeft = 100;
 
-  if (targetRect && typeof window !== "undefined") {
+  if (targetRect && typeof window !== "undefined" && !isMobile) {
     const effectivePlacement = isArabic
       ? currentStep.placement === "left"
         ? "right"
@@ -218,37 +250,34 @@ export function LiveCourseTour({
 
     if (effectivePlacement === "left") {
       if (targetRect.left >= cardWidth + 24) {
-        cardLeft = targetRect.left - cardWidth - 16;
-        cardTop = Math.max(16, Math.min(window.innerHeight - cardHeight - 16, targetRect.top - 20));
+        desktopCardLeft = targetRect.left - cardWidth - 16;
+        desktopCardTop = Math.max(16, Math.min(window.innerHeight - cardHeight - 16, targetRect.top - 20));
       } else {
-        cardTop = Math.min(window.innerHeight - cardHeight - 16, targetRect.bottom + 16);
-        cardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, targetRect.left));
+        desktopCardTop = Math.min(window.innerHeight - cardHeight - 16, targetRect.bottom + 16);
+        desktopCardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, targetRect.left));
       }
     } else if (effectivePlacement === "right") {
       if (targetRect.right + cardWidth + 24 <= window.innerWidth) {
-        cardLeft = targetRect.right + 16;
-        cardTop = Math.max(16, Math.min(window.innerHeight - cardHeight - 16, targetRect.top - 20));
+        desktopCardLeft = targetRect.right + 16;
+        desktopCardTop = Math.max(16, Math.min(window.innerHeight - cardHeight - 16, targetRect.top - 20));
       } else {
-        cardTop = Math.min(window.innerHeight - cardHeight - 16, targetRect.bottom + 16);
-        cardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, targetRect.left));
+        desktopCardTop = Math.min(window.innerHeight - cardHeight - 16, targetRect.bottom + 16);
+        desktopCardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, targetRect.left));
       }
     } else {
       // placement "bottom"
       if (targetRect.bottom + cardHeight + 24 <= window.innerHeight) {
-        cardTop = targetRect.bottom + 16;
+        desktopCardTop = targetRect.bottom + 16;
       } else {
-        cardTop = Math.max(16, targetRect.top - cardHeight - 16);
+        desktopCardTop = Math.max(16, targetRect.top - cardHeight - 16);
       }
       if (isArabic) {
         const preferredLeft = targetRect.right - cardWidth;
-        cardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, preferredLeft));
+        desktopCardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, preferredLeft));
       } else {
-        cardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, targetRect.left));
+        desktopCardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, targetRect.left));
       }
     }
-  } else if (typeof window !== "undefined") {
-    cardTop = Math.max(20, (window.innerHeight - cardHeight) / 2);
-    cardLeft = Math.max(20, (window.innerWidth - cardWidth) / 2);
   }
 
   return (
@@ -270,31 +299,31 @@ export function LiveCourseTour({
           <div
             onClick={onClose}
             style={{ top: 0, left: 0, right: 0, height: cutoutTop }}
-            className="fixed bg-slate-950/80 backdrop-blur-md z-[200] transition-all duration-200 cursor-pointer"
+            className="fixed bg-slate-950/80 backdrop-blur-md z-[200] transition-all duration-200 cursor-pointer pointer-events-auto"
           />
           {/* Bottom Blurred Box */}
           <div
             onClick={onClose}
             style={{ top: cutoutBottom, left: 0, right: 0, bottom: 0 }}
-            className="fixed bg-slate-950/80 backdrop-blur-md z-[200] transition-all duration-200 cursor-pointer"
+            className="fixed bg-slate-950/80 backdrop-blur-md z-[200] transition-all duration-200 cursor-pointer pointer-events-auto"
           />
           {/* Left Blurred Box */}
           <div
             onClick={onClose}
             style={{ top: cutoutTop, left: 0, width: cutoutLeft, height: cutoutHeight }}
-            className="fixed bg-slate-950/80 backdrop-blur-md z-[200] transition-all duration-200 cursor-pointer"
+            className="fixed bg-slate-950/80 backdrop-blur-md z-[200] transition-all duration-200 cursor-pointer pointer-events-auto"
           />
           {/* Right Blurred Box */}
           <div
             onClick={onClose}
             style={{ top: cutoutTop, left: cutoutRight, right: 0, height: cutoutHeight }}
-            className="fixed bg-slate-950/80 backdrop-blur-md z-[200] transition-all duration-200 cursor-pointer"
+            className="fixed bg-slate-950/80 backdrop-blur-md z-[200] transition-all duration-200 cursor-pointer pointer-events-auto"
           />
         </>
       ) : (
         <div
           onClick={onClose}
-          className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[200]"
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[200] pointer-events-auto"
         />
       )}
 
@@ -302,23 +331,19 @@ export function LiveCourseTour({
         ==============================================================
         SHINING TARGET SPOTLIGHT BORDER
         Frames the unblurred target with a bright pulsing amber halo!
+        Fast CSS transition avoids spring-physics stutter on mobile GPUs.
         ==============================================================
       */}
       {targetRect && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{
-            opacity: 1,
-            scale: 1,
+        <div
+          style={{
+            position: "fixed",
             top: cutoutTop,
             left: cutoutLeft,
             width: cutoutWidth,
             height: cutoutHeight,
-          }}
-          transition={{ type: "spring", stiffness: 350, damping: 30 }}
-          style={{
-            position: "fixed",
-            borderRadius: "16px",
+            borderRadius: isMobile ? "12px" : "16px",
+            transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
           }}
           className="pointer-events-none z-[202] border-2 border-amber-400 dark:border-amber-300 ring-4 ring-amber-400/40 shadow-[0_0_35px_rgba(245,158,11,0.9),inset_0_0_15px_rgba(245,158,11,0.2)] animate-pulse"
         />
@@ -327,34 +352,48 @@ export function LiveCourseTour({
       {/* 
         ==============================================================
         SHINING GUIDE BOX (CAROUSEL / DIALOG)
-        Vibrant luminous glow, prominent Arabic switcher, and high contrast!
+        On Mobile: Docks smoothly as a Bottom Sheet (never overlaps target).
+        On Desktop: Floats relative to target with intelligent RTL mirroring.
         ==============================================================
       */}
       <AnimatePresence mode="wait">
         <motion.div
           key={currentStep.id}
-          initial={{ opacity: 0, y: 15, scale: 0.96 }}
+          initial={isMobile ? { opacity: 0, y: 30 } : { opacity: 0, y: 12, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -10, scale: 0.96 }}
-          transition={{ duration: 0.25 }}
-          style={{
-            position: "fixed",
-            top: cardTop,
-            left: cardLeft,
-          }}
-          className="z-[210] w-[92vw] max-w-[390px] rounded-3xl border-2 border-indigo-400/90 ring-2 ring-indigo-400/50 ring-offset-2 ring-offset-slate-950 bg-slate-900/98 text-white backdrop-blur-2xl shadow-[0_0_60px_rgba(99,102,241,0.7),0_0_25px_rgba(168,85,247,0.5),0_25px_50px_rgba(0,0,0,0.9)] overflow-hidden"
+          exit={isMobile ? { opacity: 0, y: 20 } : { opacity: 0, y: -10, scale: 0.98 }}
+          transition={{ duration: 0.2 }}
+          style={
+            isMobile
+              ? {
+                  position: "fixed",
+                  bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
+                  left: "12px",
+                  right: "12px",
+                  margin: "0 auto",
+                  maxWidth: "420px",
+                  width: "calc(100% - 24px)",
+                }
+              : {
+                  position: "fixed",
+                  top: desktopCardTop,
+                  left: desktopCardLeft,
+                  width: cardWidth,
+                }
+          }
+          className="z-[210] rounded-3xl border-2 border-indigo-400/90 ring-2 ring-indigo-400/50 ring-offset-2 ring-offset-slate-950 bg-slate-900/98 text-white backdrop-blur-2xl shadow-[0_0_50px_rgba(99,102,241,0.7),0_0_20px_rgba(168,85,247,0.5),0_25px_50px_rgba(0,0,0,0.9)] overflow-hidden"
         >
           {/* Top radiant rainbow light line */}
           <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-indigo-400 to-purple-500 shadow-[0_0_15px_rgba(99,102,241,0.9)]" />
 
-          <div className="p-5 sm:p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
             {/* Header: Badge, Obvious Arabic Switcher, and Skip button */}
-            <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-700/80">
+            <div className="flex items-center justify-between gap-2 pb-2.5 sm:pb-3 border-b border-slate-700/80">
               <div className="flex items-center gap-2 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center shrink-0 shadow-inner">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center shrink-0 shadow-inner">
                   {currentStep.icon}
                 </div>
-                <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-500/25 text-indigo-300 border border-indigo-400/40 truncate">
+                <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/25 text-indigo-300 border border-indigo-400/40 truncate">
                   {isArabic ? currentStep.badge_ar : currentStep.badge_en}
                 </span>
               </div>
@@ -364,10 +403,10 @@ export function LiveCourseTour({
                 <button
                   type="button"
                   onClick={() => setLang(isArabic ? "en" : "ar")}
-                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full font-black text-xs border border-amber-300 bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 shadow-[0_0_18px_rgba(251,191,36,0.7)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1 rounded-full font-black text-xs border border-amber-300 bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 shadow-[0_0_18px_rgba(251,191,36,0.7)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
                   title={isArabic ? "Switch to English" : "التحويل إلى العربية"}
                 >
-                  <Languages size={14} className="text-slate-950" />
+                  <Languages size={13} className="text-slate-950" />
                   <span>{isArabic ? "English" : "العربية"}</span>
                 </button>
 
@@ -385,8 +424,8 @@ export function LiveCourseTour({
             </div>
 
             {/* Title & Description */}
-            <div className="space-y-2">
-              <h4 className="font-extrabold text-base sm:text-lg text-white leading-tight drop-shadow-sm">
+            <div className="space-y-1 sm:space-y-2">
+              <h4 className="font-extrabold text-sm sm:text-base md:text-lg text-white leading-tight drop-shadow-sm">
                 {isArabic ? currentStep.title_ar : currentStep.title_en}
               </h4>
               <p className="text-xs sm:text-[13px] text-slate-200 whitespace-pre-line leading-relaxed font-medium">
@@ -395,16 +434,16 @@ export function LiveCourseTour({
             </div>
 
             {/* Footer Navigation Bar */}
-            <div className="pt-3 border-t border-slate-700/80 flex items-center justify-between gap-2">
+            <div className="pt-2.5 sm:pt-3 border-t border-slate-700/80 flex items-center justify-between gap-2">
               {/* Step indicator dots */}
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 sm:gap-1.5">
                 {steps.map((_, i) => (
                   <span
                     key={i}
-                    className={`h-2 rounded-full transition-all ${
+                    className={`h-1.5 sm:h-2 rounded-full transition-all ${
                       i === currentStepIndex
-                        ? "w-5 bg-gradient-to-r from-indigo-400 to-purple-400 shadow-[0_0_10px_rgba(99,102,241,0.8)]"
-                        : "w-2 bg-slate-600"
+                        ? "w-4 sm:w-5 bg-gradient-to-r from-indigo-400 to-purple-400 shadow-[0_0_10px_rgba(99,102,241,0.8)]"
+                        : "w-1.5 sm:w-2 bg-slate-600"
                     }`}
                   />
                 ))}
@@ -421,7 +460,7 @@ export function LiveCourseTour({
                     onClick={handlePrev}
                     className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition-all cursor-pointer hover:scale-105 active:scale-95"
                   >
-                    {isArabic ? <ArrowRight size={13} /> : <ArrowLeft size={13} />}
+                    {isArabic ? <ArrowRight size={12} /> : <ArrowLeft size={12} />}
                     <span>{isArabic ? "السابق" : "Back"}</span>
                   </button>
                 )}
@@ -429,7 +468,7 @@ export function LiveCourseTour({
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-xs font-black transition-all shadow-[0_0_20px_rgba(99,102,241,0.7)] cursor-pointer hover:scale-105 active:scale-95"
+                  className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-xs font-black transition-all shadow-[0_0_20px_rgba(99,102,241,0.7)] cursor-pointer hover:scale-105 active:scale-95"
                 >
                   <span>
                     {currentStepIndex < steps.length - 1
@@ -441,9 +480,9 @@ export function LiveCourseTour({
                         : "Got it, Start!"}
                   </span>
                   {currentStepIndex < steps.length - 1 ? (
-                    isArabic ? <ArrowLeft size={13} /> : <ArrowRight size={13} />
+                    isArabic ? <ArrowLeft size={12} /> : <ArrowRight size={12} />
                   ) : (
-                    <CheckCircle2 size={13} />
+                    <CheckCircle2 size={12} />
                   )}
                 </button>
               </div>
