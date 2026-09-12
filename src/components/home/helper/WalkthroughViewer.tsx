@@ -1,11 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
-  Play,
-  Pause,
   RotateCcw,
   ExternalLink,
   ChevronLeft,
@@ -28,34 +26,16 @@ interface Props {
 
 export function WalkthroughViewer({ topic, isArabic, onBack, onClose, onToggleLang }: Props) {
   const [currentStep, setCurrentStep] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
 
   const totalSteps = topic.steps.length;
-
-  // Auto-play steps
-  useEffect(() => {
-    if (!isPlaying) return;
-    const timer = setInterval(() => {
-      setCurrentStep((prev) => (prev + 1) % totalSteps);
-    }, 4500);
-    return () => clearInterval(timer);
-  }, [isPlaying, totalSteps]);
-
   const step = topic.steps[currentStep];
 
   function handleNext() {
-    setIsPlaying(false);
     setCurrentStep((prev) => (prev + 1) % totalSteps);
   }
 
   function handlePrev() {
-    setIsPlaying(false);
-    setCurrentStep((prev) => (prev - 1 + totalSteps) % totalSteps);
-  }
-
-  function handleReplay() {
-    setCurrentStep(0);
-    setIsPlaying(true);
+    setCurrentStep((prev) => Math.max(0, prev - 1));
   }
 
   return (
@@ -141,50 +121,72 @@ export function WalkthroughViewer({ topic, isArabic, onBack, onClose, onToggleLa
         </motion.div>
       </AnimatePresence>
 
-      {/* Playback Controls & Action CTA */}
-      <div className="mt-4 pt-3 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3">
-        {/* Step Navigation & Playback */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Back Button */}
+      {/* Manual Step Navigation Bar & Action CTA */}
+      <div className="mt-5 pt-4 border-t border-border/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+        {/* Navigation Group: Back + Step Indicator + Next */}
+        <div className="flex items-center justify-between sm:justify-start gap-2.5 sm:gap-3">
+          {/* Obvious Back Button */}
           <button
             type="button"
             onClick={handlePrev}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border hover:bg-muted text-xs font-bold text-foreground transition-colors shadow-sm cursor-pointer"
+            disabled={currentStep === 0}
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-border/90 bg-muted/80 hover:bg-muted text-foreground font-black text-xs sm:text-sm transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-muted/80 disabled:active:scale-100"
             title={isArabic ? "الخطوة السابقة" : "Previous Step"}
           >
-            {isArabic ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+            {isArabic ? <ChevronRight size={18} className="stroke-[2.5]" /> : <ChevronLeft size={18} className="stroke-[2.5]" />}
             <span>{isArabic ? "السابق" : "Back"}</span>
           </button>
 
-          {/* Play/Pause Button */}
-          <button
-            type="button"
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border hover:bg-muted text-xs font-bold text-foreground transition-colors shadow-sm cursor-pointer"
-          >
-            {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-            <span>{isPlaying ? (isArabic ? "إيقاف" : "Pause") : isArabic ? "تشغيل" : "Play"}</span>
-          </button>
+          {/* Interactive Step Dots & Counter */}
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-muted/40 border border-border/60">
+            {topic.steps.map((_, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setCurrentStep(idx)}
+                className={`h-2.5 rounded-full transition-all cursor-pointer ${
+                  idx === currentStep
+                    ? "w-6 bg-primary"
+                    : "w-2.5 bg-muted-foreground/30 hover:bg-muted-foreground/60"
+                }`}
+                title={`${isArabic ? "الخطوة" : "Step"} ${idx + 1}`}
+              />
+            ))}
+            <span className="text-[11px] font-black text-muted-foreground ml-1 rtl:ml-0 rtl:mr-1">
+              {currentStep + 1}/{totalSteps}
+            </span>
+          </div>
 
-          {/* Next Button */}
+          {/* Obvious Primary Next Button */}
           <button
             type="button"
             onClick={handleNext}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-primary/40 bg-primary/10 hover:bg-primary/20 text-xs font-bold text-primary transition-colors shadow-sm cursor-pointer"
-            title={isArabic ? "الخطوة التالية" : "Next Step"}
+            className="inline-flex items-center justify-center gap-2 px-6 py-2.5 sm:px-7 sm:py-2.5 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs sm:text-sm transition-all shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 hover:scale-[1.02] active:scale-95 cursor-pointer"
+            title={
+              currentStep < totalSteps - 1
+                ? isArabic
+                  ? "الخطوة التالية"
+                  : "Next Step"
+                : isArabic
+                  ? "إعادة العرض من البداية"
+                  : "Start from Beginning"
+            }
           >
-            <span>{isArabic ? "التالي" : "Next"}</span>
-            {isArabic ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}
-          </button>
-
-          {/* Replay Button */}
-          <button
-            type="button"
-            onClick={handleReplay}
-            className="p-1.5 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer ml-1 rtl:ml-0 rtl:mr-1"
-            title={isArabic ? "إعادة العرض" : "Replay"}
-          >
-            <RotateCcw size={15} />
+            {currentStep < totalSteps - 1 ? (
+              <>
+                <span>{isArabic ? "التالي" : "Next"}</span>
+                {isArabic ? (
+                  <ChevronLeft size={18} className="stroke-[2.5]" />
+                ) : (
+                  <ChevronRight size={18} className="stroke-[2.5]" />
+                )}
+              </>
+            ) : (
+              <>
+                <RotateCcw size={16} className="stroke-[2.5]" />
+                <span>{isArabic ? "إعادة من البداية" : "Start Over"}</span>
+              </>
+            )}
           </button>
         </div>
 
@@ -192,10 +194,10 @@ export function WalkthroughViewer({ topic, isArabic, onBack, onClose, onToggleLa
         <Link
           to={topic.action_href}
           onClick={onClose}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs sm:text-sm font-bold text-primary-foreground shadow hover:bg-primary/90 transition-all"
+          className="inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary px-4 py-2.5 text-xs sm:text-sm font-black transition-all hover:scale-[1.02] active:scale-95 shadow-sm"
         >
           <span>{isArabic ? topic.action_label_ar : topic.action_label_en}</span>
-          <ExternalLink size={14} />
+          <ExternalLink size={15} />
         </Link>
       </div>
     </div>
