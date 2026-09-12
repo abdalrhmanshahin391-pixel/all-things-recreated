@@ -41,33 +41,33 @@ export const HELPER_TOPICS: HelperTopic[] = [
     action_label_ar: "تصفح الجامعات",
     steps: [
       {
-        title_en: "Step 1: Open Universities",
-        title_ar: "الخطوة الأولى: فتح قائمة الجامعات",
+        title_en: "Step 1: Click on the 'UNIVERSITIES' Button",
+        title_ar: "الخطوة الأولى: الضغط على زر الجامعات (UNIVERSITIES)",
         description_en:
-          "Click the 'Universities' tab from the top navigation bar or home page to view all supported medical institutions.",
+          "On the home page, click the prominent blue 'UNIVERSITIES' button (or the top navigation link) to explore medical universities.",
         description_ar:
-          "انقر على زر 'الجامعات' من القائمة العلوية أو الصفحة الرئيسية لعرض كليات الطب المتاحة.",
-        badge_en: "Navigation",
-        badge_ar: "التنقل",
+          "في الصفحة الرئيسية، انقر على زر 'UNIVERSITIES' الأزرق الواضح في الوسط (أو عبر القائمة العلوية) لاستعراض الجامعات الطبية.",
+        badge_en: "Home Button",
+        badge_ar: "زر الصفحة الرئيسية",
       },
       {
-        title_en: "Step 2: Choose YSMU",
-        title_ar: "الخطوة الثانية: اختيار جامعة YSMU",
+        title_en: "Step 2: Choose Yerevan State Medical University (YSMU)",
+        title_ar: "الخطوة الثانية: اختيار جامعة ولاية يريفان الطبية (YSMU)",
         description_en:
-          "Select Yerevan State Medical University (YSMU) to access your university's medical curriculum, courses, and exam archives.",
+          "From the university catalog, select Yerevan State Medical University (YSMU) to enter your medical curriculum hub.",
         description_ar:
-          "اختر جامعة ولاية يريفان الطبية (YSMU) للوصول إلى مناهج كليتك، كورساتك، وبنوك أسئلة جامعتك.",
+          "من قائمة الجامعات، اختر جامعة ولاية يريفان الطبية (YSMU) للدخول إلى البوابة التعليمية الخاصة بكليتك.",
         badge_en: "YSMU Portal",
         badge_ar: "بوابة YSMU",
       },
       {
-        title_en: "Step 3: Discover the 3 Main Pillars",
-        title_ar: "الخطوة الثالثة: استكشاف الأقسام الثلاثة الرئيسية",
+        title_en: "Step 3: Understand Courses, Resources & Lectures",
+        title_ar: "الخطوة الثالثة: التعرف على الكورسات، المصادر، والمحاضرات",
         description_en:
-          "• Courses: Question bank for each subject with study & test modes.\n• Resources: Committee (لجنة الطب والجراحة) study archives.\n• Lectures: Video and PDF explanations that make tough topics easy to master.",
+          "• Courses: Question bank for each subject with study & test modes.\n• Resources: Committee (لجنة الطب والجراحة) with free books, past papers & study material.\n• Lectures: Video or PDF for certain material that makes it easier to study.",
         description_ar:
-          "• الكورسات (Courses): بنك الأسئلة الشامل لكل مادة مع أنماط تدريب واختبار.\n• المصادر (Resources): أرشيف لجنة الطب والجراحة الشامل.\n• المحاضرات (Lectures): شروحات فيديو وملفات PDF لتسهيل دراسة المواد المعقدة.",
-        badge_en: "3 Pillars",
+          "• الكورسات (Courses): بنك الأسئلة لكل مادة مع أنماط تدريب وامتحانات.\n• المصادر (Resources): أرشيف لجنة الطب والجراحة للكتب، أسئلة السنوات السابقة، والملخصات.\n• المحاضرات (Lectures): فيديوهات أو ملفات PDF لشرح المواد المعقدة وتسهيل دراستها.",
+        badge_en: "3 Core Pillars",
         badge_ar: "3 أقسام رئيسية",
       },
     ],

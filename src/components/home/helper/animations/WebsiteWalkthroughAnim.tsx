@@ -1,14 +1,13 @@
-import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  GraduationCap,
-  Building2,
+  MousePointer,
+  Sparkles,
   BookOpen,
   Library,
   Video,
-  MousePointer,
   CheckCircle2,
-  Sparkles,
-  ArrowRight,
+  Maximize2,
 } from "lucide-react";
 
 interface Props {
@@ -17,238 +16,370 @@ interface Props {
 }
 
 export function WebsiteWalkthroughAnim({ currentStep, isArabic }: Props) {
-  return (
-    <div className="relative w-full h-[340px] sm:h-[380px] bg-slate-950 rounded-2xl border border-slate-800 p-4 sm:p-6 overflow-hidden flex flex-col justify-between select-none shadow-2xl text-slate-100">
-      {/* Decorative ambient background */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+  // In Step 2 (the 3 cards), rotate through Courses -> Resources -> Lectures
+  const [activeCard, setActiveCard] = useState<"courses" | "resources" | "lectures">("courses");
 
-      {/* Simulated Browser Header */}
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 z-10">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-rose-500/80" />
-          <div className="w-3 h-3 rounded-full bg-amber-500/80" />
-          <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
-          <span className="ml-2 text-xs font-mono text-slate-400">aquaqbank.com</span>
+  useEffect(() => {
+    if (currentStep !== 2) return;
+    const interval = setInterval(() => {
+      setActiveCard((prev) => {
+        if (prev === "courses") return "resources";
+        if (prev === "resources") return "lectures";
+        return "courses";
+      });
+    }, 2800);
+    return () => clearInterval(interval);
+  }, [currentStep]);
+
+  return (
+    <div className="relative w-full h-[350px] sm:h-[400px] md:h-[440px] bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden flex flex-col justify-between select-none shadow-2xl text-slate-100">
+      {/* Top Browser Bar */}
+      <div className="flex items-center justify-between px-3 py-2 bg-slate-900/90 border-b border-slate-800 z-20">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
+          <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+          <span className="ml-2 text-[11px] font-mono text-slate-400">
+            {currentStep === 0
+              ? "aquaqbank.com"
+              : currentStep === 1
+              ? "aquaqbank.com/universities"
+              : "aquaqbank.com/universities/ysmu"}
+          </span>
         </div>
 
-        {/* Navigation bar simulation */}
-        <div className="flex items-center gap-2 text-xs font-semibold">
-          <div className="px-2.5 py-1 rounded-md bg-slate-800/60 text-slate-300">
-            {isArabic ? "الرئيسية" : "Home"}
-          </div>
-
-          {/* Animated Universities Button */}
-          <motion.div
-            animate={{
-              scale: currentStep === 0 ? [1, 1.08, 1] : 1,
-              backgroundColor:
-                currentStep === 0 ? "rgba(14, 165, 233, 0.3)" : "rgba(15, 23, 42, 0.6)",
-              borderColor: currentStep === 0 ? "#38bdf8" : "rgba(51, 65, 85, 0.6)",
-            }}
-            transition={{ duration: 1.5, repeat: currentStep === 0 ? Infinity : 0 }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-cyan-400 font-bold shadow-lg"
-          >
-            <GraduationCap size={14} />
-            <span>{isArabic ? "الجامعات" : "Universities"}</span>
-          </motion.div>
+        <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
+          <span className="px-2 py-0.5 rounded bg-primary/20 text-primary border border-primary/30">
+            {currentStep === 0
+              ? isArabic
+                ? "1. الصفحة الرئيسية"
+                : "1. Home Page"
+              : currentStep === 1
+              ? isArabic
+                ? "2. اختيار الجامعة (YSMU)"
+                : "2. Choose YSMU"
+              : isArabic
+              ? "3. أقسام YSMU الثلاثة"
+              : "3. YSMU Core Sections"}
+          </span>
         </div>
       </div>
 
-      {/* Main Canvas Area according to Current Step */}
-      <div className="relative flex-1 flex items-center justify-center py-4 z-10">
-        {/* Step 0: Pointer Clicking Universities */}
-        {currentStep === 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="flex flex-col items-center text-center max-w-sm"
-          >
-            <div className="relative mb-4">
+      {/* Screen Viewport with Ken-Burns / Crossfade Animation */}
+      <div className="relative flex-1 w-full overflow-hidden bg-slate-950">
+        <AnimatePresence mode="wait">
+          {/* STEP 0: Actual Home Page Screenshot & Animated Click on UNIVERSITIES button */}
+          {currentStep === 0 && (
+            <motion.div
+              key="step0"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+              className="relative w-full h-full"
+            >
+              <img
+                src="/helper/step1-universities.png"
+                alt="AquaQBank Home Screen"
+                className="w-full h-full object-cover object-center"
+              />
+
+              {/* Dark gradient overlay to enhance highlight visibility */}
+              <div className="absolute inset-0 bg-black/25 pointer-events-none" />
+
+              {/* Animated Target Box over the UNIVERSITIES button */}
               <motion.div
-                animate={{ scale: [1, 1.2, 1] }}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{
+                  opacity: 1,
+                  scale: [1, 1.05, 1],
+                  borderColor: ["#38bdf8", "#0284c7", "#38bdf8"],
+                }}
                 transition={{ duration: 2, repeat: Infinity }}
-                className="w-16 h-16 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-400 shadow-xl"
+                className="absolute left-1/2 -translate-x-1/2 bottom-[14%] sm:bottom-[16%] w-[160px] sm:w-[220px] h-[38px] sm:h-[50px] rounded-xl border-2 border-cyan-400 bg-cyan-400/20 shadow-[0_0_25px_rgba(14,165,233,0.6)] flex items-center justify-center pointer-events-none"
               >
-                <GraduationCap size={32} />
+                <span className="sr-only">Universities Button Target</span>
               </motion.div>
-              {/* Simulated Clicking Finger / Cursor */}
+
+              {/* Animated Cursor clicking the button */}
               <motion.div
                 animate={{
-                  x: [10, -5, 10],
-                  y: [10, -5, 10],
+                  x: [40, 0, 40],
+                  y: [40, 0, 40],
+                  scale: [1, 0.85, 1],
                 }}
-                transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute -bottom-2 -right-2 text-white drop-shadow-lg"
+                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute left-1/2 translate-x-8 sm:translate-x-14 bottom-[11%] sm:bottom-[13%] z-30 pointer-events-none"
               >
-                <MousePointer size={24} className="fill-white text-slate-900" />
+                <div className="relative">
+                  <MousePointer
+                    size={28}
+                    className="text-slate-950 fill-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]"
+                  />
+                  {/* Click ripple */}
+                  <motion.span
+                    animate={{ scale: [0.5, 2], opacity: [1, 0] }}
+                    transition={{ duration: 1.2, repeat: Infinity }}
+                    className="absolute -top-1 -left-1 w-6 h-6 rounded-full border-2 border-cyan-300"
+                  />
+                </div>
               </motion.div>
-            </div>
-            <h4 className="text-base font-bold text-white mb-1">
-              {isArabic ? "اضغط على زر الجامعات" : "Click 'Universities'"}
-            </h4>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              {isArabic
-                ? "ابدأ رحلتك الدراسية باختيار جامعتك من القائمة للوصول إلى مناهجك المعتمدة"
-                : "Start by clicking the Universities button from the top navigation to view medical schools."}
-            </p>
-          </motion.div>
-        )}
 
-        {/* Step 1: Choosing YSMU */}
-        {currentStep === 1 && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md flex flex-col items-center"
-          >
-            <div className="text-xs font-semibold uppercase tracking-wider text-cyan-400 mb-3 flex items-center gap-1.5">
-              <Building2 size={14} />
-              <span>{isArabic ? "اختيار الجامعة" : "Select University"}</span>
-            </div>
+              {/* Explanatory Floating Badge */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="absolute top-4 left-1/2 -translate-x-1/2 z-30 px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-cyan-400/50 backdrop-blur-md text-white text-xs font-bold shadow-xl flex items-center gap-2"
+              >
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                <span>
+                  {isArabic
+                    ? "الخطوة الأولى: اضغط على زر الجامعات (UNIVERSITIES)"
+                    : "Step 1: Click the 'UNIVERSITIES' button"}
+                </span>
+              </motion.div>
+            </motion.div>
+          )}
 
+          {/* STEP 1: Actual Pick Your University Screenshot & Animated Selection of YSMU */}
+          {currentStep === 1 && (
             <motion.div
-              animate={{
-                borderColor: ["#0284c7", "#f59e0b", "#0284c7"],
-                boxShadow: [
-                  "0 0 15px rgba(14, 165, 233, 0.3)",
-                  "0 0 25px rgba(245, 158, 11, 0.4)",
-                  "0 0 15px rgba(14, 165, 233, 0.3)",
-                ],
-              }}
-              transition={{ duration: 2.5, repeat: Infinity }}
-              className="w-full bg-slate-900/90 border-2 rounded-2xl p-4 flex items-center justify-between gap-4"
+              key="step1"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+              className="relative w-full h-full"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-600 to-cyan-800 flex items-center justify-center font-black text-white text-lg shadow">
-                  YS
+              <img
+                src="/helper/step2-ysmu.png"
+                alt="Pick Your University - YSMU"
+                className="w-full h-full object-cover object-left-top sm:object-center"
+              />
+
+              <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+
+              {/* Glowing highlight around the YSMU Card */}
+              <motion.div
+                animate={{
+                  boxShadow: [
+                    "0 0 0 2px #38bdf8, 0 0 25px rgba(14, 165, 233, 0.4)",
+                    "0 0 0 3px #f59e0b, 0 0 35px rgba(245, 158, 11, 0.6)",
+                    "0 0 0 2px #38bdf8, 0 0 25px rgba(14, 165, 233, 0.4)",
+                  ],
+                }}
+                transition={{ duration: 2.5, repeat: Infinity }}
+                className="absolute left-[3%] sm:left-[11%] bottom-[4%] sm:bottom-[8%] w-[210px] sm:w-[250px] md:w-[280px] h-[230px] sm:h-[280px] rounded-3xl pointer-events-none"
+              />
+
+              {/* Animated Clicking Hand / Pointer */}
+              <motion.div
+                animate={{
+                  x: [25, 0, 25],
+                  y: [25, 0, 25],
+                  scale: [1, 0.88, 1],
+                }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute left-[20%] sm:left-[22%] bottom-[20%] z-30 pointer-events-none"
+              >
+                <div className="relative">
+                  <MousePointer
+                    size={28}
+                    className="text-slate-950 fill-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]"
+                  />
+                  <motion.span
+                    animate={{ scale: [0.5, 2], opacity: [1, 0] }}
+                    transition={{ duration: 1.2, repeat: Infinity }}
+                    className="absolute -top-1 -left-1 w-6 h-6 rounded-full border-2 border-amber-400"
+                  />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-black text-white text-base">YSMU</span>
-                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold">
-                      {isArabic ? "الجامعة النشطة" : "Active Portal"}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-300 mt-0.5">
-                    {isArabic
-                      ? "جامعة ولاية يريفان الطبية (Yerevan State Medical University)"
-                      : "Yerevan State Medical University, Armenia"}
-                  </p>
+              </motion.div>
+
+              {/* Step 2 Callout */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="absolute top-4 left-1/2 -translate-x-1/2 z-30 px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-amber-400/50 backdrop-blur-md text-white text-xs font-bold shadow-xl flex items-center gap-2"
+              >
+                <CheckCircle2 size={14} className="text-amber-400" />
+                <span>
+                  {isArabic
+                    ? "الخطوة الثانية: اختيار جامعة ولاية يريفان الطبية (YSMU)"
+                    : "Step 2: Choose Yerevan State Medical University (YSMU)"}
+                </span>
+              </motion.div>
+            </motion.div>
+          )}
+
+          {/* STEP 2: Actual YSMU Hub Screenshot (Courses, Lectures, Resources) */}
+          {currentStep === 2 && (
+            <motion.div
+              key="step2"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+              className="relative w-full h-full"
+            >
+              <img
+                src="/helper/step3-hub.png"
+                alt="YSMU Hub - Courses, Lectures, Resources"
+                className="w-full h-full object-cover object-bottom"
+              />
+
+              <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+
+              {/* Dynamic Spotlights over the 3 Cards */}
+              {/* Card 1: Courses (Left) */}
+              <motion.div
+                animate={{
+                  opacity: activeCard === "courses" ? 1 : 0.4,
+                  scale: activeCard === "courses" ? 1.03 : 1,
+                  boxShadow:
+                    activeCard === "courses"
+                      ? "0 0 0 3px #f97316, 0 0 30px rgba(249, 115, 22, 0.7)"
+                      : "none",
+                }}
+                className="absolute left-[4%] sm:left-[5%] bottom-[4%] sm:bottom-[7%] w-[28%] h-[40%] sm:h-[45%] rounded-2xl pointer-events-none"
+              />
+
+              {/* Card 2: Lectures (Center) */}
+              <motion.div
+                animate={{
+                  opacity: activeCard === "lectures" ? 1 : 0.4,
+                  scale: activeCard === "lectures" ? 1.03 : 1,
+                  boxShadow:
+                    activeCard === "lectures"
+                      ? "0 0 0 3px #38bdf8, 0 0 30px rgba(56, 189, 248, 0.7)"
+                      : "none",
+                }}
+                className="absolute left-[36%] bottom-[4%] sm:bottom-[7%] w-[28%] h-[40%] sm:h-[45%] rounded-2xl pointer-events-none"
+              />
+
+              {/* Card 3: Resources (Right) */}
+              <motion.div
+                animate={{
+                  opacity: activeCard === "resources" ? 1 : 0.4,
+                  scale: activeCard === "resources" ? 1.03 : 1,
+                  boxShadow:
+                    activeCard === "resources"
+                      ? "0 0 0 3px #eab308, 0 0 30px rgba(234, 179, 8, 0.7)"
+                      : "none",
+                }}
+                className="absolute right-[4%] sm:right-[5%] bottom-[4%] sm:bottom-[7%] w-[28%] h-[40%] sm:h-[45%] rounded-2xl pointer-events-none"
+              />
+
+              {/* Active Explanation Banner overlay */}
+              <div className="absolute top-3 left-3 right-3 z-30 flex flex-col items-center">
+                <div className="flex gap-1.5 mb-2 bg-slate-950/80 p-1 rounded-xl border border-slate-800 backdrop-blur-md">
+                  <button
+                    type="button"
+                    onClick={() => setActiveCard("courses")}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                      activeCard === "courses"
+                        ? "bg-amber-500 text-slate-950 shadow"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    {isArabic ? "1. الكورسات (Courses)" : "1. Courses"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveCard("resources")}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                      activeCard === "resources"
+                        ? "bg-amber-500 text-slate-950 shadow"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    {isArabic ? "2. المصادر (Resources)" : "2. Resources"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveCard("lectures")}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                      activeCard === "lectures"
+                        ? "bg-cyan-500 text-slate-950 shadow"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    {isArabic ? "3. المحاضرات (Lectures)" : "3. Lectures"}
+                  </button>
                 </div>
-              </div>
-              <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shrink-0">
-                <CheckCircle2 size={18} />
-              </div>
-            </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="mt-3 flex items-center gap-2 text-xs text-emerald-400 font-medium"
-            >
-              <Sparkles size={14} />
-              <span>{isArabic ? "تم الدخول إلى بوابة YSMU الطبية" : "Entered YSMU Medical Portal"}</span>
-            </motion.div>
-          </motion.div>
-        )}
+                {/* Text card for the active selection */}
+                <motion.div
+                  key={activeCard}
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="px-3.5 py-2 rounded-xl bg-slate-950/90 border border-slate-700/80 backdrop-blur-md text-white text-xs max-w-lg text-center shadow-2xl"
+                >
+                  {activeCard === "courses" && (
+                    <div>
+                      <span className="font-black text-amber-400 block mb-0.5">
+                        {isArabic
+                          ? "الكورسات (Courses) = بنك الأسئلة لكل مادة"
+                          : "Courses = Question Bank for each subject"}
+                      </span>
+                      <span className="text-[11px] text-slate-300">
+                        {isArabic
+                          ? "بنوك أسئلة متكاملة مقسمة حسب السنوات والمواد مع تدريب وامتحانات فورية."
+                          : "Subject-by-subject question banks organized year by year with instant practice."}
+                      </span>
+                    </div>
+                  )}
 
-        {/* Step 2: The 3 Main Pillars (Courses, Resources/Committee, Lectures) */}
-        {currentStep === 2 && (
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3"
-          >
-            {/* Pillar 1: Courses */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-slate-900/90 border border-cyan-500/40 rounded-xl p-3 flex flex-col items-center text-center shadow-lg"
-            >
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-2">
-                <BookOpen size={20} />
-              </div>
-              <h5 className="font-bold text-sm text-white">
-                {isArabic ? "الكورسات (Courses)" : "Courses"}
-              </h5>
-              <span className="text-[10px] font-semibold text-cyan-400 uppercase tracking-wider mb-1.5">
-                {isArabic ? "بنك الأسئلة" : "Question Bank"}
-              </span>
-              <p className="text-[11px] text-slate-300 leading-tight">
-                {isArabic
-                  ? "بنك الأسئلة الشامل لكل مادة مع تصحيح فوري وامتحانات تجريبية."
-                  : "Question bank for each subject with study & test modes."}
-              </p>
-            </motion.div>
+                  {activeCard === "resources" && (
+                    <div>
+                      <span className="font-black text-amber-400 block mb-0.5">
+                        {isArabic
+                          ? "المصادر (Resources) = لجنة الطب والجراحة"
+                          : "Resources = Committee (لجنة الطب والجراحة)"}
+                      </span>
+                      <span className="text-[11px] text-slate-300">
+                        {isArabic
+                          ? "أرشيف مجاني يشمل الكتب، أسئلة السنوات السابقة، ملخصات الدفعات لجميع السنوات 0-6."
+                          : "Free archives: past papers, medical textbooks & summaries across all 7 years."}
+                      </span>
+                    </div>
+                  )}
 
-            {/* Pillar 2: Resources (Committee) */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-slate-900/90 border border-purple-500/40 rounded-xl p-3 flex flex-col items-center text-center shadow-lg"
-            >
-              <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 mb-2">
-                <Library size={20} />
+                  {activeCard === "lectures" && (
+                    <div>
+                      <span className="font-black text-cyan-400 block mb-0.5">
+                        {isArabic
+                          ? "المحاضرات (Lectures) = فيديو وملفات PDF"
+                          : "Lectures = Videos & PDF Notes"}
+                      </span>
+                      <span className="text-[11px] text-slate-300">
+                        {isArabic
+                          ? "محاضرات مرئية وملفات ملخصة للمواد الصعبة لتسهيل الفهم والمذاكرة."
+                          : "Video explanations and summarized PDFs for difficult subjects to make studying easier."}
+                      </span>
+                    </div>
+                  )}
+                </motion.div>
               </div>
-              <h5 className="font-bold text-sm text-white">
-                {isArabic ? "المصادر (Resources)" : "Resources"}
-              </h5>
-              <span className="text-[10px] font-semibold text-purple-400 uppercase tracking-wider mb-1.5">
-                {isArabic ? "لجنة الطب والجراحة" : "Committee Portal"}
-              </span>
-              <p className="text-[11px] text-slate-300 leading-tight">
-                {isArabic
-                  ? "أرشيف لجنة الطب والجراحة: ملخصات، كتب، وأسئلة السنوات السابقة."
-                  : "Committee (لجنة الطب والجراحة) archives: summaries, books & past papers."}
-              </p>
             </motion.div>
-
-            {/* Pillar 3: Lectures */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-slate-900/90 border border-amber-500/40 rounded-xl p-3 flex flex-col items-center text-center shadow-lg"
-            >
-              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-2">
-                <Video size={20} />
-              </div>
-              <h5 className="font-bold text-sm text-white">
-                {isArabic ? "المحاضرات (Lectures)" : "Lectures"}
-              </h5>
-              <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider mb-1.5">
-                {isArabic ? "فيديو وملفات شرح" : "Video & PDF Notes"}
-              </span>
-              <p className="text-[11px] text-slate-300 leading-tight">
-                {isArabic
-                  ? "فيديوهات وملفات PDF لشرح المواد المعقدة وتسهيل فهمها."
-                  : "Video & PDF explanations that make difficult subjects easier to study."}
-              </p>
-            </motion.div>
-          </motion.div>
-        )}
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Bottom Step Indicator Bar */}
-      <div className="flex items-center justify-between border-t border-slate-800/80 pt-2 text-[11px] text-slate-400 z-10">
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/90 border-t border-slate-800 text-[11px] text-slate-400 z-20">
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
           {isArabic
-            ? `المرحلة ${currentStep + 1} من 3: ${
+            ? `الخطوة ${currentStep + 1} من 3: ${
                 currentStep === 0
-                  ? "زر الجامعات"
+                  ? "زر الجامعات (UNIVERSITIES)"
                   : currentStep === 1
                   ? "اختيار YSMU"
                   : "الكورسات واللجنة والمحاضرات"
               }`
             : `Step ${currentStep + 1} of 3: ${
                 currentStep === 0
-                  ? "Open Universities"
+                  ? "Click UNIVERSITIES"
                   : currentStep === 1
                   ? "Select YSMU"
                   : "Courses, Committee & Lectures"
