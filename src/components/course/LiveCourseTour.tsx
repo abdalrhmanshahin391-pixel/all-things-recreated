@@ -115,32 +115,61 @@ export function LiveCourseTour({
 
   const currentStep = steps[currentStepIndex];
 
-  // Update target bounding box on step change, resize, or scroll
+  // Update target bounding box on step change, resize, scroll, or language direction switch
   useEffect(() => {
     if (!isOpen) return;
 
-    function updateRect() {
+    function update() {
       if (!currentStep) return;
       const el = document.querySelector(currentStep.targetSelector);
       if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-        setTimeout(() => {
-          setTargetRect(el.getBoundingClientRect());
-        }, 250);
+        const rect = el.getBoundingClientRect();
+        setTargetRect((prev) => {
+          if (
+            !prev ||
+            Math.abs(prev.top - rect.top) > 1 ||
+            Math.abs(prev.left - rect.left) > 1 ||
+            Math.abs(prev.width - rect.width) > 1 ||
+            Math.abs(prev.height - rect.height) > 1
+          ) {
+            return rect;
+          }
+          return prev;
+        });
       } else {
         setTargetRect(null);
       }
     }
 
-    updateRect();
-    window.addEventListener("resize", updateRect);
-    window.addEventListener("scroll", updateRect, true);
+    // Scroll into center view smoothly
+    const el = document.querySelector(currentStep?.targetSelector);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    }
+
+    update();
+    const t1 = setTimeout(update, 60);
+    const t2 = setTimeout(update, 180);
+    const t3 = setTimeout(update, 360);
+    const t4 = setTimeout(update, 600);
+
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+
+    const ro = new ResizeObserver(() => update());
+    ro.observe(document.body);
+    if (el) ro.observe(el);
 
     return () => {
-      window.removeEventListener("resize", updateRect);
-      window.removeEventListener("scroll", updateRect, true);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(t4);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+      ro.disconnect();
     };
-  }, [isOpen, currentStepIndex, currentStep?.targetSelector]);
+  }, [isOpen, currentStepIndex, currentStep?.targetSelector, lang]);
 
   // Handle auto-selection of free subject on Step 1 if user is not enrolled
   useEffect(() => {
@@ -174,14 +203,20 @@ export function LiveCourseTour({
   const cutoutRight = cutoutLeft + cutoutWidth;
   const cutoutBottom = cutoutTop + cutoutHeight;
 
-  // Safe floating card coordinates
-  const cardWidth = 390;
+  // Safe floating card coordinates (mirrors automatically for RTL)
+  const cardWidth = Math.min(390, typeof window !== "undefined" ? window.innerWidth - 32 : 390);
   const cardHeight = 360;
   let cardTop = 100;
   let cardLeft = 100;
 
-  if (targetRect) {
-    if (currentStep.placement === "left") {
+  if (targetRect && typeof window !== "undefined") {
+    const effectivePlacement = isArabic
+      ? currentStep.placement === "left"
+        ? "right"
+        : currentStep.placement
+      : currentStep.placement;
+
+    if (effectivePlacement === "left") {
       if (targetRect.left >= cardWidth + 24) {
         cardLeft = targetRect.left - cardWidth - 16;
         cardTop = Math.max(16, Math.min(window.innerHeight - cardHeight - 16, targetRect.top - 20));
@@ -189,16 +224,29 @@ export function LiveCourseTour({
         cardTop = Math.min(window.innerHeight - cardHeight - 16, targetRect.bottom + 16);
         cardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, targetRect.left));
       }
+    } else if (effectivePlacement === "right") {
+      if (targetRect.right + cardWidth + 24 <= window.innerWidth) {
+        cardLeft = targetRect.right + 16;
+        cardTop = Math.max(16, Math.min(window.innerHeight - cardHeight - 16, targetRect.top - 20));
+      } else {
+        cardTop = Math.min(window.innerHeight - cardHeight - 16, targetRect.bottom + 16);
+        cardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, targetRect.left));
+      }
     } else {
+      // placement "bottom"
       if (targetRect.bottom + cardHeight + 24 <= window.innerHeight) {
         cardTop = targetRect.bottom + 16;
-        cardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, targetRect.left));
       } else {
         cardTop = Math.max(16, targetRect.top - cardHeight - 16);
+      }
+      if (isArabic) {
+        const preferredLeft = targetRect.right - cardWidth;
+        cardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, preferredLeft));
+      } else {
         cardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, targetRect.left));
       }
     }
-  } else {
+  } else if (typeof window !== "undefined") {
     cardTop = Math.max(20, (window.innerHeight - cardHeight) / 2);
     cardLeft = Math.max(20, (window.innerWidth - cardWidth) / 2);
   }
