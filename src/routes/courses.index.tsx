@@ -6,7 +6,9 @@ import {
   isAllYearsCourse,
   isZeroCourse,
   getYearSortPriority,
+  hasSemesterSupport,
 } from "@/lib/course-options";
+import { useLang } from "@/components/LanguageProvider";
 import {
   Stethoscope,
   Pill,
@@ -63,6 +65,7 @@ type Course = {
   id: string;
   title: string;
   year: number;
+  semester?: number | null;
   price: number;
   currency: string | null;
   category: string;
@@ -250,9 +253,13 @@ function CourseSection({
   Icon: React.ComponentType<{ className?: string; size?: number; strokeWidth?: number }>;
 }) {
   const { t } = useTranslation();
+  const { lang } = useLang();
   const options = useCourseOptions();
   const isAllYears = isAllYearsCourse(year, options);
   const isZero = isZeroCourse(year, options);
+  const canHaveSemester = hasSemesterSupport(year, options);
+  const [semesterFilter, setSemesterFilter] = useState<"all" | 1 | 2>("all");
+
   // An admin-defined year label wins over the generic "Nth year" heading.
   const custom = options.year.find((o) => Number(o.value) === year);
   const SectionIcon = isAllYears ? Globe : isZero ? GraduationCap : Icon;
@@ -265,59 +272,113 @@ function CourseSection({
         ? custom.label
         : t("cms.coursesPage.yearHeading", { ordinal: ordinal(year) });
 
+  const displayedCourses = useMemo(() => {
+    if (!canHaveSemester || semesterFilter === "all") return courses;
+    return courses.filter((c) => c.semester === semesterFilter);
+  }, [courses, canHaveSemester, semesterFilter]);
+
   return (
     <section>
-      <div className="flex items-center gap-3 mb-6">
-        <div
-          className={`grid place-items-center h-9 w-9 rounded-lg ${
-            isAllYears
-              ? "bg-amber-500/10 text-amber-500"
-              : isZero
-                ? "bg-purple-500/10 text-purple-500"
-                : "bg-muted text-primary"
-          }`}
-        >
-          <SectionIcon size={18} strokeWidth={2} />
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <div
+            className={`grid place-items-center h-9 w-9 rounded-lg ${
+              isAllYears
+                ? "bg-amber-500/10 text-amber-500"
+                : isZero
+                  ? "bg-purple-500/10 text-purple-500"
+                  : "bg-muted text-primary"
+            }`}
+          >
+            <SectionIcon size={18} strokeWidth={2} />
+          </div>
+          <h2 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground">
+            {sectionTitle}
+          </h2>
+          <span className="inline-flex items-center text-[11px] font-semibold uppercase tracking-widest text-muted-foreground bg-card border border-border rounded-full px-2.5 py-1">
+            {displayedCourses.length === 1
+              ? t("cms.coursesPage.countOne")
+              : t("cms.coursesPage.countOther", { count: displayedCourses.length })}
+          </span>
         </div>
-        <h2 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground">
-          {sectionTitle}
-        </h2>
-        <span className="inline-flex items-center text-[11px] font-semibold uppercase tracking-widest text-muted-foreground bg-card border border-border rounded-full px-2.5 py-1">
-          {courses.length === 1
-            ? t("cms.coursesPage.countOne")
-            : t("cms.coursesPage.countOther", { count: courses.length })}
-        </span>
+
+        {canHaveSemester && (
+          <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-card border border-border text-xs font-medium shadow-sm">
+            <button
+              type="button"
+              onClick={() => setSemesterFilter("all")}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                semesterFilter === "all"
+                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {lang === "ar" ? "الكل" : "All"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSemesterFilter(1)}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                semesterFilter === 1
+                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {lang === "ar" ? "الفصل الأول" : "1st Semester"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSemesterFilter(2)}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                semesterFilter === 2
+                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {lang === "ar" ? "الفصل الثاني" : "2nd Semester"}
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-        {courses.map((c) => {
-          const active = enrolledIds.has(c.id);
-          const total = (c.questions_count_mid ?? 0) + (c.questions_count_final ?? 0);
-          return (
-            <CourseCard
-              key={c.id}
-              course={{
-                id: c.id,
-                title: c.title,
-                year: c.year,
-                category: c.category,
-                image_url: c.image_url,
-                price: c.price,
-                currency: c.currency,
-                badge: c.badge,
-                badge_color: c.badge_color,
-                badge_expires_at: c.badge_expires_at,
-                compare_at_price: c.compare_at_price,
-                discount_active: c.discount_active,
-                discount_ends_at: c.discount_ends_at,
-              }}
-              counts={{ subjects: c.subjects_count ?? 0, questions: total }}
-              unlocked={active}
-              showPrice
-            />
-          );
-        })}
-      </div>
+      {displayedCourses.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border/80 bg-card/40 py-12 text-center text-sm text-muted-foreground">
+          {lang === "ar"
+            ? "لا توجد دورات مضافة لهذا الفصل بعد"
+            : "No courses available for this semester yet."}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+          {displayedCourses.map((c) => {
+            const active = enrolledIds.has(c.id);
+            const total = (c.questions_count_mid ?? 0) + (c.questions_count_final ?? 0);
+            return (
+              <CourseCard
+                key={c.id}
+                course={{
+                  id: c.id,
+                  title: c.title,
+                  year: c.year,
+                  semester: c.semester,
+                  category: c.category,
+                  image_url: c.image_url,
+                  price: c.price,
+                  currency: c.currency,
+                  badge: c.badge,
+                  badge_color: c.badge_color,
+                  badge_expires_at: c.badge_expires_at,
+                  compare_at_price: c.compare_at_price,
+                  discount_active: c.discount_active,
+                  discount_ends_at: c.discount_ends_at,
+                }}
+                counts={{ subjects: c.subjects_count ?? 0, questions: total }}
+                unlocked={active}
+                showPrice
+              />
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

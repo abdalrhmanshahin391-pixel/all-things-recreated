@@ -494,7 +494,7 @@ function CourseDetailPage() {
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground bg-background border border-border rounded-full px-3 py-1">
               <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-              Year {course.year} · {course.exam_type ?? "Mid + Final"}
+              Year {course.year}{(course as any).semester ? ` · Sem ${(course as any).semester}` : ""} · {course.exam_type ?? "Mid + Final"}
             </span>
             {enrolled && (
               <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-accent bg-accent/10 border border-accent/30 rounded-full px-3 py-1">

@@ -26,6 +26,7 @@ type Row = {
   id: string;
   title: string;
   year: number | null;
+  semester: number | null;
   kind: string | null;
   currency: string | null;
   price: number | null;
@@ -78,7 +79,7 @@ function CourseControlPage() {
         supabase
           .from("courses")
           .select(
-            "id, title, year, kind, currency, price, published, university_id, badge, badge_color, badge_expires_at, compare_at_price, discount_active, discount_ends_at, show_on_home, admin_only",
+            "id, title, year, semester, kind, currency, price, published, university_id, badge, badge_color, badge_expires_at, compare_at_price, discount_active, discount_ends_at, show_on_home, admin_only",
           )
           .order("year", { ascending: true })
           .order("title", { ascending: true }),
@@ -186,7 +187,7 @@ function CourseControlPage() {
                   <div className="flex flex-wrap items-center gap-2 mb-4">
                     <h2 className="font-black text-lg me-auto">{r.title}</h2>
                     <span className="text-[11px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-slate-100 text-slate-600">
-                      Year {r.year ?? "—"} · {r.kind ?? "questions"}
+                      Year {r.year ?? "—"}{r.semester ? ` · Sem ${r.semester}` : ""} · {r.kind ?? "questions"}
                     </span>
                     {offerLive && (
                       <span className="text-[11px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-amber-100 text-amber-700">

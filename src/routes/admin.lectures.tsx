@@ -37,6 +37,7 @@ type Course = {
   id: string;
   title: string;
   year: number;
+  semester?: number | null;
   published: boolean;
   university_id: string;
   intro_video_url: string | null;
@@ -114,7 +115,7 @@ function AdminLecturesPage() {
   async function loadCourses(staffIds: string[]) {
     let q = supabase
       .from("courses")
-      .select("id,title,year,published,university_id,intro_video_url,intro_video_storage_path,intro_free")
+      .select("id,title,year,semester,published,university_id,intro_video_url,intro_video_storage_path,intro_free")
       .eq("kind", "lectures")
       .order("year")
       .order("title");
@@ -494,7 +495,7 @@ function AdminLecturesPage() {
             {courses.length === 0 && <option value="">No lecture courses yet</option>}
             {courses.map((c) => (
               <option key={c.id} value={c.id}>
-                Y{c.year} · {c.title}
+                Y{c.year}{c.semester ? ` (Sem ${c.semester})` : ""} · {c.title}
               </option>
             ))}
           </select>

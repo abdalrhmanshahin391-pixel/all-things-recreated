@@ -154,3 +154,37 @@ export function yearLabel(
   if (isAllYearsCourse(year, options) || year === 0) return "For all years";
   return `${ORDINAL[year] ?? `${year}th`} year`;
 }
+
+export type SemesterValue = 1 | 2;
+
+export const SEMESTER_OPTIONS = [
+  { value: 1, labelEn: "1st Semester", labelAr: "الفصل الأول" },
+  { value: 2, labelEn: "2nd Semester", labelAr: "الفصل الثاني" },
+] as const;
+
+/**
+ * Checks whether an academic year supports semester selection.
+ * Semester selection applies to all years EXCEPT Zero course and all-years courses.
+ */
+export function hasSemesterSupport(
+  year: number | null | undefined,
+  options?: CourseOptionGroups,
+): boolean {
+  if (year === null || year === undefined) return false;
+  if (isZeroCourse(year, options)) return false;
+  if (isAllYearsCourse(year, options)) return false;
+  return true;
+}
+
+/**
+ * Returns a human-friendly label for a semester value.
+ */
+export function semesterLabel(
+  semester: number | null | undefined,
+  lang: "en" | "ar" = "en",
+): string | null {
+  if (semester === 1) return lang === "ar" ? "الفصل الأول" : "1st Semester";
+  if (semester === 2) return lang === "ar" ? "الفصل الثاني" : "2nd Semester";
+  return null;
+}
+

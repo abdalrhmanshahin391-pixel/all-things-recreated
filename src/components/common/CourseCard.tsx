@@ -8,6 +8,7 @@ type CourseLike = {
   id: string;
   title: string;
   year: number | null;
+  semester?: number | null;
   category?: string | null;
   image_url: string | null;
   price?: number | null;
@@ -142,6 +143,17 @@ export function CourseCard({
           >
             {isAllYears ? "ALL YEARS" : isZero ? "ZERO COURSE" : `YEAR ${year || "—"}`}
           </span>
+          {!isAllYears && !isZero && (course.semester === 1 || course.semester === 2) && (
+            <span
+              className={`inline-flex items-center text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                course.semester === 1
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                  : "bg-blue-50 text-blue-800 border-blue-300"
+              }`}
+            >
+              {course.semester === 1 ? "SEM 1" : "SEM 2"}
+            </span>
+          )}
           <span
             className="inline-flex items-center text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full text-white"
             style={{ background: "linear-gradient(135deg, #06b6d4, #0891b2)" }}

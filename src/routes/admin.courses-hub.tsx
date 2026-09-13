@@ -17,6 +17,7 @@ import {
   isZeroCourse,
   yearLabel,
   getYearSortPriority,
+  hasSemesterSupport,
 } from "@/lib/course-options";
 import { CourseOptionsManager } from "@/components/admin/CourseOptionsManager";
 import { BADGE_PRESETS } from "@/components/common/CourseBadge";
@@ -44,6 +45,7 @@ type Course = {
   id: string;
   title: string;
   year: number;
+  semester?: number | null;
   price: number;
   paddle_price_id?: string | null;
   category: string;
@@ -121,6 +123,7 @@ function CoursesHubPage() {
   // new course form
   const [title, setTitle] = useState("");
   const [year, setYear] = useState<number>(1);
+  const [semester, setSemester] = useState<number | null>(null);
   const [price, setPrice] = useState("");
   const [paddlePriceId, setPaddlePriceId] = useState("");
   const [category, setCategory] = useState("major");
@@ -261,6 +264,7 @@ function CoursesHubPage() {
     const { error } = await (supabase.from("courses") as any).insert({
       title: title.trim(),
       year,
+      semester: hasSemesterSupport(year, options) ? (Number(semester) || null) : null,
       price: parsedPrice,
       paddle_price_id: effectivePaddlePriceId,
       category,
@@ -277,6 +281,7 @@ function CoursesHubPage() {
     setTitle("");
     setPrice("");
     setPaddlePriceId("");
+    setSemester(null);
     toast.success("Course added");
     refresh();
   }
@@ -500,7 +505,11 @@ function CoursesHubPage() {
                 )}
                 <select
                   value={year}
-                  onChange={(e) => setYear(Number(e.target.value))}
+                  onChange={(e) => {
+                    const yVal = Number(e.target.value);
+                    setYear(yVal);
+                    if (!hasSemesterSupport(yVal, options)) setSemester(null);
+                  }}
                   className="md:col-span-2 rounded-lg border border-white/15 bg-black/40 px-3 py-3 text-sm outline-none focus:border-white/50"
                 >
                   {[...options.year]
@@ -513,6 +522,17 @@ function CoursesHubPage() {
                       <option key={o.id} value={Number(o.value)}>{o.label}</option>
                     ))}
                 </select>
+                {hasSemesterSupport(year, options) && (
+                  <select
+                    value={semester ?? ""}
+                    onChange={(e) => setSemester(e.target.value ? Number(e.target.value) : null)}
+                    className="md:col-span-2 rounded-lg border border-emerald-500/30 bg-black/40 px-3 py-3 text-sm outline-none focus:border-emerald-500 text-emerald-300"
+                  >
+                    <option value="">Sem: Unassigned</option>
+                    <option value="1">1st Semester (الفصل الأول)</option>
+                    <option value="2">2nd Semester (الفصل الثاني)</option>
+                  </select>
+                )}
                 {kind === "questions" && (
                   <select
                     value={examType}
@@ -656,6 +676,16 @@ function CoursesHubPage() {
                                 ? "All Years"
                                 : `Y${c.year}`}
                           </span>
+                          {c.semester === 1 && (
+                            <span className="rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 font-medium">
+                              Sem 1
+                            </span>
+                          )}
+                          {c.semester === 2 && (
+                            <span className="rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 font-medium">
+                              Sem 2
+                            </span>
+                          )}
                           <span className="rounded-full bg-emerald-500/15 text-emerald-300 px-2 py-0.5 font-medium">
                             ${Number(c.price).toFixed(2)}
                           </span>
@@ -1066,6 +1096,7 @@ function EditCourseModal({
   const [price, setPrice] = useState(String(course.price));
   const [paddlePriceId, setPaddlePriceId] = useState(course.paddle_price_id ?? "");
   const [year, setYear] = useState(course.year);
+  const [semester, setSemester] = useState<number | null>(course.semester ?? null);
   const [category, setCategory] = useState<string>(course.category ?? "major");
   const [examType, setExamType] = useState(course.exam_type);
   const [subjects, setSubjects] = useState(String(course.subjects_count));
@@ -1161,6 +1192,7 @@ function EditCourseModal({
         price: Number(price) || 0,
         paddle_price_id: effectivePaddlePriceId,
         year,
+        semester: hasSemesterSupport(year, options) ? (Number(semester) || null) : null,
         category,
         exam_type: examType,
         subjects_count: Number(subjects) || 0,
@@ -1264,7 +1296,15 @@ function EditCourseModal({
               </select>
             </Field>
             <Field label="Year">
-              <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50">
+              <select
+                value={year}
+                onChange={(e) => {
+                  const yVal = Number(e.target.value);
+                  setYear(yVal);
+                  if (!hasSemesterSupport(yVal, options)) setSemester(null);
+                }}
+                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50"
+              >
                 {options.year.some((o) => Number(o.value) === year) ? null : (
                   <option value={year}>{yearLabel(year, options)}</option>
                 )}
@@ -1279,6 +1319,19 @@ function EditCourseModal({
                   ))}
               </select>
             </Field>
+            {hasSemesterSupport(year, options) && (
+              <Field label="Semester">
+                <select
+                  value={semester ?? ""}
+                  onChange={(e) => setSemester(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full rounded-lg border border-emerald-500/30 bg-black/40 px-3 py-2 text-sm outline-none focus:border-emerald-500 text-emerald-300"
+                >
+                  <option value="">Not specified / None</option>
+                  <option value="1">1st Semester (الفصل الأول)</option>
+                  <option value="2">2nd Semester (الفصل الثاني)</option>
+                </select>
+              </Field>
+            )}
             <Field label="Exam type / badge">
               <select value={examType} onChange={(e) => setExamType(e.target.value)} className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50">
                 {options.exam_type.some((o) => o.value === examType) ? null : <option value={examType}>{examType}</option>}

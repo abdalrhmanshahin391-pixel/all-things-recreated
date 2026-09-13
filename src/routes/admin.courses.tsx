@@ -29,6 +29,7 @@ import {
   isZeroCourse,
   yearLabel,
   getYearSortPriority,
+  hasSemesterSupport,
 } from "@/lib/course-options";
 import { CourseOptionsManager } from "@/components/admin/CourseOptionsManager";
 import {
@@ -62,6 +63,7 @@ type Course = {
   id: string;
   title: string;
   year: number;
+  semester?: number | null;
   price: number;
   paddle_price_id?: string | null;
   category: string;
@@ -100,10 +102,12 @@ function AdminCoursesPage() {
   const [universities, setUniversities] = useState<University[]>([]);
   const [uniFilter, setUniFilter] = useState<string>("all");
   const [yearFilter, setYearFilter] = useState<string>("all");
+  const [semesterFilter, setSemesterFilter] = useState<string>("all");
 
   // new course form
   const [title, setTitle] = useState("");
   const [year, setYear] = useState<number>(1);
+  const [semester, setSemester] = useState<number | null>(null);
   const [price, setPrice] = useState<string>("");
   const [paddlePriceId, setPaddlePriceId] = useState<string>("");
   const [category, setCategory] = useState<string>("major");
@@ -202,6 +206,12 @@ function AdminCoursesPage() {
         return String(c.year) === yearFilter;
       });
     }
+    if (semesterFilter !== "all") {
+      list = list.filter((c) => {
+        if (semesterFilter === "none") return !c.semester;
+        return String(c.semester) === semesterFilter;
+      });
+    }
     if (q) {
       list = list.filter(
         (c) => c.title.toLowerCase().includes(q) || String(c.year).includes(q),
@@ -213,7 +223,7 @@ function AdminCoursesPage() {
       if (pA !== pB) return pA - pB;
       return a.title.localeCompare(b.title);
     });
-  }, [courses, courseQuery, kindFilter, uniFilter, yearFilter, options]);
+  }, [courses, courseQuery, kindFilter, uniFilter, yearFilter, semesterFilter, options]);
 
 
 
@@ -244,6 +254,7 @@ function AdminCoursesPage() {
     const payload: any = {
       title: title.trim(),
       year,
+      semester: hasSemesterSupport(year, options) ? (Number(semester) || null) : null,
       price: Number(price) || 0,
       paddle_price_id: paddlePriceId.trim() || null,
       category,
@@ -290,6 +301,7 @@ function AdminCoursesPage() {
     setPrice("");
     setPaddlePriceId("");
     setYear(Number(options.year[0]?.value) || 1);
+    setSemester(null);
     setCategory(options.category[0]?.value ?? "major");
     setExamType(options.exam_type[0]?.value ?? "MINI-OSCE");
     setKind("questions");
@@ -436,7 +448,11 @@ function AdminCoursesPage() {
             )}
             <select
               value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
+              onChange={(e) => {
+                const yVal = Number(e.target.value);
+                setYear(yVal);
+                if (!hasSemesterSupport(yVal, options)) setSemester(null);
+              }}
               className="md:col-span-2 rounded-lg border border-white/15 bg-black/40 px-3 py-3 text-sm outline-none focus:border-white/50"
             >
               {[...options.year]
@@ -451,6 +467,17 @@ function AdminCoursesPage() {
                   </option>
                 ))}
             </select>
+            {hasSemesterSupport(year, options) && (
+              <select
+                value={semester ?? ""}
+                onChange={(e) => setSemester(e.target.value ? Number(e.target.value) : null)}
+                className="md:col-span-2 rounded-lg border border-emerald-500/30 bg-black/40 px-3 py-3 text-sm outline-none focus:border-emerald-500 text-emerald-300"
+              >
+                <option value="">Sem: Unassigned</option>
+                <option value="1">1st Semester (الفصل الأول)</option>
+                <option value="2">2nd Semester (الفصل الثاني)</option>
+              </select>
+            )}
             {kind === "questions" && (
               <select
                 value={examType}
@@ -498,30 +525,27 @@ function AdminCoursesPage() {
 
         {/* All courses */}
         <section className="mb-12">
-          <div className="flex items-center gap-2 mb-4">
-            <BookOpen size={18} className="text-amber-400" />
-            <h2 className="font-semibold text-lg">All Courses ({courses.length})</h2>
-          </div>
-          <div className="mb-3 inline-flex rounded-lg border border-white/15 bg-black/30 p-1 text-[11px] font-bold uppercase tracking-wider">
-            {(["all", "questions", "lectures"] as KindFilter[]).map((k) => (
-              <button
-                key={k}
-                onClick={() => setKindFilter(k)}
-                className={`px-3 py-1.5 rounded-md transition-colors ${
-                  kindFilter === k
-                    ? k === "lectures"
-                      ? "bg-emerald-500 text-black"
-                      : k === "questions"
-                      ? "bg-indigo-500 text-white"
-                      : "bg-white/15 text-white"
-                    : "text-white/55 hover:text-white"
-                }`}
-              >
-                {k}
-              </button>
-            ))}
-          </div>
-          <div className="mb-3 flex items-center gap-4 flex-wrap">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <h2 className="text-xl font-bold">
+              {filteredCourses.length} {filteredCourses.length === 1 ? "Course" : "Courses"}
+            </h2>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">Type</span>
+              <div className="inline-flex rounded-lg border border-white/15 bg-black/30 p-0.5 text-xs">
+                {(["all", "questions", "lectures"] as KindFilter[]).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setKindFilter(k)}
+                    className={`px-3 py-1 rounded transition-colors ${
+                      kindFilter === k ? "bg-white/20 text-white font-bold" : "text-white/60 hover:text-white"
+                    }`}
+                  >
+                    {k === "all" ? "All" : k === "questions" ? "Questions" : "Lectures"}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">University</span>
               <select
@@ -582,6 +606,38 @@ function AdminCoursesPage() {
                   }`}
                 >
                   All Years
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">Semester</span>
+              <div className="inline-flex rounded-lg border border-white/15 bg-black/30 p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setSemesterFilter("all")}
+                  className={`px-2.5 py-1 rounded transition-colors ${
+                    semesterFilter === "all" ? "bg-white/20 text-white font-bold" : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSemesterFilter("1")}
+                  className={`px-2.5 py-1 rounded transition-colors ${
+                    semesterFilter === "1" ? "bg-emerald-500 text-white font-bold" : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  Sem 1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSemesterFilter("2")}
+                  className={`px-2.5 py-1 rounded transition-colors ${
+                    semesterFilter === "2" ? "bg-blue-500 text-white font-bold" : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  Sem 2
                 </button>
               </div>
             </div>
@@ -663,6 +719,16 @@ function AdminCoursesPage() {
                               ? "All Years"
                               : `Y${c.year}`}
                         </span>
+                        {c.semester === 1 && (
+                          <span className="rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 font-medium">
+                            Sem 1
+                          </span>
+                        )}
+                        {c.semester === 2 && (
+                          <span className="rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 font-medium">
+                            Sem 2
+                          </span>
+                        )}
                         <span className="rounded-full bg-emerald-500/15 text-emerald-300 px-2 py-0.5 font-medium">
                           ${Number(c.price).toFixed(2)}
                         </span>
@@ -872,6 +938,7 @@ function EditCourseModal({
   const [price, setPrice] = useState(String(course.price));
   const [paddlePriceId, setPaddlePriceId] = useState(course.paddle_price_id ?? "");
   const [year, setYear] = useState(course.year);
+  const [semester, setSemester] = useState<number | null>(course.semester ?? null);
   const options = useCourseOptions();
   const [category, setCategory] = useState<string>(course.category ?? "major");
   const [examType, setExamType] = useState(course.exam_type);
@@ -964,6 +1031,7 @@ function EditCourseModal({
         price: Number(price) || 0,
         paddle_price_id: finalPaddlePriceId,
         year,
+        semester: hasSemesterSupport(year, options) ? (Number(semester) || null) : null,
         category,
         exam_type: examType,
         subjects_count: Number(subjects) || 0,
@@ -1105,7 +1173,11 @@ function EditCourseModal({
             <Field label="Year">
               <select
                 value={year}
-                onChange={(e) => setYear(Number(e.target.value))}
+                onChange={(e) => {
+                  const yVal = Number(e.target.value);
+                  setYear(yVal);
+                  if (!hasSemesterSupport(yVal, options)) setSemester(null);
+                }}
                 className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-white/50"
               >
                 {options.year.some((o) => Number(o.value) === year) ? null : (
@@ -1126,6 +1198,19 @@ function EditCourseModal({
                   ))}
               </select>
             </Field>
+            {hasSemesterSupport(year, options) && (
+              <Field label="Semester">
+                <select
+                  value={semester ?? ""}
+                  onChange={(e) => setSemester(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full rounded-lg border border-emerald-500/30 bg-black/40 px-3 py-2 text-sm outline-none focus:border-emerald-500 text-emerald-300"
+                >
+                  <option value="">Not specified / None</option>
+                  <option value="1">1st Semester (الفصل الأول)</option>
+                  <option value="2">2nd Semester (الفصل الثاني)</option>
+                </select>
+              </Field>
+            )}
             <Field label="Exam type / badge">
               <select
                 value={examType}

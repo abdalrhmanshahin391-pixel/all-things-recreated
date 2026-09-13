@@ -22,7 +22,9 @@ import {
   isAllYearsCourse,
   isZeroCourse,
   getYearSortPriority,
+  hasSemesterSupport,
 } from "@/lib/course-options";
+import { useLang } from "@/components/LanguageProvider";
 
 export const Route = createFileRoute("/lectures/")({
   head: () => ({
@@ -42,6 +44,7 @@ type Course = {
   id: string;
   title: string;
   year: number;
+  semester?: number | null;
   price: number;
   kind: string;
   image_url: string | null;
@@ -78,7 +81,7 @@ function LecturesPage() {
       let query = supabase
         .from("courses")
         .select(
-          "id,title,year,price,kind,image_url,published,currency,compare_at_price,discount_active,discount_ends_at,admin_only",
+          "id,title,year,semester,price,kind,image_url,published,currency,compare_at_price,discount_active,discount_ends_at,admin_only",
         )
         .eq("published", true)
         .eq("kind", "lectures");
@@ -203,9 +206,13 @@ function LectureSection({
   enrolledIds: Set<string>;
   Icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
 }) {
+  const { lang } = useLang();
   const options = useCourseOptions();
   const isAllYears = isAllYearsCourse(year, options);
   const isZero = isZeroCourse(year, options);
+  const canHaveSemester = hasSemesterSupport(year, options);
+  const [semesterFilter, setSemesterFilter] = useState<"all" | 1 | 2>("all");
+
   const custom = options.year.find((o) => Number(o.value) === year);
 
   const SectionIcon = isAllYears ? Globe : isZero ? GraduationCap : Icon;
@@ -217,33 +224,86 @@ function LectureSection({
         ? custom.label
         : `${ordinal(year)} Year`;
 
+  const displayedCourses = useMemo(() => {
+    if (!canHaveSemester || semesterFilter === "all") return courses;
+    return courses.filter((c) => c.semester === semesterFilter);
+  }, [courses, canHaveSemester, semesterFilter]);
+
   return (
     <section>
-      <div className="flex items-center gap-3 mb-6">
-        <div
-          className={`grid place-items-center h-9 w-9 rounded-lg ${
-            isAllYears
-              ? "bg-amber-500/10 text-amber-500"
-              : isZero
-                ? "bg-purple-500/10 text-purple-500"
-                : "bg-muted text-primary"
-          }`}
-        >
-          <SectionIcon size={18} strokeWidth={2} />
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <div
+            className={`grid place-items-center h-9 w-9 rounded-lg ${
+              isAllYears
+                ? "bg-amber-500/10 text-amber-500"
+                : isZero
+                  ? "bg-purple-500/10 text-purple-500"
+                  : "bg-muted text-primary"
+            }`}
+          >
+            <SectionIcon size={18} strokeWidth={2} />
+          </div>
+          <h2 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground">
+            {sectionTitle}
+          </h2>
+          <span className="inline-flex items-center text-[11px] font-semibold uppercase tracking-widest text-muted-foreground bg-card border border-border rounded-full px-2.5 py-1">
+            {displayedCourses.length} lecture{displayedCourses.length === 1 ? "" : " courses"}
+          </span>
         </div>
-        <h2 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground">
-          {sectionTitle}
-        </h2>
-        <span className="inline-flex items-center text-[11px] font-semibold uppercase tracking-widest text-muted-foreground bg-card border border-border rounded-full px-2.5 py-1">
-          {courses.length} lecture{courses.length === 1 ? "" : " courses"}
-        </span>
+
+        {canHaveSemester && (
+          <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-card border border-border text-xs font-medium shadow-sm">
+            <button
+              type="button"
+              onClick={() => setSemesterFilter("all")}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                semesterFilter === "all"
+                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {lang === "ar" ? "الكل" : "All"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSemesterFilter(1)}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                semesterFilter === 1
+                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {lang === "ar" ? "الفصل الأول" : "1st Semester"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSemesterFilter(2)}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                semesterFilter === 2
+                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {lang === "ar" ? "الفصل الثاني" : "2nd Semester"}
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {courses.map((c) => (
-          <LectureCard key={c.id} course={c} active={enrolledIds.has(c.id)} />
-        ))}
-      </div>
+      {displayedCourses.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border/80 bg-card/40 py-12 text-center text-sm text-muted-foreground">
+          {lang === "ar"
+            ? "لا توجد محاضرات متاحة لهذا الفصل بعد"
+            : "No lecture courses available for this semester yet."}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {displayedCourses.map((c) => (
+            <LectureCard key={c.id} course={c} active={enrolledIds.has(c.id)} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -286,11 +346,23 @@ function LectureCard({ course, active }: { course: Course; active: boolean }) {
         <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-widest px-2.5 py-1 rounded-full uppercase bg-background/95 text-foreground border border-border">
           <Video size={11} /> Lectures
         </span>
-        {active && (
-          <span className="absolute top-3 right-3 inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-widest px-2.5 py-1 rounded-full uppercase bg-accent text-accent-foreground">
-            Owned
-          </span>
-        )}
+        <div className="absolute top-3 right-3 flex items-center gap-1.5">
+          {course.semester === 1 && (
+            <span className="inline-flex items-center text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full uppercase bg-emerald-500 text-white shadow-sm">
+              SEM 1
+            </span>
+          )}
+          {course.semester === 2 && (
+            <span className="inline-flex items-center text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full uppercase bg-blue-500 text-white shadow-sm">
+              SEM 2
+            </span>
+          )}
+          {active && (
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-widest px-2.5 py-1 rounded-full uppercase bg-accent text-accent-foreground shadow-sm">
+              Owned
+            </span>
+          )}
+        </div>
       </Link>
       <div className="px-4 py-4 flex flex-col gap-3 flex-1">
         <div className="font-semibold text-base text-foreground text-center capitalize">

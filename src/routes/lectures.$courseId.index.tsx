@@ -325,7 +325,7 @@ function LectureCoursePage() {
 
           <div className="rounded-lg bg-card border border-border p-6 md:p-7 shadow-[var(--shadow-card)]">
             <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Year {course.year}
+              Year {course.year}{(course as any).semester ? ` · Sem ${(course as any).semester}` : ""}
             </div>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight capitalize text-foreground">{course.title}</h1>
             <p className="mt-2 text-sm text-muted-foreground">

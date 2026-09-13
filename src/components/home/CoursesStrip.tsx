@@ -9,11 +9,15 @@ type Course = {
   id: string;
   title: string;
   year: number | null;
+  semester?: number | null;
   category: string | null;
   image_url: string | null;
   exam_type: string | null;
   price: number | null;
   currency: string | null;
+  badge?: string | null;
+  badge_color?: string | null;
+  badge_expires_at?: string | null;
   compare_at_price?: number | null;
   discount_active?: boolean | null;
   discount_ends_at?: string | null;
@@ -33,7 +37,7 @@ export const homeCoursesQuery = queryOptions({
       const { data } = await supabase
         .from("courses")
         .select(
-          "id, title, year, category, image_url, exam_type, price, currency, badge, badge_color, badge_expires_at, compare_at_price, discount_active, discount_ends_at",
+          "id, title, year, semester, category, image_url, exam_type, price, currency, badge, badge_color, badge_expires_at, compare_at_price, discount_active, discount_ends_at",
         )
         .eq("published", true)
         .eq("show_on_home", true)
