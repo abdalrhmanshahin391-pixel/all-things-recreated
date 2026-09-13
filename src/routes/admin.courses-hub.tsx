@@ -261,7 +261,7 @@ function CoursesHubPage() {
       }
     }
 
-    const { error } = await (supabase.from("courses") as any).insert({
+    const payload: any = {
       title: title.trim(),
       year,
       semester: hasSemesterSupport(year, options) ? (Number(semester) || null) : null,
@@ -272,7 +272,25 @@ function CoursesHubPage() {
       kind,
       university_id: universityId,
       created_by: user!.id,
-    });
+    };
+
+    let { error } = await (supabase.from("courses") as any).insert(payload);
+    if (error && (error.message?.toLowerCase().includes("semester") || (error as any).code === "PGRST204")) {
+      console.warn("Retrying course insert in courses-hub without semester column (migration pending):", error);
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.semester;
+      const retry = await (supabase.from("courses") as any).insert(fallbackPayload);
+      if (!retry.error) {
+        error = null;
+        toast.warning(
+          "Course added! Note: The 'semester' column needs to be created in your Supabase SQL Editor so semesters can be saved.",
+          { duration: 8000 }
+        );
+      } else {
+        error = retry.error;
+      }
+    }
+
     setSubmitting(false);
     if (error) {
       setError(error.message);
@@ -1185,23 +1203,45 @@ function EditCourseModal({
       }
     }
 
-    const { error } = await supabase
+    const updatePayload: Record<string, any> = {
+      title: title.trim(),
+      price: Number(price) || 0,
+      paddle_price_id: effectivePaddlePriceId,
+      year,
+      semester: hasSemesterSupport(year, options) ? (Number(semester) || null) : null,
+      category,
+      exam_type: examType,
+      subjects_count: Number(subjects) || 0,
+      questions_count_mid: Number(qMid) || 0,
+      questions_count_final: Number(qFinal) || 0,
+      image_url: imageUrl,
+      published: nextPublished ?? published,
+    };
+
+    let { error } = await supabase
       .from("courses")
-      .update({
-        title: title.trim(),
-        price: Number(price) || 0,
-        paddle_price_id: effectivePaddlePriceId,
-        year,
-        semester: hasSemesterSupport(year, options) ? (Number(semester) || null) : null,
-        category,
-        exam_type: examType,
-        subjects_count: Number(subjects) || 0,
-        questions_count_mid: Number(qMid) || 0,
-        questions_count_final: Number(qFinal) || 0,
-        image_url: imageUrl,
-        published: nextPublished ?? published,
-      })
+      .update(updatePayload)
       .eq("id", course.id);
+
+    if (error && (error.message?.toLowerCase().includes("semester") || (error as any).code === "PGRST204")) {
+      console.warn("Retrying course update in courses-hub without semester column (migration pending):", error);
+      const fallbackPayload = { ...updatePayload };
+      delete fallbackPayload.semester;
+      const retry = await supabase
+        .from("courses")
+        .update(fallbackPayload)
+        .eq("id", course.id);
+      if (!retry.error) {
+        error = null;
+        toast.warning(
+          "Course saved! Note: The 'semester' column needs to be created in your Supabase SQL Editor so semesters can be saved.",
+          { duration: 8000 }
+        );
+      } else {
+        error = retry.error;
+      }
+    }
+
     setSaving(false);
     if (error) {
       setError(error.message);

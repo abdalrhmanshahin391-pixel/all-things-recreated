@@ -281,7 +281,22 @@ function AdminCoursesPage() {
       }
     }
 
-    const { error } = await (supabase.from("courses") as any).insert(payload);
+    let { error } = await (supabase.from("courses") as any).insert(payload);
+    if (error && (error.message?.toLowerCase().includes("semester") || (error as any).code === "PGRST204")) {
+      console.warn("Retrying course insert without semester column (migration pending):", error);
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.semester;
+      const retry = await (supabase.from("courses") as any).insert(fallbackPayload);
+      if (!retry.error) {
+        error = null;
+        toast.warning(
+          "Course created! Note: The 'semester' column needs to be added to your Supabase database in SQL Editor to store semester selections.",
+          { duration: 8000 }
+        );
+      } else {
+        error = retry.error;
+      }
+    }
     setSubmitting(false);
     if (error) {
       setError(error.message);
@@ -370,11 +385,37 @@ function AdminCoursesPage() {
         </div>
 
         {error && (
-          <div className="mb-6 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300 flex items-start justify-between gap-3">
-            <span>{error}</span>
-            <button onClick={() => setError(null)} className="text-red-300/70 hover:text-red-200">
-              <X size={16} />
-            </button>
+          <div className="mb-6 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-2 flex-1">
+                <p className="font-semibold text-red-200">{error}</p>
+                {error.toLowerCase().includes("semester") && (
+                  <div className="rounded-lg bg-black/50 border border-white/10 p-3 text-xs text-white/80 space-y-2">
+                    <p className="font-medium text-amber-300">
+                      💡 The Supabase database requires the 'semester' column migration to be executed once in your Supabase SQL Editor:
+                    </p>
+                    <code className="block bg-black/80 p-2 rounded text-emerald-400 font-mono text-[11px] select-all overflow-x-auto">
+                      ALTER TABLE public.courses ADD COLUMN IF NOT EXISTS semester smallint CHECK (semester IN (1, 2) OR semester IS NULL); NOTIFY pgrst, 'reload schema';
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(
+                          "ALTER TABLE public.courses ADD COLUMN IF NOT EXISTS semester smallint CHECK (semester IN (1, 2) OR semester IS NULL);\nGRANT ALL (semester) ON public.courses TO authenticated;\nGRANT SELECT (semester) ON public.courses TO anon;\nNOTIFY pgrst, 'reload schema';"
+                        );
+                        toast.success("SQL command copied to clipboard! Paste and run it in Supabase SQL Editor.");
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40 text-xs font-semibold transition"
+                    >
+                      Copy SQL to Clipboard
+                    </button>
+                  </div>
+                )}
+              </div>
+              <button onClick={() => setError(null)} className="text-red-300/70 hover:text-red-200 p-1">
+                <X size={16} />
+              </button>
+            </div>
           </div>
         )}
 
@@ -1024,28 +1065,51 @@ function EditCourseModal({
       }
     }
 
-    const { error } = await supabase
+    const updatePayload: Record<string, any> = {
+      title: title.trim(),
+      price: Number(price) || 0,
+      paddle_price_id: finalPaddlePriceId,
+      year,
+      semester: hasSemesterSupport(year, options) ? (Number(semester) || null) : null,
+      category,
+      exam_type: examType,
+      subjects_count: Number(subjects) || 0,
+      questions_count_mid: Number(qMid) || 0,
+      questions_count_final: Number(qFinal) || 0,
+      image_url: imageUrl,
+      published: finalPublished,
+    };
+
+    let { error } = await supabase
       .from("courses")
-      .update({
-        title: title.trim(),
-        price: Number(price) || 0,
-        paddle_price_id: finalPaddlePriceId,
-        year,
-        semester: hasSemesterSupport(year, options) ? (Number(semester) || null) : null,
-        category,
-        exam_type: examType,
-        subjects_count: Number(subjects) || 0,
-        questions_count_mid: Number(qMid) || 0,
-        questions_count_final: Number(qFinal) || 0,
-        image_url: imageUrl,
-        published: finalPublished,
-      })
+      .update(updatePayload)
       .eq("id", course.id);
+
+    if (error && (error.message?.toLowerCase().includes("semester") || (error as any).code === "PGRST204")) {
+      console.warn("Retrying course update without semester column (migration pending):", error);
+      const fallbackPayload = { ...updatePayload };
+      delete fallbackPayload.semester;
+      const retry = await supabase
+        .from("courses")
+        .update(fallbackPayload)
+        .eq("id", course.id);
+      if (!retry.error) {
+        error = null;
+        toast.warning(
+          "Course updated! Note: The 'semester' column needs to be added to your Supabase database in SQL Editor to store semester choices.",
+          { duration: 8000 }
+        );
+      } else {
+        error = retry.error;
+      }
+    }
+
     setSaving(false);
     if (error) {
       setError(error.message);
       return;
     }
+    toast.success("Course updated successfully");
     onSaved();
   }
 

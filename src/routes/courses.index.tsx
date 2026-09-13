@@ -272,6 +272,10 @@ function CourseSection({
         ? custom.label
         : t("cms.coursesPage.yearHeading", { ordinal: ordinal(year) });
 
+  const countAll = courses.length;
+  const countSem1 = useMemo(() => courses.filter((c) => c.semester === 1).length, [courses]);
+  const countSem2 = useMemo(() => courses.filter((c) => c.semester === 2).length, [courses]);
+
   const displayedCourses = useMemo(() => {
     if (!canHaveSemester || semesterFilter === "all") return courses;
     return courses.filter((c) => c.semester === semesterFilter);
@@ -303,39 +307,74 @@ function CourseSection({
         </div>
 
         {canHaveSemester && (
-          <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-card border border-border text-xs font-medium shadow-sm">
+          <div
+            role="group"
+            aria-label={lang === "ar" ? "تصفية حسب الفصل الدراسي" : "Filter by semester"}
+            className="inline-flex items-center gap-1.5 p-1.5 rounded-2xl bg-card/90 dark:bg-zinc-900/90 border border-border/80 shadow-md backdrop-blur-md"
+          >
             <button
               type="button"
               onClick={() => setSemesterFilter("all")}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
+              className={`inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all duration-150 ${
                 semesterFilter === "all"
-                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-primary text-primary-foreground shadow-md shadow-primary/25 scale-[1.02]"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/70 font-semibold"
               }`}
             >
-              {lang === "ar" ? "الكل" : "All"}
+              <span>{lang === "ar" ? "الكل" : "All"}</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-black leading-none ${
+                  semesterFilter === "all"
+                    ? "bg-primary-foreground/20 text-primary-foreground"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {countAll}
+              </span>
             </button>
+
             <button
               type="button"
               onClick={() => setSemesterFilter(1)}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
+              className={`inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all duration-150 ${
                 semesterFilter === 1
-                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30 scale-[1.02]"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/70 font-semibold"
               }`}
             >
-              {lang === "ar" ? "الفصل الأول" : "1st Semester"}
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />
+              <span>{lang === "ar" ? "الفصل الأول" : "1st Semester"}</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-black leading-none ${
+                  semesterFilter === 1
+                    ? "bg-white/25 text-white"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {countSem1}
+              </span>
             </button>
+
             <button
               type="button"
               onClick={() => setSemesterFilter(2)}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
+              className={`inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all duration-150 ${
                 semesterFilter === 2
-                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30 scale-[1.02]"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/70 font-semibold"
               }`}
             >
-              {lang === "ar" ? "الفصل الثاني" : "2nd Semester"}
+              <span className="inline-block w-2 h-2 rounded-full bg-blue-400" />
+              <span>{lang === "ar" ? "الفصل الثاني" : "2nd Semester"}</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-black leading-none ${
+                  semesterFilter === 2
+                    ? "bg-white/25 text-white"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {countSem2}
+              </span>
             </button>
           </div>
         )}
