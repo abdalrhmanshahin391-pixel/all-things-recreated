@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Download, Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { exportCourseBackup, importCourseBackup } from "@/lib/course-backup.functions";
+import { CourseDuplicatesModal } from "@/components/course/CourseDuplicatesModal";
 
 export function AdminBackupControls({
   courseId,
@@ -78,7 +79,8 @@ export function AdminBackupControls({
   const btn = "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-widest bg-white/90 border border-indigo-200 text-indigo-700 hover:border-indigo-400 hover:bg-white shadow-sm disabled:opacity-50 transition-colors";
 
   return (
-    <div className="flex flex-col gap-2 items-end">
+    <div className="flex flex-wrap gap-2 items-center justify-end">
+      <CourseDuplicatesModal courseId={courseId} courseTitle={courseTitle} />
       <button onClick={handleExport} disabled={!!busy} className={btn} title="Download a JSON backup of this course">
         {busy === "export" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
         Export backup

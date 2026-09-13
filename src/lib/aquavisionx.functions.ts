@@ -568,7 +568,7 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
     if (notReady.length) throw new Error(`Stage 1 is not finished — ${notReady.length} page(s) still pending.`);
 
     const { data: items, error: iErr } = await supabase.from(ITEMS)
-      .select("id, stem, options, answer_mode, question_type, combo_sets, printed_choices, solved, status").eq("job_id", data.jobId).order("item_index");
+      .select("id, stem, options, answer_mode, question_type, combo_sets, printed_choices, solved, status, answer_letter").eq("job_id", data.jobId).order("item_index");
     if (iErr) throw iErr;
     const todo = (items ?? []).filter((it: any) => !it.solved);
     if (!todo.length) throw new Error("Every question is already solved.");
@@ -596,10 +596,14 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
       const comboBlock = it.answer_mode === "multiple" && sets.length
         ? `ALLOWED ANSWER SETS (printed on the paper — you MUST choose exactly one of these):\n${sets.map((s) => s.join(",")).join("\n")}\n`
         : "";
+      const providedAnswer = it.answer_letter ? String(it.answer_letter).trim().toUpperCase() : "";
+      const answerDirective = providedAnswer
+        ? `OFFICIAL / PROVIDED ANSWER KEY: The known correct answer for this question is option "${providedAnswer}". You MUST mark option "${providedAnswer}" with is_correct: true. Construct your medical explanation and concept proving why option "${providedAnswer}" is correct and why other options are incorrect.\n`
+        : "";
       return {
         request: {
           systemInstruction: { parts: [{ text: SOLVE_SYSTEM }] },
-          contents: [{ role: "user", parts: [...resourceParts, { text: `${refBlock}${resourceParts.length ? "RESOURCE RULE: Base the answer and explanation on the supplied source. If it does not contain enough evidence, return an error field instead of guessing.\n" : ""}ANSWER MODE: ${it.answer_mode === "multiple" ? "MULTIPLE — select every correct numbered statement" : "SINGLE — select exactly one answer"}\n${comboBlock}${topicBlock}--- QUESTION ---\n${it.stem}\n\n${optText}\n--- END ---` }] }],
+          contents: [{ role: "user", parts: [...resourceParts, { text: `${refBlock}${resourceParts.length ? "RESOURCE RULE: Base the answer and explanation on the supplied source. If it does not contain enough evidence, return an error field instead of guessing.\n" : ""}${answerDirective}ANSWER MODE: ${it.answer_mode === "multiple" ? "MULTIPLE — select every correct numbered statement" : "SINGLE — select exactly one answer"}\n${comboBlock}${topicBlock}--- QUESTION ---\n${it.stem}\n\n${optText}\n--- END ---` }] }],
           generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json" },
         },
         metadata: { key: `i-${it.id}` },
@@ -660,7 +664,7 @@ export const pollAqvAnswers = createServerFn({ method: "POST" })
             is_correct: !!o?.is_correct,
           })).filter((o: any) => o.text)
         : [];
-      const { data: itemRow } = await supabase.from(ITEMS).select("answer_mode, question_type, combo_sets, status").eq("id", itemId).single();
+      const { data: itemRow } = await supabase.from(ITEMS).select("answer_mode, question_type, combo_sets, status, answer_letter").eq("id", itemId).single();
       const answerMode: AnswerMode = itemRow?.answer_mode === "multiple" ? "multiple" : "single";
       const parsedAnswers = Array.isArray(parsed?.answer_letters)
         ? parsed.answer_letters.map((value: unknown) => String(value).trim()).filter(Boolean)
@@ -672,6 +676,12 @@ export const pollAqvAnswers = createServerFn({ method: "POST" })
       if (answerMode === "multiple" && storedSets.length) labels = snapToPrintedCombo(labels, storedSets);
       if (answerMode === "multiple" && (itemRow?.status === "needs_combinations"
         || (itemRow?.question_type === "combination" && storedSets.length < 2))) labels = [];
+      if (itemRow?.answer_letter && String(itemRow.answer_letter).trim()) {
+        const providedLetters = String(itemRow.answer_letter).trim().toUpperCase().split(",").map((s: string) => s.trim()).filter(Boolean);
+        if (providedLetters.length > 0) {
+          labels = providedLetters;
+        }
+      }
       const correctLabels = new Set(labels);
       const answer = [...correctLabels].join(",");
       const explanation = String(parsed?.explanation || "").trim();
@@ -1047,4 +1057,171 @@ export const renameAqvTopic = createServerFn({ method: "POST" })
       await supabase.from(JOBS).update({ sort_topics: next }).eq("id", data.jobId);
     }
     return { topic: to };
+  });
+
+// ---------------- 10. Answer key handling (optional admin answers) ----------------
+
+/** Set or clear the answer letter for a single question item */
+export const setAqvItemAnswer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    itemId: z.string().uuid(),
+    answerLetter: z.string().max(20).nullable(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const letter = data.answerLetter ? data.answerLetter.trim().toUpperCase() : null;
+    const { data: item } = await supabase.from(ITEMS).select("options").eq("id", data.itemId).maybeSingle();
+    let options = item?.options;
+    if (Array.isArray(options)) {
+      const correctSet = new Set(letter ? letter.split(",").map((s) => s.trim()) : []);
+      options = options.map((o: any) => ({
+        ...o,
+        is_correct: correctSet.has(o.letter),
+      }));
+    }
+    const { error } = await supabase.from(ITEMS).update({
+      answer_letter: letter,
+      ...(options ? { options } : {}),
+    }).eq("id", data.itemId);
+    if (error) throw error;
+    return { itemId: data.itemId, answerLetter: letter };
+  });
+
+/** Parser helper to extract answer keys from text input */
+export function parseAnswerKeyEntries(text: string): Array<{ number?: string; letter: string }> {
+  const lines = text.split(/[\r\n]+/);
+  const entries: Array<{ number?: string; letter: string }> = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // Check for comma or semicolon or tab separated patterns like "1. A, 2. B, 3. C" or "1:A 2:B"
+    const explicitNumbered = [...line.matchAll(/(?:^|[\s,;])(?:Q|Question|q)?\s*(\d+)[\s.:)\-–—=]+([A-Ea-e](?:\s*,\s*[A-Ea-e])*|\d+(?:\s*,\s*\d+)*)/g)];
+    if (explicitNumbered.length > 0) {
+      for (const m of explicitNumbered) {
+        entries.push({
+          number: m[1],
+          letter: m[2].toUpperCase().replace(/\s+/g, ""),
+        });
+      }
+      continue;
+    }
+
+    // Try single line item: e.g. "A" or "A, B" or "B"
+    const pureLetter = line.match(/^([A-Ea-e](?:\s*,\s*[A-Ea-e])*)$/);
+    if (pureLetter) {
+      entries.push({
+        letter: pureLetter[1].toUpperCase().replace(/\s+/g, ""),
+      });
+      continue;
+    }
+
+    // If space/comma separated letters like "A B C D E"
+    const letterTokens = line.split(/[\s,;]+/).filter((t) => /^[A-Ea-e]$/i.test(t));
+    if (letterTokens.length > 1) {
+      for (const lt of letterTokens) {
+        entries.push({ letter: lt.toUpperCase() });
+      }
+      continue;
+    }
+
+    // Fallback: match any number + letter pair
+    const fallback = line.match(/(?:(?:Q|Question|q)?\s*(\d+)[\s.:)\-–—=]+)?([A-Ea-e])/i);
+    if (fallback) {
+      entries.push({
+        number: fallback[1] || undefined,
+        letter: fallback[2].toUpperCase(),
+      });
+    }
+  }
+
+  return entries;
+}
+
+/** Apply a pasted answer key across a job's items */
+export const applyAqvAnswerKey = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    jobId: z.string().uuid(),
+    text: z.string().max(20000),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const parsedEntries = parseAnswerKeyEntries(data.text);
+    if (!parsedEntries.length) {
+      throw new Error("No valid answers found. Format examples: '1. A' or '1: A, 2: B' or 'A B C D'.");
+    }
+
+    const { data: items, error: iErr } = await supabase.from(ITEMS)
+      .select("id, number, item_index, options").eq("job_id", data.jobId).order("item_index");
+    if (iErr) throw iErr;
+    if (!items?.length) throw new Error("No questions found for this job.");
+
+    const itemsByNumber = new Map<string, any>();
+    const itemsByIndex = new Map<number, any>();
+    items.forEach((it: any) => {
+      if (it.number) itemsByNumber.set(String(it.number).trim(), it);
+      itemsByIndex.set(it.item_index, it);
+    });
+
+    let appliedCount = 0;
+    for (let i = 0; i < parsedEntries.length; i++) {
+      const entry = parsedEntries[i];
+      let targetItem = null;
+      if (entry.number && itemsByNumber.has(entry.number)) {
+        targetItem = itemsByNumber.get(entry.number);
+      } else if (entry.number && !isNaN(Number(entry.number))) {
+        const idx = Number(entry.number) - 1;
+        targetItem = itemsByIndex.get(idx);
+      } else if (i < items.length) {
+        targetItem = items[i];
+      }
+
+      if (targetItem) {
+        let options = targetItem.options;
+        const letter = entry.letter.toUpperCase();
+        if (Array.isArray(options)) {
+          const correctSet = new Set(letter.split(",").map((s) => s.trim()));
+          options = options.map((o: any) => ({
+            ...o,
+            is_correct: correctSet.has(o.letter),
+          }));
+        }
+        await supabase.from(ITEMS).update({
+          answer_letter: letter,
+          ...(options ? { options } : {}),
+        }).eq("id", targetItem.id);
+        appliedCount++;
+      }
+    }
+
+    return { totalParsed: parsedEntries.length, appliedCount };
+  });
+
+/** Clear all provided answers for a job */
+export const clearAqvJobAnswers = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    jobId: z.string().uuid(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const { data: items } = await supabase.from(ITEMS).select("id, options, solved").eq("job_id", data.jobId);
+    if (items) {
+      for (const it of items) {
+        if (!it.solved) {
+          let options = it.options;
+          if (Array.isArray(options)) {
+            options = options.map((o: any) => ({ ...o, is_correct: false }));
+          }
+          await supabase.from(ITEMS).update({
+            answer_letter: null,
+            ...(options ? { options } : {}),
+          }).eq("id", it.id);
+        }
+      }
+    }
+    return { success: true };
   });

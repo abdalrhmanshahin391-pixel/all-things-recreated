@@ -26,8 +26,12 @@ import {
   setAqvSortMode,
   setAqvItemTopic,
   renameAqvTopic,
+  setAqvItemAnswer,
+  applyAqvAnswerKey,
+  clearAqvJobAnswers,
 } from "@/lib/aquavisionx.functions";
 import { ReferenceBookCard } from "@/components/admin/ReferenceBookCard";
+import { AnswerKeyCard } from "@/components/admin/AnswerKeyCard";
 
 export const Route = createFileRoute("/admin/aquavisionx")({
   head: () => ({
@@ -103,6 +107,9 @@ function Page() {
   const setSortMode = useServerFn(setAqvSortMode);
   const setItemTopic = useServerFn(setAqvItemTopic);
   const renameTopic = useServerFn(renameAqvTopic);
+  const setItemAnswerFn = useServerFn(setAqvItemAnswer);
+  const applyAnswerKeyFn = useServerFn(applyAqvAnswerKey);
+  const clearAnswersFn = useServerFn(clearAqvJobAnswers);
 
   const say = (m: string) => setLog((p) => [`${new Date().toLocaleTimeString()} · ${m}`, ...p].slice(0, 120));
 
@@ -243,6 +250,7 @@ function Page() {
   const pagesReady = pages.length > 0 && pages.every((p) => p.status === "ready" || p.status === "empty");
   const solvedCount = items.filter((i) => i.solved).length;
   const allSolved = items.length > 0 && solvedCount === items.length;
+  const answeredCount = items.filter((i) => !!i.answer_letter).length;
   const missingComboCount = items.filter((i) => i.status === "needs_combinations").length;
   const canSolve = !!job && pagesReady && items.length > 0 && !allSolved && !missingComboCount && stage !== "solving" && !busy;
   const canImport = !!job && allSolved && stage !== "imported" && !busy;
@@ -271,53 +279,59 @@ function Page() {
           <div className="grid sm:grid-cols-3 gap-3">
             <select value={courseId} onChange={(e) => setCourseId(e.target.value)}
               className="px-3 py-2 rounded-xl border border-border bg-background text-sm">
-              <option value="">— course —</option>
+              <option value="">Choose course…</option>
               {courses.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
             </select>
             <select value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={!courseId}
-              className="px-3 py-2 rounded-xl border border-border bg-background text-sm disabled:opacity-50">
-              <option value="">— group —</option>
+              className="px-3 py-2 rounded-xl border border-border bg-background text-sm disabled:opacity-40">
+              <option value="">Choose folder…</option>
               {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
             <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} disabled={!groupId}
-              className="px-3 py-2 rounded-xl border border-border bg-background text-sm disabled:opacity-50">
-              <option value="">— subject —</option>
+              className="px-3 py-2 rounded-xl border border-border bg-background text-sm disabled:opacity-40">
+              <option value="">Choose subject…</option>
               {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
+        </div>
 
-          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground mt-5 mb-3">2. Past-paper PDF</p>
-          <label className="block cursor-pointer rounded-2xl border-2 border-dashed border-border bg-muted/40 p-6 text-center hover:border-primary">
-            <Upload className="mx-auto text-muted-foreground" />
-            <p className="mt-2 text-sm font-bold">{file ? file.name : "Click to choose a PDF"}</p>
-            <p className="text-xs text-muted-foreground">Sent page by page — never the whole PDF in one request.</p>
-            <input type="file" accept="application/pdf" className="hidden"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </label>
-
-          <button onClick={handleStart} disabled={!canStart}
-            className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-sm disabled:opacity-40">
-            {busy ? <Loader2 className="animate-spin" size={16} /> : <PlayCircle size={16} />}
-            Start stage 1 — read the paper
-          </button>
+        {/* Upload */}
+        <div className="rounded-2xl bg-card border border-border p-5 mb-5">
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground mb-3">2. Choose past paper PDF</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 cursor-pointer font-bold text-sm">
+              <Upload size={16} /> {file ? file.name : "Pick PDF…"}
+              <input type="file" accept="application/pdf" className="hidden"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            </label>
+            <button onClick={handleStart} disabled={!canStart}
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-sm disabled:opacity-40">
+              {busy ? <Loader2 className="animate-spin" size={16} /> : <PlayCircle size={16} />}
+              Start (split into 1-page batches)
+            </button>
+            <span className="text-xs text-muted-foreground">Each page is read as strict JSON (no answers) — 50% discount.</span>
+          </div>
         </div>
 
         {/* Active job */}
         {job && (
           <div className="rounded-2xl bg-card border border-border p-5 mb-5">
-            <div className="flex items-center gap-2 mb-3">
-              <h2 className="font-black truncate">{job.pdf_name}</h2>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Active Job</p>
+                <h2 className="text-lg font-black">{job.pdf_name}</h2>
+              </div>
               <StagePill stage={stage} />
-              <button onClick={() => setJob(null)} className="ml-auto p-1.5 rounded hover:bg-muted"><X size={14} /></button>
             </div>
             {job.error && (
               <div className="rounded-xl bg-destructive/10 text-destructive px-3 py-2 text-xs mb-3">{job.error}</div>
             )}
 
-            <div className="grid sm:grid-cols-3 gap-3 text-sm">
-              <Stat label="Pages read" value={`${pages.filter((p) => p.status === "ready" || p.status === "empty").length}/${pages.length}`} />
-              <Stat label="Questions read" value={String(items.length)} />
-              <Stat label="Solved + explained" value={`${solvedCount}/${items.length}`} />
+            <div className="mt-4 grid sm:grid-cols-4 gap-3 text-center">
+              <StatCard label="Pages" value={`${pages.filter((p) => p.status === "ready").length}/${pages.length}`} />
+              <StatCard label="Questions read" value={String(items.length)} />
+              <StatCard label="Solved" value={`${solvedCount}/${items.length}`} />
+              <StatCard label="Imported" value={stage === "imported" ? "Yes" : "No"} />
             </div>
 
             {pages.some((p) => p.status === "empty") && (
@@ -359,6 +373,25 @@ function Page() {
                 }}
               />
             </div>
+
+            {items.length > 0 && (
+              <div className="mt-4">
+                <AnswerKeyCard
+                  totalQuestions={items.length}
+                  answeredQuestions={answeredCount}
+                  disabled={stage === "solving"}
+                  onApplyKey={async (text) => {
+                    const res = await applyAnswerKeyFn({ data: { jobId: job.id, text } });
+                    await openJob(job.id);
+                    return res;
+                  }}
+                  onClearAnswers={async () => {
+                    await clearAnswersFn({ data: { jobId: job.id } });
+                    await openJob(job.id);
+                  }}
+                />
+              </div>
+            )}
 
             <SortCard
               mode={(job.sort_mode as string) || "none"}
@@ -432,6 +465,40 @@ function Page() {
                       {it.answer_letter && <span className="ml-auto font-black text-emerald-600">{it.answer_letter}</span>}
                     </div>
                     <p className="text-sm mt-1 line-clamp-2">{it.stem}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/40 text-xs">
+                      <span className="text-[11px] font-semibold text-muted-foreground mr-1">Answer key:</span>
+                      {((Array.isArray(it.options) && it.options.length > 0)
+                        ? it.options
+                        : [{ letter: "A" }, { letter: "B" }, { letter: "C" }, { letter: "D" }]
+                      ).map((opt: any) => {
+                        const isSelected = (it.answer_letter || "").split(",").map((s: string) => s.trim().toUpperCase()).includes(opt.letter.toUpperCase());
+                        return (
+                          <button
+                            key={opt.letter}
+                            type="button"
+                            disabled={stage === "solving"}
+                            onClick={async () => {
+                              const nextLetter = isSelected ? null : opt.letter;
+                              try {
+                                await setItemAnswerFn({ data: { itemId: it.id, answerLetter: nextLetter } });
+                                setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, answer_letter: nextLetter } : x)));
+                                toast.success(nextLetter ? `Marked answer as ${nextLetter}` : "Cleared answer");
+                              } catch (e: any) {
+                                toast.error(e?.message || "Failed to update answer");
+                              }
+                            }}
+                            className={`px-2 py-0.5 rounded-md text-xs font-bold transition-colors ${
+                              isSelected
+                                ? "bg-emerald-600 text-white shadow-sm"
+                                : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                            }`}
+                            title={opt.text ? `${opt.letter}. ${opt.text}` : `Option ${opt.letter}`}
+                          >
+                            {opt.letter}
+                          </button>
+                        );
+                      })}
+                    </div>
                     {((job.sort_mode as string) || "none") !== "none" && (
                       <TopicPicker
                         value={it.topic ?? ""}
