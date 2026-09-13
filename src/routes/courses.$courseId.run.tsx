@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
 import { QuestionImage } from "@/components/quiz/QuestionImage";
@@ -10,6 +11,8 @@ import { ProtectedContent } from "@/components/protect/ProtectedContent";
 import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
 import { ArabicToggle } from "@/components/quiz/ArabicToggle";
 import { useQuestionTranslation } from "@/hooks/useQuestionTranslation";
+import { MoveQuestionControl, type CourseSectionGroup } from "@/components/course/MoveQuestionControl";
+import { moveSingleCourseQuestion } from "@/lib/course-sorter.functions";
 import {
   Flag,
   CheckCircle2,
@@ -96,6 +99,7 @@ function RunPage() {
   /** Questions are only readable once enrollment exists, so wait for the gate. */
   const [accessReady, setAccessReady] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
+  const [courseSections, setCourseSections] = useState<CourseSectionGroup[]>([]);
 
   // Access gate: paid course requires admin OR an enrollment row.
   // Free ($0) courses auto-enroll on first entry.
@@ -460,6 +464,75 @@ function RunPage() {
     setCurrent((c) => Math.max(0, Math.min(c, questions.length - 2)));
   }
 
+  const loadCourseSections = useCallback(async () => {
+    if (!courseId) return;
+    try {
+      const { data: grps } = await (supabase.from as any)("subject_groups")
+        .select("id, name, sort_order")
+        .eq("course_id", courseId)
+        .order("sort_order", { ascending: true });
+      const groupList = (grps ?? []) as Array<{ id: string; name: string; sort_order: number }>;
+      if (!groupList.length) return;
+
+      const { data: subs } = await (supabase.from as any)("subjects")
+        .select("id, group_id, name, sort_order")
+        .in("group_id", groupList.map((g) => g.id))
+        .order("sort_order", { ascending: true });
+      const subList = (subs ?? []) as Array<{ id: string; group_id: string; name: string; sort_order: number }>;
+
+      const subByGroup = new Map<string, Array<{ id: string; name: string; sort_order: number }>>();
+      for (const s of subList) {
+        const arr = subByGroup.get(s.group_id) ?? [];
+        arr.push({ id: s.id, name: s.name, sort_order: s.sort_order });
+        subByGroup.set(s.group_id, arr);
+      }
+
+      const structured: CourseSectionGroup[] = groupList.map((g) => ({
+        id: g.id,
+        name: g.name,
+        sort_order: g.sort_order,
+        subjects: subByGroup.get(g.id) ?? [],
+      }));
+
+      setCourseSections(structured);
+    } catch (e) {
+      console.error("Failed to load course sections for admin move", e);
+    }
+  }, [courseId]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      void loadCourseSections();
+    }
+  }, [isAdmin, loadCourseSections]);
+
+  const handleMoveQuestion = useCallback(
+    async (
+      questionId: string,
+      targetSubjectId?: string,
+      createNewSubject?: { courseId: string; name: string; groupId?: string; newGroupName?: string },
+    ) => {
+      const res = await moveSingleCourseQuestion({
+        data: {
+          questionId,
+          targetSubjectId,
+          createNewSubject,
+        },
+      });
+
+      if (res.success) {
+        toast.success(`Question moved to "${res.targetSubjectName}"`);
+        setQuestions((prev) =>
+          prev.map((q) => (q.id === questionId ? { ...q, subject_id: res.targetSubjectId } : q)),
+        );
+        if (res.newSubject || createNewSubject) {
+          void loadCourseSections();
+        }
+      }
+    },
+    [loadCourseSections],
+  );
+
   if (finished && !reviewMode) {
     return (
       <ResultsScreen
@@ -493,7 +566,14 @@ function RunPage() {
           </div>
           <ProtectionNotice className="mb-6" />
           <ProtectedContent context="exam" scope="card">
-            <ReviewCard q={q} userAnswer={answers[q.id]} />
+            <ReviewCard
+              q={q}
+              userAnswer={answers[q.id]}
+              isAdmin={isAdmin}
+              courseId={courseId}
+              courseSections={courseSections}
+              onMoveQuestion={handleMoveQuestion}
+            />
           </ProtectedContent>
           <div className="mt-6 flex items-center justify-between gap-3">
             <button onClick={() => setReviewIndex((i) => Math.max(0, i - 1))} disabled={reviewIndex === 0}
@@ -570,9 +650,13 @@ function RunPage() {
                   <ExamCard
                     key={q.id} q={q} index={i}
                     selected={answers[q.id]}
-                     onSelect={(opt) => setAnswers((p) => ({ ...p, [q.id]: toggleSelection(p[q.id], opt, q.answer_mode === "multiple") }))}
+                    onSelect={(opt) => setAnswers((p) => ({ ...p, [q.id]: toggleSelection(p[q.id], opt, q.answer_mode === "multiple") }))}
                     isFlagged={flags.has(q.id)}
                     onToggleFlag={() => toggleFlag(q.id)}
+                    isAdmin={isAdmin}
+                    courseId={courseId}
+                    courseSections={courseSections}
+                    onMoveQuestion={handleMoveQuestion}
                   />
                 ))}
                 <button onClick={() => setFinished(true)}
@@ -584,6 +668,9 @@ function RunPage() {
               currentQ && (
               <QuestionCard
                 q={currentQ} mode={mode} isAdmin={isAdmin}
+                courseId={courseId}
+                courseSections={courseSections}
+                onMoveQuestion={handleMoveQuestion}
                 selected={answers[currentQ.id]}
                 submitted={submitted[currentQ.id] || mode === "study"}
                 isFlagged={flags.has(currentQ.id)}
@@ -692,9 +779,17 @@ function fmtTime(s: number) {
 
 function QuestionCard({
   q, mode, isAdmin, selected, submitted, isFlagged, isShining = false,
+  courseId, courseSections, onMoveQuestion,
   onToggleFlag, onSelect, onSubmit, onNext, isLast, onSetCorrect, onDelete, onCapture,
 }: {
   q: Question; mode: Mode; isAdmin: boolean;
+  courseId?: string;
+  courseSections?: CourseSectionGroup[];
+  onMoveQuestion?: (
+    questionId: string,
+    targetSubjectId?: string,
+    createNewSubject?: { courseId: string; name: string; groupId?: string; newGroupName?: string },
+  ) => Promise<void>;
   selected: string[] | undefined; submitted: boolean; isFlagged: boolean; isShining?: boolean;
   onToggleFlag: () => void; onSelect: (label: string) => void;
   onSubmit: () => void; onNext: () => void; isLast: boolean;
@@ -738,12 +833,21 @@ function QuestionCard({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <ArabicToggle on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
+          {isAdmin && courseId && courseSections && onMoveQuestion && (
+            <MoveQuestionControl
+              questionId={q.id}
+              currentSubjectId={q.subject_id}
+              courseId={courseId}
+              courseSections={courseSections}
+              onMoveQuestion={onMoveQuestion}
+            />
+          )}
           {isAdmin && isStudy && (
             <button
               onClick={onDelete}
-              className="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-rose-200 text-rose-700 hover:bg-rose-50"
+              className="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-rose-200 text-rose-700 hover:bg-rose-50 cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" /> Delete question
             </button>
@@ -858,9 +962,16 @@ function QuestionCard({
 
 function ExamCard({
   q, index, selected, onSelect, isFlagged, onToggleFlag,
+  isAdmin, courseId, courseSections, onMoveQuestion,
 }: {
-   q: Question; index: number; selected: string[] | undefined;
+  q: Question; index: number; selected: string[] | undefined;
   onSelect: (label: string) => void; isFlagged: boolean; onToggleFlag: () => void;
+  isAdmin?: boolean; courseId?: string; courseSections?: CourseSectionGroup[];
+  onMoveQuestion?: (
+    questionId: string,
+    targetSubjectId?: string,
+    createNewSubject?: { courseId: string; name: string; groupId?: string; newGroupName?: string },
+  ) => Promise<void>;
 }) {
   const [ar, setAr] = useState(false);
   const { data: tr, loading: trLoading, error: trError } = useQuestionTranslation(q.id, ar);
@@ -882,6 +993,17 @@ function ExamCard({
           {isFlagged ? "Flagged" : "Flag question"}
         </button>
         <ArabicToggle className="mt-3" on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
+        {isAdmin && courseId && courseSections && onMoveQuestion && (
+          <div className="mt-3">
+            <MoveQuestionControl
+              questionId={q.id}
+              currentSubjectId={q.subject_id}
+              courseId={courseId}
+              courseSections={courseSections}
+              onMoveQuestion={onMoveQuestion}
+            />
+          </div>
+        )}
       </div>
       <ProtectedContent context="exam" scope="card">
       <div className="px-5 py-5">
@@ -922,7 +1044,25 @@ function ExamCard({
   );
 }
 
-function ReviewCard({ q, userAnswer }: { q: Question; userAnswer: string[] | undefined }) {
+function ReviewCard({
+  q,
+  userAnswer,
+  isAdmin,
+  courseId,
+  courseSections,
+  onMoveQuestion,
+}: {
+  q: Question;
+  userAnswer: string[] | undefined;
+  isAdmin?: boolean;
+  courseId?: string;
+  courseSections?: CourseSectionGroup[];
+  onMoveQuestion?: (
+    questionId: string,
+    targetSubjectId?: string,
+    createNewSubject?: { courseId: string; name: string; groupId?: string; newGroupName?: string },
+  ) => Promise<void>;
+}) {
   const [ar, setAr] = useState(false);
   const { data: tr, loading: trLoading, error: trError } = useQuestionTranslation(q.id, ar);
   const show = ar && tr ? tr : null;
@@ -933,7 +1073,18 @@ function ReviewCard({ q, userAnswer }: { q: Question; userAnswer: string[] | und
           <Pencil className="w-4 h-4 text-rose-500" />
           <span className="text-xs uppercase tracking-widest font-bold text-rose-600">Wrong answer</span>
         </span>
-        <ArabicToggle on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {isAdmin && courseId && courseSections && onMoveQuestion && (
+            <MoveQuestionControl
+              questionId={q.id}
+              currentSubjectId={q.subject_id}
+              courseId={courseId}
+              courseSections={courseSections}
+              onMoveQuestion={onMoveQuestion}
+            />
+          )}
+          <ArabicToggle on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
+        </div>
       </div>
       {q.image_url && <div className="px-6 pt-6"><QuestionImage path={q.image_url} /></div>}
       {(q.stem?.trim() || !q.image_url) && (

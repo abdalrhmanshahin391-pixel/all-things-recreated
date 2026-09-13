@@ -553,3 +553,139 @@ export const applyCourseQuestionSort = createServerFn({ method: "POST" })
       createdSubjectsCount,
     };
   });
+
+// ---------------- 4. Move a Single Question to Another Section (Fast Admin Mover) ----------------
+
+export const moveSingleCourseQuestion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        questionId: z.string().uuid(),
+        targetSubjectId: z.string().uuid().optional(),
+        createNewSubject: z
+          .object({
+            courseId: z.string().uuid(),
+            name: z.string().min(1).max(100),
+            groupId: z.string().uuid().optional(),
+            newGroupName: z.string().max(100).optional(),
+          })
+          .optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let destSubjectId = data.targetSubjectId;
+    let targetSub: any = null;
+
+    if (data.createNewSubject) {
+      const subName = data.createNewSubject.name.trim();
+      let targetGroupId = data.createNewSubject.groupId;
+
+      if (!targetGroupId) {
+        if (data.createNewSubject.newGroupName && data.createNewSubject.newGroupName.trim()) {
+          const gName = data.createNewSubject.newGroupName.trim();
+          const { data: existingG } = await supabaseAdmin
+            .from("subject_groups")
+            .select("id")
+            .eq("course_id", data.createNewSubject.courseId)
+            .ilike("name", gName)
+            .maybeSingle();
+
+          if (existingG) {
+            targetGroupId = existingG.id;
+          } else {
+            const { data: newG, error: ge } = await supabaseAdmin
+              .from("subject_groups")
+              .insert({
+                course_id: data.createNewSubject.courseId,
+                name: gName,
+                sort_order: 99,
+              })
+              .select("id")
+              .single();
+            if (ge || !newG) throw new Error(ge?.message || "Failed to create folder/group");
+            targetGroupId = newG.id;
+          }
+        } else {
+          // Fallback to first group in course
+          const { data: firstG } = await supabaseAdmin
+            .from("subject_groups")
+            .select("id")
+            .eq("course_id", data.createNewSubject.courseId)
+            .order("sort_order")
+            .limit(1)
+            .maybeSingle();
+          if (!firstG) throw new Error("Please create at least one folder/group in this course first.");
+          targetGroupId = firstG.id;
+        }
+      }
+
+      // Check if subject already exists under this group
+      const { data: existingSub } = await supabaseAdmin
+        .from("subjects")
+        .select("id, name, group_id, subject_groups(name)")
+        .eq("group_id", targetGroupId)
+        .ilike("name", subName)
+        .maybeSingle();
+
+      if (existingSub) {
+        destSubjectId = existingSub.id;
+        targetSub = existingSub;
+      } else {
+        const { data: newSub, error: se } = await supabaseAdmin
+          .from("subjects")
+          .insert({
+            group_id: targetGroupId,
+            name: subName,
+            access_level: "paid",
+            sort_order: 99,
+          })
+          .select("id, name, group_id, subject_groups(name)")
+          .single();
+        if (se || !newSub) throw new Error(se?.message || "Failed to create subject");
+        destSubjectId = newSub.id;
+        targetSub = newSub;
+      }
+    } else {
+      if (!destSubjectId) {
+        throw new Error("No target section specified.");
+      }
+      const { data: existingSub, error: se } = await supabaseAdmin
+        .from("subjects")
+        .select("id, name, group_id, subject_groups(name)")
+        .eq("id", destSubjectId)
+        .single();
+      if (se || !existingSub) throw new Error("Target section not found.");
+      targetSub = existingSub;
+    }
+
+    // Update question's subject_id
+    const { error: uErr } = await supabaseAdmin
+      .from("questions")
+      .update({ subject_id: destSubjectId })
+      .eq("id", data.questionId);
+
+    if (uErr) {
+      throw new Error(uErr.message || "Failed to update question section.");
+    }
+
+    return {
+      success: true,
+      questionId: data.questionId,
+      targetSubjectId: destSubjectId!,
+      targetSubjectName: (targetSub.name as string) || "Unknown",
+      targetGroupName: ((targetSub as any).subject_groups?.name as string) ?? "",
+      targetGroupId: targetSub.group_id as string,
+      newSubject: data.createNewSubject
+        ? {
+            id: targetSub.id,
+            name: targetSub.name,
+            group_id: targetSub.group_id,
+          }
+        : undefined,
+    };
+  });
