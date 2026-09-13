@@ -602,7 +602,7 @@ Lecture 4: Heart Failure & Cardiomyopathies`}
                               >
                                 {courseSubjects.map((s) => (
                                   <option key={s.id} value={s.id}>
-                                    {s.name} ({s.question_count ?? 0} questions)
+                                    {s.name}
                                   </option>
                                 ))}
                               </select>

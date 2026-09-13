@@ -264,7 +264,7 @@ export const classifyCourseQuestions = createServerFn({ method: "POST" })
     const groupIds = (groups ?? []).map((g: any) => g.id);
     const { data: subjects } = await supabaseAdmin
       .from("subjects")
-      .select("id, group_id, name, sort_order, question_count")
+      .select("id, group_id, name, sort_order")
       .in("group_id", groupIds)
       .order("sort_order");
 
@@ -510,7 +510,6 @@ export const applyCourseQuestionSort = createServerFn({ method: "POST" })
               name: subName,
               access_level: "paid",
               sort_order: 99,
-              question_count: 0,
             })
             .select("id")
             .single();
@@ -541,18 +540,6 @@ export const applyCourseQuestionSort = createServerFn({ method: "POST" })
         }
         movedQuestionsCount += item.questionIds.length;
       }
-    }
-
-    // Refresh question_count on all affected subjects
-    for (const sId of affectedSubjectIds) {
-      const { count } = await supabaseAdmin
-        .from("questions")
-        .select("id", { count: "exact", head: true })
-        .eq("subject_id", sId);
-      await supabaseAdmin
-        .from("subjects")
-        .update({ question_count: count ?? 0 })
-        .eq("id", sId);
     }
 
     return {

@@ -328,10 +328,10 @@ function Page() {
             )}
 
             <div className="mt-4 grid sm:grid-cols-4 gap-3 text-center">
-              <StatCard label="Pages" value={`${pages.filter((p) => p.status === "ready").length}/${pages.length}`} />
-              <StatCard label="Questions read" value={String(items.length)} />
-              <StatCard label="Solved" value={`${solvedCount}/${items.length}`} />
-              <StatCard label="Imported" value={stage === "imported" ? "Yes" : "No"} />
+              <Stat label="Pages" value={`${pages.filter((p) => p.status === "ready").length}/${pages.length}`} />
+              <Stat label="Questions read" value={String(items.length)} />
+              <Stat label="Solved" value={`${solvedCount}/${items.length}`} />
+              <Stat label="Imported" value={stage === "imported" ? "Yes" : "No"} />
             </div>
 
             {pages.some((p) => p.status === "empty") && (
@@ -600,6 +600,8 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+const StatCard = Stat;
 
 function StagePill({ stage }: { stage: string }) {
   const map: Record<string, { cls: string; label: string; spin?: boolean }> = {
