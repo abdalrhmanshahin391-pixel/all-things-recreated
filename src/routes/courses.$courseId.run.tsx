@@ -30,6 +30,7 @@ import {
 
 type Mode = "study" | "session" | "exam";
 type Pool = "all" | "flagged" | "incorrect";
+const LOAD_TIMEOUT_MS = 20_000;
 
 export const Route = createFileRoute("/courses/$courseId/run")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -80,7 +81,8 @@ function RunPage() {
   const { courseId } = Route.useParams();
   const { mode, subjects, timed, duration, pool } = Route.useSearch();
   const navigate = useNavigate();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, loading: authLoading } = useAuth();
+  const accessKey = `${courseId}:${user?.id ?? "guest"}:${isAdmin ? "admin" : "student"}`;
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,68 +98,107 @@ function RunPage() {
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewIndex, setReviewIndex] = useState(0);
   const [pendingNote, setPendingNote] = useState<SaveNotePayload | null>(null);
-  /** Questions are only readable once enrollment exists, so wait for the gate. */
-  const [accessReady, setAccessReady] = useState(false);
-  const [accessDenied, setAccessDenied] = useState(false);
+  /** Wait for the course access check before requesting protected content. */
+  const [accessReady, setAccessReady] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadVersion, setReloadVersion] = useState(0);
+  const hasAccess = accessReady === accessKey;
   const [courseSections, setCourseSections] = useState<CourseSectionGroup[]>([]);
 
   // Access gate: paid course requires admin OR an enrollment row.
   // Free ($0) courses auto-enroll on first entry.
   useEffect(() => {
+    setAccessReady(null);
+    setAccessDenied(null);
+    setLoadError(null);
+    if (authLoading) return;
     if (isAdmin) {
-      setAccessReady(true);
+      setAccessReady(accessKey);
       return;
     }
     if (!user) return;
     let cancelled = false;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS);
     (async () => {
-      const { data: c } = await (supabase.from as any)("courses")
+      const { data: c, error: courseError } = await (supabase.from as any)("courses")
         .select("price")
         .eq("id", courseId)
-        .maybeSingle();
+        .maybeSingle()
+        .abortSignal(controller.signal);
+      if (courseError) throw courseError;
+      if (!c) throw new Error("Course not found");
       const price = Number(c?.price ?? 0);
       if (price <= 0) {
-        // Free course: enrol first so the content becomes readable, then load.
-        await (supabase.from as any)("user_courses").upsert(
+        // Record free enrollment when allowed; content queries still enforce RLS.
+        const { error: enrollmentError } = await (supabase.from as any)("user_courses").upsert(
           { user_id: user.id, course_id: courseId },
-          { onConflict: "user_id,course_id" },
-        );
-        if (!cancelled) setAccessReady(true);
+          { onConflict: "user_id,course_id", ignoreDuplicates: true },
+        ).abortSignal(controller.signal);
+        // Some installations only allow administrators to write enrollments.
+        // That must not prevent students reading already-public free content.
+        if (enrollmentError && enrollmentError.code !== "42501") throw enrollmentError;
+        if (!cancelled) setAccessReady(accessKey);
         return;
       }
-      const { data: enr } = await (supabase.from as any)("user_courses")
+      const { data: enr, error: enrollmentError } = await (supabase.from as any)("user_courses")
         .select("id")
         .eq("user_id", user.id)
         .eq("course_id", courseId)
-        .maybeSingle();
+        .maybeSingle()
+        .abortSignal(controller.signal);
+      if (enrollmentError) throw enrollmentError;
       if (cancelled) return;
       if (!enr) {
-        setAccessDenied(true);
+        setAccessDenied(accessKey);
         navigate({ to: "/courses/$courseId/checkout", params: { courseId } });
         return;
       }
-      setAccessReady(true);
-    })();
+      setAccessReady(accessKey);
+    })().catch((error) => {
+      if (cancelled) return;
+      console.error("Failed to check course access", error);
+      setLoadError("We could not check your course access. Please try again.");
+    }).finally(() => clearTimeout(timeout));
     return () => {
       cancelled = true;
+      controller.abort();
+      clearTimeout(timeout);
     };
-  }, [user, isAdmin, courseId, navigate]);
+  }, [user, isAdmin, authLoading, courseId, accessKey, navigate, reloadVersion]);
 
 
   useEffect(() => {
-    if (!accessReady) return;
+    if (!hasAccess) return;
+    let cancelled = false;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS);
+    setLoading(true);
+    setLoadError(null);
+    setQuestions([]);
+    setAnswers({});
+    setSubmitted({});
+    setCurrent(0);
+    setFinished(false);
+    setReviewMode(false);
+    setReviewIndex(0);
+    setSecondsLeft(initialSeconds);
     (async () => {
-      setLoading(true);
       let subjectIds: string[] = [];
       if (subjects === "all") {
-        const { data: g } = await (supabase.from as any)("subject_groups")
+        const { data: g, error: groupError } = await (supabase.from as any)("subject_groups")
           .select("id")
-          .eq("course_id", courseId);
+          .eq("course_id", courseId)
+          .abortSignal(controller.signal);
+        if (groupError) throw groupError;
         const gIds = (g ?? []).map((r: { id: string }) => r.id);
         if (gIds.length) {
-          const { data: s } = await (supabase.from as any)("subjects")
+          const { data: s, error: subjectError } = await (supabase.from as any)("subjects")
             .select("id")
-            .in("group_id", gIds);
+            .in("group_id", gIds)
+            .abortSignal(controller.signal);
+          if (subjectError) throw subjectError;
           subjectIds = (s ?? []).map((r: { id: string }) => r.id);
         }
       } else {
@@ -165,24 +206,29 @@ function RunPage() {
       }
 
       if (!subjectIds.length) {
+        if (cancelled) return;
         setQuestions([]);
         setLoading(false);
         return;
       }
 
-      const { data: subjMeta } = await (supabase.from as any)("subjects")
+      const { data: subjMeta, error: metadataError } = await (supabase.from as any)("subjects")
         .select("id,sort_order,ordered")
-        .in("id", subjectIds);
+        .in("id", subjectIds)
+        .abortSignal(controller.signal);
+      if (metadataError) throw metadataError;
       const subjectInfo = new Map<string, { sort: number; ordered: boolean }>(
         ((subjMeta ?? []) as any[]).map((r) => [r.id as string, { sort: Number(r.sort_order) || 0, ordered: Boolean(r.ordered) }]),
       );
 
-      const { data: qs } = await (supabase.from as any)("questions")
+      const { data: qs, error: questionError } = await (supabase.from as any)("questions")
         .select(
           "id,subject_id,stem,explanation,image_url,answer_mode,sort_order,question_options(id,label,text,is_correct,sort_order)",
         )
         .in("subject_id", subjectIds)
-        .order("sort_order");
+        .order("sort_order")
+        .abortSignal(controller.signal);
+      if (questionError) throw questionError;
 
       const LETTERS = ["A", "B", "C", "D", "E", "F"];
       const shuffle = <T,>(arr: T[]): T[] => {
@@ -218,19 +264,23 @@ function RunPage() {
       });
 
       if (user) {
-        const { data: flagRows } = await (supabase.from as any)("question_flags")
+        const { data: flagRows, error: flagError } = await (supabase.from as any)("question_flags")
           .select("question_id")
-          .eq("user_id", user.id);
+          .eq("user_id", user.id)
+          .abortSignal(controller.signal);
+        if (flagError) throw flagError;
         const flagSet = new Set<string>((flagRows ?? []).map((r: any) => r.question_id));
-        setFlags(flagSet);
+        if (!cancelled) setFlags(flagSet);
 
         if (pool === "flagged") {
           list = list.filter((q) => flagSet.has(q.id));
         } else if (pool === "incorrect") {
-          const { data: attemptRows } = await (supabase.from as any)("question_attempts")
+          const { data: attemptRows, error: attemptError } = await (supabase.from as any)("question_attempts")
             .select("question_id,is_correct,attempted_at")
             .eq("user_id", user.id)
-            .order("attempted_at", { ascending: false });
+            .order("attempted_at", { ascending: false })
+            .abortSignal(controller.signal);
+          if (attemptError) throw attemptError;
           const latest = new Map<string, boolean>();
           for (const r of (attemptRows ?? []) as any[]) {
             if (!latest.has(r.question_id)) latest.set(r.question_id, r.is_correct);
@@ -266,10 +316,21 @@ function RunPage() {
         );
       }
 
+      if (cancelled) return;
       setQuestions(list);
       setLoading(false);
-    })();
-  }, [courseId, subjects, pool, user?.id, accessReady]);
+    })().catch((error) => {
+      if (cancelled) return;
+      console.error("Failed to load course questions", error);
+      setLoadError("We could not load the questions. Please try again.");
+      setLoading(false);
+    }).finally(() => clearTimeout(timeout));
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timeout);
+    };
+  }, [courseId, subjects, pool, user, hasAccess, accessKey, initialSeconds, mode, reloadVersion]);
 
   useEffect(() => {
     if (mode !== "study" || !questions.length) return;
@@ -282,14 +343,14 @@ function RunPage() {
   }, [mode, questions]);
 
   useEffect(() => {
-    if (mode !== "exam" || !timed || finished) return;
+    if (mode !== "exam" || !timed || finished || loading || !hasAccess || !questions.length || loadError) return;
     if (secondsLeft <= 0) {
       setFinished(true);
       return;
     }
     const t = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(t);
-  }, [mode, timed, finished, secondsLeft]);
+  }, [mode, timed, finished, secondsLeft, loading, hasAccess, questions.length, loadError]);
 
   useEffect(() => {
     if (!finished || !user || mode === "study") return;
@@ -357,74 +418,15 @@ function RunPage() {
 
   // Track time spent on current active question in study/session mode
   useEffect(() => {
-    if (finished || reviewMode || mode === "exam" || !currentQ || submitted[currentQ?.id]) return;
+    if (finished || reviewMode || mode === "exam" || !currentQ || submitted[currentQ.id]) return;
     const interval = setInterval(() => {
       setTimeSpentOnQuestion((s) => s + 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, [finished, reviewMode, mode, currentQ?.id, submitted]);
+  }, [finished, reviewMode, mode, currentQ, submitted]);
 
   const isFlagShining =
-    timeSpentOnQuestion >= 45 && !isFlaggedCurrent && !submitted[currentQ?.id];
-
-  if (accessDenied) {
-    return (
-      <div className="min-h-screen bg-background text-foreground">
-        <SiteHeader variant="light" />
-        <main className="mx-auto max-w-xl px-6 pt-32 text-center">
-          <div className="medical-card p-10">
-            <h1 className="text-xl font-bold">You don't have access to this course yet</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Unlock it to start solving questions.</p>
-            <Link
-              to="/courses/$courseId" params={{ courseId }}
-              className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500"
-            >
-              Back to course <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  if (loading || !accessReady) {
-    return (
-      <div className="min-h-screen bg-background text-foreground">
-        <SiteHeader variant="light" />
-        <div className="mx-auto max-w-4xl px-6 pt-28">
-          <div className="h-8 w-48 bg-muted rounded-lg animate-pulse mb-6" />
-          <div className="h-96 bg-muted rounded-2xl animate-pulse" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!questions.length) {
-    return (
-      <div className="min-h-screen bg-background text-foreground">
-        <SiteHeader variant="light" />
-        <main className="mx-auto max-w-xl px-6 pt-32 text-center">
-          <div className="medical-card p-10">
-            <Sparkles className="w-10 h-10 mx-auto text-indigo-500 mb-3" />
-            <h1 className="text-xl font-bold">Nothing to study here yet</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {pool === "flagged"
-                ? "You have no flagged questions in these subjects yet."
-                : pool === "incorrect"
-                  ? "No previously incorrect questions in these subjects."
-                  : "No questions in the selected subjects yet."}
-            </p>
-            <Link
-              to="/courses/$courseId" params={{ courseId }}
-              className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500"
-            >
-              Back to course <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </main>
-      </div>
-    );
-  }
+    !!currentQ && timeSpentOnQuestion >= 45 && !isFlaggedCurrent && !submitted[currentQ.id];
 
   const goToCourse = () => navigate({ to: "/courses/$courseId", params: { courseId } });
 
@@ -532,6 +534,100 @@ function RunPage() {
     },
     [loadCourseSections],
   );
+
+  // Every hook above must run on loading, denied, empty and ready renders.
+  // Returning earlier changes React's hook order when questions arrive.
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <SiteHeader variant="light" />
+        <main className="mx-auto max-w-xl px-6 pt-32 text-center">
+          <div className="medical-card p-10" role="alert">
+            <h1 className="text-xl font-bold">We could not open this session</h1>
+            <p className="mt-2 text-sm text-muted-foreground">{loadError}</p>
+            <button type="button" onClick={() => setReloadVersion((version) => version + 1)}
+              className="mt-6 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500">
+              Try again
+            </button>
+            <Link to="/courses/$courseId" params={{ courseId }} className="ml-4 text-sm underline">
+              Back to course
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!authLoading && !user && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <SiteHeader variant="light" />
+        <main className="mx-auto max-w-xl px-6 pt-32 text-center">
+          <div className="medical-card p-10">
+            <h1 className="text-xl font-bold">Sign in to start your session</h1>
+            <p className="mt-2 text-sm text-muted-foreground">Your answers and progress are saved to your account.</p>
+            <Link to="/login" search={{ next: `/courses/${courseId}/run?mode=${mode}&subjects=${encodeURIComponent(subjects)}&timed=${timed}&duration=${duration}&pool=${pool}` } as any}
+              className="mt-6 inline-flex px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500">
+              Sign in
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (accessDenied === accessKey) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <SiteHeader variant="light" />
+        <main className="mx-auto max-w-xl px-6 pt-32 text-center">
+          <div className="medical-card p-10">
+            <h1 className="text-xl font-bold">You don't have access to this course yet</h1>
+            <p className="mt-2 text-sm text-muted-foreground">Unlock it to start solving questions.</p>
+            <Link to="/courses/$courseId" params={{ courseId }}
+              className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500">
+              Back to course <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (loading || !hasAccess || authLoading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <SiteHeader variant="light" />
+        <div className="mx-auto max-w-4xl px-6 pt-28">
+          <div className="h-8 w-48 bg-muted rounded-lg animate-pulse mb-6" />
+          <div className="h-96 bg-muted rounded-2xl animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!questions.length) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <SiteHeader variant="light" />
+        <main className="mx-auto max-w-xl px-6 pt-32 text-center">
+          <div className="medical-card p-10">
+            <Sparkles className="w-10 h-10 mx-auto text-indigo-500 mb-3" />
+            <h1 className="text-xl font-bold">Nothing to study here yet</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {pool === "flagged" ? "You have no flagged questions in these subjects yet."
+                : pool === "incorrect" ? "No previously incorrect questions in these subjects."
+                  : "No questions in the selected subjects yet."}
+            </p>
+            <Link to="/courses/$courseId" params={{ courseId }}
+              className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500">
+              Back to course <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (finished && !reviewMode) {
     return (
