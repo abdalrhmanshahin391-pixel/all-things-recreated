@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, PlayCircle, Loader2, Check, AlertTriangle, ScanEye, Brain, Download, X } from "lucide-react";
+import { ArrowLeft, Upload, PlayCircle, Loader2, Check, AlertTriangle, ScanEye, Brain, Download, X, CopyX } from "lucide-react";
 import { splitPdfInto2PageBlobs } from "@/lib/pdf-split";
 import {
   createAqvJob,
@@ -29,9 +29,14 @@ import {
   setAqvItemAnswer,
   applyAqvAnswerKey,
   clearAqvJobAnswers,
+  setAqvCustomInstructions,
+  extractAqvAnswerKeyFromPdf,
+  applyAqvDetectedAnswers,
+  removeAqvDuplicateItems,
 } from "@/lib/aquavisionx.functions";
 import { ReferenceBookCard } from "@/components/admin/ReferenceBookCard";
 import { AnswerKeyCard } from "@/components/admin/AnswerKeyCard";
+import { AiInstructionsCard } from "@/components/admin/AiInstructionsCard";
 
 export const Route = createFileRoute("/admin/aquavisionx")({
   head: () => ({
@@ -110,6 +115,10 @@ function Page() {
   const setItemAnswerFn = useServerFn(setAqvItemAnswer);
   const applyAnswerKeyFn = useServerFn(applyAqvAnswerKey);
   const clearAnswersFn = useServerFn(clearAqvJobAnswers);
+  const setCustomInstructionsFn = useServerFn(setAqvCustomInstructions);
+  const extractPdfKeyFn = useServerFn(extractAqvAnswerKeyFromPdf);
+  const applyDetectedAnswersFn = useServerFn(applyAqvDetectedAnswers);
+  const removeDuplicatesFn = useServerFn(removeAqvDuplicateItems);
 
   const say = (m: string) => setLog((p) => [`${new Date().toLocaleTimeString()} · ${m}`, ...p].slice(0, 120));
 
@@ -379,9 +388,20 @@ function Page() {
                 <AnswerKeyCard
                   totalQuestions={items.length}
                   answeredQuestions={answeredCount}
+                  detectedCount={items.filter((it) => it.detected_answer || (Array.isArray(it.options) && it.options.some((o: any) => o.is_highlighted))).length}
                   disabled={stage === "solving"}
                   onApplyKey={async (text) => {
                     const res = await applyAnswerKeyFn({ data: { jobId: job.id, text } });
+                    await openJob(job.id);
+                    return res;
+                  }}
+                  onUploadPdfKey={async (pdfBase64) => {
+                    const res = await extractPdfKeyFn({ data: { jobId: job.id, pdfBase64 } });
+                    await openJob(job.id);
+                    return res;
+                  }}
+                  onApplyDetectedAnswers={async () => {
+                    const res = await applyDetectedAnswersFn({ data: { jobId: job.id } });
                     await openJob(job.id);
                     return res;
                   }}
@@ -392,6 +412,17 @@ function Page() {
                 />
               </div>
             )}
+
+            <div className="mt-4">
+              <AiInstructionsCard
+                instructions={job.custom_instructions ?? null}
+                disabled={stage === "solving"}
+                onSave={async (instructions) => {
+                  await setCustomInstructionsFn({ data: { jobId: job.id, instructions } });
+                  setJob((prev: any) => (prev ? { ...prev, custom_instructions: instructions } : prev));
+                }}
+              />
+            </div>
 
             <SortCard
               mode={(job.sort_mode as string) || "none"}
@@ -414,8 +445,6 @@ function Page() {
                 toast.success("Sub-subject renamed");
               }}
             />
-
-
 
             {missingComboCount > 0 && (
               <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm text-amber-800 dark:text-amber-300">
@@ -448,6 +477,32 @@ function Page() {
                   <Download size={16} /> Import solved only ({pendingSolved})
                 </button>
               )}
+              {solvedCount > 0 && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      const res = await removeDuplicatesFn({ data: { jobId: job.id } });
+                      await openJob(job.id);
+                      if (res.removedCount > 0) {
+                        toast.success(`Removed ${res.removedCount} duplicate question(s). ${res.remainingCount} questions remaining.`);
+                      } else {
+                        toast.info("No duplicates found — all questions are unique.");
+                      }
+                    } catch (e: any) {
+                      toast.error(e?.message || "Failed to check duplicates");
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300 font-bold text-sm hover:bg-amber-500/20 transition disabled:opacity-40"
+                  title="Remove identical duplicate questions (matching question and answer)"
+                >
+                  <CopyX size={16} /> Remove Duplicates (AI)
+                </button>
+              )}
               {stage === "reading" && <span className="text-xs text-muted-foreground">waiting for Gemini to read the pages…</span>}
               {stage === "solving" && <span className="text-xs text-muted-foreground">waiting for Gemini to solve every question…</span>}
             </div>
@@ -456,11 +511,19 @@ function Page() {
               <ul className="mt-4 space-y-2 max-h-96 overflow-y-auto">
                 {items.map((it) => (
                   <li key={it.id} className="rounded-xl border border-border px-3 py-2">
-                    <div className="flex items-center gap-2 text-xs">
+                    <div className="flex items-center gap-2 text-xs flex-wrap">
                       <span className="font-bold">{it.number ? `Q${it.number}` : `#${it.item_index + 1}`}</span>
                       <StagePill stage={it.status} />
                       {it.answer_mode === "multiple" && (
                         <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-black text-amber-700">MULTIPLE</span>
+                      )}
+                      {it.detected_answer && (
+                        <span
+                          className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-400 border border-amber-500/30"
+                          title="Answer detected directly on the PDF paper (printed or highlighted)"
+                        >
+                          PDF: {it.detected_answer}
+                        </span>
                       )}
                       {it.answer_letter && <span className="ml-auto font-black text-emerald-600">{it.answer_letter}</span>}
                     </div>
@@ -472,6 +535,7 @@ function Page() {
                         : [{ letter: "A" }, { letter: "B" }, { letter: "C" }, { letter: "D" }]
                       ).map((opt: any) => {
                         const isSelected = (it.answer_letter || "").split(",").map((s: string) => s.trim().toUpperCase()).includes(opt.letter.toUpperCase());
+                        const isPdfDetected = opt.is_highlighted || (it.detected_answer && it.detected_answer.split(/[,;\s]+/).includes(opt.letter.toUpperCase()));
                         return (
                           <button
                             key={opt.letter}
@@ -490,11 +554,14 @@ function Page() {
                             className={`px-2 py-0.5 rounded-md text-xs font-bold transition-colors ${
                               isSelected
                                 ? "bg-emerald-600 text-white shadow-sm"
-                                : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                                : isPdfDetected
+                                  ? "border border-amber-500/70 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+                                  : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
                             }`}
-                            title={opt.text ? `${opt.letter}. ${opt.text}` : `Option ${opt.letter}`}
+                            title={opt.text ? `${opt.letter}. ${opt.text}${isPdfDetected ? " (Detected in PDF)" : ""}` : `Option ${opt.letter}`}
                           >
                             {opt.letter}
+                            {isPdfDetected && !isSelected && <span className="ml-1 text-[9px] text-amber-600 dark:text-amber-400">★</span>}
                           </button>
                         );
                       })}

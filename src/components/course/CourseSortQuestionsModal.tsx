@@ -66,6 +66,7 @@ export function CourseSortQuestionsModal({
   const [mode, setMode] = useState<"pdf" | "text" | "auto">("pdf");
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [topicsText, setTopicsText] = useState("");
+  const [sortingInstructions, setSortingInstructions] = useState("");
   const [busy, setBusy] = useState(false);
   const [busyMessage, setBusyMessage] = useState("");
 
@@ -123,6 +124,7 @@ export function CourseSortQuestionsModal({
         data: {
           courseId,
           topics: topicRes.topics,
+          sortingInstructions: sortingInstructions.trim() || undefined,
         },
       });
 
@@ -382,6 +384,23 @@ Lecture 4: Heart Failure & Cardiomyopathies`}
                     </p>
                   </div>
                 )}
+
+                {/* Optional AI Instructions */}
+                <div className="rounded-xl border border-border bg-card p-3.5 space-y-2">
+                  <label className="text-xs font-bold text-foreground block">
+                    2. AI Sorting Instructions & Notes (Optional) / توجيهات وملاحظات للذكاء الاصطناعي أثناء الفرز
+                  </label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Tell Gemini strictly how to categorize questions (e.g., specific rules, how to handle edge cases, or chapter priorities).
+                  </p>
+                  <textarea
+                    value={sortingInstructions}
+                    onChange={(e) => setSortingInstructions(e.target.value)}
+                    rows={2}
+                    placeholder="e.g.: Strictly classify pediatric surgical conditions into Pediatric Surgery rather than General Surgery..."
+                    className="w-full rounded-lg border border-border bg-background p-2.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
 
                 {/* Submit button */}
                 <div className="pt-2 flex justify-end">

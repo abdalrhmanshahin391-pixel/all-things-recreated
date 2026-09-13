@@ -293,7 +293,7 @@ async function submitBatch(apiKey: string, displayName: string, requests: any[])
 const READ_SYSTEM = `You read ONE page of a medical exam past-paper (image or text PDF page) and transcribe its questions.
 
 Return STRICT JSON only (no markdown fences):
-{"questions":[{"number":"12","question_type":"ordinary|combination|multiple_select","answer_mode":"single|multiple","stem":"the main question, verbatim plain text","options":[{"letter":"A or 1","text":"..."}],"printed_choices":[{"letter":"A","text":"1,2"}],"combinations":[[1,2],[2,3]]}]}
+{"questions":[{"number":"12","question_type":"ordinary|combination|multiple_select","answer_mode":"single|multiple","stem":"the main question, verbatim plain text","options":[{"letter":"A or 1","text":"...","is_highlighted":false}],"printed_choices":[{"letter":"A","text":"1,2"}],"combinations":[[1,2],[2,3]],"detected_answer":"A or null"}]}
 
 Rules:
 - Transcribe EVERY question that appears on this page, in reading order. Never skip one.
@@ -310,6 +310,13 @@ Rules:
 - Ordinary questions whose A/B/C/D choices contain answer words remain ordinary: set "question_type":"ordinary", "answer_mode":"single", keep their answer text as A/B/C/D options, and return empty printed_choices/combinations.
 - Genuine select-all-that-apply questions without printed A/B/C/D combinations use "question_type":"multiple_select" and may have empty combinations.
 - If a question has no visible options (open/short answer), return "options": [].
+- DETECTED / HIGHLIGHTED ANSWERS ON THE PAGE:
+  Some question past-papers already contain answers marked directly on the paper:
+  * An answer explicitly printed (e.g. "Answer: C", "Ans: 1, 2", "Key: B", "(Ans. D)", "Correct: A").
+  * OR an option letter or body visibly highlighted (yellow/colored marker), circled, underlined, or marked with a checkmark (✓).
+  If you see an explicitly printed answer or a visibly highlighted/marked choice for a question, extract it into "detected_answer" (e.g. "C" or "A,B" or "1,2") and mark that option in "options" with "is_highlighted": true.
+  If NO answer is marked or printed on the question, set "detected_answer": null.
+  IMPORTANT: Do NOT solve the question yourself; ONLY report answers that are physically printed or marked on the document page.
 - Do NOT answer the questions and do NOT explain anything here.
 - If the page contains no questions at all (cover page, index, blank), return {"questions":[]}.`;
 
@@ -329,6 +336,7 @@ Rules:
 - The user message states ANSWER MODE. For SINGLE, mark exactly ONE option correct and return its label in both answer_letter and answer_letters.
 - For MULTIPLE, the user message may list ALLOWED ANSWER SETS (the combinations printed on the paper, e.g. 1,2 / 2,3 / 1,3 / 3,4). When it does, you MUST pick exactly ONE of those printed sets as the answer: mark true ONLY the statements of that set, and return exactly its numbers in answer_letters. Never return a set that is not listed. In "Why the other options are wrong" explain why each other printed set is wrong. If no allowed sets are given, judge every statement independently and mark all correct ones true.
 - Keep the given options verbatim and in the given order.
+- If the question came with only 2 options (e.g. True/False or Yes/No), keep ONLY those 2 options and do NOT invent additional options.
 - If the question came with no options, INVENT exactly 4 plausible options A-D where exactly one is correct.
 - answer_letter MUST match the option you marked is_correct.
 - If (and only if) the user message contains a TOPIC block, also return a "topic" field: a short sub-subject name for this question. When a topic list is given you MUST copy one of the listed names EXACTLY, or "Other" if none fits. When no list is given, invent a short (1-3 words) topic name and reuse the same wording for questions about the same area.
@@ -509,7 +517,23 @@ export const pollAqvRead = createServerFn({ method: "POST" })
         const normalized = normalizeCombinationQuestion(q);
         const stem = normalized.stem;
         if (stem.length < 5) continue;
-        const options = normalized.options;
+        const rawDetected = q?.detected_answer ? String(q.detected_answer).trim().toUpperCase() : null;
+        const rawOptions = Array.isArray(q?.options) ? q.options : [];
+        const highlightedLetters = new Set<string>();
+        rawOptions.forEach((ro: any) => {
+          if (ro?.is_highlighted || ro?.highlighted || ro?.is_marked) {
+            highlightedLetters.add(String(ro.letter || "").trim().toUpperCase());
+          }
+        });
+        if (rawDetected) {
+          rawDetected.split(/[,;\s]+/).forEach((l: string) => { if (l) highlightedLetters.add(l.trim()); });
+        }
+        const options = normalized.options.map((opt: any) => ({
+          ...opt,
+          ...(highlightedLetters.has(opt.letter.toUpperCase()) ? { is_highlighted: true } : {}),
+        }));
+        const detectedAnswer = rawDetected || (highlightedLetters.size > 0 ? [...highlightedLetters].join(",") : null);
+
         const printedChoices = Array.isArray(q?.printed_choices) ? q.printed_choices : [];
         const numericMultiple = normalized.answerMode === "multiple" && normalized.options.length >= 2
           && normalized.options.every((option) => /^\d+$/.test(option.letter));
@@ -532,13 +556,23 @@ export const pollAqvRead = createServerFn({ method: "POST" })
           question_type: questionType,
           combo_sets: normalized.answerMode === "multiple" ? normalized.comboSets : [],
           printed_choices: printedChoices,
+          detected_answer: detectedAnswer,
           status: missingCombos ? "needs_combinations" : "read",
           error: missingCombos ? "Printed A–D answer combinations were not recovered. Enter them before solving." : null,
         });
       }
       if (rows.length) {
+        let insertErr: any = null;
         const { error: iErr } = await supabase.from(ITEMS).insert(rows);
-        if (iErr) throw iErr;
+        if (iErr && (iErr.message?.includes("detected_answer") || iErr.code === "42703")) {
+          // If cloud migration hasn't executed yet, insert without detected_answer (options already contains is_highlighted)
+          const fallbackRows = rows.map(({ detected_answer, ...r }: any) => r);
+          const { error: fbErr } = await supabase.from(ITEMS).insert(fallbackRows);
+          insertErr = fbErr;
+        } else {
+          insertErr = iErr;
+        }
+        if (insertErr) throw insertErr;
       }
       total += rows.length;
       await supabase.from(PAGES).update({
@@ -577,8 +611,17 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
     if (blocked.length) throw new Error(`${blocked.length} combination question(s) are missing the paper's allowed sets. Repair them before solving.`);
 
     const apiKey = await getGeminiKey(supabase);
-    const { data: jobRow } = await supabase.from(JOBS)
-      .select("reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime, sort_mode, sort_topics").eq("id", data.jobId).maybeSingle();
+    let jobRow: any = null;
+    const { data: rowWithCustom, error: jErr1 } = await supabase.from(JOBS)
+      .select("reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime, sort_mode, sort_topics, custom_instructions").eq("id", data.jobId).maybeSingle();
+    if (jErr1 && (jErr1.message?.includes("custom_instructions") || jErr1.code === "42703")) {
+      const { data: rowFallback } = await supabase.from(JOBS)
+        .select("reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime, sort_mode, sort_topics").eq("id", data.jobId).maybeSingle();
+      jobRow = rowFallback;
+    } else {
+      jobRow = rowWithCustom;
+    }
+
     const refBlock = buildReferenceBlock(jobRow?.reference_book);
     const resourceParts = await buildResourceParts(supabase, jobRow);
     const sortMode = String(jobRow?.sort_mode ?? "none");
@@ -587,6 +630,10 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
       : sortTopics.length
         ? `TOPIC — also return a "topic" field. Choose EXACTLY one name from this list (or "Other"):\n${sortTopics.map((t) => `- ${t}`).join("\n")}\n`
         : `TOPIC — also return a "topic" field: a short (1-3 words) sub-subject name for this question.\n`;
+    const customInstructions = String(jobRow?.custom_instructions ?? "").trim();
+    const customInstructionsBlock = customInstructions
+      ? `CRITICAL ADMINISTRATOR INSTRUCTIONS (STRICTLY ENFORCE):\n${customInstructions}\nYou MUST strictly follow these instructions when solving this question and writing the explanation.\n\n`
+      : "";
     const requests = todo.map((it: any) => {
       const opts = Array.isArray(it.options) ? it.options : [];
       const optText = opts.length
@@ -603,7 +650,7 @@ export const submitAqvAnswerBatch = createServerFn({ method: "POST" })
       return {
         request: {
           systemInstruction: { parts: [{ text: SOLVE_SYSTEM }] },
-          contents: [{ role: "user", parts: [...resourceParts, { text: `${refBlock}${resourceParts.length ? "RESOURCE RULE: Base the answer and explanation on the supplied source. If it does not contain enough evidence, return an error field instead of guessing.\n" : ""}${answerDirective}ANSWER MODE: ${it.answer_mode === "multiple" ? "MULTIPLE — select every correct numbered statement" : "SINGLE — select exactly one answer"}\n${comboBlock}${topicBlock}--- QUESTION ---\n${it.stem}\n\n${optText}\n--- END ---` }] }],
+          contents: [{ role: "user", parts: [...resourceParts, { text: `${refBlock}${resourceParts.length ? "RESOURCE RULE: Base the answer and explanation on the supplied source. If it does not contain enough evidence, return an error field instead of guessing.\n" : ""}${customInstructionsBlock}${answerDirective}ANSWER MODE: ${it.answer_mode === "multiple" ? "MULTIPLE — select every correct numbered statement" : "SINGLE — select exactly one answer"}\n${comboBlock}${topicBlock}--- QUESTION ---\n${it.stem}\n\n${optText}\n--- END ---` }] }],
           generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json" },
         },
         metadata: { key: `i-${it.id}` },
@@ -846,13 +893,50 @@ export const getAqvJob = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => JobInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
-    const [{ data: job, error: e1 }, { data: pages, error: e2 }, { data: items, error: e3 }] = await Promise.all([
-      supabase.from(JOBS).select("id, pdf_name, total_pages, stage, status, imported_count, error, course_id, group_id, subject_id, reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime, sort_mode, sort_topics, created_at").eq("id", data.jobId).single(),
-      supabase.from(PAGES).select("id, page_number, status, question_count, error").eq("job_id", data.jobId).order("page_number"),
-      supabase.from(ITEMS).select("id, item_index, number, stem, options, answer_mode, question_type, combo_sets, printed_choices, answer_letter, concept, explanation, summary_table, solved, imported, status, error, topic").eq("job_id", data.jobId).order("item_index"),
-    ]);
-    if (e1) throw e1; if (e2) throw e2; if (e3) throw e3;
-    return { job, pages: pages ?? [], items: items ?? [] };
+
+    let job: any = null;
+    const { data: j1, error: e1 } = await supabase.from(JOBS)
+      .select("id, pdf_name, total_pages, stage, status, imported_count, error, course_id, group_id, subject_id, reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime, sort_mode, sort_topics, custom_instructions, created_at").eq("id", data.jobId).single();
+    if (e1 && (e1.message?.includes("custom_instructions") || e1.code === "42703")) {
+      const { data: j2, error: e1Fb } = await supabase.from(JOBS)
+        .select("id, pdf_name, total_pages, stage, status, imported_count, error, course_id, group_id, subject_id, reference_book, resource_kind, resource_text, resource_url, resource_storage_path, resource_name, resource_mime, sort_mode, sort_topics, created_at").eq("id", data.jobId).single();
+      if (e1Fb) throw e1Fb;
+      job = j2;
+    } else if (e1) {
+      throw e1;
+    } else {
+      job = j1;
+    }
+
+    const { data: pages, error: e2 } = await supabase.from(PAGES)
+      .select("id, page_number, status, question_count, error").eq("job_id", data.jobId).order("page_number");
+    if (e2) throw e2;
+
+    let rawItems: any[] = [];
+    const { data: i1, error: e3 } = await supabase.from(ITEMS)
+      .select("id, item_index, number, stem, options, answer_mode, question_type, combo_sets, printed_choices, answer_letter, concept, explanation, summary_table, solved, imported, status, error, topic, detected_answer").eq("job_id", data.jobId).order("item_index");
+    if (e3 && (e3.message?.includes("detected_answer") || e3.code === "42703")) {
+      const { data: i2, error: e3Fb } = await supabase.from(ITEMS)
+        .select("id, item_index, number, stem, options, answer_mode, question_type, combo_sets, printed_choices, answer_letter, concept, explanation, summary_table, solved, imported, status, error, topic").eq("job_id", data.jobId).order("item_index");
+      if (e3Fb) throw e3Fb;
+      rawItems = i2 ?? [];
+    } else if (e3) {
+      throw e3;
+    } else {
+      rawItems = i1 ?? [];
+    }
+
+    const items = rawItems.map((it: any) => {
+      const highlighted = Array.isArray(it.options)
+        ? it.options.filter((o: any) => o.is_highlighted).map((o: any) => o.letter).join(",")
+        : null;
+      return {
+        ...it,
+        detected_answer: it.detected_answer || (highlighted || null),
+      };
+    });
+
+    return { job, pages: pages ?? [], items };
   });
 
 export const deleteAqvJob = createServerFn({ method: "POST" })
@@ -1225,3 +1309,246 @@ export const clearAqvJobAnswers = createServerFn({ method: "POST" })
     }
     return { success: true };
   });
+
+function cleanStemForDedup(raw: string): string {
+  if (!raw) return "";
+  let s = String(raw).trim().toLowerCase();
+  s = s.replace(/<[^>]+>/g, " ");
+  s = s.replace(/[*_~`#]/g, "");
+  s = s.replace(/^(?:(?:q|question)\s*\d+[\s.:)\-–—=]+|\d+[\s.:)\-–—=]+)/i, "");
+  s = s.replace(/\s+/g, " ").trim();
+  s = s.replace(/^[:;.,\-–—\s]+|[:;.,\-–—\s]+$/g, "");
+  return s;
+}
+
+export async function removeTypicalDuplicates(supabase: any, jobId: string): Promise<{ removedCount: number; remainingCount: number }> {
+  const { data: items, error } = await supabase.from(ITEMS)
+    .select("id, number, stem, options, answer_letter, item_index, solved")
+    .eq("job_id", jobId)
+    .order("item_index");
+  if (error || !items || items.length < 2) return { removedCount: 0, remainingCount: items?.length ?? 0 };
+
+  const seenSignatures = new Map<string, string>();
+  const duplicateIds: string[] = [];
+
+  for (const it of items) {
+    const stemNorm = cleanStemForDedup(it.stem);
+    const answerNorm = String(it.answer_letter || "").trim().toUpperCase();
+    const optsNorm = (Array.isArray(it.options) ? it.options : [])
+      .map((o: any) => `${o.letter}:${cleanStemForDedup(o.text || o.body || "")}`)
+      .sort()
+      .join("|");
+
+    // Typical duplicate signature: matching stem + answer + options
+    const signature = `${stemNorm}:::${answerNorm}:::${optsNorm}`;
+    if (seenSignatures.has(signature)) {
+      duplicateIds.push(it.id);
+    } else {
+      seenSignatures.set(signature, it.id);
+    }
+  }
+
+  if (duplicateIds.length > 0) {
+    for (let i = 0; i < duplicateIds.length; i += 50) {
+      const chunk = duplicateIds.slice(i, i + 50);
+      await supabase.from(ITEMS).delete().in("id", chunk);
+    }
+  }
+
+  return {
+    removedCount: duplicateIds.length,
+    remainingCount: items.length - duplicateIds.length,
+  };
+}
+
+// ---------------- 11. AI Custom Instructions ----------------
+
+export const setAqvCustomInstructions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    jobId: z.string().uuid(),
+    instructions: z.string().max(10000).nullable(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const text = data.instructions ? data.instructions.trim() : null;
+    try {
+      const { error } = await supabase.from(JOBS).update({ custom_instructions: text }).eq("id", data.jobId);
+      if (error) {
+        console.warn("Could not save custom_instructions directly to column:", error.message);
+      }
+    } catch (e: any) {
+      console.warn("Custom instructions column not ready yet:", e?.message);
+    }
+    return { instructions: text };
+  });
+
+// ---------------- 12. Answer key PDF OCR extraction ----------------
+
+export const extractAqvAnswerKeyFromPdf = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    jobId: z.string().uuid(),
+    pdfBase64: z.string().min(20).max(25_000_000),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const apiKey = await getGeminiKey(supabase);
+
+    const prompt = `You are an expert OCR and exam answer key reader.
+Extract all question numbers and their corresponding correct answer letter(s) from this answer key document.
+The document may be an image inside a PDF, a scanned document, a photo of an answer sheet, a printed table, or typed text.
+
+Return STRICT JSON only (no markdown fences, no backticks):
+{
+  "answers": [
+    { "number": "1", "letter": "A" },
+    { "number": "2", "letter": "B" }
+  ]
+}
+
+Rules:
+- Extract EVERY question number and answer choice present in the document.
+- Format the letter as standard uppercase letters: A, B, C, D, E...
+- If an answer is a combination or multiple letters (e.g. "1,2" or "A, B"), include them as "A,B" or "1,2".
+- Maintain exact question numbers as printed on the sheet (e.g., "1", "2", "3b", etc.).
+- If there is no question number, provide sequential numbers starting from 1.
+- Output strictly valid JSON.`;
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify({
+          contents: [{
+            role: "user",
+            parts: [
+              { inlineData: { mimeType: "application/pdf", data: data.pdfBase64 } },
+              { text: prompt },
+            ],
+          }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 8192, responseMimeType: "application/json" },
+        }),
+      },
+    );
+
+    const json = await res.json().catch(() => ({} as any));
+    if (!res.ok) throw new Error(`Reading answer key PDF failed (${res.status}): ${JSON.stringify(json?.error || json).slice(0, 300)}`);
+
+    const parsed = parseJsonObject(responseText(json));
+    const rawAnswers = Array.isArray(parsed?.answers) ? parsed.answers : (Array.isArray(parsed) ? parsed : []);
+    const parsedEntries: Array<{ number?: string; letter: string }> = [];
+
+    for (const a of rawAnswers) {
+      const letter = String(a?.letter || a?.answer || a?.choice || "").trim().toUpperCase();
+      const num = a?.number != null ? String(a.number).trim().replace(/^Q/i, "") : undefined;
+      if (letter) {
+        parsedEntries.push({ number: num, letter });
+      }
+    }
+
+    if (!parsedEntries.length) {
+      throw new Error("Could not detect any answers in the provided PDF. Ensure the PDF contains a clear answer key or table.");
+    }
+
+    const { data: items, error: iErr } = await supabase.from(ITEMS)
+      .select("id, number, item_index, options").eq("job_id", data.jobId).order("item_index");
+    if (iErr) throw iErr;
+    if (!items?.length) throw new Error("No questions found for this job.");
+
+    const itemsByNumber = new Map<string, any>();
+    const itemsByIndex = new Map<number, any>();
+    items.forEach((it: any) => {
+      if (it.number) itemsByNumber.set(String(it.number).trim(), it);
+      itemsByIndex.set(it.item_index, it);
+    });
+
+    let appliedCount = 0;
+    for (let i = 0; i < parsedEntries.length; i++) {
+      const entry = parsedEntries[i];
+      let targetItem = null;
+      if (entry.number && itemsByNumber.has(entry.number)) {
+        targetItem = itemsByNumber.get(entry.number);
+      } else if (entry.number && !isNaN(Number(entry.number))) {
+        const idx = Number(entry.number) - 1;
+        targetItem = itemsByIndex.get(idx);
+      } else if (i < items.length) {
+        targetItem = items[i];
+      }
+
+      if (targetItem) {
+        let options = targetItem.options;
+        const letter = entry.letter.toUpperCase();
+        if (Array.isArray(options)) {
+          const correctSet = new Set(letter.split(",").map((s) => s.trim()));
+          options = options.map((o: any) => ({
+            ...o,
+            is_correct: correctSet.has(o.letter),
+          }));
+        }
+        await supabase.from(ITEMS).update({
+          answer_letter: letter,
+          ...(options ? { options } : {}),
+        }).eq("id", targetItem.id);
+        appliedCount++;
+      }
+    }
+
+    return { totalParsed: parsedEntries.length, appliedCount };
+  });
+
+// ---------------- 13. Apply detected answers from PDF ----------------
+
+export const applyAqvDetectedAnswers = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => JobInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    let items: any[] = [];
+    const { data: i1, error: e1 } = await supabase.from(ITEMS)
+      .select("id, options, detected_answer").eq("job_id", data.jobId);
+    if (e1 && (e1.message?.includes("detected_answer") || e1.code === "42703")) {
+      const { data: i2, error: e2 } = await supabase.from(ITEMS)
+        .select("id, options").eq("job_id", data.jobId);
+      if (e2) throw e2;
+      items = i2 ?? [];
+    } else if (e1) {
+      throw e1;
+    } else {
+      items = i1 ?? [];
+    }
+
+    let appliedCount = 0;
+    for (const it of items) {
+      const opts = Array.isArray(it.options) ? it.options : [];
+      const highlightedLetters = opts.filter((o: any) => o.is_highlighted).map((o: any) => o.letter);
+      const detected = it.detected_answer || (highlightedLetters.length ? highlightedLetters.join(",") : null);
+      if (!detected) continue;
+
+      const letter = String(detected).trim().toUpperCase();
+      const correctSet = new Set(letter.split(",").map((s) => s.trim()));
+      const updatedOptions = opts.map((o: any) => ({
+        ...o,
+        is_correct: correctSet.has(o.letter),
+      }));
+
+      await supabase.from(ITEMS).update({
+        answer_letter: letter,
+        options: updatedOptions,
+      }).eq("id", it.id);
+      appliedCount++;
+    }
+    return { appliedCount };
+  });
+
+// ---------------- 14. Remove typical duplicate questions ----------------
+
+export const removeAqvDuplicateItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => JobInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    return await removeTypicalDuplicates(supabase, data.jobId);
+  });
+

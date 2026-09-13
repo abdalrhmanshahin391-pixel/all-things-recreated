@@ -246,6 +246,7 @@ export const classifyCourseQuestions = createServerFn({ method: "POST" })
         courseId: z.string().uuid(),
         subjectIds: z.array(z.string().uuid()).optional(),
         topics: z.array(z.string().min(1)).min(1),
+        sortingInstructions: z.string().max(5000).optional(),
       })
       .parse(d),
   )
@@ -304,6 +305,10 @@ export const classifyCourseQuestions = createServerFn({ method: "POST" })
     const topicClassification = new Map<string, string[]>();
     for (const t of allowedTopicNames) topicClassification.set(t, []);
 
+    const instructionsBlock = data.sortingInstructions?.trim()
+      ? `\nADMINISTRATOR SORTING INSTRUCTIONS (STRICTLY ENFORCE):\n${data.sortingInstructions.trim()}\n`
+      : "";
+
     // Batch questions into chunks of 35 to classify with Gemini
     const CHUNK_SIZE = 35;
     for (let i = 0; i < questions.length; i += CHUNK_SIZE) {
@@ -316,7 +321,7 @@ export const classifyCourseQuestions = createServerFn({ method: "POST" })
 Categorize each question into EXACTLY ONE best-fitting topic from this allowed list:
 ${topicsList.map((t, idx) => `${idx + 1}. ${t}`).join("\n")}
 - Other / Uncategorized
-
+${instructionsBlock}
 Return strict JSON:
 {
   "classifications": [
