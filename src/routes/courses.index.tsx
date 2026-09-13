@@ -25,6 +25,10 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { MedicalPageBackdrop } from "@/components/common/MedicalPageBackdrop";
 import { useAuth } from "@/hooks/useAuth";
 import { CourseCard } from "@/components/common/CourseCard";
+import {
+  fetchCourseSemestersMap,
+  enrichCoursesWithSemesters,
+} from "@/lib/course-semester-store";
 
 export const Route = createFileRoute("/courses/")({
   head: () => ({
@@ -104,13 +108,17 @@ function CoursesPage() {
         .eq("kind", "questions");
       // Courses flagged "admin only" in CoursesHub stay hidden from students.
       if (!isAdmin) query = query.eq("admin_only", false);
-      const { data, error } = await query.order("created_at", { ascending: true });
+      const [coursesRes, semMap] = await Promise.all([
+        query.order("created_at", { ascending: true }),
+        fetchCourseSemestersMap(),
+      ]);
       if (cancelled) return;
-      if (error) {
+      if (coursesRes.error) {
         setErrorMsg("load-error");
         setCourses([]);
       } else {
-        const list = (data as Course[]) ?? [];
+        const list = (coursesRes.data as Course[]) ?? [];
+        enrichCoursesWithSemesters(list, semMap);
         // Patch real counts from the DB so we never show stale 0 subjects / 0 questions.
         const ids = list.map((c) => c.id);
         if (ids.length > 0) {

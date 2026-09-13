@@ -38,6 +38,11 @@ import {
   autoReconcileCoursesToPaddle,
 } from "@/utils/payments.functions";
 import { toast } from "sonner";
+import {
+  fetchCourseSemestersMap,
+  enrichCoursesWithSemesters,
+  persistCourseSemester,
+} from "@/lib/course-semester-store";
 
 function CourseThumb({ value, className }: { value: string | null; className?: string }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -157,14 +162,19 @@ function AdminCoursesPage() {
   }, [loading, user, isAdmin]);
 
   async function refresh() {
-    const [c, u, e, un] = await Promise.all([
+    const [c, u, e, un, semMap] = await Promise.all([
       supabase.from("courses").select("*").order("created_at", { ascending: false }),
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("user_courses").select("id,user_id,course_id"),
       supabase.from("universities").select("id,name,short_name").eq("is_active", true).order("sort_order"),
+      fetchCourseSemestersMap(),
     ]);
     if (c.error) setError(c.error.message);
-    else setCourses((c.data as Course[]) ?? []);
+    else {
+      const list = (c.data as Course[]) ?? [];
+      enrichCoursesWithSemesters(list, semMap);
+      setCourses(list);
+    }
     if (!u.error) setUsers((u.data as Profile[]) ?? []);
     if (!e.error) setEnrollments((e.data as Enrollment[]) ?? []);
     if (!un.error) {
@@ -281,21 +291,29 @@ function AdminCoursesPage() {
       }
     }
 
-    let { error } = await (supabase.from("courses") as any).insert(payload);
+    let insertPayload = { ...payload };
+    let { data: insertedData, error } = await (supabase.from("courses") as any)
+      .insert(insertPayload)
+      .select("id")
+      .maybeSingle();
+
     if (error && (error.message?.toLowerCase().includes("semester") || (error as any).code === "PGRST204")) {
       console.warn("Retrying course insert without semester column (migration pending):", error);
-      const fallbackPayload = { ...payload };
-      delete fallbackPayload.semester;
-      const retry = await (supabase.from("courses") as any).insert(fallbackPayload);
+      delete insertPayload.semester;
+      const retry = await (supabase.from("courses") as any)
+        .insert(insertPayload)
+        .select("id")
+        .maybeSingle();
       if (!retry.error) {
         error = null;
-        toast.warning(
-          "Course created! Note: The 'semester' column needs to be added to your Supabase database in SQL Editor to store semester selections.",
-          { duration: 8000 }
-        );
+        insertedData = retry.data;
       } else {
         error = retry.error;
       }
+    }
+
+    if (!error && insertedData?.id && hasSemesterSupport(year, options) && semester) {
+      await persistCourseSemester(insertedData.id, semester);
     }
     setSubmitting(false);
     if (error) {
@@ -1102,6 +1120,13 @@ function EditCourseModal({
       } else {
         error = retry.error;
       }
+    }
+
+    const effectiveSem = hasSemesterSupport(year, options) ? (Number(semester) || null) : null;
+    try {
+      await persistCourseSemester(course.id, effectiveSem);
+    } catch (e) {
+      console.warn("persistCourseSemester failed:", e);
     }
 
     setSaving(false);

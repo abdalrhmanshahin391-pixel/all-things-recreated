@@ -25,6 +25,10 @@ import {
   hasSemesterSupport,
 } from "@/lib/course-options";
 import { useLang } from "@/components/LanguageProvider";
+import {
+  fetchCourseSemestersMap,
+  enrichCoursesWithSemesters,
+} from "@/lib/course-semester-store";
 
 export const Route = createFileRoute("/lectures/")({
   head: () => ({
@@ -81,18 +85,23 @@ function LecturesPage() {
       let query = supabase
         .from("courses")
         .select(
-          "id,title,year,semester,price,kind,image_url,published,currency,compare_at_price,discount_active,discount_ends_at,admin_only",
+          "id,title,year,price,kind,image_url,published,currency,compare_at_price,discount_active,discount_ends_at,admin_only",
         )
         .eq("published", true)
         .eq("kind", "lectures");
       if (!isAdmin) query = query.eq("admin_only", false);
-      const { data, error } = await query.order("created_at", { ascending: true });
+      const [coursesRes, semMap] = await Promise.all([
+        query.order("created_at", { ascending: true }),
+        fetchCourseSemestersMap(),
+      ]);
       if (cancelled) return;
-      if (error) {
+      if (coursesRes.error) {
         setErrorMsg("Couldn't load lectures. Please refresh.");
         setCourses([]);
       } else {
-        setCourses((data as Course[]) ?? []);
+        const list = (coursesRes.data as Course[]) ?? [];
+        enrichCoursesWithSemesters(list, semMap);
+        setCourses(list);
       }
       setLoading(false);
     })();
