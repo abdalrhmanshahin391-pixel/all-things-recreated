@@ -701,9 +701,12 @@ function QuestionGeneratorPage() {
         kind: stillFailed.length ? "error" : "ok",
         text: stillFailed.length
           ? `${added} question(s) saved. Stopped at: ${stoppedAt} — those parts could not be read even after splitting.`
-          : `${added} question${added === 1 ? "" : "s"} added. Total ready for review: ${collected.length}.`,
+          : runMode === "detect"
+            ? `${added} question${added === 1 ? "" : "s"} detected. Answers and explanations are not written yet.`
+            : `${added} question${added === 1 ? "" : "s"} added. Total ready for review: ${collected.length}.`,
       });
       toast.success(`Done — ${added} new question(s).`);
+      if (runMode === "detect") setAskSolve(true);
     }
   }
 
@@ -712,7 +715,74 @@ function QuestionGeneratorPage() {
     if (sourceKind === "text" && sourceText.trim().length < 40) { toast.error("Upload a PDF or paste some text first."); return; }
     const batches = buildBatches();
     if (!batches.length) { toast.error("Upload a PDF or paste some text first."); return; }
-    await runBatches(batches, true);
+    // OpenAI + "Extract & sort": first just detect the questions page by page,
+    // then ask whether they should be answered.
+    const runMode: RunMode = provider === "openai" && mode === "extract" ? "detect" : mode;
+    await runBatches(batches, true, runMode);
+  }
+
+  /** Answer the detected questions in small groups, keeping their wording. */
+  async function handleSolveDetected() {
+    if (!status?.saved) { toast.error(`Save your ${PROVIDER_LABEL[provider]} key first.`); return; }
+    const targets = items.filter((i) => i.selected);
+    if (!targets.length) { toast.error("Select at least one question first."); return; }
+    setAskSolve(false);
+    setSolving(true);
+    setRunResult(null);
+    const solveMode: RunMode = referenceText.trim().length > 200 ? "solve_ref" : "solve";
+    const GROUP = 5;
+    let solved = 0;
+    try {
+      for (let i = 0; i < targets.length; i += GROUP) {
+        const group = targets.slice(i, i + GROUP);
+        const asText = group
+          .map((it, n) =>
+            [`Q${n + 1}. ${it.stem}`, ...it.options.map((o) => `${o.letter}. ${o.body}`)].join("\n"),
+          )
+          .join("\n\n");
+        logLine(`Solving questions ${i + 1}-${i + group.length}…`);
+        const res: any = await runJob({
+          data: {
+            provider,
+            mode: solveMode,
+            text: asText,
+            referenceText: solveMode === "solve_ref" ? referenceText.slice(0, 120_000) : undefined,
+            notes: notes.trim() || undefined,
+            difficulty,
+            language,
+          },
+        });
+        const back: any[] = res?.questions ?? [];
+        setItems((prev) =>
+          prev.map((it) => {
+            const idx = group.findIndex((g) => g.key === it.key);
+            const q = idx >= 0 ? back[idx] : null;
+            if (!q) return it;
+            return {
+              ...it,
+              options: it.options.map((o, n) => ({
+                ...o,
+                is_correct: !!q.options?.[n]?.is_correct,
+                wrong_reason: String(q.options?.[n]?.wrong_reason ?? o.wrong_reason),
+              })),
+              correct_explanation: String(q.correct_explanation ?? it.correct_explanation),
+              reference_note: String(q.reference_note ?? it.reference_note),
+            };
+          }),
+        );
+        solved += Math.min(back.length, group.length);
+        logLine(`Answered ${Math.min(back.length, group.length)} question(s).`, "ok");
+      }
+      setRunResult({ kind: "ok", text: `${solved} question(s) answered with explanations.` });
+      toast.success(`Answered ${solved} question(s).`);
+    } catch (e) {
+      const msg = errText(e);
+      logLine(`Solving stopped: ${msg}`, "error");
+      setRunResult({ kind: "error", text: `Solving stopped: ${msg}` });
+      toast.error(msg);
+    } finally {
+      setSolving(false);
+    }
   }
 
 
