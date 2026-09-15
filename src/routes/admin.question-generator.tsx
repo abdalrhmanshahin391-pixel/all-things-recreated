@@ -57,6 +57,8 @@ const MODES = [
   { id: "solve", label: "Solve (no reference)", hint: "Answer from medical knowledge" },
 ] as const;
 type Mode = (typeof MODES)[number]["id"];
+/** Internal run modes — "detect" finds questions without answering them. */
+type RunMode = Mode | "detect";
 
 type Provider = "openai" | "gemini";
 type KeyStatus = { saved: boolean; masked: string; model: string; updatedAt?: string | null };
@@ -213,6 +215,9 @@ function QuestionGeneratorPage() {
   const [runLog, setRunLog] = useState<{ text: string; kind: "info" | "ok" | "error" }[]>([]);
   const [runResult, setRunResult] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [failedBatches, setFailedBatches] = useState<Batch[]>([]);
+  const [askSolve, setAskSolve] = useState(false);
+  const [solving, setSolving] = useState(false);
+  
 
   const [items, setItems] = useState<Item[]>([]);
 
@@ -466,7 +471,8 @@ function QuestionGeneratorPage() {
 
   function imageBatches(): Batch[] {
     const out: Batch[] = [];
-    const per = Math.max(1, Math.min(6, pagesPerCall));
+    // OpenAI reads one page per call so nothing is missed on long PDFs.
+    const per = provider === "openai" ? 1 : Math.max(1, Math.min(6, pagesPerCall));
     for (let i = 0; i < pageImages.length; i += per) {
       const slice = pageImages.slice(i, i + per);
       out.push({
@@ -483,11 +489,30 @@ function QuestionGeneratorPage() {
   }
 
   function textBatches(): Batch[] {
+    // OpenAI runs page by page so every page is detected on its own.
+    if (provider === "openai" && pageStarts.length > 1) return pageTextBatches();
     return chunkText(sourceText).map((p, i) => ({
       label: `Chunk ${i + 1}${pagesForRange(pageStarts, p.from, p.to, textPageNums)} · text`,
       piece: p,
       depth: 0,
     }));
+  }
+
+  /** One call per PDF page (text layer), using the recorded page start offsets. */
+  function pageTextBatches(): Batch[] {
+    const out: Batch[] = [];
+    for (let i = 0; i < pageStarts.length; i++) {
+      const from = pageStarts[i];
+      const to = i + 1 < pageStarts.length ? pageStarts[i + 1] : sourceText.length;
+      const text = sourceText.slice(from, to);
+      if (text.trim().length < 20) continue;
+      out.push({
+        label: `Page ${textPageNums[i] ?? i + 1} · text`,
+        piece: { text, from, to },
+        depth: 0,
+      });
+    }
+    return out;
   }
 
   function buildBatches(): Batch[] {
@@ -535,16 +560,18 @@ function QuestionGeneratorPage() {
   }
 
 
-  async function runBatches(initial: Batch[], keepExisting: boolean) {
+  async function runBatches(initial: Batch[], keepExisting: boolean, runMode: RunMode = mode) {
     if (!status?.saved) { toast.error(`Save your ${PROVIDER_LABEL[provider]} key first.`); return; }
     setRunning(true);
     setRunResult(null);
     setRunLog([]);
     setFailedBatches([]);
+    setAskSolve(false);
+    
     const textCount = initial.filter((b) => !b.images?.length).length;
     const imgCount = initial.length - textCount;
     logLine(
-      `Starting — ${initial.length} piece(s) (${textCount} text, ${imgCount} scanned), ${PROVIDER_LABEL[provider]} · ${status.model}, mode ${mode}.`,
+      `Starting — ${initial.length} piece(s) (${textCount} text, ${imgCount} scanned), ${PROVIDER_LABEL[provider]} · ${status.model}, mode ${runMode}.`,
     );
 
     const queue: Batch[] = [...initial];
@@ -569,12 +596,12 @@ function QuestionGeneratorPage() {
         const res: any = await runJob({
           data: {
             provider,
-            mode,
+            mode: runMode,
             text: b.piece?.text ?? "",
             images: b.images?.length ? b.images : undefined,
-            referenceText: mode === "solve_ref" ? referenceText.slice(0, 120_000) : undefined,
+            referenceText: runMode === "solve_ref" ? referenceText.slice(0, 120_000) : undefined,
             notes: `${notes}${avoidNote}`.trim() || undefined,
-            count: mode === "generate" ? count : undefined,
+            count: runMode === "generate" ? count : undefined,
             difficulty,
             language,
           },
@@ -679,9 +706,12 @@ function QuestionGeneratorPage() {
         kind: stillFailed.length ? "error" : "ok",
         text: stillFailed.length
           ? `${added} question(s) saved. Stopped at: ${stoppedAt} — those parts could not be read even after splitting.`
-          : `${added} question${added === 1 ? "" : "s"} added. Total ready for review: ${collected.length}.`,
+          : runMode === "detect"
+            ? `${added} question${added === 1 ? "" : "s"} detected. Answers and explanations are not written yet.`
+            : `${added} question${added === 1 ? "" : "s"} added. Total ready for review: ${collected.length}.`,
       });
       toast.success(`Done — ${added} new question(s).`);
+      if (runMode === "detect") setAskSolve(true);
     }
   }
 
@@ -690,7 +720,74 @@ function QuestionGeneratorPage() {
     if (sourceKind === "text" && sourceText.trim().length < 40) { toast.error("Upload a PDF or paste some text first."); return; }
     const batches = buildBatches();
     if (!batches.length) { toast.error("Upload a PDF or paste some text first."); return; }
-    await runBatches(batches, true);
+    // OpenAI + "Extract & sort": first just detect the questions page by page,
+    // then ask whether they should be answered.
+    const runMode: RunMode = provider === "openai" && mode === "extract" ? "detect" : mode;
+    await runBatches(batches, true, runMode);
+  }
+
+  /** Answer the detected questions in small groups, keeping their wording. */
+  async function handleSolveDetected() {
+    if (!status?.saved) { toast.error(`Save your ${PROVIDER_LABEL[provider]} key first.`); return; }
+    const targets = items.filter((i) => i.selected);
+    if (!targets.length) { toast.error("Select at least one question first."); return; }
+    setAskSolve(false);
+    setSolving(true);
+    setRunResult(null);
+    const solveMode: RunMode = referenceText.trim().length > 200 ? "solve_ref" : "solve";
+    const GROUP = 5;
+    let solved = 0;
+    try {
+      for (let i = 0; i < targets.length; i += GROUP) {
+        const group = targets.slice(i, i + GROUP);
+        const asText = group
+          .map((it, n) =>
+            [`Q${n + 1}. ${it.stem}`, ...it.options.map((o) => `${o.letter}. ${o.body}`)].join("\n"),
+          )
+          .join("\n\n");
+        logLine(`Solving questions ${i + 1}-${i + group.length}…`);
+        const res: any = await runJob({
+          data: {
+            provider,
+            mode: solveMode,
+            text: asText,
+            referenceText: solveMode === "solve_ref" ? referenceText.slice(0, 120_000) : undefined,
+            notes: notes.trim() || undefined,
+            difficulty,
+            language,
+          },
+        });
+        const back: any[] = res?.questions ?? [];
+        setItems((prev) =>
+          prev.map((it) => {
+            const idx = group.findIndex((g) => g.key === it.key);
+            const q = idx >= 0 ? back[idx] : null;
+            if (!q) return it;
+            return {
+              ...it,
+              options: it.options.map((o, n) => ({
+                ...o,
+                is_correct: !!q.options?.[n]?.is_correct,
+                wrong_reason: String(q.options?.[n]?.wrong_reason ?? o.wrong_reason),
+              })),
+              correct_explanation: String(q.correct_explanation ?? it.correct_explanation),
+              reference_note: String(q.reference_note ?? it.reference_note),
+            };
+          }),
+        );
+        solved += Math.min(back.length, group.length);
+        logLine(`Answered ${Math.min(back.length, group.length)} question(s).`, "ok");
+      }
+      setRunResult({ kind: "ok", text: `${solved} question(s) answered with explanations.` });
+      toast.success(`Answered ${solved} question(s).`);
+    } catch (e) {
+      const msg = errText(e);
+      logLine(`Solving stopped: ${msg}`, "error");
+      setRunResult({ kind: "error", text: `Solving stopped: ${msg}` });
+      toast.error(msg);
+    } finally {
+      setSolving(false);
+    }
   }
 
 
@@ -1092,6 +1189,38 @@ function QuestionGeneratorPage() {
             </button>
           </div>
           {reading && <p className="mt-2 text-xs text-muted-foreground">{reading}</p>}
+          {provider === "openai" && mode === "extract" && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              OpenAI reads one page per call and only finds the questions first — you will be asked
+              afterwards whether to answer them.
+            </p>
+          )}
+
+          {askSolve && (
+            <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border-2 border-primary/40 bg-primary/10 px-3 py-2 text-sm font-semibold">
+              <span>
+                {items.filter((i) => i.selected).length} question(s) found. Do you want the AI to
+                answer them and write the explanations now?
+              </span>
+              <button
+                type="button"
+                onClick={() => void handleSolveDetected()}
+                disabled={solving || running}
+                className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-primary-foreground disabled:opacity-50"
+              >
+                {solving ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
+                Yes, solve them
+              </button>
+              <button
+                type="button"
+                onClick={() => setAskSolve(false)}
+                className="rounded-lg border-2 border-border px-3 py-1.5 text-xs font-bold hover:bg-muted"
+              >
+                No, keep as is
+              </button>
+            </div>
+          )}
+
 
           {runResult && (
             <div

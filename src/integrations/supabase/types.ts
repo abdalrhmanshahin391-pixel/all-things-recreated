@@ -1279,7 +1279,6 @@ export type Database = {
           published: boolean
           questions_count_final: number
           questions_count_mid: number
-          semester: number | null
           show_on_home: boolean
           subjects_count: number
           title: string
@@ -1313,7 +1312,6 @@ export type Database = {
           published?: boolean
           questions_count_final?: number
           questions_count_mid?: number
-          semester?: number | null
           show_on_home?: boolean
           subjects_count?: number
           title: string
@@ -1347,7 +1345,6 @@ export type Database = {
           published?: boolean
           questions_count_final?: number
           questions_count_mid?: number
-          semester?: number | null
           show_on_home?: boolean
           subjects_count?: number
           title?: string

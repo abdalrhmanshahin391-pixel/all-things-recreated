@@ -34,7 +34,7 @@ export function defaultModelFor(provider: AiProvider) {
 
 export type InputImage = { mime: string; base64: string };
 
-export const QUESTION_MODES = ["extract", "generate", "solve_ref", "solve"] as const;
+export const QUESTION_MODES = ["extract", "detect", "generate", "solve_ref", "solve"] as const;
 export type QuestionMode = (typeof QUESTION_MODES)[number];
 
 export type GeneratedOption = {
@@ -129,6 +129,9 @@ export function buildQuestionPrompt(input: {
   switch (input.mode) {
     case "extract":
       task = `The ${src} already contains exam questions. Extract and clean EVERY question you find, split stem and options, mark the correct answer, and write the explanations. Do not invent extra questions.`;
+      break;
+    case "detect":
+      task = `The ${src} already contains exam questions. ONLY detect and transcribe them: copy every question stem and its options exactly as printed, in order. Do NOT answer them and do NOT write explanations — leave "correct_explanation" and every "wrong_reason" as "". If the source prints an answer key, mark that option as correct; otherwise mark the first option as correct as a placeholder. Do not invent extra questions.`;
       break;
     case "generate":
       task = `The ${src} is study material. Write ${input.count ?? 10} NEW multiple-choice questions from it, ${input.difficulty ?? "mixed"} difficulty, covering the important points.`;
