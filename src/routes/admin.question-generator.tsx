@@ -217,7 +217,7 @@ function QuestionGeneratorPage() {
   const [failedBatches, setFailedBatches] = useState<Batch[]>([]);
   const [askSolve, setAskSolve] = useState(false);
   const [solving, setSolving] = useState(false);
-  const lastRunMode = useRef<RunMode>("extract");
+  
 
   const [items, setItems] = useState<Item[]>([]);
 
