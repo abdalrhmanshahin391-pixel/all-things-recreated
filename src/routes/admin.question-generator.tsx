@@ -1189,6 +1189,38 @@ function QuestionGeneratorPage() {
             </button>
           </div>
           {reading && <p className="mt-2 text-xs text-muted-foreground">{reading}</p>}
+          {provider === "openai" && mode === "extract" && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              OpenAI reads one page per call and only finds the questions first — you will be asked
+              afterwards whether to answer them.
+            </p>
+          )}
+
+          {askSolve && (
+            <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border-2 border-primary/40 bg-primary/10 px-3 py-2 text-sm font-semibold">
+              <span>
+                {items.filter((i) => i.selected).length} question(s) found. Do you want the AI to
+                answer them and write the explanations now?
+              </span>
+              <button
+                type="button"
+                onClick={() => void handleSolveDetected()}
+                disabled={solving || running}
+                className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-primary-foreground disabled:opacity-50"
+              >
+                {solving ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
+                Yes, solve them
+              </button>
+              <button
+                type="button"
+                onClick={() => setAskSolve(false)}
+                className="rounded-lg border-2 border-border px-3 py-1.5 text-xs font-bold hover:bg-muted"
+              >
+                No, keep as is
+              </button>
+            </div>
+          )}
+
 
           {runResult && (
             <div
