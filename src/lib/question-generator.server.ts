@@ -34,7 +34,7 @@ export function defaultModelFor(provider: AiProvider) {
 
 export type InputImage = { mime: string; base64: string };
 
-export const QUESTION_MODES = ["extract", "generate", "solve_ref", "solve"] as const;
+export const QUESTION_MODES = ["extract", "detect", "generate", "solve_ref", "solve"] as const;
 export type QuestionMode = (typeof QUESTION_MODES)[number];
 
 export type GeneratedOption = {
