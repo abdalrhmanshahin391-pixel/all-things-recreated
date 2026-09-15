@@ -591,12 +591,12 @@ function QuestionGeneratorPage() {
         const res: any = await runJob({
           data: {
             provider,
-            mode,
+            mode: runMode,
             text: b.piece?.text ?? "",
             images: b.images?.length ? b.images : undefined,
-            referenceText: mode === "solve_ref" ? referenceText.slice(0, 120_000) : undefined,
+            referenceText: runMode === "solve_ref" ? referenceText.slice(0, 120_000) : undefined,
             notes: `${notes}${avoidNote}`.trim() || undefined,
-            count: mode === "generate" ? count : undefined,
+            count: runMode === "generate" ? count : undefined,
             difficulty,
             language,
           },
