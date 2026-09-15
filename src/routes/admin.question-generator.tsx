@@ -57,6 +57,8 @@ const MODES = [
   { id: "solve", label: "Solve (no reference)", hint: "Answer from medical knowledge" },
 ] as const;
 type Mode = (typeof MODES)[number]["id"];
+/** Internal run modes — "detect" finds questions without answering them. */
+type RunMode = Mode | "detect";
 
 type Provider = "openai" | "gemini";
 type KeyStatus = { saved: boolean; masked: string; model: string; updatedAt?: string | null };
