@@ -483,11 +483,30 @@ function QuestionGeneratorPage() {
   }
 
   function textBatches(): Batch[] {
+    // OpenAI runs page by page so every page is detected on its own.
+    if (provider === "openai" && pageStarts.length > 1) return pageTextBatches();
     return chunkText(sourceText).map((p, i) => ({
       label: `Chunk ${i + 1}${pagesForRange(pageStarts, p.from, p.to, textPageNums)} · text`,
       piece: p,
       depth: 0,
     }));
+  }
+
+  /** One call per PDF page (text layer), using the recorded page start offsets. */
+  function pageTextBatches(): Batch[] {
+    const out: Batch[] = [];
+    for (let i = 0; i < pageStarts.length; i++) {
+      const from = pageStarts[i];
+      const to = i + 1 < pageStarts.length ? pageStarts[i + 1] : sourceText.length;
+      const text = sourceText.slice(from, to);
+      if (text.trim().length < 20) continue;
+      out.push({
+        label: `Page ${textPageNums[i] ?? i + 1} · text`,
+        piece: { text, from, to },
+        depth: 0,
+      });
+    }
+    return out;
   }
 
   function buildBatches(): Batch[] {
