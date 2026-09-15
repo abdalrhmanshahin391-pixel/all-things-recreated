@@ -567,7 +567,7 @@ function QuestionGeneratorPage() {
     setRunLog([]);
     setFailedBatches([]);
     setAskSolve(false);
-    lastRunMode.current = runMode;
+    
     const textCount = initial.filter((b) => !b.images?.length).length;
     const imgCount = initial.length - textCount;
     logLine(
