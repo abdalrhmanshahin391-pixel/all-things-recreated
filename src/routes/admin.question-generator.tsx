@@ -555,16 +555,18 @@ function QuestionGeneratorPage() {
   }
 
 
-  async function runBatches(initial: Batch[], keepExisting: boolean) {
+  async function runBatches(initial: Batch[], keepExisting: boolean, runMode: RunMode = mode) {
     if (!status?.saved) { toast.error(`Save your ${PROVIDER_LABEL[provider]} key first.`); return; }
     setRunning(true);
     setRunResult(null);
     setRunLog([]);
     setFailedBatches([]);
+    setAskSolve(false);
+    lastRunMode.current = runMode;
     const textCount = initial.filter((b) => !b.images?.length).length;
     const imgCount = initial.length - textCount;
     logLine(
-      `Starting — ${initial.length} piece(s) (${textCount} text, ${imgCount} scanned), ${PROVIDER_LABEL[provider]} · ${status.model}, mode ${mode}.`,
+      `Starting — ${initial.length} piece(s) (${textCount} text, ${imgCount} scanned), ${PROVIDER_LABEL[provider]} · ${status.model}, mode ${runMode}.`,
     );
 
     const queue: Batch[] = [...initial];
