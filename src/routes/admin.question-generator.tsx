@@ -215,6 +215,9 @@ function QuestionGeneratorPage() {
   const [runLog, setRunLog] = useState<{ text: string; kind: "info" | "ok" | "error" }[]>([]);
   const [runResult, setRunResult] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [failedBatches, setFailedBatches] = useState<Batch[]>([]);
+  const [askSolve, setAskSolve] = useState(false);
+  const [solving, setSolving] = useState(false);
+  const lastRunMode = useRef<RunMode>("extract");
 
   const [items, setItems] = useState<Item[]>([]);
 
