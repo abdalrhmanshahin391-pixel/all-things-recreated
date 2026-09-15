@@ -466,7 +466,8 @@ function QuestionGeneratorPage() {
 
   function imageBatches(): Batch[] {
     const out: Batch[] = [];
-    const per = Math.max(1, Math.min(6, pagesPerCall));
+    // OpenAI reads one page per call so nothing is missed on long PDFs.
+    const per = provider === "openai" ? 1 : Math.max(1, Math.min(6, pagesPerCall));
     for (let i = 0; i < pageImages.length; i += per) {
       const slice = pageImages.slice(i, i + per);
       out.push({
