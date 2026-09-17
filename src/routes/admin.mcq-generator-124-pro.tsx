@@ -26,6 +26,8 @@ import {
   createOpenAiBatchExtraction124,
   checkOpenAiBatchStatus124,
   retrieveOpenAiBatchExtractionResults124,
+  createOpenAiBatchSolving124,
+  retrieveOpenAiBatchSolvingResults124,
 } from "@/lib/mcq-generator-124-pro.functions";
 import { renderPageToCanvas, canvasToJpegBase64 } from "@/lib/pdf-page-image";
 
@@ -129,11 +131,30 @@ export function McqGenerator124ProPage() {
   const [manualOptionText, setManualOptionText] = useState<string>("");
 
   // ── Stage 2: Solving State ────────────────────────────────────────────────
+  const [solveProcessingMode, setSolveProcessingMode] = useState<ProcessingMode>("standard");
   const [solveSource, setSolveSource] = useState<SolveSource>("ai");
   const [studyMaterialText, setStudyMaterialText] = useState<string>("");
   const [studyMaterialName, setStudyMaterialName] = useState<string>("");
   const [answerKeyText, setAnswerKeyText] = useState<string>("");
   const [isSolving, setIsSolving] = useState<boolean>(false);
+  const [isCreatingBatchSolve, setIsCreatingBatchSolve] = useState<boolean>(false);
+  const [batchSolveJob, setBatchSolveJob] = useState<{
+    batchId: string;
+    status: string;
+    totalQuestions: number;
+    requestCounts: { total: number; completed: number; failed: number };
+    outputFileId?: string | null;
+  } | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("mcq_124_pro_batch_solve_job");
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
   const [solveProgress, setSolveProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const [stage2Done, setStage2Done] = useState<boolean>(false);
 
@@ -173,6 +194,19 @@ export function McqGenerator124ProPage() {
   const createBatchExtractFn = useServerFn(createOpenAiBatchExtraction124);
   const checkBatchStatusFn = useServerFn(checkOpenAiBatchStatus124);
   const retrieveBatchResultsFn = useServerFn(retrieveOpenAiBatchExtractionResults124);
+  const createBatchSolveFn = useServerFn(createOpenAiBatchSolving124);
+  const retrieveBatchSolveResultsFn = useServerFn(retrieveOpenAiBatchSolvingResults124);
+
+  // Persist batch solve job
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (batchSolveJob) {
+        localStorage.setItem("mcq_124_pro_batch_solve_job", JSON.stringify(batchSolveJob));
+      } else {
+        localStorage.removeItem("mcq_124_pro_batch_solve_job");
+      }
+    }
+  }, [batchSolveJob]);
 
   // Save keys to local storage when changed
   useEffect(() => {
@@ -622,6 +656,11 @@ export function McqGenerator124ProPage() {
 
   // ── Start Stage 2 Solving & Explaining ────────────────────────────────────
   async function startSolving() {
+    if (solveProcessingMode === "batch") {
+      await handleStartBatchSolving();
+      return;
+    }
+
     const unapproved = extractedQuestions.filter((q) => q.isApproved === false && !q.isIgnored && !q.isDuplicate);
     if (unapproved.length > 0) {
       toast.info(`Skipping ${unapproved.length} unapproved/fragmented question(s). You can review/approve them in Phase 1.`);
@@ -700,6 +739,141 @@ export function McqGenerator124ProPage() {
     setIsSolving(false);
     setStage2Done(true);
     toast.success("Solving & AquavisionX Explanations complete!");
+  }
+
+  // ── Stage 2 Batch Solving Handlers (50% Cost Savings) ─────────────────────
+  async function handleStartBatchSolving() {
+    const unapproved = extractedQuestions.filter((q) => q.isApproved === false && !q.isIgnored && !q.isDuplicate);
+    if (unapproved.length > 0) {
+      toast.info(`Skipping ${unapproved.length} unapproved/fragmented question(s). You can review/approve them in Phase 1.`);
+    }
+
+    const active = extractedQuestions.filter((q) => !q.isIgnored && !q.isDuplicate && q.isApproved !== false);
+    if (active.length === 0) {
+      toast.error("No approved active questions to solve. Please approve or complete any pending questions.");
+      return;
+    }
+
+    if (!openaiKey?.trim()) {
+      toast.error("OpenAI API key required for Batch Solving API.");
+      return;
+    }
+
+    setIsCreatingBatchSolve(true);
+    toast.loading(`Creating OpenAI Batch Solving Job for ${active.length} questions (50% Cost Savings)...`, { id: "batch-solve-create" });
+
+    try {
+      const res: any = await createBatchSolveFn({
+        data: {
+          questions: active.map((q) => ({
+            id: q.id,
+            number: q.number,
+            stem: q.stem,
+            options: q.options,
+            detectedAnswer: q.detectedAnswer,
+          })),
+          sourceMethod: solveSource,
+          studyMaterialText,
+          studyMaterialName,
+          includeSourceCitation,
+          answerKeyText,
+          combinationMode: comboMode,
+          model: selectedModel,
+          openaiApiKey: openaiKey,
+        },
+      });
+
+      setBatchSolveJob({
+        batchId: res.batchId,
+        status: res.status,
+        totalQuestions: res.totalQuestions,
+        requestCounts: { total: res.totalQuestions, completed: 0, failed: 0 },
+      });
+
+      toast.success(`Batch Solving Job Submitted! Batch ID: ${res.batchId} (50% Discount Applied)`, { id: "batch-solve-create" });
+    } catch (err: any) {
+      toast.error(`Batch solve submission failed: ${err?.message || err}`, { id: "batch-solve-create" });
+    } finally {
+      setIsCreatingBatchSolve(false);
+    }
+  }
+
+  async function checkBatchSolveStatus() {
+    if (!batchSolveJob?.batchId) return;
+    try {
+      toast.loading("Checking Batch Solving status...", { id: "batch-solve-check" });
+      const res: any = await checkBatchStatusFn({
+        data: {
+          batchId: batchSolveJob.batchId,
+          openaiApiKey: openaiKey,
+        },
+      });
+
+      setBatchSolveJob((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: res.status,
+              requestCounts: res.requestCounts,
+              outputFileId: res.outputFileId,
+            }
+          : null
+      );
+
+      if (res.status === "completed") {
+        toast.success("Batch Solving Job Completed! Click 'Apply Solved Answers' to update workspace (50% Cost Saved).", { id: "batch-solve-check" });
+      } else {
+        toast.info(`Batch Status: ${res.status} (${res.requestCounts.completed}/${res.requestCounts.total} completed)`, { id: "batch-solve-check" });
+      }
+    } catch (err: any) {
+      toast.error(`Status check failed: ${err?.message || err}`, { id: "batch-solve-check" });
+    }
+  }
+
+  async function handleApplyBatchSolveResults() {
+    if (!batchSolveJob?.outputFileId) {
+      toast.error("No output file available yet. Batch is still processing.");
+      return;
+    }
+
+    try {
+      toast.loading("Retrieving and parsing batch solving results...", { id: "batch-solve-apply" });
+      const active = extractedQuestions.filter((q) => !q.isIgnored && !q.isDuplicate && q.isApproved !== false);
+      const res: any = await retrieveBatchSolveResultsFn({
+        data: {
+          outputFileId: batchSolveJob.outputFileId,
+          openaiApiKey: openaiKey,
+          questions: active.map((q) => ({ id: q.id, options: q.options })),
+        },
+      });
+
+      const resultMap = new Map<string, any>();
+      for (const r of res.results || []) {
+        resultMap.set(r.questionId, r);
+      }
+
+      setExtractedQuestions((prev) =>
+        prev.map((q) => {
+          const solved = resultMap.get(q.id);
+          if (!solved) return q;
+          return {
+            ...q,
+            selectedAnswer: solved.selectedAnswer,
+            options: solved.options,
+            concept: solved.concept,
+            sourceReference: solved.sourceReference,
+            explanation: solved.explanation,
+            summaryTable: solved.summaryTable,
+            solveStatus: "solved",
+          };
+        })
+      );
+
+      setStage2Done(true);
+      toast.success(`Successfully applied solved answers for ${res.results?.length || 0} questions (50% Cost Saved)!`, { id: "batch-solve-apply" });
+    } catch (err: any) {
+      toast.error(`Failed to apply batch results: ${err?.message || err}`, { id: "batch-solve-apply" });
+    }
   }
 
   // ── Start Stage 3 Import ──────────────────────────────────────────────────
@@ -1445,6 +1619,48 @@ export function McqGenerator124ProPage() {
                 <Cpu size={16} className="text-amber-400" /> Process 2: Answering & AquavisionX Explanation Engine
               </h3>
 
+              {/* Execution Mode Selector (Standard vs Batch API 50% Off) */}
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <div>
+                  <div className="text-xs font-bold text-white flex items-center gap-2">
+                    <span>Solving Execution Pipeline</span>
+                    {solveProcessingMode === "batch" && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-mono font-bold">
+                        50% Cost Savings
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {solveProcessingMode === "standard"
+                      ? "Sequential real-time solving. Live progress with immediate question updates."
+                      : "OpenAI Batch API (50% Cost Savings). Asynchronous background solving ideal for large exam banks."}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1.5 p-1 bg-slate-900 border border-slate-800 rounded-lg">
+                  <button
+                    onClick={() => setSolveProcessingMode("standard")}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      solveProcessingMode === "standard"
+                        ? "bg-slate-800 text-white shadow-sm"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Sparkles size={13} className="text-amber-400" /> Standard (Instant)
+                  </button>
+                  <button
+                    onClick={() => setSolveProcessingMode("batch")}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      solveProcessingMode === "batch"
+                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Flame size={13} className="text-amber-400" /> Batch API (50% Off)
+                  </button>
+                </div>
+              </div>
+
               <div className="grid md:grid-cols-3 gap-4 mb-6">
                 {/* Method A */}
                 <button
@@ -1551,11 +1767,20 @@ export function McqGenerator124ProPage() {
 
                 <div className="flex items-center gap-2">
                   <button
-                    disabled={isSolving || extractedQuestions.length === 0}
+                    disabled={isSolving || isCreatingBatchSolve || extractedQuestions.length === 0}
                     onClick={startSolving}
                     className="py-3 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-md disabled:opacity-50 flex items-center gap-2 transition-all"
                   >
-                    {isSolving ? (
+                    {isCreatingBatchSolve ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" />
+                        Submitting Batch Solving Job (50% Off)...
+                      </>
+                    ) : solveProcessingMode === "batch" ? (
+                      <>
+                        <Flame size={14} /> Launch Batch Solving (50% Cost Savings)
+                      </>
+                    ) : isSolving ? (
                       <>
                         <RefreshCw size={14} className="animate-spin" />
                         Solving Question {solveProgress.current} / {solveProgress.total}...
@@ -1567,7 +1792,7 @@ export function McqGenerator124ProPage() {
                     )}
                   </button>
 
-                  {isSolving && (
+                  {isSolving && solveProcessingMode === "standard" && (
                     <button
                       onClick={handleEmergencyStop}
                       className="px-4 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-all"
@@ -1579,6 +1804,96 @@ export function McqGenerator124ProPage() {
                 </div>
               </div>
             </div>
+
+            {/* Batch Solving Job Monitor (When a batch solve job is active) */}
+            {batchSolveJob && (
+              <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-6">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-mono font-bold uppercase flex items-center gap-1">
+                        <Flame size={10} /> OpenAI Batch Solving Job Active
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-slate-300">
+                        50% Cost Savings
+                      </span>
+                    </div>
+                    <h4 className="text-sm font-bold text-white mt-1.5 flex items-center gap-2">
+                      Batch ID: <span className="font-mono text-amber-400">{batchSolveJob.batchId}</span>
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Status:{" "}
+                      <strong
+                        className={`uppercase font-bold ${
+                          batchSolveJob.status === "completed"
+                            ? "text-emerald-400"
+                            : batchSolveJob.status === "failed"
+                            ? "text-red-400"
+                            : "text-amber-400"
+                        }`}
+                      >
+                        {batchSolveJob.status}
+                      </strong>{" "}
+                      · {batchSolveJob.requestCounts.completed} of {batchSolveJob.requestCounts.total} questions solved (50% price discount).
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={checkBatchSolveStatus}
+                      className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-all"
+                    >
+                      <RefreshCw size={12} /> Check Status
+                    </button>
+
+                    {batchSolveJob.status === "completed" && (
+                      <button
+                        onClick={handleApplyBatchSolveResults}
+                        className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md transition-all"
+                      >
+                        <CheckCircle2 size={14} /> Apply Solved Answers (50% Cost Saved)
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => setBatchSolveJob(null)}
+                      className="p-2 rounded-xl hover:bg-slate-800 text-slate-500 hover:text-slate-300 text-xs"
+                      title="Dismiss monitor"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                {batchSolveJob.requestCounts.total > 0 && (
+                  <div className="mt-4 pt-4 border-t border-slate-800/80">
+                    <div className="flex justify-between text-[11px] text-slate-400 mb-1">
+                      <span>Batch Solving Progress</span>
+                      <span>
+                        {Math.round((batchSolveJob.requestCounts.completed / batchSolveJob.requestCounts.total) * 100)}%
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-slate-950 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-500 ${
+                          batchSolveJob.status === "completed" ? "bg-emerald-500" : "bg-amber-500"
+                        }`}
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            Math.max(
+                              5,
+                              Math.round((batchSolveJob.requestCounts.completed / batchSolveJob.requestCounts.total) * 100)
+                            )
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Solved Questions List with AquavisionX Explanations */}
             {extractedQuestions.some((q) => q.solveStatus === "solved") && (

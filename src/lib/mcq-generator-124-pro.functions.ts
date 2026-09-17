@@ -589,17 +589,25 @@ const SolveQuestionInput = z.object({
   geminiApiKey: z.string().optional(),
 });
 
-export const solveAndExplain124 = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .validator((d: unknown) => SolveQuestionInput.parse(d))
-  .handler(async ({ data, context }) => {
-    await ensureAdmin(context);
+export function buildSolvePrompts124(params: {
+  question: {
+    number: number | string;
+    stem: string;
+    options: Array<{ letter: string; text: string }>;
+    detectedAnswer?: string | null;
+  };
+  sourceMethod: "ai" | "source_material" | "answer_key";
+  studyMaterialText?: string;
+  studyMaterialName?: string;
+  includeSourceCitation?: boolean;
+  answerKeyText?: string;
+  combinationMode: "mode1_keep_original" | "mode2_convert_multiple";
+}) {
+  const { question, sourceMethod, studyMaterialText, studyMaterialName, includeSourceCitation, answerKeyText, combinationMode } = params;
 
-    const { question, sourceMethod, studyMaterialText, studyMaterialName, includeSourceCitation, answerKeyText, combinationMode, model, openaiApiKey, geminiApiKey } = data;
-
-    let authorityPrompt = "";
-    if (sourceMethod === "source_material" && studyMaterialText) {
-      authorityPrompt = `PRIMARY AUTHORITY SOURCE DOCUMENT ("${studyMaterialName || "Reference Material"}"):
+  let authorityPrompt = "";
+  if (sourceMethod === "source_material" && studyMaterialText) {
+    authorityPrompt = `PRIMARY AUTHORITY SOURCE DOCUMENT ("${studyMaterialName || "Reference Material"}"):
 ${studyMaterialText.slice(0, 50000)}
 END OF AUTHORITY SOURCE.
 
@@ -615,15 +623,15 @@ ${
   [Exact section / page / chapter / quoted text reference from source]`
     : ""
 }`;
-    } else if (sourceMethod === "answer_key" && answerKeyText) {
-      authorityPrompt = `PROVIDED ANSWER KEY REFERENCE:
+  } else if (sourceMethod === "answer_key" && answerKeyText) {
+    authorityPrompt = `PROVIDED ANSWER KEY REFERENCE:
 ${answerKeyText.slice(0, 10000)}
 END OF ANSWER KEY.
 
 Use this answer key to identify the intended correct answer for Question #${question.number}.`;
-    }
+  }
 
-    const systemPrompt = `You are a world-class medical professor and examination tutor.
+  const systemPrompt = `You are a world-class medical professor and examination tutor.
 You will solve this medical MCQ and write a comprehensive, professional clinical explanation following the AquavisionX standard.
 
 ${authorityPrompt}
@@ -676,7 +684,7 @@ Return STRICT JSON:
   "summary_table": "| Option | Verdict | Medical Reason |\\n|---|---|---|\\n..."
 }`;
 
-    const userPrompt = `Question #${question.number}:
+  const userPrompt = `Question #${question.number}:
 ${question.stem}
 
 Options:
@@ -684,6 +692,54 @@ ${question.options.map((o) => `${o.letter}) ${o.text}`).join("\n")}
 ${question.detectedAnswer ? `\n(Physical page had detected mark: ${question.detectedAnswer})` : ""}
 
 Solve this question and generate the complete AquavisionX medical explanation and summary table.`;
+
+  return { systemPrompt, userPrompt };
+}
+
+export function parseSolvedQuestionOutput124(
+  questionId: string,
+  options: Array<{ letter: string; text: string; is_correct?: boolean }>,
+  rawOutput: string
+) {
+  const parsed = parseJsonObject(rawOutput);
+
+  const selectedLetters: string[] = Array.isArray(parsed?.correct_option_letters)
+    ? parsed.correct_option_letters.map((l: any) => String(l).toUpperCase())
+    : [String(parsed?.selected_answer || "A").trim().toUpperCase()];
+
+  const updatedOptions = options.map((o) => ({
+    ...o,
+    is_correct: selectedLetters.includes(o.letter.toUpperCase()),
+  }));
+
+  return {
+    questionId,
+    selectedAnswer: String(parsed?.selected_answer || selectedLetters.join(", ")),
+    options: updatedOptions,
+    concept: String(parsed?.concept || ""),
+    sourceReference: parsed?.source_reference ? String(parsed.source_reference) : undefined,
+    explanation: String(parsed?.explanation || ""),
+    summaryTable: String(parsed?.summary_table || ""),
+  };
+}
+
+export const solveAndExplain124 = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => SolveQuestionInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await ensureAdmin(context);
+
+    const { question, sourceMethod, studyMaterialText, studyMaterialName, includeSourceCitation, answerKeyText, combinationMode, model, openaiApiKey, geminiApiKey } = data;
+
+    const { systemPrompt, userPrompt } = buildSolvePrompts124({
+      question,
+      sourceMethod,
+      studyMaterialText,
+      studyMaterialName,
+      includeSourceCitation,
+      answerKeyText,
+      combinationMode,
+    });
 
     const rawOutput = await callUnifiedAi({
       model,
@@ -694,26 +750,7 @@ Solve this question and generate the complete AquavisionX medical explanation an
       jsonMode: true,
     });
 
-    const parsed = parseJsonObject(rawOutput);
-
-    const selectedLetters: string[] = Array.isArray(parsed?.correct_option_letters)
-      ? parsed.correct_option_letters.map((l: any) => String(l).toUpperCase())
-      : [String(parsed?.selected_answer || "A").trim().toUpperCase()];
-
-    const updatedOptions = question.options.map((o) => ({
-      ...o,
-      is_correct: selectedLetters.includes(o.letter.toUpperCase()),
-    }));
-
-    return {
-      questionId: question.id,
-      selectedAnswer: String(parsed?.selected_answer || selectedLetters.join(", ")),
-      options: updatedOptions,
-      concept: String(parsed?.concept || ""),
-      sourceReference: parsed?.source_reference ? String(parsed.source_reference) : undefined,
-      explanation: String(parsed?.explanation || ""),
-      summaryTable: String(parsed?.summary_table || ""),
-    };
+    return parseSolvedQuestionOutput124(question.id, question.options, rawOutput);
   });
 
 // ── 5. Batch API Handlers (50% Discount Asynchronous Mode) ────────────────────
@@ -881,6 +918,175 @@ export const retrieveOpenAiBatchExtractionResults124 = createServerFn({ method: 
 
     allQuestions.sort((a, b) => a.pageNumber - b.pageNumber);
     return { questions: allQuestions };
+  });
+
+// D. Create OpenAI Batch Solving Job (50% Discount)
+const CreateBatchSolvingInput = z.object({
+  questions: z.array(
+    z.object({
+      id: z.string(),
+      number: z.union([z.number(), z.string()]),
+      stem: z.string(),
+      options: z.array(z.object({ letter: z.string(), text: z.string() })),
+      detectedAnswer: z.string().nullable().optional(),
+    })
+  ),
+  sourceMethod: z.enum(["ai", "source_material", "answer_key"]),
+  studyMaterialText: z.string().optional(),
+  studyMaterialName: z.string().optional(),
+  includeSourceCitation: z.boolean().optional(),
+  answerKeyText: z.string().optional(),
+  combinationMode: z.enum(["mode1_keep_original", "mode2_convert_multiple"]),
+  model: z.string(),
+  openaiApiKey: z.string(),
+});
+
+export const createOpenAiBatchSolving124 = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => CreateBatchSolvingInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await ensureAdmin(context);
+
+    const {
+      questions,
+      sourceMethod,
+      studyMaterialText,
+      studyMaterialName,
+      includeSourceCitation,
+      answerKeyText,
+      combinationMode,
+      model,
+      openaiApiKey,
+    } = data;
+
+    const actualModel = model === "gpt-4.1-mini" ? "gpt-4o-mini" : model === "gpt-4.1" ? "gpt-4o" : model.startsWith("gpt") ? model : "gpt-4o-mini";
+
+    const jsonlLines = questions.map((q) => {
+      const { systemPrompt, userPrompt } = buildSolvePrompts124({
+        question: q,
+        sourceMethod,
+        studyMaterialText,
+        studyMaterialName,
+        includeSourceCitation,
+        answerKeyText,
+        combinationMode,
+      });
+
+      const lineObj = {
+        custom_id: `q-${q.id}`,
+        method: "POST",
+        url: "/v1/chat/completions",
+        body: {
+          model: actualModel,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.1,
+        },
+      };
+      return JSON.stringify(lineObj);
+    });
+
+    const jsonlContent = jsonlLines.join("\n");
+    const blob = new Blob([jsonlContent], { type: "application/jsonl" });
+    const formData = new FormData();
+    formData.append("purpose", "batch");
+    formData.append("file", blob, `batch-solve-${Date.now()}.jsonl`);
+
+    // 1. Upload File
+    const fileRes = await fetch("https://api.openai.com/v1/files", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${openaiApiKey}` },
+      body: formData,
+    });
+    const fileJson = await fileRes.json();
+    if (!fileRes.ok) throw new Error(`OpenAI file upload failed: ${fileJson?.error?.message || JSON.stringify(fileJson)}`);
+
+    const fileId = fileJson.id;
+
+    // 2. Create Batch Job
+    const batchRes = await fetch("https://api.openai.com/v1/batches", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        input_file_id: fileId,
+        endpoint: "/v1/chat/completions",
+        completion_window: "24h",
+      }),
+    });
+    const batchJson = await batchRes.json();
+    if (!batchRes.ok) throw new Error(`OpenAI batch creation failed: ${batchJson?.error?.message || JSON.stringify(batchJson)}`);
+
+    return {
+      batchId: batchJson.id as string,
+      status: batchJson.status as string,
+      totalQuestions: questions.length,
+      createdAt: new Date().toISOString(),
+    };
+  });
+
+// E. Retrieve Batch Solving Results (50% Discount)
+const RetrieveBatchSolvingInput = z.object({
+  outputFileId: z.string(),
+  openaiApiKey: z.string(),
+  questions: z.array(
+    z.object({
+      id: z.string(),
+      options: z.array(z.object({ letter: z.string(), text: z.string(), is_correct: z.boolean().optional() })),
+    })
+  ),
+});
+
+export const retrieveOpenAiBatchSolvingResults124 = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => RetrieveBatchSolvingInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await ensureAdmin(context);
+
+    const { outputFileId, openaiApiKey, questions } = data;
+    const res = await fetch(`https://api.openai.com/v1/files/${outputFileId}/content`, {
+      headers: { Authorization: `Bearer ${openaiApiKey}` },
+    });
+    if (!res.ok) throw new Error("Failed to download batch solving output file content.");
+
+    const text = await res.text();
+    const lines = text.split("\n").filter((l) => l.trim());
+
+    // Map questions by id for fast lookup
+    const qMap = new Map<string, Array<{ letter: string; text: string; is_correct?: boolean }>>();
+    for (const q of questions) {
+      qMap.set(q.id, q.options);
+    }
+
+    const results: Array<{
+      questionId: string;
+      selectedAnswer: string;
+      options: Array<{ letter: string; text: string; is_correct?: boolean }>;
+      concept: string;
+      sourceReference?: string;
+      explanation: string;
+      summaryTable: string;
+    }> = [];
+
+    for (const line of lines) {
+      try {
+        const item = JSON.parse(line);
+        const customId = String(item.custom_id || "");
+        const qId = customId.replace(/^q-/, "");
+        const options = qMap.get(qId) || [];
+
+        const bodyContent = item.response?.body?.choices?.[0]?.message?.content || "";
+        const parsedResult = parseSolvedQuestionOutput124(qId, options, bodyContent);
+        results.push(parsedResult);
+      } catch {}
+    }
+
+    return { results };
   });
 
 // ── 6. Direct Course Importer ─────────────────────────────────────────────────
