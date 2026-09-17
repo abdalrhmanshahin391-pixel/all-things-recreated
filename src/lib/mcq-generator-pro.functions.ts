@@ -9,6 +9,11 @@ import { z } from "zod";
 // ─── Supported models ────────────────────────────────────────────────────────
 
 const MODELS = {
+  "gemini-2.5-flash-lite": {
+    provider: "gemini" as const,
+    apiModel: "gemini-2.5-flash-lite",
+    label: "Gemini 2.5 Flash-Lite",
+  },
   "gemini-2.5-flash": {
     provider: "gemini" as const,
     apiModel: "gemini-2.5-flash",
@@ -39,7 +44,8 @@ export const MODEL_OPTIONS = Object.entries(MODELS).map(([id, m]) => ({
 
 type ModelId = keyof typeof MODELS;
 
-const ModelIdSchema = z.enum([
+export const ModelIdSchema = z.enum([
+  "gemini-2.5-flash-lite",
   "gemini-2.5-flash",
   "gemini-2.5-pro",
   "gemini-3.1-pro",
@@ -582,9 +588,7 @@ export const getMcqSession = createServerFn({ method: "POST" })
 
     const { data: questions, error: qErr } = await supabase
       .from(QUESTIONS_TABLE)
-      .select(
-        "id, page_number, question_number, stem, options, question_type, needs_manual_options, options_generated_by_ai, is_duplicate, duplicate_of_id, review_status, sort_order",
-      )
+      .select("*")
       .eq("session_id", data.sessionId)
       .order("sort_order", { ascending: true });
     if (qErr) throw qErr;
@@ -708,6 +712,29 @@ const ImportInput = z.object({
   // if questionIds omitted, imports ALL accepted questions
 });
 
+function isOptionSelected(letter: string, body: string, selectedAnswer: any): boolean {
+  if (selectedAnswer == null) return false;
+  const normLetter = letter.trim().toUpperCase();
+  const normBody = body.trim().toLowerCase();
+
+  if (Array.isArray(selectedAnswer)) {
+    return selectedAnswer.some((item) => {
+      const s = String(item).trim();
+      return s.toUpperCase() === normLetter || s.toLowerCase() === normBody;
+    });
+  }
+
+  const s = String(selectedAnswer).trim();
+  if (s.toUpperCase() === normLetter) return true;
+  if (s.toLowerCase() === normBody) return true;
+
+  const cleanS = s.replace(/[\s,]+/g, "").toUpperCase();
+  const cleanBody = body.replace(/[\s,]+/g, "").toUpperCase();
+  if (cleanS && cleanBody && cleanS === cleanBody) return true;
+
+  return false;
+}
+
 export const importSessionQuestions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ImportInput.parse(d))
@@ -717,7 +744,7 @@ export const importSessionQuestions = createServerFn({ method: "POST" })
     // Build query for questions to import
     let qQuery = supabase
       .from(QUESTIONS_TABLE)
-      .select("id, stem, options, question_type")
+      .select("id, stem, options, question_type, selected_answer, answer_text, source_reference")
       .eq("session_id", data.sessionId)
       .eq("review_status", "accepted")
       .order("sort_order", { ascending: true });
@@ -774,14 +801,18 @@ export const importSessionQuestions = createServerFn({ method: "POST" })
           continue;
         }
 
-        // Insert options
+        // Insert options with is_correct determined from Phase 2 selected_answer
         const opts: any[] = Array.isArray(q.options) ? q.options : [];
         if (opts.length > 0) {
           const optRows = opts.map((o: any, idx: number) => ({
             question_id: qRow.id,
             label: String(o?.letter ?? "").toUpperCase().slice(0, 3),
             text: String(o?.body ?? "").trim() || null,
-            is_correct: false, // Phase 1: no answer solving yet
+            is_correct: isOptionSelected(
+              String(o?.letter ?? ""),
+              String(o?.body ?? ""),
+              q.selected_answer
+            ),
             sort_order: idx + 1,
           }));
           const { error: oErr } = await supabase
@@ -821,3 +852,762 @@ export const getMcqKeyStatus = createServerFn({ method: "GET" })
       hasOpenAI: providers.has("openai"),
     };
   });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PHASE 2 — MCQ ANSWERING / SOLVING
+// ═════════════════════════════════════════════════════════════════════════════
+
+async function callGeminiText(
+  apiKey: string,
+  modelName: string,
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<string> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+  const body = {
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: userPrompt }],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 4096,
+      responseMimeType: "application/json",
+    },
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({} as any));
+  if (!res.ok) {
+    throw new Error(
+      `Gemini API error (${res.status}): ${JSON.stringify(json?.error || json).slice(0, 400)}`,
+    );
+  }
+  return json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+}
+
+async function callOpenAIText(
+  apiKey: string,
+  modelName: string,
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<string> {
+  const body = {
+    model: modelName === "gpt-4o" ? "gpt-4o" : "gpt-4o-mini",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    max_tokens: 4096,
+    temperature: 0.1,
+    response_format: { type: "json_object" },
+  };
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({} as any));
+  if (!res.ok) {
+    throw new Error(
+      `OpenAI API error (${res.status}): ${JSON.stringify(json?.error || json).slice(0, 400)}`,
+    );
+  }
+  return json?.choices?.[0]?.message?.content ?? "";
+}
+
+const PHASE2_SOLVER_SYSTEM = `You are an expert exam solver. You are given ONE multiple-choice question: its stem, all answer options, and its question type.
+
+YOUR ONLY TASK: Determine the correct answer from the provided options.
+
+CRITICAL RULES:
+1. STRICTLY CHOOSE FROM AVAILABLE OPTIONS:
+   - You MUST pick an answer that is present in the provided options list.
+   - NEVER invent a new option. NEVER output an option letter that does not exist in the options list.
+2. QUESTION TYPES:
+   - "single_choice" (including original combination MCQ where options are e.g. A) 1,2 B) 1,4 C) 1,2,3):
+     Return the EXACT letter (e.g. "A", "B", "C", "D") of the correct option in "selected_answer", and the verbatim option text in "answer_text".
+   - "multiple_answer" (converted individual statements):
+     Return an array of the letters corresponding to ALL correct statements in "selected_answer" (e.g. ["A", "C"]), and array of their texts in "answer_text".
+3. ABSOLUTELY NO EXPLANATIONS:
+   - Do NOT write detailed explanations.
+   - Do NOT write why other options are wrong.
+   - Do NOT provide clinical pearls or educational summaries.
+   - You may only include a very short 1-2 sentence "brief_reasoning" for internal record.
+4. UNCERTAINTY & MISSING EVIDENCE:
+   - Do NOT guess or hallucinate certainty.
+   - If the question is ambiguous, stem is incomplete, or options are insufficient, set "needs_review": true and provide a clear explanation in "review_reason".
+   - If study material is provided, answer ONLY if supported by the material. If not found in the material, set "needs_review": true and explain in "review_reason".
+   - When using study material, cite the location (page, chapter, or section) in "source_reference".
+
+Return STRICT JSON only:
+{
+  "selected_answer": "C",
+  "answer_text": "Option text",
+  "confidence": "high",
+  "needs_review": false,
+  "review_reason": null,
+  "source_reference": null,
+  "brief_reasoning": "≤2 sentences rationale"
+}`;
+
+function validateAnswerSelection(
+  rawAnswer: any,
+  options: Array<{ letter: string; body: string }>,
+  questionType: "single_choice" | "multiple_answer"
+): {
+  valid: boolean;
+  selectedAnswer: any;
+  answerText: any;
+  errorReason?: string;
+} {
+  const optsByLetter = new Map<string, string>();
+  const optsByBody = new Map<string, string>();
+
+  for (const opt of options) {
+    const l = String(opt.letter || "").trim().toUpperCase();
+    const b = String(opt.body || "").trim();
+    if (l) {
+      optsByLetter.set(l, b);
+      if (b) optsByBody.set(b.toLowerCase(), l);
+    }
+  }
+
+  if (questionType === "multiple_answer") {
+    const arr = Array.isArray(rawAnswer) ? rawAnswer : [rawAnswer];
+    const resolvedLetters: string[] = [];
+    const resolvedTexts: string[] = [];
+
+    for (const item of arr) {
+      const s = String(item || "").trim();
+      const upper = s.toUpperCase();
+      if (optsByLetter.has(upper)) {
+        resolvedLetters.push(upper);
+        resolvedTexts.push(optsByLetter.get(upper)!);
+      } else if (optsByBody.has(s.toLowerCase())) {
+        const letter = optsByBody.get(s.toLowerCase())!;
+        resolvedLetters.push(letter);
+        resolvedTexts.push(optsByLetter.get(letter)!);
+      } else {
+        return {
+          valid: false,
+          selectedAnswer: arr,
+          answerText: null,
+          errorReason: `Selected answer statement "${s}" does not match any valid option`,
+        };
+      }
+    }
+
+    if (resolvedLetters.length === 0) {
+      return {
+        valid: false,
+        selectedAnswer: [],
+        answerText: [],
+        errorReason: "No valid statement options were selected",
+      };
+    }
+
+    return {
+      valid: true,
+      selectedAnswer: resolvedLetters,
+      answerText: resolvedTexts,
+    };
+  }
+
+  // Single choice
+  const s = String(rawAnswer ?? "").trim();
+  const upper = s.toUpperCase();
+
+  if (optsByLetter.has(upper)) {
+    return {
+      valid: true,
+      selectedAnswer: upper,
+      answerText: optsByLetter.get(upper)!,
+    };
+  }
+
+  if (optsByBody.has(s.toLowerCase())) {
+    const letter = optsByBody.get(s.toLowerCase())!;
+    return {
+      valid: true,
+      selectedAnswer: letter,
+      answerText: optsByLetter.get(letter)!,
+    };
+  }
+
+  // Combination format check: e.g. "1,2,3" against "1, 2, 3"
+  const cleanS = s.replace(/[\s,]+/g, "").toUpperCase();
+  for (const [letter, body] of optsByLetter.entries()) {
+    const cleanBody = body.replace(/[\s,]+/g, "").toUpperCase();
+    if (cleanS && cleanBody && cleanS === cleanBody) {
+      return {
+        valid: true,
+        selectedAnswer: letter,
+        answerText: body,
+      };
+    }
+  }
+
+  const validLetters = [...optsByLetter.keys()].join(", ");
+  return {
+    valid: false,
+    selectedAnswer: s,
+    answerText: null,
+    errorReason: `Selected answer "${s}" does not match any available option (${validLetters || "None"})`,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 13. initiateAnsweringSession
+// ─────────────────────────────────────────────────────────────────────────────
+
+const InitiateAnsweringInput = z.object({
+  sessionId: z.string().uuid(),
+  method: z.enum(["ai", "study_material", "user_answer_key"]),
+  model: ModelIdSchema.optional(),
+  instructions: z.string().max(4000).optional(),
+  studyMaterialName: z.string().max(300).optional(),
+  studyMaterialText: z.string().max(100_000).optional(),
+});
+
+export const initiateAnsweringSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => InitiateAnsweringInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+
+    const modelDef = data.model ? MODELS[data.model] : null;
+
+    const { error } = await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        answering_method: data.method,
+        answering_model: data.model ?? null,
+        answering_provider: modelDef?.provider ?? null,
+        answering_instructions: data.instructions ?? null,
+        study_material_name: data.studyMaterialName ?? null,
+        study_material_text: data.studyMaterialText ?? null,
+        answering_status: "running",
+      })
+      .eq("id", data.sessionId);
+
+    if (error) throw error;
+    return { ok: true };
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 14. solveSingleQuestion (Method A & B)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SolveQuestionInput = z.object({
+  sessionId: z.string().uuid(),
+  questionId: z.string().uuid(),
+  method: z.enum(["ai", "study_material"]),
+  model: ModelIdSchema,
+  instructions: z.string().max(4000).optional(),
+  studyMaterialText: z.string().max(100_000).optional(),
+});
+
+export const solveSingleQuestion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SolveQuestionInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+
+    // Fetch the question
+    const { data: q, error: qErr } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id, stem, options, question_type, question_number")
+      .eq("id", data.questionId)
+      .single();
+
+    if (qErr || !q) throw new Error("Question not found");
+
+    const modelDef = MODELS[data.model];
+    if (!modelDef) throw new Error(`Unknown model: ${data.model}`);
+
+    const optionsList: Array<{ letter: string; body: string }> = Array.isArray(q.options)
+      ? q.options
+      : [];
+
+    // Format options for the prompt
+    const formattedOptions = optionsList
+      .map((o) => `  ${o.letter}) ${o.body}`)
+      .join("\n");
+
+    let userPrompt = `QUESTION:
+${q.stem}
+
+AVAILABLE OPTIONS:
+${formattedOptions}
+
+QUESTION TYPE:
+${q.question_type || "single_choice"}
+`;
+
+    if (data.method === "study_material" && data.studyMaterialText?.trim()) {
+      userPrompt = `STUDY MATERIAL / REFERENCE CONTEXT:
+"""
+${data.studyMaterialText.trim().slice(0, 100_000)}
+"""
+
+${userPrompt}
+INSTRUCTION FOR METHOD B: Answer strictly according to the study material above. Cite the section/page in "source_reference". If not covered, set needs_review: true.
+`;
+    }
+
+    if (data.instructions?.trim()) {
+      userPrompt += `\nADDITIONAL USER SOLVING INSTRUCTIONS:\n${data.instructions.trim()}\n`;
+    }
+
+    userPrompt += `\nDetermine the correct answer and return STRICT JSON per system prompt.`;
+
+    let rawOutput = "";
+    try {
+      if (modelDef.provider === "gemini") {
+        const apiKey = await getGeminiKey(supabase);
+        rawOutput = await callGeminiText(
+          apiKey,
+          modelDef.apiModel,
+          PHASE2_SOLVER_SYSTEM,
+          userPrompt
+        );
+      } else {
+        const apiKey = await getOpenAIKey(supabase);
+        rawOutput = await callOpenAIText(
+          apiKey,
+          modelDef.apiModel,
+          PHASE2_SOLVER_SYSTEM,
+          userPrompt
+        );
+      }
+    } catch (apiErr: any) {
+      // Record failure on question
+      await supabase
+        .from(QUESTIONS_TABLE)
+        .update({
+          answering_status: "failed",
+          needs_review: true,
+          review_reason: `AI API error: ${apiErr?.message || String(apiErr)}`,
+        })
+        .eq("id", data.questionId);
+      throw apiErr;
+    }
+
+    const parsed = extractJson(rawOutput) || {};
+    const validation = validateAnswerSelection(
+      parsed.selected_answer,
+      optionsList,
+      q.question_type || "single_choice"
+    );
+
+    let needsReview = Boolean(parsed.needs_review);
+    let reviewReason = parsed.review_reason ? String(parsed.review_reason).trim() : null;
+
+    if (!validation.valid) {
+      needsReview = true;
+      reviewReason = validation.errorReason || "AI answer does not match any available option";
+    }
+
+    const confidence = ["high", "medium", "low"].includes(String(parsed.confidence).toLowerCase())
+      ? (String(parsed.confidence).toLowerCase() as "high" | "medium" | "low")
+      : "medium";
+
+    const updatePayload: Record<string, any> = {
+      answer_source: data.method,
+      selected_answer: validation.selectedAnswer,
+      answer_text: validation.answerText,
+      confidence,
+      needs_review: needsReview,
+      review_reason: reviewReason,
+      source_reference: parsed.source_reference ? String(parsed.source_reference).trim() : null,
+      answering_model: data.model,
+      answering_provider: modelDef.provider,
+      answering_instructions: data.instructions ?? null,
+      answering_status: needsReview ? "needs_review" : "answered",
+      internal_reasoning: parsed.brief_reasoning ? String(parsed.brief_reasoning).trim().slice(0, 500) : null,
+      answered_at: new Date().toISOString(),
+    };
+
+    const { error: updErr } = await supabase
+      .from(QUESTIONS_TABLE)
+      .update(updatePayload)
+      .eq("id", data.questionId);
+
+    if (updErr) throw updErr;
+
+    // Recalculate session counters
+    const { count: answeredCount } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId)
+      .in("answering_status", ["answered", "needs_review"]);
+
+    const { count: reviewCount } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId)
+      .eq("needs_review", true);
+
+    await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        total_answered: answeredCount ?? 0,
+        total_needs_review: reviewCount ?? 0,
+      })
+      .eq("id", data.sessionId);
+
+    return {
+      questionId: data.questionId,
+      selectedAnswer: validation.selectedAnswer,
+      needsReview,
+      reviewReason,
+      confidence,
+    };
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 15. parseAnswerKeyPdf (Method C PDF OCR)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const parseAnswerKeyPdf = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    pdfBase64: z.string().min(20).max(25_000_000),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const apiKey = await getGeminiKey(supabase);
+
+    const prompt = `You are an expert OCR engine for exam answer keys.
+Extract all question numbers and their corresponding correct answer letter(s) or combination(s) from this answer key document.
+Return STRICT JSON only:
+{
+  "answers": [
+    { "number": "1", "letter": "A" },
+    { "number": "2", "letter": "B" },
+    { "number": "3", "letter": "1,2,3" }
+  ]
+}
+Rules:
+- Extract EVERY question number and answer choice.
+- Keep exact question numbers (e.g. 1, 2, 3, etc.).
+- Maintain combinations verbatim (e.g. "1,2" or "1,2,3" or "A,C").
+- Output STRICT JSON only.`;
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify({
+          contents: [{
+            role: "user",
+            parts: [
+              { inlineData: { mimeType: "application/pdf", data: data.pdfBase64 } },
+              { text: prompt },
+            ],
+          }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 8192, responseMimeType: "application/json" },
+        }),
+      },
+    );
+
+    const json = await res.json().catch(() => ({} as any));
+    if (!res.ok) throw new Error(`Answer key PDF OCR failed: ${JSON.stringify(json?.error || json).slice(0, 300)}`);
+
+    const raw = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const parsed = extractJson(raw);
+    const answers = Array.isArray(parsed?.answers) ? parsed.answers : (Array.isArray(parsed) ? parsed : []);
+
+    const entries: Array<{ number?: string; letter: string }> = [];
+    for (const a of answers) {
+      const letter = String(a?.letter || a?.answer || a?.choice || "").trim().toUpperCase();
+      const num = a?.number != null ? String(a.number).trim().replace(/^Q/i, "") : undefined;
+      if (letter) {
+        entries.push({ number: num, letter });
+      }
+    }
+
+    return { entries };
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 16. parseAnswerKeyEntries (Text parsing helper)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function parseAnswerKeyEntries(text: string): Array<{ number?: string; letter: string }> {
+  const lines = text.split(/[\r\n]+/);
+  const entries: Array<{ number?: string; letter: string }> = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // Pattern 1: explicit number + letter / combination e.g. "1. A", "1: A,B", "Q12 - 1,2,3", "47. C"
+    const explicitNumbered = [...line.matchAll(/(?:^|[\s,;])(?:Q|Question|q)?\s*(\d+)[\s.:)\-–—=]+([A-Za-z0-9,\s]+)/g)];
+    if (explicitNumbered.length > 0) {
+      for (const m of explicitNumbered) {
+        const val = m[2].trim().replace(/\s*,\s*/g, ",");
+        if (/^[A-Za-z0-9,]+$/.test(val)) {
+          entries.push({
+            number: m[1],
+            letter: val.toUpperCase(),
+          });
+        }
+      }
+      continue;
+    }
+
+    // Pattern 2: Single line item e.g. "A", "C", "A,B", "1,2,3"
+    if (/^[A-Za-z0-9,\s]+$/.test(line)) {
+      const val = line.replace(/\s*,\s*/g, ",").toUpperCase();
+      if (val.length <= 15) {
+        entries.push({ letter: val });
+        continue;
+      }
+    }
+
+    // Fallback: match any number + letter
+    const fallback = line.match(/(?:(?:Q|Question|q)?\s*(\d+)[\s.:)\-–—=]+)?([A-Za-z])/i);
+    if (fallback) {
+      entries.push({
+        number: fallback[1] || undefined,
+        letter: fallback[2].toUpperCase(),
+      });
+    }
+  }
+
+  return entries;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 17. applyAnswerKeyBatch (Method C mapping without re-solving)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ApplyAnswerKeyInput = z.object({
+  sessionId: z.string().uuid(),
+  entries: z.array(
+    z.object({
+      number: z.string().optional(),
+      letter: z.string().min(1),
+    })
+  ).min(1).max(2000),
+});
+
+export const applyAnswerKeyBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ApplyAnswerKeyInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+
+    // Fetch all questions for this session
+    const { data: questions, error: qErr } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id, stem, options, question_type, question_number, sort_order")
+      .eq("session_id", data.sessionId)
+      .order("sort_order", { ascending: true });
+
+    if (qErr || !questions) throw new Error("Could not load questions for session");
+
+    // Index questions by printed question_number and by array index
+    const qByNumber = new Map<string, any>();
+    questions.forEach((q, idx) => {
+      if (q.question_number != null) {
+        qByNumber.set(String(q.question_number), q);
+      }
+    });
+
+    let appliedCount = 0;
+    let needsReviewCount = 0;
+
+    for (let i = 0; i < data.entries.length; i++) {
+      const entry = data.entries[i];
+      let targetQ = null;
+
+      if (entry.number && qByNumber.has(entry.number)) {
+        targetQ = qByNumber.get(entry.number);
+      } else if (entry.number && !isNaN(Number(entry.number))) {
+        const idx = Number(entry.number) - 1;
+        targetQ = questions[idx] || null;
+      } else if (i < questions.length) {
+        targetQ = questions[i];
+      }
+
+      if (!targetQ) continue;
+
+      const optionsList = Array.isArray(targetQ.options) ? targetQ.options : [];
+      const validation = validateAnswerSelection(
+        entry.letter,
+        optionsList,
+        targetQ.question_type || "single_choice"
+      );
+
+      const needsReview = !validation.valid;
+      if (needsReview) needsReviewCount++;
+
+      await supabase
+        .from(QUESTIONS_TABLE)
+        .update({
+          answer_source: "user_answer_key",
+          selected_answer: validation.selectedAnswer,
+          answer_text: validation.answerText,
+          confidence: "high",
+          needs_review: needsReview,
+          review_reason: needsReview
+            ? (validation.errorReason || "Answer key does not match question options")
+            : null,
+          answering_status: needsReview ? "needs_review" : "answered",
+          answered_at: new Date().toISOString(),
+        })
+        .eq("id", targetQ.id);
+
+      appliedCount++;
+    }
+
+    // Update session status & counters
+    await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        answering_method: "user_answer_key",
+        answering_status: "completed",
+        total_answered: appliedCount,
+        total_needs_review: needsReviewCount,
+      })
+      .eq("id", data.sessionId);
+
+    return { appliedCount, totalEntries: data.entries.length, needsReviewCount };
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 18. updateQuestionAnswerManual (Admin manual edit)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const UpdateManualAnswerInput = z.object({
+  questionId: z.string().uuid(),
+  selected_answer: z.union([z.string(), z.array(z.string())]),
+  answer_text: z.union([z.string(), z.array(z.string())]).optional(),
+  needs_review: z.boolean().optional(),
+  review_reason: z.string().nullable().optional(),
+  source_reference: z.string().nullable().optional(),
+});
+
+export const updateQuestionAnswerManual = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => UpdateManualAnswerInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+
+    const patch: Record<string, any> = {
+      selected_answer: data.selected_answer,
+      answering_status: data.needs_review ? "needs_review" : "answered",
+      answered_at: new Date().toISOString(),
+    };
+
+    if (data.answer_text !== undefined) patch.answer_text = data.answer_text;
+    if (data.needs_review !== undefined) patch.needs_review = data.needs_review;
+    if (data.review_reason !== undefined) patch.review_reason = data.review_reason;
+    if (data.source_reference !== undefined) patch.source_reference = data.source_reference;
+
+    const { error } = await supabase
+      .from(QUESTIONS_TABLE)
+      .update(patch)
+      .eq("id", data.questionId);
+
+    if (error) throw error;
+    return { ok: true };
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 19. clearSessionAnswers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ClearAnswersInput = z.object({ sessionId: z.string().uuid() });
+
+export const clearSessionAnswers = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ClearAnswersInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+
+    await supabase
+      .from(QUESTIONS_TABLE)
+      .update({
+        answer_source: null,
+        selected_answer: null,
+        answer_text: null,
+        confidence: null,
+        needs_review: false,
+        review_reason: null,
+        source_reference: null,
+        answering_model: null,
+        answering_provider: null,
+        answering_instructions: null,
+        answering_status: "unanswered",
+        internal_reasoning: null,
+        answered_at: null,
+      })
+      .eq("session_id", data.sessionId);
+
+    await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        answering_status: "idle",
+        total_answered: 0,
+        total_needs_review: 0,
+      })
+      .eq("id", data.sessionId);
+
+    return { ok: true };
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 20. completeAnsweringSession
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CompleteAnsweringInput = z.object({ sessionId: z.string().uuid() });
+
+export const completeAnsweringSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => CompleteAnsweringInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+
+    const { count: answeredCount } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId)
+      .in("answering_status", ["answered", "needs_review"]);
+
+    const { count: reviewCount } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId)
+      .eq("needs_review", true);
+
+    await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        answering_status: "completed",
+        total_answered: answeredCount ?? 0,
+        total_needs_review: reviewCount ?? 0,
+      })
+      .eq("id", data.sessionId);
+
+    return { ok: true };
+  });
+

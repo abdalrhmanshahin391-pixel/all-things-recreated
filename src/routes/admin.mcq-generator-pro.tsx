@@ -6,14 +6,15 @@ import {
   Loader2, ChevronDown, ChevronUp, RefreshCw, BookOpen, Edit3,
   AlertTriangle, Copy, Eye, EyeOff, Filter, Import, Key,
   FileText, Layers, MoreHorizontal, RotateCcw, Save, X,
-  ChevronsUpDown, AlertCircle, Star,
+  ChevronsUpDown, AlertCircle, Star, Sparkles, Check, HelpCircle,
+  Play, Pause, ArrowRight, BookMarked, KeyRound, ListOrdered,
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { FloatingMedicalBackdrop } from "@/components/home/FloatingMedicalBackdrop";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { loadPdfForRenderPreferWorker } from "@/lib/pdf-page-render";
+import { loadPdfForRenderPreferWorker, getPdfPageTexts } from "@/lib/pdf-page-render";
 import { renderPageToCanvas, canvasToJpegBase64 } from "@/lib/pdf-page-image";
 import {
   createMcqSession,
@@ -29,6 +30,16 @@ import {
   importSessionQuestions,
   getMcqKeyStatus,
   MODEL_OPTIONS,
+  ModelIdSchema,
+  // Phase 2
+  initiateAnsweringSession,
+  solveSingleQuestion,
+  parseAnswerKeyPdf,
+  parseAnswerKeyEntries,
+  applyAnswerKeyBatch,
+  updateQuestionAnswerManual,
+  clearSessionAnswers,
+  completeAnsweringSession,
 } from "@/lib/mcq-generator-pro.functions";
 
 // ─── Route ────────────────────────────────────────────────────────────────────
@@ -37,7 +48,7 @@ export const Route = createFileRoute("/admin/mcq-generator-pro")({
   head: () => ({
     meta: [
       { title: "MCQ Generator Pro — AquaQBank Admin" },
-      { name: "description", content: "Restricted admin tool to extract MCQ questions from scanned PDF exams using AI vision." },
+      { name: "description", content: "Restricted admin tool to extract and solve MCQ questions from scanned PDF exams." },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -57,6 +68,16 @@ type Session = {
   model: string;
   created_at: string;
   updated_at: string;
+  // Phase 2
+  answering_method?: "ai" | "study_material" | "user_answer_key" | null;
+  answering_model?: string | null;
+  answering_provider?: string | null;
+  answering_instructions?: string | null;
+  study_material_name?: string | null;
+  study_material_text?: string | null;
+  answering_status?: "idle" | "running" | "completed" | "failed" | "cancelled";
+  total_answered?: number;
+  total_needs_review?: number;
 };
 
 type McqOption = { letter: string; body: string };
@@ -74,15 +95,45 @@ type McqQuestion = {
   duplicate_of_id: string | null;
   review_status: "pending" | "accepted" | "rejected";
   sort_order: number;
+  // Phase 2
+  answer_source?: "ai" | "study_material" | "user_answer_key" | null;
+  selected_answer?: any; // string or string[]
+  answer_text?: any;
+  confidence?: "high" | "medium" | "low" | null;
+  needs_review?: boolean;
+  review_reason?: string | null;
+  source_reference?: string | null;
+  answering_model?: string | null;
+  answering_provider?: string | null;
+  answering_instructions?: string | null;
+  answering_status?: "unanswered" | "answered" | "failed" | "needs_review";
+  internal_reasoning?: string | null;
+  answered_at?: string | null;
 };
 
-type FilterTab = "all" | "duplicates" | "needs_options" | "accepted" | "rejected" | "pending";
+type FilterTab =
+  | "all"
+  | "needs_review"
+  | "answered"
+  | "unanswered"
+  | "duplicates"
+  | "needs_options"
+  | "accepted"
+  | "rejected"
+  | "pending";
 
 type Course = { id: string; title: string; year?: number | null };
 type Group = { id: string; name: string; course_id: string };
 type SubjectRow = { id: string; name: string; group_id: string };
 
-type Step = "configure" | "processing" | "review" | "import";
+type Step =
+  | "configure"
+  | "processing"
+  | "review"
+  | "solve_setup"
+  | "solve_progress"
+  | "solve_complete"
+  | "import";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -115,6 +166,25 @@ function statusLabel(s: Session["status"]) {
   }
 }
 
+function formatSelectedAnswer(ans: any): string {
+  if (ans == null) return "None";
+  if (Array.isArray(ans)) return ans.join(", ");
+  return String(ans);
+}
+
+function blobToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = String(reader.result || "");
+      const b64 = res.includes(",") ? res.split(",")[1] : res;
+      resolve(b64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 function McqGeneratorPro() {
@@ -132,15 +202,15 @@ function McqGeneratorPro() {
   const [activeQuestions, setActiveQuestions] = useState<McqQuestion[]>([]);
   const [step, setStep]                 = useState<Step>("configure");
 
-  // ── Configuration ──
+  // ── Configuration (Phase 1) ──
   const [file, setFile]                 = useState<File | null>(null);
-  const [modelId, setModelId]           = useState("gemini-2.5-flash");
+  const [modelId, setModelId]           = useState("gemini-2.5-flash-lite");
   const [combinationMode, setCombinationMode] = useState<"keep" | "convert">("keep");
   const [missingOptsMode, setMissingOptsMode] = useState<"manual" | "ai_generate">("manual");
   const [aiNotes, setAiNotes]           = useState("");
   const fileInputRef                    = useRef<HTMLInputElement>(null);
 
-  // ── Processing ──
+  // ── Processing (Phase 1) ──
   const [processing, setProcessing]     = useState(false);
   const [processLog, setProcessLog]     = useState<string[]>([]);
   const [currentPage, setCurrentPage]   = useState(0);
@@ -148,7 +218,29 @@ function McqGeneratorPro() {
   const cancelledRef                    = useRef(false);
   const [pagesQCount, setPagesQCount]   = useState<Record<number, number>>({});
 
-  // ── Review ──
+  // ── Phase 2 Solving State ──
+  const [solveMethod, setSolveMethod]   = useState<"ai" | "study_material" | "user_answer_key">("ai");
+  const [solveModel, setSolveModel]     = useState("gemini-2.5-flash-lite");
+  const [solveInstructions, setSolveInstructions] = useState("");
+  const [studyMaterialFile, setStudyMaterialFile] = useState<File | null>(null);
+  const [studyMaterialText, setStudyMaterialText] = useState("");
+  const [studyMaterialLoading, setStudyMaterialLoading] = useState(false);
+  const [answerKeyMode, setAnswerKeyMode] = useState<"text" | "pdf">("text");
+  const [answerKeyText, setAnswerKeyText] = useState("");
+  const [answerKeyPdf, setAnswerKeyPdf] = useState<File | null>(null);
+  const [answerKeyBusy, setAnswerKeyBusy] = useState(false);
+
+  // Phase 2 Live Progress
+  const [solvingActive, setSolvingActive] = useState(false);
+  const [solvingPaused, setSolvingPaused] = useState(false);
+  const solvingPausedRef                = useRef(false);
+  const solvingCancelledRef             = useRef(false);
+  const [solveCurrentIndex, setSolveCurrentIndex] = useState(0);
+  const [solveTotalToRun, setSolveTotalToRun] = useState(0);
+  const [solveLog, setSolveLog]         = useState<string[]>([]);
+  const [solveErrorCount, setSolveErrorCount] = useState(0);
+
+  // ── Review & Overrides ──
   const [filterTab, setFilterTab]       = useState<FilterTab>("all");
   const [editingId, setEditingId]       = useState<string | null>(null);
   const [editStem, setEditStem]         = useState("");
@@ -158,6 +250,13 @@ function McqGeneratorPro() {
   const [bulkSelecting, setBulkSelecting] = useState(false);
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
   const [rejectingDupes, setRejectingDupes] = useState(false);
+
+  // Manual Answer Override State
+  const [overrideQId, setOverrideQId]   = useState<string | null>(null);
+  const [overrideAnswer, setOverrideAnswer] = useState<string>("");
+  const [overrideMulti, setOverrideMulti] = useState<string[]>([]);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [savingOverride, setSavingOverride] = useState(false);
 
   // ── Import ──
   const [courses, setCourses]           = useState<Course[]>([]);
@@ -236,6 +335,7 @@ function McqGeneratorPro() {
       setFilterTab("all");
       setSelectedIds(new Set());
       setEditingId(null);
+      setOverrideQId(null);
       toast.dismiss("open-session");
     } catch (e: any) {
       toast.dismiss("open-session");
@@ -259,7 +359,7 @@ function McqGeneratorPro() {
     }
   }
 
-  // ─── Start processing ────────────────────────────────────────────────────
+  // ─── Phase 1: Start extraction processing ────────────────────────────────
 
   async function handleStartProcessing() {
     if (!file) { toast.error("Please upload a PDF first."); return; }
@@ -285,19 +385,17 @@ function McqGeneratorPro() {
     const log = (msg: string) => setProcessLog((prev) => [...prev, msg]);
 
     try {
-      // Load PDF
       log("📄 Loading PDF…");
       pdf = await loadPdfForRenderPreferWorker(file);
       numPages = pdf.numPages ?? 0;
       setTotalPages(numPages);
       log(`📄 PDF loaded — ${numPages} page${numPages === 1 ? "" : "s"}`);
 
-      // Create session
       const sess = await createMcqSession({
         data: {
           pdfName: file.name,
           totalPages: numPages,
-          model: modelId,
+          model: modelId as any,
           combinationMode,
           missingOptsMode,
           aiNotes: aiNotes || undefined,
@@ -307,7 +405,6 @@ function McqGeneratorPro() {
       log(`✅ Session created (${sessionId.slice(0, 8)}…)`);
       await loadSessions();
 
-      // Process each page
       for (let p = 1; p <= numPages; p++) {
         if (cancelledRef.current) {
           log("⛔ Cancelled by user.");
@@ -339,18 +436,16 @@ function McqGeneratorPro() {
       }
 
       if (!cancelledRef.current) {
-        // Finalize
         log("⚙️ Running duplicate detection…");
         const fin = await finalizeSession({ data: { sessionId } });
         log(`✅ Done! Duplicates found: ${fin.duplicatesFound}`);
 
-        // Load the full session + questions for review
         const fullData = await getMcqSession({ data: { sessionId } });
         setActiveSession(fullData.session as Session);
         setActiveQuestions(fullData.questions as McqQuestion[]);
         setStep("review");
         await loadSessions();
-        toast.success("Extraction complete! Review your questions below.");
+        toast.success("Extraction complete! Review your questions or proceed to Phase 2 Solving.");
       }
     } catch (err: any) {
       log(`❌ Fatal error: ${err?.message ?? String(err)}`);
@@ -363,21 +458,286 @@ function McqGeneratorPro() {
     }
   }
 
-  async function handleCancel() {
+  async function handleCancelExtraction() {
     cancelledRef.current = true;
-    toast.info("Cancelling after current page…");
+    toast.info("Cancelling extraction after current page…");
   }
 
-  // ─── Review actions ──────────────────────────────────────────────────────
+  // ─── Phase 2: Solving Methods & Execution ─────────────────────────────────
+
+  async function handleStudyMaterialUpload(f: File) {
+    setStudyMaterialFile(f);
+    setStudyMaterialLoading(true);
+    toast.loading("Extracting text from study material PDF…", { id: "sm-extract" });
+    try {
+      const texts = await getPdfPageTexts(f, 1, 100);
+      const combined = texts.join("\n\n---\n\n").trim();
+      setStudyMaterialText(combined);
+      toast.dismiss("sm-extract");
+      toast.success(`Loaded ${texts.length} pages of study material!`);
+    } catch (e: any) {
+      toast.dismiss("sm-extract");
+      toast.error("Could not extract PDF text: " + (e?.message || String(e)));
+    } finally {
+      setStudyMaterialLoading(false);
+    }
+  }
+
+  async function handleApplyAnswerKeyText() {
+    if (!activeSession) return;
+    const trimmed = answerKeyText.trim();
+    if (!trimmed) { toast.error("Please paste an answer key first."); return; }
+
+    const entries = parseAnswerKeyEntries(trimmed);
+    if (entries.length === 0) {
+      toast.error("No valid answers could be parsed. Check formatting (e.g. '1. A' or '1: C').");
+      return;
+    }
+
+    setAnswerKeyBusy(true);
+    try {
+      const res = await applyAnswerKeyBatch({
+        data: { sessionId: activeSession.id, entries },
+      });
+      toast.success(`Applied ${res.appliedCount} answers! (${res.needsReviewCount} need review)`);
+      const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
+      setActiveSession(updated.session as Session);
+      setActiveQuestions(updated.questions as McqQuestion[]);
+      setStep("solve_complete");
+    } catch (e: any) {
+      toast.error("Failed to apply answer key: " + (e?.message || String(e)));
+    } finally {
+      setAnswerKeyBusy(false);
+    }
+  }
+
+  async function handleApplyAnswerKeyPdf() {
+    if (!activeSession) return;
+    if (!answerKeyPdf) { toast.error("Please choose an answer-key PDF file."); return; }
+
+    setAnswerKeyBusy(true);
+    toast.loading("Reading answer key PDF via OCR…", { id: "ocr-key" });
+    try {
+      const b64 = await blobToBase64(answerKeyPdf);
+      const parsed = await parseAnswerKeyPdf({ data: { pdfBase64: b64 } });
+      if (parsed.entries.length === 0) {
+        toast.dismiss("ocr-key");
+        toast.error("No answers found in the uploaded PDF.");
+        return;
+      }
+
+      toast.loading(`OCR found ${parsed.entries.length} items. Mapping to questions…`, { id: "ocr-key" });
+      const res = await applyAnswerKeyBatch({
+        data: { sessionId: activeSession.id, entries: parsed.entries },
+      });
+      toast.dismiss("ocr-key");
+      toast.success(`Applied ${res.appliedCount} answers! (${res.needsReviewCount} need review)`);
+
+      const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
+      setActiveSession(updated.session as Session);
+      setActiveQuestions(updated.questions as McqQuestion[]);
+      setStep("solve_complete");
+    } catch (e: any) {
+      toast.dismiss("ocr-key");
+      toast.error("Failed to extract PDF key: " + (e?.message || String(e)));
+    } finally {
+      setAnswerKeyBusy(false);
+    }
+  }
+
+  async function handleStartAnswering() {
+    if (!activeSession) return;
+
+    if (solveMethod === "user_answer_key") {
+      if (answerKeyMode === "text") {
+        await handleApplyAnswerKeyText();
+      } else {
+        await handleApplyAnswerKeyPdf();
+      }
+      return;
+    }
+
+    // Method A or B
+    const questionsToSolve = activeQuestions.filter((q) => q.review_status !== "rejected");
+    if (questionsToSolve.length === 0) {
+      toast.error("No questions available to solve.");
+      return;
+    }
+
+    setSolvingActive(true);
+    setSolvingPaused(false);
+    solvingPausedRef.current = false;
+    solvingCancelledRef.current = false;
+    setSolveLog([]);
+    setSolveErrorCount(0);
+    setSolveTotalToRun(questionsToSolve.length);
+    setSolveCurrentIndex(0);
+    setStep("solve_progress");
+
+    const log = (msg: string) => setSolveLog((prev) => [...prev, msg]);
+
+    try {
+      await initiateAnsweringSession({
+        data: {
+          sessionId: activeSession.id,
+          method: solveMethod,
+          model: solveModel as any,
+          instructions: solveInstructions || undefined,
+          studyMaterialName: studyMaterialFile?.name || undefined,
+          studyMaterialText: studyMaterialText || undefined,
+        },
+      });
+
+      log(`🚀 Started answering with Method: ${solveMethod === "study_material" ? "Study Material" : "AI Independent"}`);
+      log(`🧠 Model: ${MODEL_OPTIONS.find((m) => m.id === solveModel)?.label || solveModel}`);
+
+      for (let i = 0; i < questionsToSolve.length; i++) {
+        if (solvingCancelledRef.current) {
+          log("⛔ Solving cancelled by user.");
+          break;
+        }
+
+        while (solvingPausedRef.current) {
+          await new Promise((r) => setTimeout(r, 500));
+        }
+
+        const q = questionsToSolve[i];
+        setSolveCurrentIndex(i + 1);
+
+        try {
+          const res = await solveSingleQuestion({
+            data: {
+              sessionId: activeSession.id,
+              questionId: q.id,
+              method: solveMethod,
+              model: solveModel as any,
+              instructions: solveInstructions || undefined,
+              studyMaterialText: studyMaterialText || undefined,
+            },
+          });
+
+          // Update question in local state
+          setActiveQuestions((prev) =>
+            prev.map((item) =>
+              item.id === q.id
+                ? {
+                    ...item,
+                    answer_source: solveMethod,
+                    selected_answer: res.selectedAnswer,
+                    confidence: res.confidence,
+                    needs_review: res.needsReview,
+                    review_reason: res.reviewReason,
+                    answering_status: res.needsReview ? "needs_review" : "answered",
+                  }
+                : item
+            )
+          );
+
+          if (res.needsReview) {
+            log(`  ⚠️ Q${q.question_number || i + 1}: ${formatSelectedAnswer(res.selectedAnswer)} (Flagged: ${res.reviewReason || "Uncertain"})`);
+          } else {
+            log(`  ✔ Q${q.question_number || i + 1}: Correct Answer: ${formatSelectedAnswer(res.selectedAnswer)} [${res.confidence}]`);
+          }
+        } catch (itemErr: any) {
+          setSolveErrorCount((prev) => prev + 1);
+          log(`  ❌ Q${q.question_number || i + 1} Error: ${itemErr?.message || String(itemErr)}`);
+        }
+      }
+
+      if (!solvingCancelledRef.current) {
+        await completeAnsweringSession({ data: { sessionId: activeSession.id } });
+        const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
+        setActiveSession(updated.session as Session);
+        setActiveQuestions(updated.questions as McqQuestion[]);
+        setStep("solve_complete");
+        toast.success("Answering complete! Review determined answers.");
+      }
+    } catch (e: any) {
+      toast.error("Answering failed: " + (e?.message || String(e)));
+    } finally {
+      setSolvingActive(false);
+    }
+  }
+
+  async function handleClearAllAnswers() {
+    if (!activeSession) return;
+    if (!confirm("Clear all determined answers for this session? Questions will be reset to unanswered.")) return;
+    try {
+      await clearSessionAnswers({ data: { sessionId: activeSession.id } });
+      const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
+      setActiveSession(updated.session as Session);
+      setActiveQuestions(updated.questions as McqQuestion[]);
+      setStep("solve_setup");
+      toast.success("Answers cleared.");
+    } catch (e: any) {
+      toast.error("Failed to clear answers: " + (e?.message || String(e)));
+    }
+  }
+
+  // ─── Manual Answer Override ──────────────────────────────────────────────
+
+  function openAnswerOverride(q: McqQuestion) {
+    setOverrideQId(q.id);
+    if (q.question_type === "multiple_answer") {
+      setOverrideMulti(Array.isArray(q.selected_answer) ? q.selected_answer : []);
+    } else {
+      setOverrideAnswer(typeof q.selected_answer === "string" ? q.selected_answer : "");
+    }
+    setOverrideReason(q.review_reason || "");
+  }
+
+  async function saveAnswerOverride() {
+    if (!overrideQId) return;
+    const q = activeQuestions.find((item) => item.id === overrideQId);
+    if (!q) return;
+
+    setSavingOverride(true);
+    try {
+      const finalSelected = q.question_type === "multiple_answer" ? overrideMulti : overrideAnswer;
+      await updateQuestionAnswerManual({
+        data: {
+          questionId: overrideQId,
+          selected_answer: finalSelected,
+          needs_review: false,
+          review_reason: null,
+        },
+      });
+
+      setActiveQuestions((prev) =>
+        prev.map((item) =>
+          item.id === overrideQId
+            ? {
+                ...item,
+                selected_answer: finalSelected,
+                needs_review: false,
+                review_reason: null,
+                answering_status: "answered",
+              }
+            : item
+        )
+      );
+      setOverrideQId(null);
+      toast.success("Answer updated.");
+    } catch (e: any) {
+      toast.error("Failed to update answer: " + (e?.message || String(e)));
+    } finally {
+      setSavingOverride(false);
+    }
+  }
+
+  // ─── Review Filter Actions ───────────────────────────────────────────────
 
   function filteredQuestions(): McqQuestion[] {
     switch (filterTab) {
-      case "duplicates":    return activeQuestions.filter((q) => q.is_duplicate);
-      case "needs_options": return activeQuestions.filter((q) => q.needs_manual_options);
-      case "accepted":      return activeQuestions.filter((q) => q.review_status === "accepted");
-      case "rejected":      return activeQuestions.filter((q) => q.review_status === "rejected");
-      case "pending":       return activeQuestions.filter((q) => q.review_status === "pending");
-      default:              return activeQuestions;
+      case "needs_review": return activeQuestions.filter((q) => q.needs_review);
+      case "answered":     return activeQuestions.filter((q) => q.answering_status === "answered");
+      case "unanswered":   return activeQuestions.filter((q) => !q.answering_status || q.answering_status === "unanswered");
+      case "duplicates":   return activeQuestions.filter((q) => q.is_duplicate);
+      case "needs_options":return activeQuestions.filter((q) => q.needs_manual_options);
+      case "accepted":     return activeQuestions.filter((q) => q.review_status === "accepted");
+      case "rejected":     return activeQuestions.filter((q) => q.review_status === "rejected");
+      case "pending":      return activeQuestions.filter((q) => q.review_status === "pending");
+      default:             return activeQuestions;
     }
   }
 
@@ -424,7 +784,7 @@ function McqGeneratorPro() {
     }
   }
 
-  // ── Inline editing ──
+  // ── Inline Stem & Options Editing ──
 
   function startEdit(q: McqQuestion) {
     setEditingId(q.id);
@@ -495,12 +855,16 @@ function McqGeneratorPro() {
   // ─── Stats derived from active questions ─────────────────────────────────
 
   const stats = {
-    total:      activeQuestions.length,
-    accepted:   activeQuestions.filter((q) => q.review_status === "accepted").length,
-    rejected:   activeQuestions.filter((q) => q.review_status === "rejected").length,
-    pending:    activeQuestions.filter((q) => q.review_status === "pending").length,
-    duplicates: activeQuestions.filter((q) => q.is_duplicate).length,
-    needsOpts:  activeQuestions.filter((q) => q.needs_manual_options).length,
+    total:       activeQuestions.length,
+    accepted:    activeQuestions.filter((q) => q.review_status === "accepted").length,
+    rejected:    activeQuestions.filter((q) => q.review_status === "rejected").length,
+    pending:     activeQuestions.filter((q) => q.review_status === "pending").length,
+    duplicates:  activeQuestions.filter((q) => q.is_duplicate).length,
+    needsOpts:   activeQuestions.filter((q) => q.needs_manual_options).length,
+    // Phase 2 stats
+    answered:    activeQuestions.filter((q) => q.answering_status === "answered").length,
+    needsReview: activeQuestions.filter((q) => q.needs_review).length,
+    unanswered:  activeQuestions.filter((q) => !q.answering_status || q.answering_status === "unanswered").length,
   };
 
   // ─── Guard ───────────────────────────────────────────────────────────────
@@ -529,7 +893,7 @@ function McqGeneratorPro() {
           <div>
             <p className="text-xs font-black uppercase tracking-widest text-red-500">Restricted Area</p>
             <h1 className="text-2xl font-black text-red-800 tracking-tight">MCQ Generator Pro</h1>
-            <p className="text-sm text-red-600 mt-0.5">Admin-only tool — Extract MCQ questions from scanned PDFs using AI Vision</p>
+            <p className="text-sm text-red-600 mt-0.5">Admin Engine — Phase 1: Extraction & Phase 2: Answering / Solving</p>
           </div>
         </div>
 
@@ -577,16 +941,22 @@ function McqGeneratorPro() {
                 >
                   <FileText size={20} className="text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm truncate">{s.pdf_name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-sm truncate">{s.pdf_name}</p>
+                      {s.answering_status === "completed" && (
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300">
+                          Phase 2 Solved
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground">
-                      {fmtDate(s.created_at)} · {s.total_pages} pages · {s.questions_extracted} Qs extracted · {s.duplicates_found} dupes
+                      {fmtDate(s.created_at)} · {s.total_pages} pages · {s.questions_extracted} Qs · {s.total_answered || 0} answered · {s.duplicates_found} dupes
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${statusColor(s.status)}`}>
                       {statusLabel(s.status)}
                     </span>
-                    <span className="text-xs text-muted-foreground font-mono">{MODEL_OPTIONS.find((m) => m.id === s.model)?.label ?? s.model}</span>
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleDeleteSession(s.id); }}
@@ -603,34 +973,42 @@ function McqGeneratorPro() {
         </section>
 
         {/* ── Step Tabs ────────────────────────────────────────────────────── */}
-        <div className="flex gap-1 rounded-xl border-2 border-border bg-card p-1 w-fit">
-          {(["configure", "processing", "review", "import"] as Step[]).map((s, i) => {
-            const labels = ["⚙️ Configure", "⚡ Process", "🔍 Review", "📥 Import"];
-            const enabled = s === "configure" || s === step ||
-              (s === "review" && !!activeSession) ||
-              (s === "import" && !!activeSession);
-            return (
-              <button
-                key={s}
-                type="button"
-                disabled={!enabled}
-                onClick={() => {
-                  if (enabled && s !== "processing") setStep(s);
-                }}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                  step === s
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                }`}
-              >
-                {labels[i]}
-              </button>
-            );
-          })}
+        <div className="flex flex-wrap gap-1 rounded-xl border-2 border-border bg-card p-1 w-fit">
+          {[
+            { id: "configure", label: "⚙️ 1. Extract Setup" },
+            { id: "processing", label: "⚡ Extract Running", hidden: step !== "processing" },
+            { id: "review", label: `🔍 2. Review MCQs (${stats.total})`, disabled: !activeSession },
+            { id: "solve_setup", label: "🧠 3. Solve Answers (Phase 2)", disabled: !activeSession },
+            { id: "import", label: "📥 4. Import to Course", disabled: !activeSession },
+          ]
+            .filter((tab) => !tab.hidden)
+            .map((tab) => {
+              const isCurrent =
+                step === tab.id ||
+                (tab.id === "solve_setup" && (step === "solve_progress" || step === "solve_complete"));
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  disabled={tab.disabled}
+                  onClick={() => {
+                    if (tab.disabled || step === "processing" || step === "solve_progress") return;
+                    setStep(tab.id as Step);
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    isCurrent
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
         </div>
 
         {/* ══════════════════════════════════════════════════════════════════
-            STEP 1 — CONFIGURE
+            STEP 1 — CONFIGURE (PHASE 1)
         ══════════════════════════════════════════════════════════════════ */}
         {step === "configure" && (
           <div className="space-y-6">
@@ -683,7 +1061,7 @@ function McqGeneratorPro() {
               {/* Model */}
               <div className="rounded-2xl border-2 border-border bg-card p-6">
                 <h2 className="font-black text-base mb-4 flex items-center gap-2">
-                  <Cpu size={18} className="text-primary" /> AI Model
+                  <Cpu size={18} className="text-primary" /> Extraction AI Model
                 </h2>
                 <div className="space-y-2">
                   {MODEL_OPTIONS.map((m) => {
@@ -761,15 +1139,15 @@ function McqGeneratorPro() {
             {/* AI Notes */}
             <div className="rounded-2xl border-2 border-border bg-card p-6">
               <h2 className="font-black text-base mb-2 flex items-center gap-2">
-                <Edit3 size={18} className="text-primary" /> AI Notes
+                <Edit3 size={18} className="text-primary" /> AI Notes for Extraction
                 <span className="text-xs font-normal text-muted-foreground ml-1">(optional)</span>
               </h2>
-              <p className="text-xs text-muted-foreground mb-3">Extra instructions injected into every page prompt. The AI will follow these strictly.</p>
+              <p className="text-xs text-muted-foreground mb-3">Extra instructions injected into every page extraction prompt. Followed strictly.</p>
               <textarea
                 value={aiNotes}
                 onChange={(e) => setAiNotes(e.target.value)}
-                placeholder="e.g. This is a pharmacology exam. Questions always have exactly 5 options (A–E). Ignore any header text that says 'Model Exam'. If a question has 2 options, keep only those 2..."
-                rows={4}
+                placeholder="e.g. This is a pharmacology exam. Questions always have exactly 5 options (A–E). If a question has 2 options, keep only those 2..."
+                rows={3}
                 className="w-full rounded-xl border-2 border-border bg-muted/30 px-4 py-3 text-sm focus:outline-none focus:border-primary resize-none"
               />
             </div>
@@ -789,11 +1167,10 @@ function McqGeneratorPro() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            STEP 2 — PROCESSING
+            STEP 2 — PROCESSING (PHASE 1)
         ══════════════════════════════════════════════════════════════════ */}
         {step === "processing" && (
           <div className="space-y-6">
-            {/* Progress */}
             <div className="rounded-2xl border-2 border-border bg-card p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-black text-base flex items-center gap-2">
@@ -803,7 +1180,7 @@ function McqGeneratorPro() {
                 {processing && (
                   <button
                     type="button"
-                    onClick={handleCancel}
+                    onClick={handleCancelExtraction}
                     className="flex items-center gap-2 rounded-xl border-2 border-red-300 bg-red-50 px-4 py-2 text-red-600 font-bold text-sm hover:bg-red-100"
                   >
                     <X size={14} /> Cancel
@@ -811,7 +1188,6 @@ function McqGeneratorPro() {
                 )}
               </div>
 
-              {/* Progress bar */}
               {totalPages > 0 && (
                 <div className="mb-4">
                   <div className="flex justify-between text-xs text-muted-foreground mb-1">
@@ -827,7 +1203,6 @@ function McqGeneratorPro() {
                 </div>
               )}
 
-              {/* Stats */}
               <div className="grid grid-cols-3 gap-3 mb-4">
                 {[
                   { label: "Pages Processed", value: Math.min(currentPage, totalPages), icon: FileText },
@@ -851,7 +1226,6 @@ function McqGeneratorPro() {
                 ))}
               </div>
 
-              {/* Log */}
               <div className="rounded-xl border border-border bg-muted/30 p-3 max-h-64 overflow-y-auto font-mono text-xs space-y-0.5">
                 {processLog.map((line, i) => (
                   <p key={i} className={
@@ -868,228 +1242,820 @@ function McqGeneratorPro() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            STEP 3 — REVIEW
+            PHASE 2 — SOLVE / ANSWER SETUP
+        ══════════════════════════════════════════════════════════════════ */}
+        {step === "solve_setup" && activeSession && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border-2 border-border bg-card p-6">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
+                    <BrainIcon className="text-primary" /> Phase 2 — MCQ Answering & Solving
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Determine the correct answer for each extracted question. No explanations are generated in this phase.
+                  </p>
+                </div>
+                {stats.answered > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearAllAnswers}
+                    className="flex items-center gap-1.5 text-xs text-red-600 hover:bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg"
+                  >
+                    <RotateCcw size={13} /> Reset Answers ({stats.answered})
+                  </button>
+                )}
+              </div>
+
+              {/* Method Selector */}
+              <div className="mt-6 space-y-3">
+                <label className="text-xs font-black uppercase tracking-wider text-muted-foreground block">
+                  Select Answering Method
+                </label>
+                <div className="grid md:grid-cols-3 gap-3">
+                  {[
+                    {
+                      id: "ai",
+                      title: "Method A: AI Solves",
+                      desc: "The AI independently solves the MCQ using its stem and extracted options. Chooses strictly from existing options.",
+                      icon: Sparkles,
+                    },
+                    {
+                      id: "study_material",
+                      title: "Method B: Study Material",
+                      desc: "Solves using uploaded reference PDF/notes. Captures source citations. Flags review if not covered.",
+                      icon: BookMarked,
+                    },
+                    {
+                      id: "user_answer_key",
+                      title: "Method C: Answer Key",
+                      desc: "Direct mapping from your manual text or answer-key PDF. Completely bypasses AI re-solving.",
+                      icon: KeyRound,
+                    },
+                  ].map((m) => (
+                    <div
+                      key={m.id}
+                      onClick={() => setSolveMethod(m.id as any)}
+                      className={`rounded-2xl border-2 p-4 cursor-pointer transition-all ${
+                        solveMethod === m.id
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-border hover:border-primary/40 bg-card"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <m.icon size={18} className={solveMethod === m.id ? "text-primary" : "text-muted-foreground"} />
+                        <p className="font-black text-sm">{m.title}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{m.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Method B Inputs: Study Material */}
+              {solveMethod === "study_material" && (
+                <div className="mt-6 rounded-xl border-2 border-primary/20 bg-primary/5 p-4 space-y-4">
+                  <h3 className="font-black text-sm flex items-center gap-2">
+                    <BookMarked size={16} className="text-primary" /> Study Material / Textbook
+                  </h3>
+                  <div>
+                    <label className="text-xs font-bold text-muted-foreground block mb-1">
+                      Upload PDF Book/Lecture (text will be extracted):
+                    </label>
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void handleStudyMaterialUpload(f);
+                      }}
+                      className="text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-primary file:text-primary-foreground cursor-pointer"
+                    />
+                    {studyMaterialLoading && (
+                      <p className="text-xs text-primary flex items-center gap-1 mt-1">
+                        <Loader2 size={12} className="animate-spin" /> Extracting pages…
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-muted-foreground block mb-1">
+                      Or Paste Reference Notes / Chapter Text:
+                    </label>
+                    <textarea
+                      value={studyMaterialText}
+                      onChange={(e) => setStudyMaterialText(e.target.value)}
+                      placeholder="Paste textbook excerpt, lecture summary, or clinical guidelines here…"
+                      rows={4}
+                      className="w-full rounded-xl border border-border bg-background p-3 text-xs focus:outline-none focus:border-primary resize-none"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Characters loaded: {studyMaterialText.length.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Method C Inputs: User Answer Key */}
+              {solveMethod === "user_answer_key" && (
+                <div className="mt-6 rounded-xl border-2 border-primary/20 bg-primary/5 p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-black text-sm flex items-center gap-2">
+                      <KeyRound size={16} className="text-primary" /> Provide Answer Key
+                    </h3>
+                    <div className="flex gap-1 rounded-lg border border-border bg-background p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setAnswerKeyMode("text")}
+                        className={`px-3 py-1 text-xs font-bold rounded-md ${answerKeyMode === "text" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                      >
+                        Paste Text
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAnswerKeyMode("pdf")}
+                        className={`px-3 py-1 text-xs font-bold rounded-md ${answerKeyMode === "pdf" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                      >
+                        Upload PDF Key
+                      </button>
+                    </div>
+                  </div>
+
+                  {answerKeyMode === "text" ? (
+                    <div>
+                      <label className="text-xs font-bold text-muted-foreground block mb-1">
+                        Paste Answer Key text (e.g. "1. A", "2. C", "3. 1,2,3" or "A B C D"):
+                      </label>
+                      <textarea
+                        value={answerKeyText}
+                        onChange={(e) => setAnswerKeyText(e.target.value)}
+                        placeholder="1. C&#10;2. A&#10;3. 1,2,3&#10;4. D..."
+                        rows={5}
+                        className="w-full rounded-xl border border-border bg-background p-3 text-xs font-mono focus:outline-none focus:border-primary resize-none"
+                      />
+                      {answerKeyText.trim() && (
+                        <p className="text-xs text-primary font-bold mt-1">
+                          ✓ Parsed {parseAnswerKeyEntries(answerKeyText).length} answer entries ready to apply.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-xs font-bold text-muted-foreground block mb-1">
+                        Upload Answer Sheet / Table PDF:
+                      </label>
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        onChange={(e) => setAnswerKeyPdf(e.target.files?.[0] || null)}
+                        className="text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-primary file:text-primary-foreground cursor-pointer"
+                      />
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        Gemini Vision OCR will scan the answer sheet and map answers without solving.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Model & Instructions (for Method A & B) */}
+              {solveMethod !== "user_answer_key" && (
+                <div className="mt-6 grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-black uppercase tracking-wider text-muted-foreground block mb-2">
+                      Answering AI Model
+                    </label>
+                    <div className="space-y-2">
+                      {MODEL_OPTIONS.map((m) => (
+                        <label
+                          key={m.id}
+                          className={`flex items-center gap-3 rounded-xl border-2 px-3 py-2.5 cursor-pointer text-xs transition-colors ${
+                            solveModel === m.id ? "border-primary bg-primary/5 font-bold" : "border-border hover:border-primary/40"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="solveModel"
+                            value={m.id}
+                            checked={solveModel === m.id}
+                            onChange={() => setSolveModel(m.id)}
+                            className="accent-primary"
+                          />
+                          <span>{m.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-black uppercase tracking-wider text-muted-foreground block mb-2">
+                      Additional Solving Instructions (Optional)
+                    </label>
+                    <textarea
+                      value={solveInstructions}
+                      onChange={(e) => setSolveInstructions(e.target.value)}
+                      placeholder="e.g. Follow current medical guidelines. If the stem mentions 'most common', choose the statistical first choice. Pay close attention to negatives ('except', 'not')..."
+                      rows={5}
+                      className="w-full rounded-xl border-2 border-border bg-muted/30 p-3 text-xs focus:outline-none focus:border-primary resize-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
+                <button
+                  type="button"
+                  onClick={() => setStep("review")}
+                  className="px-4 py-2 rounded-xl border border-border text-xs font-bold hover:bg-muted"
+                >
+                  ← Back to Review
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartAnswering}
+                  disabled={answerKeyBusy || (solveMethod === "study_material" && !studyMaterialText.trim())}
+                  className="flex items-center gap-2 rounded-xl bg-primary px-7 py-3 text-primary-foreground font-black text-sm hover:opacity-90 disabled:opacity-40"
+                >
+                  {answerKeyBusy ? (
+                    <><Loader2 size={16} className="animate-spin" /> Processing Key…</>
+                  ) : solveMethod === "user_answer_key" ? (
+                    <><CheckCircle2 size={16} /> Apply Answer Key</>
+                  ) : (
+                    <><Play size={16} /> Start Solving Answers ({stats.total - stats.rejected} Qs)</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            PHASE 2 — SOLVE PROGRESS
+        ══════════════════════════════════════════════════════════════════ */}
+        {step === "solve_progress" && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border-2 border-border bg-card p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="font-black text-lg flex items-center gap-2">
+                    <Loader2 className="animate-spin text-primary" size={20} />
+                    {solvingPaused ? "Answering Paused" : "Determining Answers (Phase 2)…"}
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Model: {MODEL_OPTIONS.find((m) => m.id === solveModel)?.label || solveModel} · Method: {solveMethod}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !solvingPaused;
+                      setSolvingPaused(next);
+                      solvingPausedRef.current = next;
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-bold hover:bg-muted"
+                  >
+                    {solvingPaused ? <Play size={14} /> : <Pause size={14} />}
+                    {solvingPaused ? "Resume" : "Pause"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      solvingCancelledRef.current = true;
+                      toast.info("Stopping after current question…");
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl border border-red-300 bg-red-50 text-red-600 px-3 py-1.5 text-xs font-bold hover:bg-red-100"
+                  >
+                    <X size={14} /> Stop
+                  </button>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              {solveTotalToRun > 0 && (
+                <div className="mb-4">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Question {solveCurrentIndex} of {solveTotalToRun}</span>
+                    <span>{Math.round((solveCurrentIndex / solveTotalToRun) * 100)}%</span>
+                  </div>
+                  <div className="h-3 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-200"
+                      style={{ width: `${(solveCurrentIndex / solveTotalToRun) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Real-time counters */}
+              <div className="grid grid-cols-4 gap-3 mb-4">
+                <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
+                  <p className="text-xl font-black text-foreground">{solveCurrentIndex}</p>
+                  <p className="text-[11px] text-muted-foreground">Processed</p>
+                </div>
+                <div className="rounded-xl border border-border bg-emerald-50/50 p-3 text-center">
+                  <p className="text-xl font-black text-emerald-700">{stats.answered}</p>
+                  <p className="text-[11px] text-emerald-800">Answered</p>
+                </div>
+                <div className="rounded-xl border border-border bg-amber-50/50 p-3 text-center">
+                  <p className="text-xl font-black text-amber-700">{stats.needsReview}</p>
+                  <p className="text-[11px] text-amber-800">Needs Review</p>
+                </div>
+                <div className="rounded-xl border border-border bg-red-50/50 p-3 text-center">
+                  <p className="text-xl font-black text-red-700">{solveErrorCount}</p>
+                  <p className="text-[11px] text-red-800">Errors</p>
+                </div>
+              </div>
+
+              {/* Live Log */}
+              <div className="rounded-xl border border-border bg-muted/30 p-3 max-h-64 overflow-y-auto font-mono text-xs space-y-0.5">
+                {solveLog.map((line, i) => (
+                  <p
+                    key={i}
+                    className={
+                      line.includes("❌")
+                        ? "text-red-600"
+                        : line.includes("⚠️")
+                        ? "text-amber-600"
+                        : line.includes("✔")
+                        ? "text-emerald-600"
+                        : "text-foreground/70"
+                    }
+                  >
+                    {line}
+                  </p>
+                ))}
+                {solvingActive && !solvingPaused && <p className="text-primary animate-pulse">▌</p>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            PHASE 2 — SOLVE COMPLETE / SUMMARY
+        ══════════════════════════════════════════════════════════════════ */}
+        {step === "solve_complete" && activeSession && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50/40 p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <CheckCircle2 size={32} className="text-emerald-600" />
+                <div>
+                  <h2 className="text-xl font-black text-emerald-900 tracking-tight">
+                    Phase 2 Answering Complete!
+                  </h2>
+                  <p className="text-xs text-emerald-700 mt-0.5">
+                    All questions have been evaluated. Review the answers or proceed to the next step.
+                  </p>
+                </div>
+              </div>
+
+              {/* Summary Stats Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-4">
+                <div className="rounded-xl border border-emerald-200 bg-white/80 p-3 text-center">
+                  <p className="text-2xl font-black text-foreground">{stats.total}</p>
+                  <p className="text-xs text-muted-foreground">Total Questions</p>
+                </div>
+                <div className="rounded-xl border border-emerald-200 bg-white/80 p-3 text-center">
+                  <p className="text-2xl font-black text-emerald-600">{stats.answered}</p>
+                  <p className="text-xs text-muted-foreground">Confident Answers</p>
+                </div>
+                <div className="rounded-xl border border-emerald-200 bg-white/80 p-3 text-center">
+                  <p className="text-2xl font-black text-amber-600">{stats.needsReview}</p>
+                  <p className="text-xs text-muted-foreground">Flagged for Review</p>
+                </div>
+                <div className="rounded-xl border border-emerald-200 bg-white/80 p-3 text-center">
+                  <p className="text-2xl font-black text-muted-foreground">{stats.unanswered}</p>
+                  <p className="text-xs text-muted-foreground">Unanswered</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-white/60 border border-emerald-200 p-3 text-xs space-y-1 text-emerald-900">
+                <p><strong>Method Used:</strong> {activeSession.answering_method || solveMethod}</p>
+                {activeSession.answering_model && (
+                  <p><strong>Model:</strong> {MODEL_OPTIONS.find((m) => m.id === activeSession.answering_model)?.label || activeSession.answering_model}</p>
+                )}
+                {activeSession.answering_instructions && (
+                  <p><strong>Instructions:</strong> {activeSession.answering_instructions}</p>
+                )}
+              </div>
+
+              {/* Phase 3 Notice & Actions */}
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep("review")}
+                  className="flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-primary-foreground font-black text-sm hover:opacity-90"
+                >
+                  <Eye size={15} /> Review Answers
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    toast.info(
+                      "Phase 2 Complete! Phase 3 (Explanation Generation) will be integrated here in the next update.",
+                      { duration: 5000 }
+                    );
+                  }}
+                  className="flex items-center gap-2 rounded-xl border-2 border-primary/40 bg-card px-5 py-2.5 text-sm font-bold hover:bg-muted"
+                >
+                  <Sparkles size={15} className="text-primary" /> Start Explanations (Phase 3)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStep("solve_setup")}
+                  className="ml-auto text-xs text-muted-foreground hover:text-foreground underline"
+                >
+                  Re-Solve / Change Settings
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            STEP 3 — REVIEW (WITH PHASE 2 ANSWERS)
         ══════════════════════════════════════════════════════════════════ */}
         {step === "review" && activeSession && (
           <div className="space-y-4">
 
             {/* Stats bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
               {[
                 { label: "Total",      value: stats.total,      color: "text-foreground" },
+                { label: "Answered",   value: stats.answered,   color: "text-emerald-600 font-black" },
+                { label: "Needs Rev",  value: stats.needsReview, color: "text-amber-600 font-black" },
+                { label: "Unanswered", value: stats.unanswered, color: "text-muted-foreground" },
                 { label: "Accepted",   value: stats.accepted,   color: "text-emerald-600" },
                 { label: "Rejected",   value: stats.rejected,   color: "text-red-600" },
-                { label: "Pending",    value: stats.pending,    color: "text-amber-600" },
                 { label: "Duplicates", value: stats.duplicates, color: "text-purple-600" },
                 { label: "Needs Opts", value: stats.needsOpts,  color: "text-orange-600" },
               ].map((s) => (
-                <div key={s.label} className="rounded-xl border-2 border-border bg-card p-3 text-center">
-                  <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
-                  <p className="text-xs text-muted-foreground">{s.label}</p>
+                <div key={s.label} className="rounded-xl border-2 border-border bg-card p-2 text-center">
+                  <p className={`text-xl font-black ${s.color}`}>{s.value}</p>
+                  <p className="text-[11px] text-muted-foreground">{s.label}</p>
                 </div>
               ))}
             </div>
 
             {/* Action bar */}
             <div className="flex flex-wrap gap-2 items-center">
+              <button
+                type="button"
+                onClick={() => setStep("solve_setup")}
+                className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-primary-foreground font-black text-xs hover:opacity-90 shadow-sm"
+              >
+                <BrainIcon size={14} /> Solve Answers (Phase 2)
+              </button>
               {stats.duplicates > 0 && (
                 <button
                   type="button"
                   onClick={handleRejectDuplicates}
                   disabled={rejectingDupes}
-                  className="flex items-center gap-2 rounded-xl border-2 border-purple-300 bg-purple-50 px-4 py-2 text-purple-700 font-bold text-sm hover:bg-purple-100 disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-xl border-2 border-purple-300 bg-purple-50 px-3 py-2 text-purple-700 font-bold text-xs hover:bg-purple-100 disabled:opacity-50"
                 >
-                  {rejectingDupes ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />}
-                  Reject All Duplicates ({stats.duplicates})
+                  {rejectingDupes ? <Loader2 size={13} className="animate-spin" /> : <Copy size={13} />}
+                  Reject Duplicates ({stats.duplicates})
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => setBulkSelecting((v) => !v)}
-                className={`flex items-center gap-2 rounded-xl border-2 px-4 py-2 font-bold text-sm transition-colors ${
+                className={`flex items-center gap-1.5 rounded-xl border-2 px-3 py-2 font-bold text-xs transition-colors ${
                   bulkSelecting ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <CheckCircle2 size={14} /> Bulk Select
+                <CheckCircle2 size={13} /> Bulk Select
               </button>
               {bulkSelecting && selectedIds.size > 0 && (
                 <>
-                  <button type="button" onClick={() => handleBulkStatus("accepted")} className="flex items-center gap-1.5 rounded-xl border-2 border-emerald-300 bg-emerald-50 px-3 py-2 text-emerald-700 font-bold text-xs hover:bg-emerald-100">
+                  <button type="button" onClick={() => handleBulkStatus("accepted")} className="flex items-center gap-1.5 rounded-xl border-2 border-emerald-300 bg-emerald-50 px-3 py-1.5 text-emerald-700 font-bold text-xs hover:bg-emerald-100">
                     <CheckCircle2 size={12} /> Accept ({selectedIds.size})
                   </button>
-                  <button type="button" onClick={() => handleBulkStatus("rejected")} className="flex items-center gap-1.5 rounded-xl border-2 border-red-300 bg-red-50 px-3 py-2 text-red-700 font-bold text-xs hover:bg-red-100">
+                  <button type="button" onClick={() => handleBulkStatus("rejected")} className="flex items-center gap-1.5 rounded-xl border-2 border-red-300 bg-red-50 px-3 py-1.5 text-red-700 font-bold text-xs hover:bg-red-100">
                     <XCircle size={12} /> Reject ({selectedIds.size})
-                  </button>
-                  <button type="button" onClick={() => handleBulkStatus("pending")} className="flex items-center gap-1.5 rounded-xl border-2 border-border bg-card px-3 py-2 text-muted-foreground font-bold text-xs hover:bg-muted">
-                    <RotateCcw size={12} /> Reset ({selectedIds.size})
                   </button>
                 </>
               )}
               <button
                 type="button"
                 onClick={() => setStep("import")}
-                className="ml-auto flex items-center gap-2 rounded-xl bg-primary px-5 py-2 text-primary-foreground font-black text-sm hover:opacity-90"
+                className="ml-auto flex items-center gap-1.5 rounded-xl border-2 border-border bg-card px-4 py-2 font-bold text-xs hover:bg-muted"
               >
-                <Import size={14} /> Go to Import
+                <Import size={13} /> Go to Import →
               </button>
             </div>
 
             {/* Filter tabs */}
             <div className="flex flex-wrap gap-1">
-              {(["all", "pending", "accepted", "rejected", "duplicates", "needs_options"] as FilterTab[]).map((tab) => {
-                const counts: Record<FilterTab, number> = {
-                  all: stats.total, pending: stats.pending, accepted: stats.accepted,
-                  rejected: stats.rejected, duplicates: stats.duplicates, needs_options: stats.needsOpts,
-                };
-                const labels: Record<FilterTab, string> = {
-                  all: "All", pending: "Pending", accepted: "Accepted",
-                  rejected: "Rejected", duplicates: "Duplicates", needs_options: "Needs Options",
-                };
-                return (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => setFilterTab(tab)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
-                      filterTab === tab ? "bg-primary text-primary-foreground" : "bg-card border-2 border-border text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {labels[tab]} <span className="opacity-70">({counts[tab]})</span>
-                  </button>
-                );
-              })}
+              {[
+                { id: "all", label: "All", count: stats.total },
+                { id: "needs_review", label: "⚠️ Needs Review", count: stats.needsReview, highlight: stats.needsReview > 0 },
+                { id: "answered", label: "✓ Answered", count: stats.answered },
+                { id: "unanswered", label: "Unanswered", count: stats.unanswered },
+                { id: "accepted", label: "Accepted", count: stats.accepted },
+                { id: "rejected", label: "Rejected", count: stats.rejected },
+                { id: "duplicates", label: "Duplicates", count: stats.duplicates },
+                { id: "needs_options", label: "Needs Options", count: stats.needsOpts },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setFilterTab(tab.id as FilterTab)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
+                    filterTab === tab.id
+                      ? "bg-primary text-primary-foreground"
+                      : tab.highlight
+                      ? "bg-amber-100 border-2 border-amber-300 text-amber-900"
+                      : "bg-card border-2 border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {tab.label} <span className="opacity-70">({tab.count})</span>
+                </button>
+              ))}
             </div>
 
             {/* Question List */}
-            <div className="space-y-2">
+            <div className="space-y-3">
               {filteredQuestions().length === 0 ? (
                 <div className="rounded-xl border-2 border-dashed border-border bg-card py-10 text-center text-sm text-muted-foreground">
-                  No questions in this filter.
+                  No questions found in this filter.
                 </div>
               ) : (
-                filteredQuestions().map((q, idx) => {
+                filteredQuestions().map((q) => {
                   const isEditing = editingId === q.id;
+                  const isOverriding = overrideQId === q.id;
+
                   return (
                     <div
                       key={q.id}
-                      className={`rounded-xl border-2 bg-card transition-colors ${
-                        q.review_status === "accepted" ? "border-emerald-300 bg-emerald-50/30" :
-                        q.review_status === "rejected" ? "border-red-200 bg-red-50/20 opacity-60" :
-                        q.is_duplicate ? "border-purple-300 bg-purple-50/20" :
+                      className={`rounded-2xl border-2 bg-card transition-colors ${
+                        q.review_status === "accepted" ? "border-emerald-300/80 bg-emerald-50/15" :
+                        q.review_status === "rejected" ? "border-red-200 bg-red-50/15 opacity-60" :
+                        q.needs_review ? "border-amber-300 bg-amber-50/20" :
+                        q.is_duplicate ? "border-purple-300 bg-purple-50/15" :
                         "border-border"
                       }`}
                     >
-                      {/* Question header */}
-                      <div className="flex items-start gap-3 px-4 py-3">
-                        {bulkSelecting && (
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(q.id)}
-                            onChange={() => {
-                              setSelectedIds((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(q.id)) next.delete(q.id); else next.add(q.id);
-                                return next;
-                              });
-                            }}
-                            className="mt-1 accent-primary shrink-0"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap gap-1.5 mb-2">
-                            <span className="text-xs font-mono text-muted-foreground">P{q.page_number}{q.question_number ? ` Q${q.question_number}` : ""}</span>
-                            {q.is_duplicate && <span className="text-xs font-bold text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded-md">DUPLICATE</span>}
-                            {q.needs_manual_options && <span className="text-xs font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded-md">NEEDS OPTIONS</span>}
-                            {q.options_generated_by_ai && <span className="text-xs font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-md">AI OPTIONS</span>}
-                            {q.question_type === "multiple_answer" && <span className="text-xs font-bold text-teal-600 bg-teal-100 px-1.5 py-0.5 rounded-md">MULTI-ANSWER</span>}
+                      <div className="p-4 space-y-3">
+
+                        {/* Top Meta Line */}
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {bulkSelecting && (
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(q.id)}
+                                onChange={() => {
+                                  setSelectedIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(q.id)) next.delete(q.id); else next.add(q.id);
+                                    return next;
+                                  });
+                                }}
+                                className="accent-primary mr-1 shrink-0"
+                              />
+                            )}
+                            <span className="text-xs font-mono font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
+                              P{q.page_number}{q.question_number ? ` · Q${q.question_number}` : ""}
+                            </span>
+                            {q.question_type === "multiple_answer" && (
+                              <span className="text-xs font-bold text-teal-700 bg-teal-100 px-2 py-0.5 rounded-md">
+                                Multi-Answer
+                              </span>
+                            )}
+                            {q.is_duplicate && (
+                              <span className="text-xs font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">
+                                Duplicate
+                              </span>
+                            )}
+                            {q.needs_manual_options && (
+                              <span className="text-xs font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-md">
+                                Needs Options
+                              </span>
+                            )}
                           </div>
 
-                          {isEditing ? (
-                            <div className="space-y-3">
-                              <textarea
-                                value={editStem}
-                                onChange={(e) => setEditStem(e.target.value)}
-                                rows={3}
-                                className="w-full rounded-xl border-2 border-primary px-3 py-2 text-sm focus:outline-none resize-none"
-                              />
-                              <div className="space-y-1.5">
-                                {editOptions.map((o, oi) => (
-                                  <div key={oi} className="flex items-center gap-2">
-                                    <span className="text-xs font-mono font-bold text-muted-foreground w-6 text-center">{o.letter}</span>
-                                    <input
-                                      type="text"
-                                      value={o.body}
-                                      onChange={(e) => {
-                                        const next = [...editOptions];
-                                        next[oi] = { ...next[oi], body: e.target.value };
-                                        setEditOptions(next);
-                                      }}
-                                      className="flex-1 rounded-lg border border-border px-3 py-1.5 text-sm focus:outline-none focus:border-primary"
-                                    />
-                                    <button type="button" onClick={() => setEditOptions((prev) => prev.filter((_, i) => i !== oi))} className="text-red-400 hover:text-red-600"><X size={14} /></button>
-                                  </div>
-                                ))}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const nextLetter = String.fromCharCode(65 + editOptions.length);
-                                    setEditOptions([...editOptions, { letter: nextLetter, body: "" }]);
-                                  }}
-                                  className="text-xs text-primary font-bold hover:underline"
-                                >
-                                  + Add option
-                                </button>
-                              </div>
-                              <div className="flex gap-2">
-                                <button type="button" onClick={saveEdit} disabled={savingEdit} className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-primary-foreground text-xs font-bold disabled:opacity-50">
-                                  {savingEdit ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Save
-                                </button>
-                                <button type="button" onClick={() => setEditingId(null)} className="flex items-center gap-1.5 rounded-lg border border-border px-4 py-1.5 text-xs font-bold text-muted-foreground hover:bg-muted">
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <p className="text-sm font-medium text-foreground leading-relaxed">{q.stem}</p>
-                              <div className="mt-2 space-y-1">
-                                {q.options.map((o) => (
-                                  <p key={o.letter} className="text-xs text-muted-foreground">
-                                    <span className="font-mono font-bold text-foreground/70">{o.letter}.</span> {o.body}
-                                  </p>
-                                ))}
-                              </div>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Action buttons */}
-                        {!isEditing && (
-                          <div className="flex items-center gap-1 shrink-0">
+                          {/* Accept / Reject Status controls */}
+                          <div className="flex items-center gap-1">
                             <button
                               type="button"
-                              title="Accept"
+                              title="Accept question"
                               onClick={() => setReviewStatus(q.id, q.review_status === "accepted" ? "pending" : "accepted")}
-                              className={`p-1.5 rounded-lg transition-colors ${q.review_status === "accepted" ? "text-emerald-600 bg-emerald-100" : "text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50"}`}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                q.review_status === "accepted" ? "text-emerald-600 bg-emerald-100" : "text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50"
+                              }`}
                             >
-                              <CheckCircle2 size={18} />
+                              <CheckCircle2 size={16} />
                             </button>
                             <button
                               type="button"
-                              title="Reject"
+                              title="Reject question"
                               onClick={() => setReviewStatus(q.id, q.review_status === "rejected" ? "pending" : "rejected")}
-                              className={`p-1.5 rounded-lg transition-colors ${q.review_status === "rejected" ? "text-red-600 bg-red-100" : "text-muted-foreground hover:text-red-600 hover:bg-red-50"}`}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                q.review_status === "rejected" ? "text-red-600 bg-red-100" : "text-muted-foreground hover:text-red-600 hover:bg-red-50"
+                              }`}
                             >
-                              <XCircle size={18} />
+                              <XCircle size={16} />
                             </button>
                             <button
                               type="button"
-                              title="Edit"
+                              title="Edit stem & options"
                               onClick={() => startEdit(q)}
                               className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                             >
-                              <Edit3 size={16} />
+                              <Edit3 size={15} />
                             </button>
+                          </div>
+                        </div>
+
+                        {/* Phase 2 Determined Answer Banner */}
+                        <div className="rounded-xl border border-border/80 bg-muted/20 p-3 space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {q.selected_answer != null ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                  <Check size={13} />
+                                  Correct: Option {formatSelectedAnswer(q.selected_answer)}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground font-medium px-2 py-0.5 bg-muted rounded">
+                                  Not yet answered (Phase 2)
+                                </span>
+                              )}
+
+                              {q.answer_source && (
+                                <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-muted text-muted-foreground">
+                                  Source: {q.answer_source === "study_material" ? "Study Material" : q.answer_source === "user_answer_key" ? "Answer Key" : "AI Solved"}
+                                </span>
+                              )}
+                              {q.confidence && (
+                                <span className="text-[11px] font-bold text-muted-foreground">
+                                  [{q.confidence} confidence]
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => openAnswerOverride(q)}
+                              className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
+                            >
+                              <Edit3 size={12} /> Override Answer
+                            </button>
+                          </div>
+
+                          {/* Needs Review Warning Banner */}
+                          {q.needs_review && (
+                            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-start gap-2">
+                              <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                              <div>
+                                <p className="font-bold">Needs Review</p>
+                                <p className="text-[11px] text-amber-800">{q.review_reason || "Uncertain or unverified answer."}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Source Reference Tag */}
+                          {q.source_reference && (
+                            <p className="text-[11px] text-muted-foreground font-mono flex items-center gap-1">
+                              <BookOpen size={12} className="text-primary" /> {q.source_reference}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Inline Override Form */}
+                        {isOverriding && (
+                          <div className="rounded-xl border-2 border-primary bg-primary/5 p-3 space-y-2">
+                            <p className="text-xs font-bold text-foreground">Change Correct Option:</p>
+                            {q.question_type === "multiple_answer" ? (
+                              <div className="flex flex-wrap gap-2">
+                                {q.options.map((opt) => {
+                                  const checked = overrideMulti.includes(opt.letter);
+                                  return (
+                                    <label key={opt.letter} className="flex items-center gap-1 text-xs cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={() => {
+                                          setOverrideMulti((prev) =>
+                                            checked ? prev.filter((l) => l !== opt.letter) : [...prev, opt.letter]
+                                          );
+                                        }}
+                                        className="accent-primary"
+                                      />
+                                      <span className="font-bold">{opt.letter}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                {q.options.map((opt) => (
+                                  <label key={opt.letter} className="flex items-center gap-1 text-xs cursor-pointer">
+                                    <input
+                                      type="radio"
+                                      name={`override-${q.id}`}
+                                      value={opt.letter}
+                                      checked={overrideAnswer === opt.letter}
+                                      onChange={() => setOverrideAnswer(opt.letter)}
+                                      className="accent-primary"
+                                    />
+                                    <span className="font-bold">{opt.letter})</span>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={saveAnswerOverride}
+                                disabled={savingOverride}
+                                className="px-3 py-1 bg-primary text-primary-foreground text-xs font-bold rounded-lg"
+                              >
+                                {savingOverride ? <Loader2 size={12} className="animate-spin" /> : "Save Answer"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setOverrideQId(null)}
+                                className="px-3 py-1 border border-border text-xs font-bold rounded-lg hover:bg-muted"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Stem & Options Display */}
+                        {isEditing ? (
+                          <div className="space-y-3 pt-2">
+                            <textarea
+                              value={editStem}
+                              onChange={(e) => setEditStem(e.target.value)}
+                              rows={3}
+                              className="w-full rounded-xl border-2 border-primary px-3 py-2 text-sm focus:outline-none resize-none"
+                            />
+                            <div className="space-y-1.5">
+                              {editOptions.map((o, oi) => (
+                                <div key={oi} className="flex items-center gap-2">
+                                  <span className="text-xs font-mono font-bold text-muted-foreground w-6 text-center">{o.letter}</span>
+                                  <input
+                                    type="text"
+                                    value={o.body}
+                                    onChange={(e) => {
+                                      const next = [...editOptions];
+                                      next[oi] = { ...next[oi], body: e.target.value };
+                                      setEditOptions(next);
+                                    }}
+                                    className="flex-1 rounded-lg border border-border px-3 py-1.5 text-sm focus:outline-none focus:border-primary"
+                                  />
+                                  <button type="button" onClick={() => setEditOptions((prev) => prev.filter((_, i) => i !== oi))} className="text-red-400 hover:text-red-600"><X size={14} /></button>
+                                </div>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextLetter = String.fromCharCode(65 + editOptions.length);
+                                  setEditOptions([...editOptions, { letter: nextLetter, body: "" }]);
+                                }}
+                                className="text-xs text-primary font-bold hover:underline"
+                              >
+                                + Add option
+                              </button>
+                            </div>
+                            <div className="flex gap-2">
+                              <button type="button" onClick={saveEdit} disabled={savingEdit} className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-primary-foreground text-xs font-bold disabled:opacity-50">
+                                {savingEdit ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Save
+                              </button>
+                              <button type="button" onClick={() => setEditingId(null)} className="flex items-center gap-1.5 rounded-lg border border-border px-4 py-1.5 text-xs font-bold text-muted-foreground hover:bg-muted">
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium text-foreground leading-relaxed">{q.stem}</p>
+                            <div className="space-y-1 pl-1">
+                              {q.options.map((o) => {
+                                const isThisCorrect =
+                                  q.selected_answer != null &&
+                                  (Array.isArray(q.selected_answer)
+                                    ? q.selected_answer.includes(o.letter)
+                                    : String(q.selected_answer).toUpperCase() === o.letter.toUpperCase());
+
+                                return (
+                                  <p
+                                    key={o.letter}
+                                    className={`text-xs rounded-lg px-2.5 py-1 transition-colors ${
+                                      isThisCorrect
+                                        ? "font-bold text-emerald-900 bg-emerald-100/70 border border-emerald-300"
+                                        : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                  >
+                                    <span className="font-mono font-bold">{o.letter}.</span> {o.body}
+                                  </p>
+                                );
+                              })}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1102,28 +2068,37 @@ function McqGeneratorPro() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            STEP 4 — IMPORT
+            STEP 4 — IMPORT TO LIVE COURSE
         ══════════════════════════════════════════════════════════════════ */}
         {step === "import" && activeSession && (
           <div className="space-y-6">
-
-            {/* Summary */}
             <div className="rounded-2xl border-2 border-border bg-card p-6">
               <h2 className="font-black text-base mb-4 flex items-center gap-2">
-                <Import size={18} className="text-primary" /> Import to Course
+                <Import size={18} className="text-primary" /> Import Accepted MCQs to Course
               </h2>
-              <div className="flex flex-wrap gap-4 text-sm mb-4">
-                <p><span className="font-bold text-emerald-600">{stats.accepted}</span> questions will be imported (accepted)</p>
-                <p><span className="font-bold text-red-500">{stats.rejected}</span> rejected (skipped)</p>
-                <p><span className="font-bold text-amber-500">{stats.pending}</span> pending (will be skipped)</p>
+
+              <div className="grid grid-cols-3 gap-3 mb-4 text-center">
+                <div className="rounded-xl border border-emerald-300 bg-emerald-50/50 p-3">
+                  <p className="text-xl font-black text-emerald-700">{stats.accepted}</p>
+                  <p className="text-xs text-emerald-900">Accepted (will be imported)</p>
+                </div>
+                <div className="rounded-xl border border-border bg-muted/30 p-3">
+                  <p className="text-xl font-black text-foreground">{stats.answered}</p>
+                  <p className="text-xs text-muted-foreground">With Correct Answers</p>
+                </div>
+                <div className="rounded-xl border border-amber-300 bg-amber-50/50 p-3">
+                  <p className="text-xl font-black text-amber-700">{stats.needsReview}</p>
+                  <p className="text-xs text-amber-900">Flagged Needs Review</p>
+                </div>
               </div>
+
               {stats.accepted === 0 && (
                 <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-amber-800 text-sm flex items-center gap-2 mb-4">
-                  <AlertTriangle size={16} /> No accepted questions yet. Go back to Review and accept some questions first.
+                  <AlertTriangle size={16} /> No accepted questions yet. Go back to Review and accept questions to import.
                 </div>
               )}
 
-              {/* Course selector */}
+              {/* Course dropdowns */}
               <div className="grid sm:grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1 block">Course</label>
@@ -1177,7 +2152,7 @@ function McqGeneratorPro() {
                   Import Result
                 </h3>
                 <div className="flex flex-wrap gap-4 text-sm mb-2">
-                  <p><span className="font-black text-emerald-700 text-xl">{importResult.inserted}</span> inserted</p>
+                  <p><span className="font-black text-emerald-700 text-xl">{importResult.inserted}</span> inserted into live course</p>
                   <p><span className="font-black text-amber-700 text-xl">{importResult.skipped}</span> skipped (already exist)</p>
                 </div>
                 {importResult.errors.length > 0 && (
@@ -1221,4 +2196,8 @@ function McqGeneratorPro() {
       </main>
     </div>
   );
+}
+
+function BrainIcon(props: any) {
+  return <Cpu {...props} />;
 }
