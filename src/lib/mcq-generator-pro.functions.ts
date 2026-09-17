@@ -1426,7 +1426,7 @@ export const applyAnswerKeyBatch = createServerFn({ method: "POST" })
 
     // Index questions by printed question_number and by array index
     const qByNumber = new Map<string, any>();
-    questions.forEach((q, idx) => {
+    (questions as any[]).forEach((q: any, idx: number) => {
       if (q.question_number != null) {
         qByNumber.set(String(q.question_number), q);
       }

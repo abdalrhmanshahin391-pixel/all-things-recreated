@@ -121,7 +121,7 @@ function AdminLecturesPage() {
       .order("title");
     if (!isAdmin) q = q.in("id", staffIds.length ? staffIds : ["00000000-0000-0000-0000-000000000000"]);
     const { data } = await q;
-    const list = (data as Course[]) ?? [];
+    const list = ((data ?? []) as unknown as Course[]);
     setCourses(list);
     setActiveCourseId((prev) => (prev && list.some((c) => c.id === prev) ? prev : (list[0]?.id ?? "")));
   }

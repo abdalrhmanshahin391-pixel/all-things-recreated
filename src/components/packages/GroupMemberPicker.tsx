@@ -7,13 +7,16 @@ export type GroupMember = { id: string; username: string; full_name: string; ema
 
 export function GroupMemberPicker({
   needed,
+  totalSeats,
   value,
   onChange,
 }: {
-  needed: number;
+  needed?: number;
+  totalSeats?: number;
   value: GroupMember[];
   onChange: (next: GroupMember[]) => void;
 }) {
+  const neededCount = needed ?? Math.max(1, (totalSeats ?? 2) - 1);
   const search = useServerFn(searchUsersForGroup);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GroupMember[]>([]);
@@ -45,7 +48,7 @@ export function GroupMemberPicker({
   }, [query, value, search]);
 
   function add(m: GroupMember) {
-    if (value.length >= needed) return;
+    if (value.length >= neededCount) return;
     onChange([...value, m]);
     setQuery("");
     setResults([]);
@@ -59,7 +62,7 @@ export function GroupMemberPicker({
   return (
     <div>
       <div className="text-xs uppercase tracking-widest text-white/50 mb-2">
-        Group members · {value.length} / {needed} picked
+        Group members · {value.length} / {neededCount} picked
       </div>
 
       {/* Picked chips */}
@@ -99,11 +102,11 @@ export function GroupMemberPicker({
             }}
             onFocus={() => setOpen(true)}
             placeholder={
-              value.length >= needed
+              value.length >= neededCount
                 ? "All members picked"
                 : "Search by username, email, or full name"
             }
-            disabled={value.length >= needed}
+            disabled={value.length >= neededCount}
             className="flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-none disabled:cursor-not-allowed"
           />
           {loading && <Loader2 className="w-4 h-4 animate-spin text-white/40" />}

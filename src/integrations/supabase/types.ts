@@ -1279,6 +1279,7 @@ export type Database = {
           published: boolean
           questions_count_final: number
           questions_count_mid: number
+          semester: number | null
           show_on_home: boolean
           subjects_count: number
           title: string
@@ -1312,6 +1313,7 @@ export type Database = {
           published?: boolean
           questions_count_final?: number
           questions_count_mid?: number
+          semester?: number | null
           show_on_home?: boolean
           subjects_count?: number
           title: string
@@ -1345,6 +1347,7 @@ export type Database = {
           published?: boolean
           questions_count_final?: number
           questions_count_mid?: number
+          semester?: number | null
           show_on_home?: boolean
           subjects_count?: number
           title?: string
@@ -3345,44 +3348,68 @@ export type Database = {
       }
       packages: {
         Row: {
+          badge_text: string | null
+          choice_count: number
           created_at: string
           currency: string
           description: string | null
+          features: Json
           group_size: number
           id: string
+          image_url: string | null
           name: string
+          notes: string | null
+          original_price: number | null
+          package_kind: string
           package_type: Database["public"]["Enums"]["package_type"]
           paddle_price_id: string | null
           price: number
           published: boolean
+          selection_mode: string
           sort_order: number
           updated_at: string
         }
         Insert: {
+          badge_text?: string | null
+          choice_count?: number
           created_at?: string
           currency?: string
           description?: string | null
+          features?: Json
           group_size?: number
           id?: string
+          image_url?: string | null
           name: string
+          notes?: string | null
+          original_price?: number | null
+          package_kind?: string
           package_type?: Database["public"]["Enums"]["package_type"]
           paddle_price_id?: string | null
           price?: number
           published?: boolean
+          selection_mode?: string
           sort_order?: number
           updated_at?: string
         }
         Update: {
+          badge_text?: string | null
+          choice_count?: number
           created_at?: string
           currency?: string
           description?: string | null
+          features?: Json
           group_size?: number
           id?: string
+          image_url?: string | null
           name?: string
+          notes?: string | null
+          original_price?: number | null
+          package_kind?: string
           package_type?: Database["public"]["Enums"]["package_type"]
           paddle_price_id?: string | null
           price?: number
           published?: boolean
+          selection_mode?: string
           sort_order?: number
           updated_at?: string
         }

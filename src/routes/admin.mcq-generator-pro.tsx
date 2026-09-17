@@ -432,8 +432,8 @@ function McqGeneratorPro() {
 
   useEffect(() => {
     if (!importCourseId) { setGroups([]); setImportGroupId(""); return; }
-    supabase.from("groups").select("id,name,course_id").eq("course_id", importCourseId)
-      .then(({ data }) => { setGroups(data ?? []); setImportGroupId(""); setSubjects([]); setImportSubjectId(""); });
+    supabase.from("subject_groups").select("id,name,course_id").eq("course_id", importCourseId)
+      .then(({ data }) => { setGroups((data as any) ?? []); setImportGroupId(""); setSubjects([]); setImportSubjectId(""); });
   }, [importCourseId]);
 
   useEffect(() => {

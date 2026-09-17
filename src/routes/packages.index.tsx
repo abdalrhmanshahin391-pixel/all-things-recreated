@@ -449,6 +449,7 @@ function PackagesPage() {
             <div className="p-6">
               <GroupMemberPicker
                 totalSeats={groupPick.pkg.group_size}
+                needed={Math.max(1, groupPick.pkg.group_size - 1)}
                 value={groupPick.members}
                 onChange={(members) => setGroupPick({ ...groupPick, members })}
               />

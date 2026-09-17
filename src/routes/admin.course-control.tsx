@@ -86,7 +86,7 @@ function CourseControlPage() {
         supabase.from("universities").select("id, name").order("name"),
       ]);
       if (error) toast.error(error.message);
-      setRows((cs ?? []) as Row[]);
+      setRows((cs ?? []) as unknown as Row[]);
       setUnis((us ?? []) as Array<{ id: string; name: string }>);
       setFetching(false);
     })();

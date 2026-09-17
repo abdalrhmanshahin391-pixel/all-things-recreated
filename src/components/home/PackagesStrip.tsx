@@ -31,7 +31,7 @@ export const homePackagesQuery = queryOptions({
       .eq("published", true)
       .order("sort_order", { ascending: true })
       .order("name", { ascending: true });
-    const packages = (data ?? []) as Package[];
+    const packages = (data ?? []) as unknown as Package[];
     const courseCounts: Record<string, number> = {};
     if (packages.length > 0) {
       const { data: rows } = await supabase

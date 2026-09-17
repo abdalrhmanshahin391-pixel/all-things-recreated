@@ -1239,7 +1239,7 @@ function EditCourseModal({
 
     let { error } = await supabase
       .from("courses")
-      .update(updatePayload)
+      .update(updatePayload as any)
       .eq("id", course.id);
 
     if (error && (error.message?.toLowerCase().includes("semester") || (error as any).code === "PGRST204")) {
@@ -1248,7 +1248,7 @@ function EditCourseModal({
       delete fallbackPayload.semester;
       const retry = await supabase
         .from("courses")
-        .update(fallbackPayload)
+        .update(fallbackPayload as any)
         .eq("id", course.id);
       if (!retry.error) {
         error = null;

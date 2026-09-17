@@ -45,7 +45,7 @@ export const homeCoursesQuery = queryOptions({
         .eq("kind", "questions")
         .order("year", { ascending: true })
         .order("title", { ascending: true });
-      const courses = (data ?? []) as Course[];
+      const courses = (data ?? []) as unknown as Course[];
       const counts: Counts = {};
       if (courses.length > 0) {
         const { data: rows } = await supabase.rpc("get_course_real_counts", {
