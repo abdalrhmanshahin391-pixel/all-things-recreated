@@ -1,6 +1,7 @@
 // MCQ Generator 1.24 Pro — Standalone Engine Server Functions
 // Dedicated, restricted-access medical MCQ engine with custom API key management,
-// multi-provider vision processing, Mode 1 & 2 combination logic, and AquavisionX explanations.
+// multi-provider vision processing, Mode 1 & 2 combination logic, AquavisionX explanations,
+// Batch API (50% discount) for both extraction & solving, and bulk missing distractor filling.
 
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -161,26 +162,8 @@ export interface ExtractedQuestion {
   isDuplicate?: boolean;
 }
 
-// ── 1. Page Vision Extraction ─────────────────────────────────────────────────
-const ExtractPageInput = z.object({
-  pageNumber: z.number().int().min(1),
-  imageJpegBase64: z.string().min(10),
-  combinationMode: z.enum(["mode1_keep_original", "mode2_convert_multiple"]),
-  model: z.string(),
-  openaiApiKey: z.string().optional(),
-  geminiApiKey: z.string().optional(),
-  customInstructions: z.string().optional(),
-});
-
-export const extractPageQuestions124 = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .validator((d: unknown) => ExtractPageInput.parse(d))
-  .handler(async ({ data, context }) => {
-    await ensureAdmin(context);
-
-    const { pageNumber, imageJpegBase64, combinationMode, model, openaiApiKey, geminiApiKey, customInstructions } = data;
-
-    const systemPrompt = `You are a medical examination transcription engine reading high-resolution photographs/scans of medical exam papers.
+function buildExtractionSystemPrompt(combinationMode: "mode1_keep_original" | "mode2_convert_multiple", customInstructions?: string): string {
+  return `You are a medical examination transcription engine reading high-resolution photographs/scans of medical exam papers.
 Your mission is to transcribe EVERY question from this page VERBATIM with zero hallucination.
 
 COMBINATION QUESTION MODE SELECTED BY SYSTEM:
@@ -235,7 +218,27 @@ Return STRICT JSON:
     }
   ]
 }`;
+}
 
+// ── 1. Page Vision Extraction (Standard Mode) ─────────────────────────────────
+const ExtractPageInput = z.object({
+  pageNumber: z.number().int().min(1),
+  imageJpegBase64: z.string().min(10),
+  combinationMode: z.enum(["mode1_keep_original", "mode2_convert_multiple"]),
+  model: z.string(),
+  openaiApiKey: z.string().optional(),
+  geminiApiKey: z.string().optional(),
+  customInstructions: z.string().optional(),
+});
+
+export const extractPageQuestions124 = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => ExtractPageInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await ensureAdmin(context);
+
+    const { pageNumber, imageJpegBase64, combinationMode, model, openaiApiKey, geminiApiKey, customInstructions } = data;
+    const systemPrompt = buildExtractionSystemPrompt(combinationMode, customInstructions);
     const userPrompt = `Transcribe all medical MCQs visible on Page ${pageNumber} of this exam paper.`;
 
     const rawOutput = await callUnifiedAi({
@@ -288,7 +291,7 @@ Return STRICT JSON:
     return { pageNumber, questions };
   });
 
-// ── 2. AI Missing Distractor Generator ────────────────────────────────────────
+// ── 2. AI Missing Distractor Generator (Single & Bulk) ────────────────────────
 const FillMissingInput = z.object({
   stem: z.string().min(1),
   currentOptions: z.array(z.object({ letter: z.string(), text: z.string() })),
@@ -353,6 +356,86 @@ Generate ${needed} additional medical distractor(s) to complete 4 total options.
     return { options: resultOptions };
   });
 
+// Bulk Fill Missing Options
+const FillAllMissingInput = z.object({
+  questions: z.array(
+    z.object({
+      id: z.string(),
+      stem: z.string(),
+      options: z.array(z.object({ letter: z.string(), text: z.string() })),
+    })
+  ),
+  model: z.string(),
+  openaiApiKey: z.string().optional(),
+  geminiApiKey: z.string().optional(),
+});
+
+export const fillAllMissingOptions124 = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => FillAllMissingInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await ensureAdmin(context);
+
+    const { questions, model, openaiApiKey, geminiApiKey } = data;
+    const updatedMap: Record<string, Array<{ letter: string; text: string }>> = {};
+
+    for (const q of questions) {
+      const needed = 4 - q.options.length;
+      if (needed <= 0) continue;
+
+      try {
+        const systemPrompt = `You are a medical exam editor.
+The following medical MCQ is missing ${needed} answer choice(s).
+Generate exactly ${needed} plausible, high-yield medical distractor(s) that fit the difficulty, tone, and clinical context of the stem and existing choices.
+
+Return STRICT JSON:
+{
+  "new_options": [
+    { "text": "generated plausible distractor text" }
+  ]
+}`;
+
+        const userPrompt = `Question Stem:
+${q.stem}
+
+Existing Options:
+${q.options.map((o) => `${o.letter}) ${o.text}`).join("\n")}
+
+Generate ${needed} additional medical distractor(s) to complete 4 total options.`;
+
+        const rawOutput = await callUnifiedAi({
+          model,
+          systemPrompt,
+          userPrompt,
+          openaiApiKey,
+          geminiApiKey,
+          jsonMode: true,
+        });
+
+        const parsed = parseJsonObject(rawOutput);
+        const newOptions = Array.isArray(parsed?.new_options) ? parsed.new_options : [];
+
+        const resultOptions = [...q.options];
+        const letters = ["A", "B", "C", "D", "E", "F"];
+
+        for (const no of newOptions) {
+          if (resultOptions.length >= 4) break;
+          const nextLetter = letters[resultOptions.length] || "D";
+          resultOptions.push({
+            letter: nextLetter,
+            text: String(no.text || "").trim(),
+          });
+        }
+        updatedMap[q.id] = resultOptions;
+      } catch {
+        // preserve existing if single item fails
+        updatedMap[q.id] = q.options;
+      }
+    }
+
+    return { updatedMap };
+  });
+
 // ── 3. Deduplication Utility ─────────────────────────────────────────────────
 export function detectDuplicates124<T extends ExtractedQuestion>(questions: T[]): {
   cleaned: T[];
@@ -377,7 +460,7 @@ export function detectDuplicates124<T extends ExtractedQuestion>(questions: T[])
   return { cleaned, duplicateCount: dupCount };
 }
 
-// ── 4. Solve and Generate AquavisionX Explanation ─────────────────────────────
+// ── 4. Solve and Generate AquavisionX Explanation (with Source Citation) ──────
 const SolveQuestionInput = z.object({
   question: z.object({
     id: z.string(),
@@ -392,6 +475,7 @@ const SolveQuestionInput = z.object({
   sourceMethod: z.enum(["ai", "source_material", "answer_key"]),
   studyMaterialText: z.string().optional(),
   studyMaterialName: z.string().optional(),
+  includeSourceCitation: z.boolean().optional(),
   answerKeyText: z.string().optional(),
   combinationMode: z.enum(["mode1_keep_original", "mode2_convert_multiple"]),
   model: z.string(),
@@ -405,7 +489,7 @@ export const solveAndExplain124 = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await ensureAdmin(context);
 
-    const { question, sourceMethod, studyMaterialText, studyMaterialName, answerKeyText, combinationMode, model, openaiApiKey, geminiApiKey } = data;
+    const { question, sourceMethod, studyMaterialText, studyMaterialName, includeSourceCitation, answerKeyText, combinationMode, model, openaiApiKey, geminiApiKey } = data;
 
     let authorityPrompt = "";
     if (sourceMethod === "source_material" && studyMaterialText) {
@@ -415,7 +499,16 @@ END OF AUTHORITY SOURCE.
 
 CRITICAL SOLVING RULE:
 - You MUST solve the question strictly according to the facts, classifications, and diagnostic criteria stated in the authority source.
-- If the question requires clinical reasoning beyond direct quotation, use the source as your primary foundational basis.`;
+- If the question requires clinical reasoning beyond direct quotation, use the source as your primary foundational basis.
+${
+  includeSourceCitation
+    ? `- SOURCE CITATION REQUIREMENT:
+  You must identify and state the exact location (e.g. Chapter title, Section name, Page number, or verbatim excerpt) in the provided study material where the question's concept and answer are found.
+  Include this in a dedicated section in the explanation:
+  **Source Reference**
+  [Exact section / page / chapter / quoted text reference from source]`
+    : ""
+}`;
     } else if (sourceMethod === "answer_key" && answerKeyText) {
       authorityPrompt = `PROVIDED ANSWER KEY REFERENCE:
 ${answerKeyText.slice(0, 10000)}
@@ -453,6 +546,13 @@ List ONLY the incorrect options. Each bullet MUST begin with the option's text i
 Example:
 - **Kanamycin** — is an aminoglycoside second-line TB agent associated with ototoxicity and nephrotoxicity, not pellagra-like dermatitis.
 
+${
+  includeSourceCitation && sourceMethod === "source_material"
+    ? `**Source Reference**
+Explicitly state where in the provided source document this concept/answer is located (Section/Page/Excerpt).`
+    : ""
+}
+
 SUMMARY TABLE REQUIREMENT:
 Provide a GitHub-flavored Markdown summary table comparing all choices:
 | Option | Verdict | Medical Reason |
@@ -465,6 +565,7 @@ Return STRICT JSON:
   "selected_answer": "Letter or statement numbers (e.g. B or 1,3)",
   "correct_option_letters": ["B"],
   "concept": "<=8 words naming the core concept",
+  "source_reference": "Section / page / excerpt if applicable",
   "explanation": "**Concept**\\n...\\n\\n**Why the correct answer is right**\\n...\\n\\n**Why the other options are wrong**\\n...",
   "summary_table": "| Option | Verdict | Medical Reason |\\n|---|---|---|\\n..."
 }`;
@@ -503,12 +604,210 @@ Solve this question and generate the complete AquavisionX medical explanation an
       selectedAnswer: String(parsed?.selected_answer || selectedLetters.join(", ")),
       options: updatedOptions,
       concept: String(parsed?.concept || ""),
+      sourceReference: parsed?.source_reference ? String(parsed.source_reference) : undefined,
       explanation: String(parsed?.explanation || ""),
       summaryTable: String(parsed?.summary_table || ""),
     };
   });
 
-// ── 5. Direct Course Importer ─────────────────────────────────────────────────
+// ── 5. Batch API Handlers (50% Discount Asynchronous Mode) ────────────────────
+
+// A. Create OpenAI Batch Extraction Job
+const CreateBatchExtractionInput = z.object({
+  pages: z.array(
+    z.object({
+      pageNumber: z.number().int().min(1),
+      imageJpegBase64: z.string().min(10),
+    })
+  ),
+  combinationMode: z.enum(["mode1_keep_original", "mode2_convert_multiple"]),
+  model: z.string(),
+  openaiApiKey: z.string(),
+  customInstructions: z.string().optional(),
+});
+
+export const createOpenAiBatchExtraction124 = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => CreateBatchExtractionInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await ensureAdmin(context);
+
+    const { pages, combinationMode, model, openaiApiKey, customInstructions } = data;
+    const actualModel = model === "gpt-4.1-mini" ? "gpt-4o-mini" : model === "gpt-4.1" ? "gpt-4o" : model;
+    const systemPrompt = buildExtractionSystemPrompt(combinationMode, customInstructions);
+
+    // Build JSONL lines
+    const jsonlLines = pages.map((p) => {
+      const lineObj = {
+        custom_id: `page-${p.pageNumber}`,
+        method: "POST",
+        url: "/v1/chat/completions",
+        body: {
+          model: actualModel,
+          messages: [
+            { role: "system", content: systemPrompt },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: `Transcribe all medical MCQs visible on Page ${p.pageNumber} of this exam paper.` },
+                {
+                  type: "image_url",
+                  image_url: { url: `data:image/jpeg;base64,${p.imageJpegBase64}`, detail: "high" },
+                },
+              ],
+            },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.1,
+        },
+      };
+      return JSON.stringify(lineObj);
+    });
+
+    const jsonlContent = jsonlLines.join("\n");
+    const blob = new Blob([jsonlContent], { type: "application/jsonl" });
+    const formData = new FormData();
+    formData.append("purpose", "batch");
+    formData.append("file", blob, `batch-extract-${Date.now()}.jsonl`);
+
+    // 1. Upload File
+    const fileRes = await fetch("https://api.openai.com/v1/files", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${openaiApiKey}` },
+      body: formData,
+    });
+    const fileJson = await fileRes.json();
+    if (!fileRes.ok) throw new Error(`OpenAI file upload failed: ${fileJson?.error?.message || JSON.stringify(fileJson)}`);
+
+    const fileId = fileJson.id;
+
+    // 2. Create Batch Job
+    const batchRes = await fetch("https://api.openai.com/v1/batches", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        input_file_id: fileId,
+        endpoint: "/v1/chat/completions",
+        completion_window: "24h",
+      }),
+    });
+    const batchJson = await batchRes.json();
+    if (!batchRes.ok) throw new Error(`OpenAI batch creation failed: ${batchJson?.error?.message || JSON.stringify(batchJson)}`);
+
+    return {
+      batchId: batchJson.id as string,
+      status: batchJson.status as string,
+      totalPages: pages.length,
+      createdAt: new Date().toISOString(),
+    };
+  });
+
+// B. Check Batch Status
+const CheckBatchInput = z.object({
+  batchId: z.string(),
+  openaiApiKey: z.string(),
+});
+
+export const checkOpenAiBatchStatus124 = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => CheckBatchInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await ensureAdmin(context);
+
+    const { batchId, openaiApiKey } = data;
+    const res = await fetch(`https://api.openai.com/v1/batches/${batchId}`, {
+      headers: { Authorization: `Bearer ${openaiApiKey}` },
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(`Batch status check failed: ${json?.error?.message || JSON.stringify(json)}`);
+
+    return {
+      batchId: json.id as string,
+      status: json.status as string, // validating, in_progress, completed, failed, expired, cancelling, cancelled
+      requestCounts: json.request_counts || { total: 0, completed: 0, failed: 0 },
+      outputFileId: json.output_file_id as string | null,
+      errorFileId: json.error_file_id as string | null,
+    };
+  });
+
+// C. Retrieve Batch Extraction Results
+const RetrieveBatchInput = z.object({
+  outputFileId: z.string(),
+  openaiApiKey: z.string(),
+});
+
+export const retrieveOpenAiBatchExtractionResults124 = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => RetrieveBatchInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await ensureAdmin(context);
+
+    const { outputFileId, openaiApiKey } = data;
+    const res = await fetch(`https://api.openai.com/v1/files/${outputFileId}/content`, {
+      headers: { Authorization: `Bearer ${openaiApiKey}` },
+    });
+    if (!res.ok) throw new Error("Failed to download batch output file content.");
+
+    const text = await res.text();
+    const lines = text.split("\n").filter((l) => l.trim());
+    const allQuestions: ExtractedQuestion[] = [];
+
+    for (const line of lines) {
+      try {
+        const item = JSON.parse(line);
+        const customId = String(item.custom_id || "");
+        const pageMatch = customId.match(/page-(\d+)/);
+        const pageNumber = pageMatch ? parseInt(pageMatch[1], 10) : 1;
+
+        const bodyContent = item.response?.body?.choices?.[0]?.message?.content;
+        const parsed = parseJsonObject(bodyContent);
+        const rawQs = Array.isArray(parsed?.questions) ? parsed.questions : [];
+
+        for (let idx = 0; idx < rawQs.length; idx++) {
+          const q = rawQs[idx];
+          const qNum = String(q.number || idx + 1).trim();
+          const rawOptions = Array.isArray(q.options) ? q.options : [];
+          const options = rawOptions.map((o: any, oIdx: number) => ({
+            letter: String(o.letter || String.fromCharCode(65 + oIdx)).toUpperCase(),
+            text: String(o.text || o.body || "").trim(),
+          })).filter((o: any) => o.text);
+
+          const isTwoChoice = options.length === 2 && options.some((o: any) => /^(true|false|yes|no)$/i.test(o.text));
+          const hasMissingOptions = options.length < 4 && !isTwoChoice;
+          const missingOptionsCount = hasMissingOptions ? 4 - options.length : 0;
+
+          const printedCombos = Array.isArray(q.printed_combinations)
+            ? q.printed_combinations.map((c: any) => ({
+                letter: String(c.letter || "").toUpperCase(),
+                text: String(c.text || "").trim(),
+              }))
+            : [];
+
+          allQuestions.push({
+            id: `q-p${pageNumber}-${idx + 1}-${Date.now().toString(36)}`,
+            pageNumber,
+            number: qNum,
+            questionType: q.question_type || (printedCombos.length > 0 ? "combination" : "ordinary"),
+            stem: String(q.stem || "").trim(),
+            options,
+            hasMissingOptions,
+            missingOptionsCount,
+            detectedAnswer: q.detected_answer ? String(q.detected_answer).trim() : null,
+            comboSets: printedCombos.map((c: any) => (c.text.match(/\d+/g) || [])),
+            originalCombinations: printedCombos,
+          });
+        }
+      } catch {}
+    }
+
+    allQuestions.sort((a, b) => a.pageNumber - b.pageNumber);
+    return { questions: allQuestions };
+  });
+
+// ── 6. Direct Course Importer ─────────────────────────────────────────────────
 const ImportQuestionsInput = z.object({
   courseId: z.string().uuid(),
   groupId: z.string().uuid(),
@@ -536,7 +835,6 @@ export const importQuestions124 = createServerFn({ method: "POST" })
     let skipped = 0;
     const errors: string[] = [];
 
-    // Get current maximum sort order for the subject
     const { count } = await supabase.from("questions").select("id", { count: "exact", head: true }).eq("subject_id", subjectId);
     let currentSort = (count || 0) + 1;
 

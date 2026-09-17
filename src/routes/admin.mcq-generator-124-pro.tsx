@@ -1,5 +1,4 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -7,7 +6,8 @@ import {
   ShieldAlert, ShieldCheck, Lock, Unlock, Key, Cpu, Sparkles, FileText, CheckCircle2,
   AlertTriangle, ArrowRight, RefreshCw, Upload, Eye, Trash2, Check, X, Layers,
   BookOpen, ListFilter, Copy, HelpCircle, Terminal, Flame, Database, ChevronRight,
-  ExternalLink, ChevronDown, ChevronUp, Search, PlusCircle, Wrench
+  ExternalLink, ChevronDown, ChevronUp, Search, PlusCircle, Wrench, Square,
+  Clock, Bookmark, Download, FolderArchive, Play, Radio
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,9 +19,13 @@ import {
   ExtractedQuestion,
   extractPageQuestions124,
   fillMissingOptions124,
+  fillAllMissingOptions124,
   detectDuplicates124,
   solveAndExplain124,
   importQuestions124,
+  createOpenAiBatchExtraction124,
+  checkOpenAiBatchStatus124,
+  retrieveOpenAiBatchExtractionResults124,
 } from "@/lib/mcq-generator-124-pro.functions";
 import { renderPageToCanvas, canvasToJpegBase64 } from "@/lib/pdf-page-image";
 
@@ -37,18 +41,33 @@ export const Route = createFileRoute("/admin/mcq-generator-124-pro")({
 
 const DEFAULT_OPENAI_KEY = "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";
 
-type Stage = "extract" | "solve" | "import";
+type Stage = "extract" | "solve" | "import" | "archive";
+type ProcessingMode = "standard" | "batch";
 type ComboMode = "mode1_keep_original" | "mode2_convert_multiple";
 type SolveSource = "ai" | "source_material" | "answer_key";
 
-interface SolvedQuestionState extends ExtractedQuestion {
+export interface SolvedQuestionState extends ExtractedQuestion {
   selectedAnswer?: string;
   concept?: string;
+  sourceReference?: string;
   explanation?: string;
   summaryTable?: string;
   solveStatus: "unsolved" | "solving" | "solved" | "error";
   solveError?: string;
   isIgnored?: boolean;
+}
+
+export interface SavedEngineSession {
+  id: string;
+  name: string;
+  createdAt: string;
+  pdfName: string;
+  totalPages: number;
+  model: string;
+  comboMode: ComboMode;
+  questions: SolvedQuestionState[];
+  isSolved: boolean;
+  isImported?: boolean;
 }
 
 export function McqGenerator124ProPage() {
@@ -72,9 +91,10 @@ export function McqGenerator124ProPage() {
     return "";
   });
   const [selectedModel, setSelectedModel] = useState<SupportedModelId>("gpt-4o-mini");
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>("standard");
   const [comboMode, setComboMode] = useState<ComboMode>("mode1_keep_original");
-  const [useBatch50, setUseBatch50] = useState<boolean>(true);
   const [customInstructions, setCustomInstructions] = useState<string>("");
+  const [includeSourceCitation, setIncludeSourceCitation] = useState<boolean>(true);
   const [showConfigPanel, setShowConfigPanel] = useState<boolean>(false);
 
   // ── Pipeline Stage ────────────────────────────────────────────────────────
@@ -89,6 +109,20 @@ export function McqGenerator124ProPage() {
   const [extractProgress, setExtractProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const [extractedQuestions, setExtractedQuestions] = useState<SolvedQuestionState[]>([]);
   const [stage1Done, setStage1Done] = useState<boolean>(false);
+  const [isBulkFillingOptions, setIsBulkFillingOptions] = useState<boolean>(false);
+
+  // Stop flag ref for emergency halt
+  const stopRequestedRef = useRef<boolean>(false);
+  const [isStopRequested, setIsStopRequested] = useState<boolean>(false);
+
+  // Batch Job State
+  const [batchJob, setBatchJob] = useState<{
+    batchId: string;
+    status: string;
+    totalPages: number;
+    requestCounts: { total: number; completed: number; failed: number };
+    outputFileId?: string | null;
+  } | null>(null);
 
   // Missing options modal/drawer
   const [resolvingMissingQ, setResolvingMissingQ] = useState<SolvedQuestionState | null>(null);
@@ -113,14 +147,32 @@ export function McqGenerator124ProPage() {
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [importResult, setImportResult] = useState<{ inserted: number; skipped: number; errors: string[] } | null>(null);
 
+  // ── Saved Sessions Archive ────────────────────────────────────────────────
+  const [savedSessions, setSavedSessions] = useState<SavedEngineSession[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("mcq_124_pro_saved_sessions");
+        return raw ? JSON.parse(raw) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
+  const [sessionSaveName, setSessionSaveName] = useState<string>("");
+
   // Inspector Preview Modal
   const [inspectingQuestion, setInspectingQuestion] = useState<SolvedQuestionState | null>(null);
 
   // ── Server Functions ──────────────────────────────────────────────────────
   const extractPageFn = useServerFn(extractPageQuestions124);
   const fillMissingFn = useServerFn(fillMissingOptions124);
+  const fillAllMissingFn = useServerFn(fillAllMissingOptions124);
   const solveQuestionFn = useServerFn(solveAndExplain124);
   const importFn = useServerFn(importQuestions124);
+  const createBatchExtractFn = useServerFn(createOpenAiBatchExtraction124);
+  const checkBatchStatusFn = useServerFn(checkOpenAiBatchStatus124);
+  const retrieveBatchResultsFn = useServerFn(retrieveOpenAiBatchExtractionResults124);
 
   // Save keys to local storage when changed
   useEffect(() => {
@@ -134,6 +186,13 @@ export function McqGenerator124ProPage() {
       localStorage.setItem("mcq_124_pro_gemini_key", geminiKey);
     }
   }, [geminiKey]);
+
+  // Persist saved sessions
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("mcq_124_pro_saved_sessions", JSON.stringify(savedSessions));
+    }
+  }, [savedSessions]);
 
   // Load courses
   useEffect(() => {
@@ -183,6 +242,7 @@ export function McqGenerator124ProPage() {
       const doc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       setPdfDoc(doc);
       setTotalPages(doc.numPages);
+      setSessionSaveName(file.name.replace(/\.[^/.]+$/, ""));
       toast.success(`PDF Loaded: ${file.name} (${doc.numPages} pages)`);
     } catch (err: any) {
       toast.error(`Failed to load PDF: ${err?.message || err}`);
@@ -199,7 +259,7 @@ export function McqGenerator124ProPage() {
     return jpeg;
   }
 
-  // ── Start Stage 1 Extraction ──────────────────────────────────────────────
+  // ── Start Stage 1 Extraction (All Pages) ──────────────────────────────────
   async function startExtraction() {
     if (!pdfDoc) {
       toast.error("Please upload an exam PDF first.");
@@ -212,65 +272,241 @@ export function McqGenerator124ProPage() {
       return;
     }
 
+    stopRequestedRef.current = false;
+    setIsStopRequested(false);
     setIsExtracting(true);
     setStage1Done(false);
 
-    // Calculate pages to process (all pages, or 50% batch chunk if toggled)
-    const pagesToRun = useBatch50 ? Math.ceil(totalPages * 0.5) : totalPages;
-    setExtractProgress({ current: 0, total: pagesToRun });
+    // Standard Mode: Process ALL pages from 1 to totalPages
+    if (processingMode === "standard") {
+      setExtractProgress({ current: 0, total: totalPages });
+      const collected: SolvedQuestionState[] = [];
 
-    const collected: SolvedQuestionState[] = [];
+      try {
+        for (let p = 1; p <= totalPages; p++) {
+          if (stopRequestedRef.current) {
+            toast.info(`Extraction halted on page ${p - 1}. Keeping all extracted questions.`);
+            break;
+          }
 
-    try {
-      for (let p = 1; p <= pagesToRun; p++) {
-        setExtractProgress({ current: p, total: pagesToRun });
-        const jpegBase64 = await getPageJpeg(p);
+          setExtractProgress({ current: p, total: totalPages });
+          const jpegBase64 = await getPageJpeg(p);
 
-        const res: any = await extractPageFn({
+          const res: any = await extractPageFn({
+            data: {
+              pageNumber: p,
+              imageJpegBase64: jpegBase64,
+              combinationMode: comboMode,
+              model: selectedModel,
+              openaiApiKey: openaiKey,
+              geminiApiKey: geminiKey,
+              customInstructions,
+            },
+          });
+
+          const pageQs: SolvedQuestionState[] = (res.questions || []).map((q: ExtractedQuestion) => ({
+            ...q,
+            solveStatus: "unsolved",
+          }));
+          collected.push(...pageQs);
+          setExtractedQuestions([...collected]);
+        }
+
+        const { cleaned, duplicateCount } = detectDuplicates124(collected);
+        setExtractedQuestions(cleaned);
+        setStage1Done(true);
+
+        if (duplicateCount > 0) {
+          toast.info(`Extracted ${cleaned.length} questions across all ${totalPages} pages. Purged ${duplicateCount} duplicate questions.`);
+        } else {
+          toast.success(`Extracted ${cleaned.length} questions successfully across all ${totalPages} pages!`);
+        }
+      } catch (err: any) {
+        toast.error(`Extraction failed: ${err?.message || err}`);
+      } finally {
+        setIsExtracting(false);
+      }
+    } else {
+      // ── BATCH API MODE (50% Price Discount) ─────────────────────────────────
+      try {
+        toast.loading("Rendering all pages and creating Batch API job...", { id: "batch-create" });
+        const pagesPayload: Array<{ pageNumber: number; imageJpegBase64: string }> = [];
+
+        for (let p = 1; p <= totalPages; p++) {
+          const jpeg = await getPageJpeg(p);
+          pagesPayload.push({ pageNumber: p, imageJpegBase64: jpeg });
+        }
+
+        const res: any = await createBatchExtractFn({
           data: {
-            pageNumber: p,
-            imageJpegBase64: jpegBase64,
+            pages: pagesPayload,
             combinationMode: comboMode,
             model: selectedModel,
             openaiApiKey: openaiKey,
-            geminiApiKey: geminiKey,
             customInstructions,
           },
         });
 
-        const pageQs: SolvedQuestionState[] = (res.questions || []).map((q: ExtractedQuestion) => ({
-          ...q,
-          solveStatus: "unsolved",
-        }));
-        collected.push(...pageQs);
-        setExtractedQuestions([...collected]);
-      }
+        setBatchJob({
+          batchId: res.batchId,
+          status: res.status,
+          totalPages: res.totalPages,
+          requestCounts: { total: res.totalPages, completed: 0, failed: 0 },
+        });
 
-      // Automatically run deduplication
-      const { cleaned, duplicateCount } = detectDuplicates124(collected);
-      setExtractedQuestions(cleaned);
-      setStage1Done(true);
-
-      if (duplicateCount > 0) {
-        toast.info(`Extracted ${cleaned.length} questions. Found ${duplicateCount} duplicate questions.`);
-      } else {
-        toast.success(`Extracted ${cleaned.length} questions successfully across ${pagesToRun} pages!`);
+        toast.success(`Batch Job Submitted! Batch ID: ${res.batchId} (50% Discount Applied)`, { id: "batch-create" });
+      } catch (err: any) {
+        toast.error(`Batch submission failed: ${err?.message || err}`, { id: "batch-create" });
+      } finally {
+        setIsExtracting(false);
       }
-    } catch (err: any) {
-      toast.error(`Extraction failed on page: ${err?.message || err}`);
-    } finally {
-      setIsExtracting(false);
     }
   }
 
-  // Purge duplicates
-  function purgeDuplicates() {
-    const withoutDups = extractedQuestions.filter((q) => !q.isDuplicate);
-    setExtractedQuestions(withoutDups);
-    toast.success("Duplicates purged!");
+  // ── Poll / Check Batch Job Status ─────────────────────────────────────────
+  async function checkBatchStatus() {
+    if (!batchJob?.batchId) return;
+    try {
+      const res: any = await checkBatchStatusFn({
+        data: {
+          batchId: batchJob.batchId,
+          openaiApiKey: openaiKey,
+        },
+      });
+
+      setBatchJob((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: res.status,
+              requestCounts: res.requestCounts,
+              outputFileId: res.outputFileId,
+            }
+          : null
+      );
+
+      if (res.status === "completed") {
+        toast.success("Batch Job Completed! Ready to download and view questions.");
+      } else {
+        toast.info(`Batch Status: ${res.status} (${res.requestCounts.completed}/${res.requestCounts.total} completed)`);
+      }
+    } catch (err: any) {
+      toast.error(`Status check failed: ${err?.message || err}`);
+    }
   }
 
-  // AI Fill Missing Options
+  // ── Retrieve Batch Job Results ────────────────────────────────────────────
+  async function retrieveBatchResults() {
+    if (!batchJob?.outputFileId) {
+      toast.error("No output file available yet. Batch is still processing.");
+      return;
+    }
+
+    try {
+      toast.loading("Retrieving and parsing batch results...", { id: "batch-load" });
+      const res: any = await retrieveBatchResultsFn({
+        data: {
+          outputFileId: batchJob.outputFileId,
+          openaiApiKey: openaiKey,
+        },
+      });
+
+      const qs: SolvedQuestionState[] = (res.questions || []).map((q: ExtractedQuestion) => ({
+        ...q,
+        solveStatus: "unsolved",
+      }));
+
+      const { cleaned } = detectDuplicates124(qs);
+      setExtractedQuestions(cleaned);
+      setStage1Done(true);
+      toast.success(`Loaded ${cleaned.length} questions from Batch API!`, { id: "batch-load" });
+    } catch (err: any) {
+      toast.error(`Failed to retrieve batch results: ${err?.message || err}`, { id: "batch-load" });
+    }
+  }
+
+  // ── Emergency Stop Handler (Point 3) ──────────────────────────────────────
+  function handleEmergencyStop() {
+    stopRequestedRef.current = true;
+    setIsStopRequested(true);
+    toast.warning("Halt requested. Finishing current item then stopping...");
+  }
+
+  // ── Auto-Fill ALL Missing Options with AI (Point 2) ───────────────────────
+  async function handleAutoFillAllMissing() {
+    const incomplete = extractedQuestions.filter((q) => q.hasMissingOptions || q.options.length < 4);
+    if (incomplete.length === 0) {
+      toast.info("All questions already have 4 complete options.");
+      return;
+    }
+
+    setIsBulkFillingOptions(true);
+    toast.loading(`AI is generating plausible distractors for ${incomplete.length} questions...`, { id: "fill-all" });
+
+    try {
+      const res: any = await fillAllMissingFn({
+        data: {
+          questions: incomplete.map((q) => ({
+            id: q.id,
+            stem: q.stem,
+            options: q.options,
+          })),
+          model: selectedModel,
+          openaiApiKey: openaiKey,
+          geminiApiKey: geminiKey,
+        },
+      });
+
+      const updatedMap: Record<string, Array<{ letter: string; text: string }>> = res.updatedMap || {};
+
+      setExtractedQuestions((prev) =>
+        prev.map((item) => {
+          if (updatedMap[item.id]) {
+            return {
+              ...item,
+              options: updatedMap[item.id],
+              hasMissingOptions: false,
+              missingOptionsCount: 0,
+            };
+          }
+          return item;
+        })
+      );
+
+      toast.success(`All ${incomplete.length} questions completed with 4 options!`, { id: "fill-all" });
+    } catch (err: any) {
+      toast.error(`Bulk option generation failed: ${err?.message || err}`, { id: "fill-all" });
+    } finally {
+      setIsBulkFillingOptions(false);
+    }
+  }
+
+  // Manual Add Option (Single)
+  function handleManualAddOption(q: SolvedQuestionState) {
+    if (!manualOptionText.trim()) return;
+    const letters = ["A", "B", "C", "D", "E"];
+    const nextLetter = letters[q.options.length] || "D";
+    const updatedOptions = [...q.options, { letter: nextLetter, text: manualOptionText.trim() }];
+    const stillMissing = updatedOptions.length < 4;
+
+    setExtractedQuestions((prev) =>
+      prev.map((item) =>
+        item.id === q.id
+          ? {
+              ...item,
+              options: updatedOptions,
+              hasMissingOptions: stillMissing,
+              missingOptionsCount: stillMissing ? 4 - updatedOptions.length : 0,
+            }
+          : item
+      )
+    );
+    setManualOptionText("");
+    if (!stillMissing) setResolvingMissingQ(null);
+    toast.success(`Option ${nextLetter} added`);
+  }
+
+  // AI Fill Single Question
   async function handleAiFillMissing(q: SolvedQuestionState) {
     try {
       toast.loading("Generating plausible medical distractors with AI...", { id: "fill-ai" });
@@ -303,31 +539,6 @@ export function McqGenerator124ProPage() {
     }
   }
 
-  // Manual Add Option
-  function handleManualAddOption(q: SolvedQuestionState) {
-    if (!manualOptionText.trim()) return;
-    const letters = ["A", "B", "C", "D", "E"];
-    const nextLetter = letters[q.options.length] || "D";
-    const updatedOptions = [...q.options, { letter: nextLetter, text: manualOptionText.trim() }];
-    const stillMissing = updatedOptions.length < 4;
-
-    setExtractedQuestions((prev) =>
-      prev.map((item) =>
-        item.id === q.id
-          ? {
-              ...item,
-              options: updatedOptions,
-              hasMissingOptions: stillMissing,
-              missingOptionsCount: stillMissing ? 4 - updatedOptions.length : 0,
-            }
-          : item
-      )
-    );
-    setManualOptionText("");
-    if (!stillMissing) setResolvingMissingQ(null);
-    toast.success(`Option ${nextLetter} added`);
-  }
-
   // ── Start Stage 2 Solving & Explaining ────────────────────────────────────
   async function startSolving() {
     const active = extractedQuestions.filter((q) => !q.isIgnored && !q.isDuplicate);
@@ -336,6 +547,8 @@ export function McqGenerator124ProPage() {
       return;
     }
 
+    stopRequestedRef.current = false;
+    setIsStopRequested(false);
     setIsSolving(true);
     setStage2Done(false);
     setSolveProgress({ current: 0, total: active.length });
@@ -346,6 +559,11 @@ export function McqGenerator124ProPage() {
     for (let i = 0; i < updated.length; i++) {
       const q = updated[i];
       if (q.isIgnored || q.isDuplicate) continue;
+
+      if (stopRequestedRef.current) {
+        toast.info(`Solving stopped on question #${q.number}. Retained all solved questions.`);
+        break;
+      }
 
       currentIdx++;
       setSolveProgress({ current: currentIdx, total: active.length });
@@ -369,6 +587,7 @@ export function McqGenerator124ProPage() {
             sourceMethod: solveSource,
             studyMaterialText,
             studyMaterialName,
+            includeSourceCitation,
             answerKeyText,
             combinationMode: comboMode,
             model: selectedModel,
@@ -380,6 +599,7 @@ export function McqGenerator124ProPage() {
         q.selectedAnswer = res.selectedAnswer;
         q.options = res.options;
         q.concept = res.concept;
+        q.sourceReference = res.sourceReference;
         q.explanation = res.explanation;
         q.summaryTable = res.summaryTable;
         q.solveStatus = "solved";
@@ -393,7 +613,7 @@ export function McqGenerator124ProPage() {
 
     setIsSolving(false);
     setStage2Done(true);
-    toast.success("Solving & Explanation Generation complete!");
+    toast.success("Solving & AquavisionX Explanations complete!");
   }
 
   // ── Start Stage 3 Import ──────────────────────────────────────────────────
@@ -439,11 +659,62 @@ export function McqGenerator124ProPage() {
     }
   }
 
+  // ── Session Archive Management (Point 6) ──────────────────────────────────
+  function saveCurrentSession() {
+    if (extractedQuestions.length === 0) {
+      toast.error("No questions in current session to save.");
+      return;
+    }
+
+    const title = sessionSaveName.trim() || `Session-${new Date().toLocaleDateString()} (${extractedQuestions.length} Qs)`;
+    const newSession: SavedEngineSession = {
+      id: `session-${Date.now()}`,
+      name: title,
+      createdAt: new Date().toISOString(),
+      pdfName: pdfFile?.name || "Exam-Document.pdf",
+      totalPages: totalPages || 1,
+      model: selectedModel,
+      comboMode,
+      questions: extractedQuestions,
+      isSolved: extractedQuestions.some((q) => q.solveStatus === "solved"),
+      isImported: !!importResult,
+    };
+
+    setSavedSessions((prev) => [newSession, ...prev]);
+    toast.success(`Session "${title}" saved to archive!`);
+  }
+
+  function loadSavedSession(s: SavedEngineSession) {
+    setExtractedQuestions(s.questions);
+    setTotalPages(s.totalPages);
+    setComboMode(s.comboMode);
+    setSelectedModel(s.model as SupportedModelId);
+    setStage1Done(true);
+    setStage2Done(s.isSolved);
+    setCurrentStage(s.isSolved ? "solve" : "extract");
+    toast.success(`Loaded session "${s.name}" with ${s.questions.length} questions! Zero AI tokens consumed.`);
+  }
+
+  function deleteSavedSession(id: string) {
+    setSavedSessions((prev) => prev.filter((s) => s.id !== id));
+    toast.info("Session removed from archive.");
+  }
+
+  function exportSessionJson(s: SavedEngineSession) {
+    const jsonStr = JSON.stringify(s, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${s.name.replace(/\s+/g, "_")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ── Restricted Clearance Lock Barrier ─────────────────────────────────────
   if (!clearanceUnlocked) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 relative overflow-hidden font-mono">
-        {/* Ambient Grid Background */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-30" />
 
         <div className="relative z-10 max-w-md w-full bg-slate-900/90 border-2 border-red-500/40 rounded-2xl p-8 shadow-2xl backdrop-blur-xl text-center">
@@ -466,8 +737,8 @@ export function McqGenerator124ProPage() {
               <span className="text-emerald-400 font-bold">ALPHA-ADMIN</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Isolation Sandbox:</span>
-              <span className="text-amber-400 font-bold">SECURE SEPARATED</span>
+              <span className="text-slate-500">Batch API Gateway:</span>
+              <span className="text-amber-400 font-bold">50% DISCOUNT ACTIVE</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Neural Gateway:</span>
@@ -500,24 +771,38 @@ export function McqGenerator124ProPage() {
           <div>
             <div className="flex items-center gap-2 mb-1.5">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-500/20 border border-red-500/40 text-[10px] font-mono font-bold text-red-400 uppercase tracking-wider">
-                <ShieldCheck size={12} /> Restricted Level 4 Console
+                <ShieldCheck size={12} /> Level 4 Console
               </span>
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-[10px] font-mono font-bold text-emerald-400">
-                ● Active Sandbox
+                ● Sandbox Online
               </span>
+              {processingMode === "batch" && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-[10px] font-mono font-bold text-amber-400">
+                  <Flame size={10} /> Batch API (50% Off)
+                </span>
+              )}
             </div>
             <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-2.5">
               <Terminal className="text-amber-400" size={26} /> {ENGINE_NAME}
             </h1>
             <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-              Autonomous 3-stage pipeline: Vision extraction of rotated/blurred exam pages, Mode 1/2 combination solving, AquavisionX clinical explanations, and direct course bank integration.
+              Complete pipeline: 14-page vision scanning, Mode 1/2 combination solving, AquavisionX clinical explanations, Batch API 50% discount, and persistent session archiving.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
+            {extractedQuestions.length > 0 && (
+              <button
+                onClick={saveCurrentSession}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 text-xs font-bold transition-all shadow-sm"
+              >
+                <Bookmark size={14} /> Save Session Archive
+              </button>
+            )}
+
             <button
               onClick={() => setShowConfigPanel(!showConfigPanel)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 shadow-sm transition-all"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 shadow-sm transition-all"
             >
               <Key size={14} className="text-amber-400" /> Dedicated API Keys & Models
               {showConfigPanel ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -528,13 +813,13 @@ export function McqGenerator124ProPage() {
 
       {/* ── Collapsible Engine Settings & API Keys Panel ───────────────────── */}
       {showConfigPanel && (
-        <div className="border-b border-slate-800 bg-slate-900/90 px-6 py-6 transition-all">
-          <div className="max-w-7xl mx-auto grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="border-b border-slate-800 bg-slate-900/95 px-6 py-6 transition-all">
+          <div className="max-w-7xl mx-auto grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* OpenAI Key */}
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
               <label className="text-xs font-bold text-slate-300 mb-2 flex items-center justify-between">
                 <span>OpenAI Engine Key</span>
-                <span className="text-[10px] text-emerald-400 font-mono">Dedicated Storage</span>
+                <span className="text-[10px] text-emerald-400 font-mono">Dedicated</span>
               </label>
               <input
                 type="password"
@@ -544,7 +829,7 @@ export function McqGenerator124ProPage() {
                 className="w-full px-3 py-2 text-xs font-mono bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-amber-500"
               />
               <p className="text-[10px] text-slate-500 mt-1.5">
-                Pre-loaded with authorized engine testing key. Isolated from website global keys.
+                Pre-loaded with authorized engine testing key. Supports Vision & Batch API.
               </p>
             </div>
 
@@ -569,7 +854,7 @@ export function McqGenerator124ProPage() {
             {/* AI Model Selector */}
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
               <label className="text-xs font-bold text-slate-300 mb-2 block">
-                Active Neural Model (All 5 Integrated)
+                Active Neural Model
               </label>
               <select
                 value={selectedModel}
@@ -583,16 +868,50 @@ export function McqGenerator124ProPage() {
                 ))}
               </select>
               <p className="text-[10px] text-slate-500 mt-1.5">
-                Choose model dynamically before each batch extraction or solve step.
+                Switch model at any time prior to execution.
+              </p>
+            </div>
+
+            {/* Processing Mode (Standard vs Batch 50% Price) */}
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+              <label className="text-xs font-bold text-slate-300 mb-2 block">
+                Processing Mode
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setProcessingMode("standard")}
+                  className={`px-3 py-2 rounded-lg border text-xs font-bold transition-all text-center ${
+                    processingMode === "standard"
+                      ? "bg-amber-500/20 border-amber-500 text-amber-300"
+                      : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
+                  }`}
+                >
+                  Standard
+                  <div className="text-[9px] font-normal opacity-75">Immediate</div>
+                </button>
+                <button
+                  onClick={() => setProcessingMode("batch")}
+                  className={`px-3 py-2 rounded-lg border text-xs font-bold transition-all text-center ${
+                    processingMode === "batch"
+                      ? "bg-amber-500/20 border-amber-500 text-amber-300"
+                      : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
+                  }`}
+                >
+                  Batch API
+                  <div className="text-[9px] font-normal text-emerald-400">50% Off</div>
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1.5">
+                Batch API executes asynchronously via OpenAI Batch at half price.
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── 3-Stage Progress Nav ───────────────────────────────────────────── */}
+      {/* ── 4-Stage Navigation Toolbar ──────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {/* Stage 1 Tab */}
           <button
             onClick={() => setCurrentStage("extract")}
@@ -608,7 +927,7 @@ export function McqGenerator124ProPage() {
             </div>
             <div className="text-sm font-bold text-white">Extract Questions</div>
             <div className="text-[11px] text-slate-400 mt-0.5">
-              Page-by-page vision, Mode 1/2 combos, missing options
+              14-page vision, Mode 1/2 combos, missing options
             </div>
           </button>
 
@@ -627,7 +946,7 @@ export function McqGenerator124ProPage() {
             </div>
             <div className="text-sm font-bold text-white">Solve & Explain</div>
             <div className="text-[11px] text-slate-400 mt-0.5">
-              AI / Material / Key solve, AquavisionX explanations
+              AI / Material / Key solve, citations, AquavisionX
             </div>
           </button>
 
@@ -646,7 +965,28 @@ export function McqGenerator124ProPage() {
             </div>
             <div className="text-sm font-bold text-white">Course Bank Import</div>
             <div className="text-[11px] text-slate-400 mt-0.5">
-              Target subject selection & error question inspector
+              Target subject bank & error question inspector
+            </div>
+          </button>
+
+          {/* Stage 4: Saved Archive Tab */}
+          <button
+            onClick={() => setCurrentStage("archive")}
+            className={`p-4 rounded-xl border text-left transition-all ${
+              currentStage === "archive"
+                ? "bg-slate-900 border-amber-500/70 shadow-lg shadow-amber-500/10"
+                : "bg-slate-900/40 border-slate-800 hover:border-slate-700 opacity-70"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-400">Archive</span>
+              <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-bold text-slate-300">
+                {savedSessions.length}
+              </span>
+            </div>
+            <div className="text-sm font-bold text-white">Saved Sessions</div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              Reload past runs with zero token expenditure
             </div>
           </button>
         </div>
@@ -667,7 +1007,7 @@ export function McqGenerator124ProPage() {
                     {pdfFile ? pdfFile.name : "Drop PDF with scanned A4 questions"}
                   </span>
                   <span className="text-[10px] text-slate-500 mt-1">
-                    {totalPages > 0 ? `${totalPages} pages ready for vision scan` : "Accepts high-res or photo PDFs"}
+                    {totalPages > 0 ? `${totalPages} pages detected (all will be scanned)` : "Supports multi-page scanned exams"}
                   </span>
                   <input
                     type="file"
@@ -682,7 +1022,7 @@ export function McqGenerator124ProPage() {
 
                 {totalPages > 0 && (
                   <div className="mt-4 p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-400 flex justify-between items-center">
-                    <span>Document: <strong className="text-white">{pdfFile?.name}</strong></span>
+                    <span>File: <strong className="text-white">{pdfFile?.name}</strong></span>
                     <span className="text-emerald-400 font-bold">{totalPages} pages</span>
                   </div>
                 )}
@@ -735,43 +1075,88 @@ export function McqGenerator124ProPage() {
               <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-                    <Flame size={16} className="text-amber-400" /> Batch & Rate Control
+                    <Flame size={16} className="text-amber-400" /> Mode & Execution
                   </h3>
 
-                  <label className="flex items-center gap-3 p-3 bg-slate-950 border border-slate-800 rounded-xl cursor-pointer mb-4">
-                    <input
-                      type="checkbox"
-                      checked={useBatch50}
-                      onChange={(e) => setUseBatch50(e.target.checked)}
-                      className="rounded border-slate-700 text-amber-500 focus:ring-amber-500"
-                    />
-                    <div>
-                      <div className="text-xs font-bold text-white">50% Batch Execution</div>
-                      <div className="text-[10px] text-slate-400">
-                        Process first 50% chunk to preserve quota and allow inspection before proceeding.
-                      </div>
+                  <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl mb-4 text-xs">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-slate-400">Processing Mode:</span>
+                      <strong className="text-amber-400 uppercase">
+                        {processingMode === "batch" ? "Batch API (50% Off)" : "Standard (Immediate)"}
+                      </strong>
                     </div>
-                  </label>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Target Scope:</span>
+                      <strong className="text-white">All {totalPages || 0} Pages</strong>
+                    </div>
+                  </div>
                 </div>
 
-                <button
-                  disabled={!pdfDoc || isExtracting}
-                  onClick={startExtraction}
-                  className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm shadow-lg shadow-amber-950/40 disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
-                >
-                  {isExtracting ? (
-                    <>
-                      <RefreshCw size={16} className="animate-spin" />
-                      Scanning Page {extractProgress.current} / {extractProgress.total}...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={16} /> Run Process 1 (Vision Extraction)
-                    </>
+                <div className="flex gap-2">
+                  <button
+                    disabled={!pdfDoc || isExtracting}
+                    onClick={startExtraction}
+                    className="flex-1 py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-950/40 disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+                  >
+                    {isExtracting ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" />
+                        Scanning Page {extractProgress.current} / {extractProgress.total}...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={14} /> Run Extraction (All {totalPages || 0} Pages)
+                      </>
+                    )}
+                  </button>
+
+                  {isExtracting && (
+                    <button
+                      onClick={handleEmergencyStop}
+                      className="px-4 py-3.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-all"
+                      title="Stop after current page"
+                    >
+                      <Square size={14} /> Stop
+                    </button>
                   )}
-                </button>
+                </div>
               </div>
             </div>
+
+            {/* Batch Job Monitor (When in Batch Mode) */}
+            {batchJob && (
+              <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-6">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-mono font-bold uppercase">
+                      OpenAI Batch API Job Active
+                    </span>
+                    <h4 className="text-sm font-bold text-white mt-1">Batch ID: {batchJob.batchId}</h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Status: <strong className="text-amber-400 uppercase">{batchJob.status}</strong> · {batchJob.requestCounts.completed} of {batchJob.requestCounts.total} pages completed (50% price discount).
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={checkBatchStatus}
+                      className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5"
+                    >
+                      <RefreshCw size={12} /> Check Status
+                    </button>
+
+                    {batchJob.status === "completed" && (
+                      <button
+                        onClick={retrieveBatchResults}
+                        className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md"
+                      >
+                        <Download size={14} /> Load & View Questions
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Extraction Results & Quality Toolbar */}
             {extractedQuestions.length > 0 && (
@@ -786,13 +1171,29 @@ export function McqGenerator124ProPage() {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Auto-fill all missing options button (Point 2) */}
+                    {extractedQuestions.some((q) => q.hasMissingOptions || q.options.length < 4) && (
+                      <button
+                        disabled={isBulkFillingOptions}
+                        onClick={handleAutoFillAllMissing}
+                        className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        {isBulkFillingOptions ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                        Auto-Fill All Missing Choices with AI ({extractedQuestions.filter((q) => q.hasMissingOptions || q.options.length < 4).length})
+                      </button>
+                    )}
+
                     {extractedQuestions.some((q) => q.isDuplicate) && (
                       <button
-                        onClick={purgeDuplicates}
+                        onClick={() => {
+                          const withoutDups = extractedQuestions.filter((q) => !q.isDuplicate);
+                          setExtractedQuestions(withoutDups);
+                          toast.success("Duplicates purged!");
+                        }}
                         className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/40 text-xs font-bold text-red-400 hover:bg-red-500/30 transition-all flex items-center gap-1.5"
                       >
-                        <Trash2 size={14} /> Purge Duplicates ({extractedQuestions.filter((q) => q.isDuplicate).length})
+                        <Trash2 size={12} /> Purge Duplicates ({extractedQuestions.filter((q) => q.isDuplicate).length})
                       </button>
                     )}
 
@@ -952,10 +1353,22 @@ export function McqGenerator124ProPage() {
 
               {/* Source Inputs if Method B or C */}
               {solveSource === "source_material" && (
-                <div className="mb-6 p-4 rounded-xl bg-slate-950 border border-slate-800">
-                  <label className="text-xs font-bold text-slate-300 block mb-2">
-                    Paste Authority Study Material Text (or Book Chapter)
-                  </label>
+                <div className="mb-6 p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-300">
+                      Paste Authority Study Material Text (or Book Chapter)
+                    </label>
+                    {/* Source citation toggle (Point 4) */}
+                    <label className="flex items-center gap-2 text-xs text-amber-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={includeSourceCitation}
+                        onChange={(e) => setIncludeSourceCitation(e.target.checked)}
+                        className="rounded border-slate-700 text-amber-500 focus:ring-amber-500"
+                      />
+                      <span className="font-semibold">Include Source Citation & Location</span>
+                    </label>
+                  </div>
                   <textarea
                     rows={4}
                     value={studyMaterialText}
@@ -986,22 +1399,34 @@ export function McqGenerator124ProPage() {
                   Target: {extractedQuestions.filter((q) => !q.isIgnored && !q.isDuplicate).length} questions
                 </div>
 
-                <button
-                  disabled={isSolving || extractedQuestions.length === 0}
-                  onClick={startSolving}
-                  className="py-3 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-md disabled:opacity-50 flex items-center gap-2 transition-all"
-                >
-                  {isSolving ? (
-                    <>
-                      <RefreshCw size={14} className="animate-spin" />
-                      Solving Question {solveProgress.current} / {solveProgress.total}...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={14} /> Run Process 2 (Solve & Generate Explanations)
-                    </>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={isSolving || extractedQuestions.length === 0}
+                    onClick={startSolving}
+                    className="py-3 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-md disabled:opacity-50 flex items-center gap-2 transition-all"
+                  >
+                    {isSolving ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" />
+                        Solving Question {solveProgress.current} / {solveProgress.total}...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={14} /> Run Process 2 (Solve & Generate Explanations)
+                      </>
+                    )}
+                  </button>
+
+                  {isSolving && (
+                    <button
+                      onClick={handleEmergencyStop}
+                      className="px-4 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-all"
+                      title="Stop after current question"
+                    >
+                      <Square size={14} /> Stop
+                    </button>
                   )}
-                </button>
+                </div>
               </div>
             </div>
 
@@ -1036,6 +1461,11 @@ export function McqGenerator124ProPage() {
                             {q.concept && (
                               <span className="px-2 py-0.5 rounded bg-amber-500/20 text-[10px] font-bold text-amber-300">
                                 {q.concept}
+                              </span>
+                            )}
+                            {q.sourceReference && (
+                              <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-[10px] font-mono font-bold text-cyan-300">
+                                Ref: {q.sourceReference}
                               </span>
                             )}
                           </div>
@@ -1247,9 +1677,108 @@ export function McqGenerator124ProPage() {
             </div>
           </div>
         )}
+
+        {/* ── STAGE 4: SAVED SESSIONS ARCHIVE (Point 6) ────────────────────── */}
+        {currentStage === "archive" && (
+          <div className="mt-6 space-y-6">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-6">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <FolderArchive size={18} className="text-cyan-400" /> Saved Engine Sessions & Past Runs
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Saved runs remain stored so you can revisit, inspect, and import anytime without consuming AI tokens again.
+                  </p>
+                </div>
+
+                {extractedQuestions.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={sessionSaveName}
+                      onChange={(e) => setSessionSaveName(e.target.value)}
+                      placeholder="Name this session..."
+                      className="px-3 py-1.5 text-xs bg-slate-950 border border-slate-700 rounded-xl text-white w-48"
+                    />
+                    <button
+                      onClick={saveCurrentSession}
+                      className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md"
+                    >
+                      <Bookmark size={14} /> Save Current ({extractedQuestions.length} Qs)
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {savedSessions.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 text-xs">
+                  <Bookmark size={32} className="mx-auto mb-2 opacity-30" />
+                  No saved sessions yet. Extract or solve questions, then click "Save Session Archive".
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {savedSessions.map((s) => (
+                    <div
+                      key={s.id}
+                      className="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition-all flex flex-wrap items-center justify-between gap-4"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-bold text-white">{s.name}</span>
+                          <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-cyan-400 font-bold">
+                            {s.questions.length} questions
+                          </span>
+                          {s.isSolved && (
+                            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-[10px] font-bold text-emerald-400">
+                              Solved & Explained
+                            </span>
+                          )}
+                          {s.isImported && (
+                            <span className="px-2 py-0.5 rounded bg-blue-500/20 text-[10px] font-bold text-blue-400">
+                              Imported
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-400 flex items-center gap-3">
+                          <span>File: <strong className="text-slate-300">{s.pdfName}</strong> ({s.totalPages} pages)</span>
+                          <span>Model: <strong className="text-slate-300">{s.model}</strong></span>
+                          <span>Saved: {new Date(s.createdAt).toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => loadSavedSession(s)}
+                          className="px-3.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold flex items-center gap-1.5 transition-all"
+                        >
+                          <Play size={12} /> Load into Workspace
+                        </button>
+                        <button
+                          onClick={() => exportSessionJson(s)}
+                          className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                          title="Download JSON backup"
+                        >
+                          <Download size={14} />
+                        </button>
+                        <button
+                          onClick={() => deleteSavedSession(s.id)}
+                          className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30"
+                          title="Delete session"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ── Missing Options Modal ──────────────────────────────────────────── */}
+      {/* ── Missing Options Modal (Manual vs AI) ────────────────────────────── */}
       {resolvingMissingQ && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
