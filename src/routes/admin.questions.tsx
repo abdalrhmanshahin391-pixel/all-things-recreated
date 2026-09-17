@@ -332,6 +332,12 @@ function AdminQuestionsPage() {
           </div>
           <div className="flex items-center gap-2">
             <Link
+              to="/admin/mcq-generator-pro"
+              className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/10 border border-amber-400/30 px-3.5 py-2 text-xs font-bold text-amber-300 hover:bg-amber-400/20 transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" /> MCQ Generator Pro
+            </Link>
+            <Link
               to="/admin/ai-keys"
               className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3.5 py-2 text-xs font-bold text-white/70 hover:bg-white/5"
             >

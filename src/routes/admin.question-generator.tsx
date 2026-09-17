@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -930,8 +930,18 @@ function QuestionGeneratorPage() {
       <SiteHeader />
       <main className="mx-auto max-w-5xl px-5 pt-28 pb-20">
         <header className="mb-8">
-          <p className="text-xs font-black uppercase tracking-[0.28em] text-primary">Admin</p>
-          <h1 className="mt-2 text-3xl md:text-4xl font-black tracking-tight text-foreground">Questions Generator</h1>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.28em] text-primary">Admin</p>
+              <h1 className="mt-2 text-3xl md:text-4xl font-black tracking-tight text-foreground">Questions Generator</h1>
+            </div>
+            <Link
+              to="/admin/mcq-generator-pro"
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground shadow-md hover:opacity-90 transition-all"
+            >
+              <Sparkles className="w-4 h-4" /> Open MCQ Generator Pro →
+            </Link>
+          </div>
           <p className="mt-2 text-muted-foreground">
             Upload a PDF (text or scanned pictures), let OpenAI or Gemini extract, write or solve the questions, review everything, then save it into a course.
           </p>
