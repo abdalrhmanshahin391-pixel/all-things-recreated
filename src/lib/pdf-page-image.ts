@@ -15,7 +15,7 @@ export type CutRegion = {
 export async function renderPageToCanvas(
   doc: any,
   pageNumber: number,
-  targetWidth = 2000,
+  targetWidth = 2800,
   timeoutMs = 55_000,
 ): Promise<HTMLCanvasElement> {
   const page = await doc.getPage(pageNumber);
@@ -47,10 +47,98 @@ export async function renderPageToCanvas(
   return canvas;
 }
 
-export function canvasToJpegBase64(canvas: HTMLCanvasElement, quality = 0.90): string {
+export function canvasToJpegBase64(canvas: HTMLCanvasElement, quality = 0.95): string {
   const url = canvas.toDataURL("image/jpeg", quality);
   const i = url.indexOf(",");
   return i >= 0 ? url.slice(i + 1) : url;
+}
+
+// ── IndexedDB Page Image Cache ──────────────────────────────────────────────
+const IDB_NAME = "mcq_124_pro_cache";
+const IDB_STORE = "page_images";
+const IDB_VERSION = 1;
+
+function openPageImageDb(): Promise<IDBDatabase | null> {
+  if (typeof window === "undefined" || !window.indexedDB) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const req = window.indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE, { keyPath: "pageNum" });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve(null);
+  });
+}
+
+export async function savePageJpegToCache(pageNum: number, jpegBase64: string): Promise<void> {
+  try {
+    const db = await openPageImageDb();
+    if (!db) return;
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).put({ pageNum, jpegBase64 });
+    return new Promise((resolve) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch {
+    // Non-fatal cache failure
+  }
+}
+
+export async function getPageJpegFromCache(pageNum: number): Promise<string | null> {
+  try {
+    const db = await openPageImageDb();
+    if (!db) return null;
+    const tx = db.transaction(IDB_STORE, "readonly");
+    const req = tx.objectStore(IDB_STORE).get(pageNum);
+    return new Promise((resolve) => {
+      req.onsuccess = () => resolve(req.result?.jpegBase64 || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function getAllCachedPageJpegs(): Promise<Record<number, string>> {
+  try {
+    const db = await openPageImageDb();
+    if (!db) return {};
+    const tx = db.transaction(IDB_STORE, "readonly");
+    const req = tx.objectStore(IDB_STORE).getAll();
+    return new Promise((resolve) => {
+      req.onsuccess = () => {
+        const result: Record<number, string> = {};
+        for (const item of req.result || []) {
+          if (item?.pageNum && item?.jpegBase64) {
+            result[item.pageNum] = item.jpegBase64;
+          }
+        }
+        resolve(result);
+      };
+      req.onerror = () => resolve({});
+    });
+  } catch {
+    return {};
+  }
+}
+
+export async function clearPageJpegCache(): Promise<void> {
+  try {
+    const db = await openPageImageDb();
+    if (!db) return;
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).clear();
+    return new Promise((resolve) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch {
+    // Ignore cleanup errors
+  }
 }
 
 /** Crop one question strip out of a rendered page canvas. Coordinates are 0–1000. */

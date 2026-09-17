@@ -55,10 +55,11 @@ interface CallAiOptions {
   openaiApiKey?: string;
   geminiApiKey?: string;
   jsonMode?: boolean;
+  temperature?: number;
 }
 
 async function callUnifiedAi(options: CallAiOptions): Promise<string> {
-  const { model, systemPrompt, userPrompt, imageBase64, openaiApiKey, geminiApiKey, jsonMode = true } = options;
+  const { model, systemPrompt, userPrompt, imageBase64, openaiApiKey, geminiApiKey, jsonMode = true, temperature = 0 } = options;
   const isGemini = model.startsWith("gemini");
 
   if (isGemini) {
@@ -84,7 +85,7 @@ async function callUnifiedAi(options: CallAiOptions): Promise<string> {
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: "user", parts }],
         generationConfig: {
-          temperature: 0.1,
+          temperature: temperature ?? 0,
           responseMimeType: jsonMode ? "application/json" : "text/plain",
         },
       }),
@@ -122,7 +123,7 @@ async function callUnifiedAi(options: CallAiOptions): Promise<string> {
         { role: "system", content: systemPrompt },
         { role: "user", content: userContent },
       ],
-      temperature: 0.1,
+      temperature: temperature ?? 0,
     };
     if (jsonMode) {
       body.response_format = { type: "json_object" };
@@ -216,12 +217,15 @@ ${
      * Set "review_reason": "Incomplete combination fragment: choices reference numbered statements (1, 2, 3...) that are missing from this page."
      * Set "is_approved": false
 
-General Rules:
-1. Extract every question on this page in natural reading order.
-2. If choices are labeled "a)", "A.", "1-", normalize to standard letters A, B, C, D...
-3. If an ordinary question is missing some options (e.g. only 3 choices visible due to cropping), transcribe only the visible options. Do not invent options here.
-4. If an answer is visibly circled, highlighted, underlined, or explicitly printed (e.g. "Ans: C"), extract it in "detected_answer". If none, return null.
-5. If the page has no questions (cover, blank, or header only), return {"questions": []}.
+General Rules & ZERO OMISSION DIRECTIVES:
+1. ZERO OMISSION POLICY: Scrutinize every line, column, and margin from top to bottom. Do NOT skip ANY question, statement, or option.
+2. MULTI-COLUMN LAYOUTS: If the page has 2 or more columns, read Column 1 top-to-bottom first, then Column 2 top-to-bottom. Numbered statements (1. 2. 3. 4.) often appear in the adjacent column or directly beneath the stem.
+3. COMBINATION STATEMENTS: You MUST transcribe EVERY numbered statement (1, 2, 3, 4...) into the "statements" array. Missing even one statement makes the question unsolvable.
+4. If choices are labeled "a)", "A.", "1-", normalize to standard letters A, B, C, D...
+5. If an ordinary question is missing some options (e.g. only 3 choices visible due to cropping), transcribe only the visible options. Do not invent options here.
+6. If an answer is visibly circled, highlighted, underlined, or explicitly printed (e.g. "Ans: C"), extract it in "detected_answer". If none, return null.
+7. SELF-CHECK: Before producing JSON, verify: does each question have its full stem? Are all statements present? Are all choices present?
+8. If the page has no questions (cover, blank, or header only), return {"questions": []}.
 ${customInstructions ? `Special User Instructions:\n${customInstructions}\n` : ""}
 
 Return STRICT JSON:
@@ -356,7 +360,191 @@ export function normalizeExtractedQuestion(q: any, pageNumber: number, idx: numb
   };
 }
 
-// ── 1. Page Vision Extraction (Standard Mode) ─────────────────────────────────
+// ── 2-Pass Vision Extraction Strategy ────────────────────────────────────────
+
+async function discoverPageQuestionsInternal(opts: {
+  pageNumber: number;
+  imageJpegBase64: string;
+  model: string;
+  openaiApiKey?: string;
+  geminiApiKey?: string;
+}): Promise<string[]> {
+  const { pageNumber, imageJpegBase64, model, openaiApiKey, geminiApiKey } = opts;
+  const systemPrompt = `You are an expert medical examination layout analyzer.
+Your mission is to examine this high-resolution page of a medical exam paper and discover EVERY question number printed on it.
+
+INSTRUCTIONS:
+1. Scan the ENTIRE page from top to bottom.
+2. If the page has 2 columns, read Column 1 top-to-bottom first, then Column 2 top-to-bottom.
+3. Check margins, corners, and headers carefully.
+4. List the question numbers in natural reading order (e.g. ["1", "2", "3", "4"]).
+5. If an orphaned fragment starts at the top (e.g. continuing from previous page), do not list statement numbers (like "4.") as question numbers.
+
+Return STRICT JSON:
+{
+  "question_numbers": ["1", "2", "3", "4"]
+}`;
+
+  const userPrompt = `List every visible question number on Page ${pageNumber} of this exam paper.`;
+
+  try {
+    const rawOutput = await callUnifiedAi({
+      model,
+      systemPrompt,
+      userPrompt,
+      imageBase64: imageJpegBase64,
+      openaiApiKey,
+      geminiApiKey,
+      jsonMode: true,
+      temperature: 0,
+    });
+    const parsed = parseJsonObject(rawOutput);
+    const nums = Array.isArray(parsed?.question_numbers)
+      ? parsed.question_numbers.map((n: any) => String(n).replace(/[^\d\w]/g, "").trim()).filter(Boolean)
+      : [];
+    return nums;
+  } catch (err) {
+    console.warn(`[Pass 1 Discovery] failed for page ${pageNumber}:`, err);
+    return [];
+  }
+}
+
+async function extractSingleQuestionFocused(opts: {
+  pageNumber: number;
+  imageJpegBase64: string;
+  questionNumber: string;
+  combinationMode: "mode1_keep_original" | "mode2_convert_multiple";
+  model: string;
+  openaiApiKey?: string;
+  geminiApiKey?: string;
+  customInstructions?: string;
+  idx?: number;
+}): Promise<ExtractedQuestion | null> {
+  const { pageNumber, imageJpegBase64, questionNumber, combinationMode, model, openaiApiKey, geminiApiKey, customInstructions, idx = 0 } = opts;
+
+  const systemPrompt = `You are an expert medical examination transcription engine reading high-resolution scans of exam papers.
+YOUR MISSION: Transcribe ONLY Question #${questionNumber} from this page VERBATIM with 100% fidelity and zero omission.
+
+ZERO OMISSION DIRECTIVES FOR QUESTION #${questionNumber}:
+1. LOCATE: Find Question #${questionNumber} on this page. If the page has 2 or more columns, inspect BOTH columns thoroughly.
+2. COMBINATION STATEMENTS (MANDATORY CRITICAL RULE):
+   - A question is a Combination Question if choices are combination numbers (e.g. "a) 1.2", "b) 1.3.4", "c) 1.2.3.4", "d) 2.3.4") or reference numbered items.
+   - For ANY combination question, the question ALWAYS has numbered statements (1. ..., 2. ..., 3. ..., 4. ...).
+   - They may appear directly below the stem, or printed in the adjacent column to the right!
+   - You MUST transcribe EVERY numbered statement into the "statements" array:
+     "statements": [
+       "1. First numbered statement verbatim",
+       "2. Second numbered statement verbatim",
+       "3. Third numbered statement verbatim",
+       "4. Fourth numbered statement verbatim"
+     ]
+   - NEVER omit or skip the numbered statements! Missing statements makes the question completely broken.
+${
+  combinationMode === "mode1_keep_original"
+    ? `   - MODE 1 — KEEP ORIGINAL COMBINATION FORMAT:
+     * Put the combination choices directly into the "options" array:
+       [{"letter": "A", "text": "1.2"}, {"letter": "B", "text": "1.3.4"}, {"letter": "C", "text": "1.2.3.4"}, {"letter": "D", "text": "2.3.4"}].
+     * Set "question_type": "combination".
+     * Also record choices in "printed_combinations".`
+    : `   - MODE 2 — CONVERT TO MULTIPLE ANSWERS:
+     * The numbered statements become the "options" (A: statement 1, B: statement 2...).
+     * Set "question_type": "multiple_answer".
+     * Record original choices in "printed_combinations".`
+}
+3. ORDINARY MCQs:
+   - Extract choices a), b), c), d) into "options" with letters "A", "B", "C", "D".
+   - Set "question_type": "ordinary".
+4. SELF-CHECK: Before producing JSON, verify that the stem, all statements (1..4), and all choices (a..d) are present.
+${customInstructions ? `Special User Instructions:\n${customInstructions}\n` : ""}
+
+Return STRICT JSON:
+{
+  "question": {
+    "number": "${questionNumber}",
+    "question_type": "ordinary|combination|multiple_answer",
+    "stem": "full question prompt verbatim without numbered statements",
+    "statements": [
+      "1. First statement verbatim",
+      "2. Second statement verbatim",
+      "3. Third statement verbatim",
+      "4. Fourth statement verbatim"
+    ],
+    "options": [
+      { "letter": "A", "text": "choice A text" },
+      { "letter": "B", "text": "choice B text" },
+      { "letter": "C", "text": "choice C text" },
+      { "letter": "D", "text": "choice D text" }
+    ],
+    "printed_combinations": [
+      { "letter": "A", "text": "1.2" }
+    ],
+    "detected_answer": null,
+    "needs_review": false,
+    "review_reason": null,
+    "is_approved": true
+  }
+}`;
+
+  const userPrompt = `Transcribe Question #${questionNumber} from Page ${pageNumber} of this exam paper.`;
+
+  try {
+    const rawOutput = await callUnifiedAi({
+      model,
+      systemPrompt,
+      userPrompt,
+      imageBase64: imageJpegBase64,
+      openaiApiKey,
+      geminiApiKey,
+      jsonMode: true,
+      temperature: 0,
+    });
+
+    const parsed = parseJsonObject(rawOutput);
+    const qObj = parsed?.question || (Array.isArray(parsed?.questions) ? parsed.questions[0] : null);
+    if (!qObj) return null;
+
+    let normalized = normalizeExtractedQuestion(qObj, pageNumber, idx);
+
+    // ── Auto-Retry if incomplete or missing combination statements ─────────
+    if (normalized.needsReview || (normalized.options.length < 4 && !normalized.isApproved)) {
+      try {
+        const retryPrompt = `FOCUSED REPAIR CALL FOR QUESTION #${questionNumber}:
+The previous transcription was missing numbered statements (1, 2, 3, 4...) or choices.
+Locate Question #${questionNumber} on Page ${pageNumber}. Inspect BOTH columns thoroughly.
+Transcribe Question #${questionNumber} with ALL statements (1, 2, 3, 4) and ALL choices (A, B, C, D).`;
+
+        const retryOutput = await callUnifiedAi({
+          model,
+          systemPrompt,
+          userPrompt: retryPrompt,
+          imageBase64: imageJpegBase64,
+          openaiApiKey,
+          geminiApiKey,
+          jsonMode: true,
+          temperature: 0,
+        });
+
+        const retryParsed = parseJsonObject(retryOutput);
+        const retryQObj = retryParsed?.question || (Array.isArray(retryParsed?.questions) ? retryParsed.questions[0] : null);
+        if (retryQObj) {
+          const retryNorm = normalizeExtractedQuestion(retryQObj, pageNumber, idx);
+          if (!retryNorm.needsReview || retryNorm.options.length > normalized.options.length) {
+            normalized = retryNorm;
+          }
+        }
+      } catch (retryErr) {
+        console.warn(`[Auto-retry] failed for Q#${questionNumber}:`, retryErr);
+      }
+    }
+
+    return normalized;
+  } catch (err) {
+    console.warn(`[Extract Q#${questionNumber}] failed on page ${pageNumber}:`, err);
+    return null;
+  }
+}
+
+// ── 1. Page Vision Extraction (2-Pass Strategy with Fallback) ────────────────
 const ExtractPageInput = z.object({
   pageNumber: z.number().int().min(1),
   imageJpegBase64: z.string().min(10),
@@ -374,6 +562,42 @@ export const extractPageQuestions124 = createServerFn({ method: "POST" })
     await ensureAdmin(context);
 
     const { pageNumber, imageJpegBase64, combinationMode, model, openaiApiKey, geminiApiKey, customInstructions } = data;
+
+    // ── PASS 1: Question Discovery Call ────────────────────────────────────
+    const discoveredNumbers = await discoverPageQuestionsInternal({
+      pageNumber,
+      imageJpegBase64,
+      model,
+      openaiApiKey,
+      geminiApiKey,
+    });
+
+    // ── PASS 2: Focused Per-Question Extraction (Concurrent) ───────────────
+    if (discoveredNumbers.length > 0) {
+      const singleResults = await Promise.all(
+        discoveredNumbers.map((qNum, idx) =>
+          extractSingleQuestionFocused({
+            pageNumber,
+            imageJpegBase64,
+            questionNumber: qNum,
+            combinationMode,
+            model,
+            openaiApiKey,
+            geminiApiKey,
+            customInstructions,
+            idx,
+          })
+        )
+      );
+
+      const validQuestions = singleResults.filter((q): q is ExtractedQuestion => q !== null && Boolean(q.stem || q.options.length));
+
+      if (validQuestions.length > 0) {
+        return { pageNumber, questions: validQuestions };
+      }
+    }
+
+    // ── FALLBACK: Whole-Page Extraction if Pass 1 or Pass 2 returned 0 ──────
     const systemPrompt = buildExtractionSystemPrompt(combinationMode, customInstructions);
     const userPrompt = `Transcribe all medical MCQs visible on Page ${pageNumber} of this exam paper.`;
 
@@ -385,6 +609,7 @@ export const extractPageQuestions124 = createServerFn({ method: "POST" })
       openaiApiKey,
       geminiApiKey,
       jsonMode: true,
+      temperature: 0,
     });
 
     const parsed = parseJsonObject(rawOutput);
@@ -395,6 +620,44 @@ export const extractPageQuestions124 = createServerFn({ method: "POST" })
     );
 
     return { pageNumber, questions };
+  });
+
+// ── 1B. Re-Extract Single Question (Alternate Model Selector) ────────────────
+const ReextractSingleQuestionInput = z.object({
+  pageNumber: z.number().int().min(1),
+  imageJpegBase64: z.string().min(10),
+  questionNumber: z.string(),
+  combinationMode: z.enum(["mode1_keep_original", "mode2_convert_multiple"]).default("mode1_keep_original"),
+  model: z.string(),
+  openaiApiKey: z.string().optional(),
+  geminiApiKey: z.string().optional(),
+  customInstructions: z.string().optional(),
+});
+
+export const reextractSingleQuestion124 = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => ReextractSingleQuestionInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await ensureAdmin(context);
+
+    const { pageNumber, imageJpegBase64, questionNumber, combinationMode, model, openaiApiKey, geminiApiKey, customInstructions } = data;
+
+    const question = await extractSingleQuestionFocused({
+      pageNumber,
+      imageJpegBase64,
+      questionNumber,
+      combinationMode,
+      model,
+      openaiApiKey,
+      geminiApiKey,
+      customInstructions,
+    });
+
+    if (!question) {
+      throw new Error(`Failed to re-extract Question #${questionNumber} from page ${pageNumber}.`);
+    }
+
+    return { question };
   });
 
 // ── 2. AI Missing Distractor Generator (Single & Bulk) ────────────────────────

@@ -18,6 +18,7 @@ import {
   SupportedModelId,
   ExtractedQuestion,
   extractPageQuestions124,
+  reextractSingleQuestion124,
   fillMissingOptions124,
   fillAllMissingOptions124,
   detectDuplicates124,
@@ -29,7 +30,14 @@ import {
   createOpenAiBatchSolving124,
   retrieveOpenAiBatchSolvingResults124,
 } from "@/lib/mcq-generator-124-pro.functions";
-import { renderPageToCanvas, canvasToJpegBase64 } from "@/lib/pdf-page-image";
+import {
+  renderPageToCanvas,
+  canvasToJpegBase64,
+  savePageJpegToCache,
+  getPageJpegFromCache,
+  getAllCachedPageJpegs,
+  clearPageJpegCache,
+} from "@/lib/pdf-page-image";
 
 export const Route = createFileRoute("/admin/mcq-generator-124-pro")({
   head: () => ({
@@ -100,22 +108,67 @@ export function McqGenerator124ProPage() {
   const [showConfigPanel, setShowConfigPanel] = useState<boolean>(false);
 
   // ── Pipeline Stage ────────────────────────────────────────────────────────
-  const [currentStage, setCurrentStage] = useState<Stage>("extract");
+  const [currentStage, setCurrentStage] = useState<Stage>(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("mcq_124_pro_current_stage") as Stage) || "extract";
+    }
+    return "extract";
+  });
 
   // ── Stage 1: Extraction State ─────────────────────────────────────────────
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
-  const [totalPages, setTotalPages] = useState<number>(0);
+  const [selectedPdfName, setSelectedPdfName] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("mcq_124_pro_pdf_name") || "";
+    }
+    return "";
+  });
+  const [totalPages, setTotalPages] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem("mcq_124_pro_total_pages");
+      return raw ? parseInt(raw, 10) || 0 : 0;
+    }
+    return 0;
+  });
   const [pageThumbnails, setPageThumbnails] = useState<Record<number, string>>({});
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
   const [extractProgress, setExtractProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
-  const [extractedQuestions, setExtractedQuestions] = useState<SolvedQuestionState[]>([]);
-  const [stage1Done, setStage1Done] = useState<boolean>(false);
+  const [extractedQuestions, setExtractedQuestions] = useState<SolvedQuestionState[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("mcq_124_pro_extracted_questions");
+        return raw ? JSON.parse(raw) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
+  const [stage1Done, setStage1Done] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("mcq_124_pro_stage1_done") === "true";
+    }
+    return false;
+  });
   const [isBulkFillingOptions, setIsBulkFillingOptions] = useState<boolean>(false);
 
   // Stop flag ref for emergency halt
   const stopRequestedRef = useRef<boolean>(false);
   const [isStopRequested, setIsStopRequested] = useState<boolean>(false);
+
+  // Filter & Review State
+  type FilterMode = "all" | "review_only" | "missing_options" | "approved";
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
+
+  // Re-Extraction States
+  const [reextractingIds, setReextractingIds] = useState<Record<string, boolean>>({});
+  const [cardModels, setCardModels] = useState<Record<string, SupportedModelId>>({});
+  const [bulkReextractModel, setBulkReextractModel] = useState<SupportedModelId>("gpt-4o");
+  const [isBulkReextracting, setIsBulkReextracting] = useState<boolean>(false);
+
+  // Reset Confirmation Modal
+  const [showResetConfirmModal, setShowResetConfirmModal] = useState<boolean>(false);
 
   // Batch Job State
   const [batchJob, setBatchJob] = useState<{
@@ -124,7 +177,17 @@ export function McqGenerator124ProPage() {
     totalPages: number;
     requestCounts: { total: number; completed: number; failed: number };
     outputFileId?: string | null;
-  } | null>(null);
+  } | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("mcq_124_pro_batch_job");
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
 
   // Missing options modal/drawer
   const [resolvingMissingQ, setResolvingMissingQ] = useState<SolvedQuestionState | null>(null);
@@ -156,7 +219,12 @@ export function McqGenerator124ProPage() {
     return null;
   });
   const [solveProgress, setSolveProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
-  const [stage2Done, setStage2Done] = useState<boolean>(false);
+  const [stage2Done, setStage2Done] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("mcq_124_pro_stage2_done") === "true";
+    }
+    return false;
+  });
 
   // ── Stage 3: Import State ─────────────────────────────────────────────────
   const [courses, setCourses] = useState<Array<{ id: string; title: string }>>([]);
@@ -187,6 +255,7 @@ export function McqGenerator124ProPage() {
 
   // ── Server Functions ──────────────────────────────────────────────────────
   const extractPageFn = useServerFn(extractPageQuestions124);
+  const reextractSingleFn = useServerFn(reextractSingleQuestion124);
   const fillMissingFn = useServerFn(fillMissingOptions124);
   const fillAllMissingFn = useServerFn(fillAllMissingOptions124);
   const solveQuestionFn = useServerFn(solveAndExplain124);
@@ -196,6 +265,83 @@ export function McqGenerator124ProPage() {
   const retrieveBatchResultsFn = useServerFn(retrieveOpenAiBatchExtractionResults124);
   const createBatchSolveFn = useServerFn(createOpenAiBatchSolving124);
   const retrieveBatchSolveResultsFn = useServerFn(retrieveOpenAiBatchSolvingResults124);
+
+  // ── IndexedDB Page Image Cache Hydration ──────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const cached = await getAllCachedPageJpegs();
+        if (cached && Object.keys(cached).length > 0) {
+          setPageThumbnails((prev) => ({ ...cached, ...prev }));
+        }
+      } catch (e) {
+        console.warn("Failed to load page images from cache:", e);
+      }
+    })();
+  }, []);
+
+  // ── Workspace State Persistence ───────────────────────────────────────────
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("mcq_124_pro_current_stage", currentStage);
+    }
+  }, [currentStage]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("mcq_124_pro_extracted_questions", JSON.stringify(extractedQuestions));
+      } catch (err) {
+        console.warn("Failed to persist questions to localStorage:", err);
+      }
+    }
+  }, [extractedQuestions]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("mcq_124_pro_stage1_done", String(stage1Done));
+    }
+  }, [stage1Done]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("mcq_124_pro_stage2_done", String(stage2Done));
+    }
+  }, [stage2Done]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (batchJob) {
+        localStorage.setItem("mcq_124_pro_batch_job", JSON.stringify(batchJob));
+      } else {
+        localStorage.removeItem("mcq_124_pro_batch_job");
+      }
+    }
+  }, [batchJob]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("mcq_124_pro_total_pages", String(totalPages));
+    }
+  }, [totalPages]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("mcq_124_pro_pdf_name", selectedPdfName);
+    }
+  }, [selectedPdfName]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("mcq_124_pro_combo_mode", comboMode);
+    }
+  }, [comboMode]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("mcq_124_pro_solve_mode", solveProcessingMode);
+    }
+  }, [solveProcessingMode]);
 
   // Persist batch solve job
   useEffect(() => {
@@ -268,6 +414,7 @@ export function McqGenerator124ProPage() {
   async function handlePdfSelect(file: File) {
     try {
       setPdfFile(file);
+      setSelectedPdfName(file.name);
       const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
       const workerUrl = (await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url")).default;
       pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -286,10 +433,16 @@ export function McqGenerator124ProPage() {
   // ── Render Page Thumbnail ─────────────────────────────────────────────────
   async function getPageJpeg(pageNum: number): Promise<string> {
     if (pageThumbnails[pageNum]) return pageThumbnails[pageNum];
-    if (!pdfDoc) throw new Error("PDF Document not loaded");
-    const canvas = await renderPageToCanvas(pdfDoc, pageNum, 2000);
-    const jpeg = canvasToJpegBase64(canvas, 0.90);
+    const fromCache = await getPageJpegFromCache(pageNum);
+    if (fromCache) {
+      setPageThumbnails((prev) => ({ ...prev, [pageNum]: fromCache }));
+      return fromCache;
+    }
+    if (!pdfDoc) throw new Error(`PDF Document not loaded. Please select or re-upload the PDF to process page ${pageNum}.`);
+    const canvas = await renderPageToCanvas(pdfDoc, pageNum, 2800);
+    const jpeg = canvasToJpegBase64(canvas, 0.95);
     setPageThumbnails((prev) => ({ ...prev, [pageNum]: jpeg }));
+    await savePageJpegToCache(pageNum, jpeg);
     return jpeg;
   }
 
@@ -654,7 +807,194 @@ export function McqGenerator124ProPage() {
     toast.success("Question approved!");
   }
 
-  // ── Start Stage 2 Solving & Explaining ────────────────────────────────────
+  // ── Filter & Review Computations ──────────────────────────────────────────
+  const filteredQuestions = useMemo(() => {
+    switch (filterMode) {
+      case "review_only":
+        return extractedQuestions.filter((q) => (q.needsReview && !q.isApproved) || q.isApproved === false);
+      case "missing_options":
+        return extractedQuestions.filter((q) => q.hasMissingOptions || q.options.length < 4);
+      case "approved":
+        return extractedQuestions.filter((q) => q.isApproved !== false && !q.needsReview);
+      default:
+        return extractedQuestions;
+    }
+  }, [extractedQuestions, filterMode]);
+
+  const reviewCount = useMemo(
+    () => extractedQuestions.filter((q) => (q.needsReview && !q.isApproved) || q.isApproved === false).length,
+    [extractedQuestions]
+  );
+  const missingOptionsCount = useMemo(
+    () => extractedQuestions.filter((q) => q.hasMissingOptions || q.options.length < 4).length,
+    [extractedQuestions]
+  );
+  const approvedCount = useMemo(
+    () => extractedQuestions.filter((q) => q.isApproved !== false && !q.needsReview).length,
+    [extractedQuestions]
+  );
+
+  // ── Re-Extraction Handlers (Per-Question & Bulk) ──────────────────────────
+  async function handleReextractQuestion(q: SolvedQuestionState, modelToUse?: SupportedModelId) {
+    const chosenModel = modelToUse || cardModels[q.id] || "gpt-4o";
+    const activeKey = chosenModel.startsWith("gemini") ? geminiKey : openaiKey;
+    if (!activeKey?.trim()) {
+      toast.error(`Please provide an API key for ${chosenModel} in Dedicated API Keys panel.`);
+      setShowConfigPanel(true);
+      return;
+    }
+
+    setReextractingIds((prev) => ({ ...prev, [q.id]: true }));
+    toast.loading(`Re-extracting Q#${q.number} with ${chosenModel}...`, { id: `reextract-${q.id}` });
+
+    try {
+      let jpegBase64 = pageThumbnails[q.pageNumber];
+      if (!jpegBase64) {
+        jpegBase64 = (await getPageJpegFromCache(q.pageNumber)) || "";
+      }
+      if (!jpegBase64 && pdfDoc) {
+        jpegBase64 = await getPageJpeg(q.pageNumber);
+      }
+      if (!jpegBase64) {
+        throw new Error(`Page image for Page ${q.pageNumber} not available. Please re-upload the PDF to re-extract.`);
+      }
+
+      const res: any = await reextractSingleFn({
+        data: {
+          pageNumber: q.pageNumber,
+          imageJpegBase64: jpegBase64,
+          questionNumber: q.number,
+          combinationMode: comboMode,
+          model: chosenModel,
+          openaiApiKey: openaiKey,
+          geminiApiKey: geminiKey,
+          customInstructions,
+        },
+      });
+
+      const updatedQ: SolvedQuestionState = {
+        ...res.question,
+        solveStatus: "unsolved",
+      };
+
+      setExtractedQuestions((prev) =>
+        prev.map((item) => (item.id === q.id ? updatedQ : item))
+      );
+
+      if (updatedQ.needsReview) {
+        toast.warning(`Re-extracted Question #${q.number}, but it still needs educator review.`, { id: `reextract-${q.id}` });
+      } else {
+        toast.success(`Question #${q.number} re-extracted successfully with ${chosenModel}!`, { id: `reextract-${q.id}` });
+      }
+    } catch (err: any) {
+      toast.error(`Re-extraction failed: ${err?.message || err}`, { id: `reextract-${q.id}` });
+    } finally {
+      setReextractingIds((prev) => ({ ...prev, [q.id]: false }));
+    }
+  }
+
+  async function handleBulkReextractReviewQuestions() {
+    const questionsToFix = extractedQuestions.filter((q) => (q.needsReview && !q.isApproved) || q.isApproved === false);
+    if (questionsToFix.length === 0) {
+      toast.info("No questions needing review to re-extract.");
+      return;
+    }
+
+    const activeKey = bulkReextractModel.startsWith("gemini") ? geminiKey : openaiKey;
+    if (!activeKey?.trim()) {
+      toast.error(`Please provide an API key for ${bulkReextractModel}.`);
+      setShowConfigPanel(true);
+      return;
+    }
+
+    setIsBulkReextracting(true);
+    toast.loading(`Re-extracting ${questionsToFix.length} review questions with ${bulkReextractModel}...`, { id: "bulk-reextract" });
+
+    let fixedCount = 0;
+    try {
+      for (const q of questionsToFix) {
+        let jpegBase64 = pageThumbnails[q.pageNumber];
+        if (!jpegBase64) {
+          jpegBase64 = (await getPageJpegFromCache(q.pageNumber)) || "";
+        }
+        if (!jpegBase64 && pdfDoc) {
+          jpegBase64 = await getPageJpeg(q.pageNumber);
+        }
+        if (!jpegBase64) continue;
+
+        try {
+          const res: any = await reextractSingleFn({
+            data: {
+              pageNumber: q.pageNumber,
+              imageJpegBase64: jpegBase64,
+              questionNumber: q.number,
+              combinationMode: comboMode,
+              model: bulkReextractModel,
+              openaiApiKey: openaiKey,
+              geminiApiKey: geminiKey,
+              customInstructions,
+            },
+          });
+
+          const updatedQ: SolvedQuestionState = {
+            ...res.question,
+            solveStatus: "unsolved",
+          };
+
+          setExtractedQuestions((prev) =>
+            prev.map((item) => (item.id === q.id ? updatedQ : item))
+          );
+          fixedCount++;
+        } catch (singleErr) {
+          console.warn(`Failed to bulk re-extract Q#${q.number}:`, singleErr);
+        }
+      }
+
+      toast.success(`Bulk re-extraction finished: ${fixedCount} of ${questionsToFix.length} questions processed!`, { id: "bulk-reextract" });
+    } catch (err: any) {
+      toast.error(`Bulk re-extraction error: ${err?.message || err}`, { id: "bulk-reextract" });
+    } finally {
+      setIsBulkReextracting(false);
+    }
+  }
+
+  // ── Reset / Start New Process Handler ─────────────────────────────────────
+  async function handleResetWorkspace() {
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("mcq_124_pro_extracted_questions");
+        localStorage.removeItem("mcq_124_pro_current_stage");
+        localStorage.removeItem("mcq_124_pro_stage1_done");
+        localStorage.removeItem("mcq_124_pro_stage2_done");
+        localStorage.removeItem("mcq_124_pro_batch_job");
+        localStorage.removeItem("mcq_124_pro_batch_solve_job");
+        localStorage.removeItem("mcq_124_pro_total_pages");
+        localStorage.removeItem("mcq_124_pro_pdf_name");
+        localStorage.removeItem("mcq_124_pro_combo_mode");
+        localStorage.removeItem("mcq_124_pro_solve_mode");
+      }
+
+      await clearPageJpegCache();
+
+      setExtractedQuestions([]);
+      setPdfFile(null);
+      setPdfDoc(null);
+      setTotalPages(0);
+      setSelectedPdfName("");
+      setPageThumbnails({});
+      setCurrentStage("extract");
+      setStage1Done(false);
+      setStage2Done(false);
+      setBatchJob(null);
+      setBatchSolveJob(null);
+      setFilterMode("all");
+      setShowResetConfirmModal(false);
+
+      toast.success("Workspace reset successfully. Ready for a new exam process!");
+    } catch (err: any) {
+      toast.error(`Failed to reset workspace: ${err?.message || err}`);
+    }
+  }
   async function startSolving() {
     if (solveProcessingMode === "batch") {
       await handleStartBatchSolving();
@@ -1051,6 +1391,15 @@ export function McqGenerator124ProPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Reset / New Process Button */}
+            <button
+              onClick={() => setShowResetConfirmModal(true)}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 text-xs font-bold transition-all shadow-sm"
+              title="Reset workspace and start fresh"
+            >
+              <Trash2 size={14} className="text-red-400" /> Reset / New Process
+            </button>
+
             {extractedQuestions.length > 0 && (
               <button
                 onClick={saveCurrentSession}
@@ -1457,11 +1806,20 @@ export function McqGenerator124ProPage() {
                       </button>
                     )}
 
-                    {extractedQuestions.some((q) => q.needsReview && !q.isApproved) && (
-                      <span className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-xs font-bold text-amber-300 flex items-center gap-1.5 shadow-sm">
-                        <AlertTriangle size={13} className="text-amber-400" />
-                        {extractedQuestions.filter((q) => q.needsReview && !q.isApproved).length} Incomplete Fragment(s) Awaiting Review
-                      </span>
+                    {reviewCount > 0 && (
+                      <button
+                        onClick={() => setFilterMode(filterMode === "review_only" ? "all" : "review_only")}
+                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ${
+                          filterMode === "review_only"
+                            ? "bg-amber-500 text-slate-950 border-amber-400 font-black shadow-amber-500/20"
+                            : "bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30"
+                        }`}
+                        title="Click to view only questions needing review"
+                      >
+                        <AlertTriangle size={13} className={filterMode === "review_only" ? "text-slate-950" : "text-amber-400"} />
+                        {reviewCount} Incomplete Fragment(s) Awaiting Review
+                        {filterMode === "review_only" && <span className="ml-1 text-[10px] bg-slate-950/30 px-1 rounded font-bold">Active</span>}
+                      </button>
                     )}
 
                     {stage1Done && (
@@ -1475,56 +1833,187 @@ export function McqGenerator124ProPage() {
                   </div>
                 </div>
 
-                {/* Question Cards List */}
-                <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
-                  {extractedQuestions.map((q, idx) => (
-                    <div
-                      key={q.id}
-                      className={`p-4 rounded-xl border transition-all ${
-                        q.isDuplicate
-                          ? "bg-red-950/20 border-red-800/40 opacity-50"
-                          : q.needsReview && !q.isApproved
-                          ? "bg-amber-950/30 border-amber-600/60"
-                          : q.hasMissingOptions
-                          ? "bg-amber-950/20 border-amber-700/50"
-                          : "bg-slate-950 border-slate-800 hover:border-slate-700"
+                {/* ── Filter Tabs Bar ────────────────────────────────────────── */}
+                <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800 mb-4">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      onClick={() => setFilterMode("all")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        filterMode === "all"
+                          ? "bg-slate-800 text-white shadow-sm border border-slate-700"
+                          : "text-slate-400 hover:text-white"
                       }`}
                     >
-                      {/* Warning for unapproved incomplete fragments */}
-                      {q.needsReview && !q.isApproved && (
-                        <div className="bg-amber-500/15 border border-amber-500/40 rounded-xl p-3 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="flex items-start gap-2.5">
-                            <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
-                            <div>
-                              <div className="text-xs font-bold text-amber-300">Requires Educator Review / Approval</div>
-                              <div className="text-[11px] text-amber-200/80 mt-0.5">
-                                {q.reviewReason || "Incomplete combination fragment missing statements or stem."}
+                      <ListFilter size={13} /> All Questions ({extractedQuestions.length})
+                    </button>
+                    <button
+                      onClick={() => setFilterMode("review_only")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        filterMode === "review_only"
+                          ? "bg-amber-500/30 text-amber-300 border border-amber-500/60 shadow-sm"
+                          : reviewCount > 0
+                          ? "text-amber-400 hover:text-amber-300 bg-amber-500/10"
+                          : "text-slate-500 hover:text-slate-400"
+                      }`}
+                    >
+                      <AlertTriangle size={13} /> ⚠️ Needs Review ({reviewCount})
+                    </button>
+                    {missingOptionsCount > 0 && (
+                      <button
+                        onClick={() => setFilterMode("missing_options")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                          filterMode === "missing_options"
+                            ? "bg-amber-500/30 text-amber-300 border border-amber-500/60 shadow-sm"
+                            : "text-amber-400 hover:text-amber-300"
+                        }`}
+                      >
+                        <Wrench size={13} /> Missing Options ({missingOptionsCount})
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setFilterMode("approved")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        filterMode === "approved"
+                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
+                          : "text-slate-400 hover:text-emerald-400"
+                      }`}
+                    >
+                      <CheckCircle2 size={13} /> ✓ Approved / Ready ({approvedCount})
+                    </button>
+                  </div>
+
+                  {filterMode !== "all" && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400">
+                        Showing <strong className="text-white">{filteredQuestions.length}</strong> of {extractedQuestions.length}
+                      </span>
+                      <button
+                        onClick={() => setFilterMode("all")}
+                        className="text-xs text-amber-400 hover:underline font-bold"
+                      >
+                        Show All
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Bulk Re-Extraction Banner when viewing review questions ─── */}
+                {filterMode === "review_only" && reviewCount > 0 && (
+                  <div className="bg-gradient-to-r from-amber-950/40 to-slate-900 border border-amber-500/30 rounded-xl p-3.5 mb-4 flex flex-wrap items-center justify-between gap-3 shadow-md">
+                    <div className="flex items-center gap-2.5">
+                      <Sparkles size={18} className="text-amber-400 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold text-white">
+                          Re-extract all {reviewCount} question(s) needing review with an alternate model
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          Performs targeted high-res vision extraction on each affected page to recover missing statements.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={bulkReextractModel}
+                        onChange={(e) => setBulkReextractModel(e.target.value as SupportedModelId)}
+                        className="px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-amber-300 font-bold focus:outline-none focus:border-amber-500"
+                      >
+                        {SUPPORTED_MODELS.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.label} ({m.tier})
+                          </option>
+                        ))}
+                      </select>
+
+                      <button
+                        disabled={isBulkReextracting}
+                        onClick={handleBulkReextractReviewQuestions}
+                        className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        {isBulkReextracting ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                        Re-extract All ({reviewCount})
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Question Cards List */}
+                <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                  {filteredQuestions.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500 text-xs bg-slate-950 rounded-xl border border-slate-800">
+                      No questions match the selected filter ({filterMode}).
+                    </div>
+                  ) : (
+                    filteredQuestions.map((q, idx) => (
+                      <div
+                        key={q.id}
+                        className={`p-4 rounded-xl border transition-all ${
+                          q.isDuplicate
+                            ? "bg-red-950/20 border-red-800/40 opacity-50"
+                            : q.needsReview && !q.isApproved
+                            ? "bg-amber-950/30 border-amber-600/60"
+                            : q.hasMissingOptions
+                            ? "bg-amber-950/20 border-amber-700/50"
+                            : "bg-slate-950 border-slate-800 hover:border-slate-700"
+                        }`}
+                      >
+                        {/* Warning for unapproved incomplete fragments */}
+                        {q.needsReview && !q.isApproved && (
+                          <div className="bg-amber-500/15 border border-amber-500/40 rounded-xl p-3 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-start gap-2.5">
+                              <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
+                              <div>
+                                <div className="text-xs font-bold text-amber-300">Requires Educator Review / Approval</div>
+                                <div className="text-[11px] text-amber-200/80 mt-0.5">
+                                  {q.reviewReason || "Incomplete combination fragment missing statements or stem."}
+                                </div>
                               </div>
                             </div>
+                            <div className="flex flex-wrap items-center gap-2 shrink-0">
+                              <select
+                                value={cardModels[q.id] || "gpt-4o"}
+                                onChange={(e) =>
+                                  setCardModels((prev) => ({ ...prev, [q.id]: e.target.value as SupportedModelId }))
+                                }
+                                className="px-2 py-1 text-[11px] bg-slate-900 border border-slate-700 rounded-lg text-amber-300 font-bold"
+                              >
+                                {SUPPORTED_MODELS.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                disabled={reextractingIds[q.id]}
+                                onClick={() => handleReextractQuestion(q)}
+                                className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1 shadow-sm transition-all disabled:opacity-50"
+                                title="Re-extract question with selected model"
+                              >
+                                {reextractingIds[q.id] ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                                Re-extract
+                              </button>
+                              <button
+                                onClick={() => handleApproveQuestion(q.id)}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1 shadow-sm transition-all"
+                              >
+                                <Check size={12} /> Approve
+                              </button>
+                              <button
+                                onClick={() => openEditQuestion(q)}
+                                className="px-2.5 py-1 rounded-lg bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs flex items-center gap-1 shadow-sm transition-all"
+                              >
+                                <Edit3 size={12} /> Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteQuestion(q.id)}
+                                className="px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold text-xs flex items-center gap-1 transition-all"
+                                title="Delete fragment"
+                              >
+                                <Trash2 size={12} /> Delete
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              onClick={() => handleApproveQuestion(q.id)}
-                              className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1 shadow-sm transition-all"
-                            >
-                              <Check size={12} /> Approve
-                            </button>
-                            <button
-                              onClick={() => openEditQuestion(q)}
-                              className="px-2.5 py-1 rounded-lg bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs flex items-center gap-1 shadow-sm transition-all"
-                            >
-                              <Edit3 size={12} /> Edit
-                            </button>
-                            <button
-                              onClick={() => handleDeleteQuestion(q.id)}
-                              className="px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold text-xs flex items-center gap-1 transition-all"
-                              title="Delete fragment"
-                            >
-                              <Trash2 size={12} /> Delete
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                        )}
 
                       <div className="flex items-start justify-between gap-4 mb-2">
                         <div className="flex items-center gap-2">
@@ -1603,7 +2092,7 @@ export function McqGenerator124ProPage() {
                         ))}
                       </div>
                     </div>
-                  ))}
+                  )))}
                 </div>
               </div>
             )}
@@ -2468,6 +2957,49 @@ export function McqGenerator124ProPage() {
               ) : (
                 <div className="text-xs text-slate-500">Page image not yet cached in session.</div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Reset Confirmation Modal ────────────────────────────────────────── */}
+      {showResetConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="p-3 bg-red-500/20 rounded-xl border border-red-500/30">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Reset Entire Workspace?</h3>
+                <p className="text-xs text-slate-400">This action clears your current session.</p>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-300 leading-relaxed bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
+              <p>Are you sure you want to clear this workspace and start a new process?</p>
+              <ul className="list-disc pl-4 space-y-1 text-slate-400">
+                <li>All <strong className="text-white">{extractedQuestions.length}</strong> questions in memory will be cleared.</li>
+                <li>Active OpenAI batch jobs and status trackers will be reset.</li>
+                <li>Cached page images from this session will be removed.</li>
+              </ul>
+              <p className="text-emerald-400 text-[11px] pt-1">
+                ✓ Saved sessions in your <strong>Session Archive</strong> will NOT be deleted.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowResetConfirmModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetWorkspace}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+              >
+                <Trash2 size={13} /> Yes, Clear Everything
+              </button>
             </div>
           </div>
         </div>
