@@ -357,6 +357,15 @@ export function normalizeExtractedQuestion(q: any, pageNumber: number, idx: numb
     q.question_type = "ordinary";
   }
 
+  // Bug Fix 2: Detect MIXED (partially combo) options — some look like number codes (e.g. "2,3", "1.4"),
+  // some are plain text. This is a malformed question that should be flagged for review.
+  const comboOptionPattern = /^[\d\s.,;+]+$/;
+  const hasPartialComboOptions =
+    !isComboOptions &&
+    options.length >= 2 &&
+    options.some((o: { letter: string; text: string }) => comboOptionPattern.test(o.text.trim())) &&
+    options.some((o: { letter: string; text: string }) => !comboOptionPattern.test(o.text.trim()));
+
   // Check for Orphaned / Incomplete Combination Fragment (User Issue 4)
   // Options are combination numbers ("1.3.4", "2.3.4", etc.) but stem does NOT contain statements 1 and 2
   const stemHasStatements = /1[\.\s].+2[\.\s]/s.test(stem);
@@ -369,6 +378,23 @@ export function normalizeExtractedQuestion(q: any, pageNumber: number, idx: numb
     isApproved = false;
     reviewReason =
       "Incomplete combination fragment: choices reference numbered statements (1, 2, 3...) that are missing from this page or question stem.";
+  }
+
+  // Bug Fix 1: Combo options present AND stem has embedded statements text BUT statements[] array is empty.
+  // The model merged statements into the stem without extracting them separately → flag for review.
+  if (isComboOptions && stemHasStatements && rawStatements.length === 0) {
+    needsReview = true;
+    isApproved = false;
+    reviewReason =
+      "Combination question: numbered statements appear embedded in the stem but were not extracted into the statements array. Please verify and edit to separate the stem from the numbered statements.";
+  }
+
+  // Bug Fix 2 (continued): flag mixed options questions for review.
+  if (hasPartialComboOptions) {
+    needsReview = true;
+    isApproved = false;
+    reviewReason =
+      "Mixed options detected: some choices appear to be numbered statement references (e.g. 1,3 or 2.4) while others are plain text answers. This may be a combination question with missing statements or a misclassification. Manual review required.";
   }
 
   const isTwoChoice = options.length === 2 && options.some((o: any) => /^(true|false|yes|no)$/i.test(o.text));
