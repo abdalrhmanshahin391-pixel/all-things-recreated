@@ -180,23 +180,31 @@ QUESTION TAXONOMY & EXTRACTION RULES:
    - STRICT: NEVER return an empty options array for ordinary MCQs.
    - Set "question_type": "ordinary".
 
-2. COMBINATION QUESTIONS:
-   - A question is a Combination Question ONLY IF the printed paper contains BOTH:
-     (a) Numbered statements (1. ... 2. ... 3. ... 4. ...) inside the question body, AND
-     (b) Choices referencing those numbers (e.g. "a) 3.4", "b) 1.2.3.4", "c) 2.3", "d) 1.4" or "A) 1, 2").
+2. COMBINATION QUESTIONS (CRITICAL MANDATORY RULE):
+   - A question is a Combination Question ONLY IF the printed paper contains:
+     (a) An introductory question prompt (e.g. "Amphoric breath sound can be heard in case of:"),
+     (b) Numbered statements (1. Pleural effusion, 2. Pneumothorax, 3. Lung cyst, 4. Tuberculous cavity...), AND
+     (c) Choices referencing those numbers (e.g. "a) 1.2", "b) 1.3.4", "c) 1.2.3.4", "d) 2.3.4").
+   - MANDATORY: You MUST extract every single numbered statement into the "statements" array verbatim:
+     "statements": [
+       "1. First numbered statement verbatim",
+       "2. Second numbered statement verbatim",
+       "3. Third numbered statement verbatim",
+       "4. Fourth numbered statement verbatim"
+     ]
+   - NEVER drop, skip, or omit the numbered statements! A combination question without statements 1, 2, 3, 4 is completely broken and unsolvable.
 ${
   combinationMode === "mode1_keep_original"
     ? `   - MODE 1 — KEEP ORIGINAL COMBINATION FORMAT:
-     * The numbered statements stay inside the "stem" (e.g. "BCG vaccine is a protection against... 1. Post-primary... 2. Primary...").
      * The combination choices MUST be extracted directly into the "options" array:
-       [{"letter": "A", "text": "3.4"}, {"letter": "B", "text": "1.2.3.4"}, {"letter": "C", "text": "2.3"}, {"letter": "D", "text": "1.4"}].
+       [{"letter": "A", "text": "1.2"}, {"letter": "B", "text": "1.3.4"}, {"letter": "C", "text": "1.2.3.4"}, {"letter": "D", "text": "2.3.4"}].
      * DO NOT leave "options" empty!
      * Set "question_type": "combination".
      * Also record choices in "printed_combinations".`
     : `   - MODE 2 — CONVERT TO MULTIPLE ANSWERS:
      * The numbered statements become the "options" (A: statement 1, B: statement 2...).
      * Set "question_type": "multiple_answer".
-     * The original printed combination choices are preserved in "printed_combinations": [{"letter":"A","text":"3.4"}, {"letter":"B","text":"1.2.3.4"}].`
+     * The original printed combination choices are preserved in "printed_combinations": [{"letter":"A","text":"1.2"}, {"letter":"B","text":"1.3.4"}].`
 }
 
 3. ORPHANED / TRUNCATED FRAGMENTS (CRITICAL GUARDRAIL):
@@ -220,17 +228,23 @@ Return STRICT JSON:
 {
   "questions": [
     {
-      "number": "6",
+      "number": "5",
       "question_type": "ordinary|combination|multiple_answer",
-      "stem": "question prompt verbatim",
+      "stem": "question prompt verbatim without numbered statements",
+      "statements": [
+        "1. First numbered statement verbatim",
+        "2. Second numbered statement verbatim",
+        "3. Third numbered statement verbatim",
+        "4. Fourth numbered statement verbatim"
+      ],
       "options": [
-        { "letter": "A", "text": "option text" },
-        { "letter": "B", "text": "option text" },
-        { "letter": "C", "text": "option text" },
-        { "letter": "D", "text": "option text" }
+        { "letter": "A", "text": "option text or 1.2" },
+        { "letter": "B", "text": "option text or 1.3.4" },
+        { "letter": "C", "text": "option text or 1.2.3.4" },
+        { "letter": "D", "text": "option text or 2.3.4" }
       ],
       "printed_combinations": [
-        { "letter": "A", "text": "3.4" }
+        { "letter": "A", "text": "1.2" }
       ],
       "detected_answer": "C or null",
       "needs_review": false,
@@ -245,6 +259,10 @@ export function normalizeExtractedQuestion(q: any, pageNumber: number, idx: numb
   const qNum = String(q.number || idx + 1).trim();
   let stem = String(q.stem || "").trim();
   let rawOptions = Array.isArray(q.options) ? q.options : [];
+
+  const rawStatements = Array.isArray(q.statements)
+    ? q.statements.map((s: any) => String(s || "").trim()).filter(Boolean)
+    : [];
 
   const printedCombos = Array.isArray(q.printed_combinations)
     ? q.printed_combinations.map((c: any) => ({
@@ -264,6 +282,14 @@ export function normalizeExtractedQuestion(q: any, pageNumber: number, idx: numb
       text: String(o.text || o.body || "").trim(),
     }))
     .filter((o: any) => o.text);
+
+  // Merge statements into stem if not already present
+  if (rawStatements.length > 0) {
+    if (!/1[\.\s].+2[\.\s]/s.test(stem)) {
+      stem = `${stem}\n${rawStatements.join("\n")}`.trim();
+    }
+    q.question_type = "combination";
+  }
 
   // Fallback: If options is still empty, check if stem accidentally absorbed options 1. ... 2. ... 3. ... 4.
   // e.g. "All the following are interstitial lung diseases, except: 1. Exogenous... 2. Fibrosing..."

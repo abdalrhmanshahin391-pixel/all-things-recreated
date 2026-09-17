@@ -15,18 +15,20 @@ export type CutRegion = {
 export async function renderPageToCanvas(
   doc: any,
   pageNumber: number,
-  targetWidth = 1400,
+  targetWidth = 2000,
   timeoutMs = 55_000,
 ): Promise<HTMLCanvasElement> {
   const page = await doc.getPage(pageNumber);
   const base = page.getViewport({ scale: 1 });
-  const scale = Math.min(3, Math.max(1, targetWidth / base.width));
+  const scale = Math.min(4, Math.max(1.5, targetWidth / base.width));
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement("canvas");
   canvas.width = Math.ceil(viewport.width);
   canvas.height = Math.ceil(viewport.height);
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D context unavailable");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const task = page.render({ canvasContext: ctx, viewport, canvas });
@@ -45,7 +47,7 @@ export async function renderPageToCanvas(
   return canvas;
 }
 
-export function canvasToJpegBase64(canvas: HTMLCanvasElement, quality = 0.72): string {
+export function canvasToJpegBase64(canvas: HTMLCanvasElement, quality = 0.90): string {
   const url = canvas.toDataURL("image/jpeg", quality);
   const i = url.indexOf(",");
   return i >= 0 ? url.slice(i + 1) : url;

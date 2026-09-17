@@ -253,8 +253,8 @@ export function McqGenerator124ProPage() {
   async function getPageJpeg(pageNum: number): Promise<string> {
     if (pageThumbnails[pageNum]) return pageThumbnails[pageNum];
     if (!pdfDoc) throw new Error("PDF Document not loaded");
-    const canvas = await renderPageToCanvas(pdfDoc, pageNum, 1600);
-    const jpeg = canvasToJpegBase64(canvas, 0.82);
+    const canvas = await renderPageToCanvas(pdfDoc, pageNum, 2000);
+    const jpeg = canvasToJpegBase64(canvas, 0.90);
     setPageThumbnails((prev) => ({ ...prev, [pageNum]: jpeg }));
     return jpeg;
   }
