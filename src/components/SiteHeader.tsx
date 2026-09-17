@@ -281,11 +281,6 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                   <MenuLink to="/admin" icon={<LayoutGrid size={16} />} onClick={() => setOpen(false)}>
                     Admin
                   </MenuLink>
-                  {isAdmin && (
-                    <MenuLink to="/admin/mcq-generator-pro" icon={<Sparkles size={16} />} onClick={() => setOpen(false)}>
-                      MCQ Generator Pro
-                    </MenuLink>
-                  )}
                   {isCommitteeHead && (
                     <>
                       <MenuLink to="/committee/manage-team" icon={<Users size={16} />} onClick={() => setOpen(false)}>
