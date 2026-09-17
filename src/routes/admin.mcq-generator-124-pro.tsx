@@ -477,26 +477,32 @@ export function McqGenerator124ProPage() {
           }
 
           setExtractProgress({ current: p, total: totalPages });
-          const jpegBase64 = await getPageJpeg(p);
 
-          const res: any = await extractPageFn({
-            data: {
-              pageNumber: p,
-              imageJpegBase64: jpegBase64,
-              combinationMode: comboMode,
-              model: selectedModel,
-              openaiApiKey: openaiKey,
-              geminiApiKey: geminiKey,
-              customInstructions,
-            },
-          });
+          try {
+            const jpegBase64 = await getPageJpeg(p);
 
-          const pageQs: SolvedQuestionState[] = (res.questions || []).map((q: ExtractedQuestion) => ({
-            ...q,
-            solveStatus: "unsolved",
-          }));
-          collected.push(...pageQs);
-          setExtractedQuestions([...collected]);
+            const res: any = await extractPageFn({
+              data: {
+                pageNumber: p,
+                imageJpegBase64: jpegBase64,
+                combinationMode: comboMode,
+                model: selectedModel,
+                openaiApiKey: openaiKey,
+                geminiApiKey: geminiKey,
+                customInstructions,
+              },
+            });
+
+            const pageQs: SolvedQuestionState[] = (res.questions || []).map((q: ExtractedQuestion) => ({
+              ...q,
+              solveStatus: "unsolved",
+            }));
+            collected.push(...pageQs);
+            setExtractedQuestions([...collected]);
+          } catch (pageErr: any) {
+            console.error(`Error on Page ${p}:`, pageErr);
+            toast.warning(`Page ${p} encountered an issue: ${pageErr?.message || pageErr}. Continuing to next page...`);
+          }
         }
 
         const { cleaned, duplicateCount } = detectDuplicates124(collected);
@@ -504,12 +510,12 @@ export function McqGenerator124ProPage() {
         setStage1Done(true);
 
         if (duplicateCount > 0) {
-          toast.info(`Extracted ${cleaned.length} questions across all ${totalPages} pages. Purged ${duplicateCount} duplicate questions.`);
+          toast.info(`Extracted ${cleaned.length} questions across ${totalPages} pages. Purged ${duplicateCount} duplicate questions.`);
         } else {
           toast.success(`Extracted ${cleaned.length} questions successfully across all ${totalPages} pages!`);
         }
       } catch (err: any) {
-        toast.error(`Extraction failed: ${err?.message || err}`);
+        toast.error(`Extraction loop error: ${err?.message || err}`);
       } finally {
         setIsExtracting(false);
       }

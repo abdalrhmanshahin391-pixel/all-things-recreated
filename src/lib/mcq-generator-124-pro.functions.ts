@@ -58,7 +58,7 @@ interface CallAiOptions {
   temperature?: number;
 }
 
-async function callUnifiedAi(options: CallAiOptions): Promise<string> {
+async function callUnifiedAiInternal(options: CallAiOptions): Promise<string> {
   const { model, systemPrompt, userPrompt, imageBase64, openaiApiKey, geminiApiKey, jsonMode = true, temperature = 0 } = options;
   const isGemini = model.startsWith("gemini");
 
@@ -145,6 +145,41 @@ async function callUnifiedAi(options: CallAiOptions): Promise<string> {
 
     const text = json?.choices?.[0]?.message?.content || "";
     return text;
+  }
+}
+
+async function callUnifiedAi(options: CallAiOptions): Promise<string> {
+  const maxRetries = 4;
+  let attempt = 0;
+
+  while (true) {
+    attempt++;
+    try {
+      return await callUnifiedAiInternal(options);
+    } catch (err: any) {
+      const msg = String(err?.message || "");
+      const isTransient =
+        msg.includes("429") ||
+        msg.includes("Rate limit") ||
+        msg.includes("503") ||
+        msg.includes("500") ||
+        msg.includes("overloaded") ||
+        msg.includes("fetch failed");
+
+      if (attempt <= maxRetries && isTransient) {
+        let waitMs = 1500 * Math.pow(2, attempt - 1);
+        const match = msg.match(/in\s+([\d\.]+)(ms|s)/i);
+        if (match) {
+          const num = parseFloat(match[1]);
+          const unit = match[2].toLowerCase();
+          waitMs = Math.max(waitMs, unit === "s" ? num * 1000 + 500 : num + 400);
+        }
+        console.warn(`[AI Call 429 Retry ${attempt}/${maxRetries}] Waiting ${(waitMs / 1000).toFixed(2)}s due to transient limit: ${msg}`);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      } else {
+        throw err;
+      }
+    }
   }
 }
 
@@ -563,43 +598,9 @@ export const extractPageQuestions124 = createServerFn({ method: "POST" })
 
     const { pageNumber, imageJpegBase64, combinationMode, model, openaiApiKey, geminiApiKey, customInstructions } = data;
 
-    // ── PASS 1: Question Discovery Call ────────────────────────────────────
-    const discoveredNumbers = await discoverPageQuestionsInternal({
-      pageNumber,
-      imageJpegBase64,
-      model,
-      openaiApiKey,
-      geminiApiKey,
-    });
-
-    // ── PASS 2: Focused Per-Question Extraction (Concurrent) ───────────────
-    if (discoveredNumbers.length > 0) {
-      const singleResults = await Promise.all(
-        discoveredNumbers.map((qNum, idx) =>
-          extractSingleQuestionFocused({
-            pageNumber,
-            imageJpegBase64,
-            questionNumber: qNum,
-            combinationMode,
-            model,
-            openaiApiKey,
-            geminiApiKey,
-            customInstructions,
-            idx,
-          })
-        )
-      );
-
-      const validQuestions = singleResults.filter((q): q is ExtractedQuestion => q !== null && Boolean(q.stem || q.options.length));
-
-      if (validQuestions.length > 0) {
-        return { pageNumber, questions: validQuestions };
-      }
-    }
-
-    // ── FALLBACK: Whole-Page Extraction if Pass 1 or Pass 2 returned 0 ──────
+    // ── PASS 1: High-Resolution Whole-Page Transcription with ZERO OMISSION Directives ──
     const systemPrompt = buildExtractionSystemPrompt(combinationMode, customInstructions);
-    const userPrompt = `Transcribe all medical MCQs visible on Page ${pageNumber} of this exam paper.`;
+    const userPrompt = `Transcribe all medical MCQs visible on Page ${pageNumber} of this exam paper verbatim with zero omissions across all columns.`;
 
     const rawOutput = await callUnifiedAi({
       model,
@@ -615,9 +616,35 @@ export const extractPageQuestions124 = createServerFn({ method: "POST" })
     const parsed = parseJsonObject(rawOutput);
     const rawQuestions = Array.isArray(parsed?.questions) ? parsed.questions : [];
 
-    const questions: ExtractedQuestion[] = rawQuestions.map((q: any, idx: number) =>
+    let questions: ExtractedQuestion[] = rawQuestions.map((q: any, idx: number) =>
       normalizeExtractedQuestion(q, pageNumber, idx)
     );
+
+    // ── PASS 2 (Self-Healing): Focused repair call for any incomplete question ──
+    for (let idx = 0; idx < questions.length; idx++) {
+      const q = questions[idx];
+      const isBrokenCombo = q.questionType === "combination" && (!q.options.length || !/1[\.\s].+2[\.\s]/s.test(q.stem));
+      if (q.needsReview || isBrokenCombo) {
+        try {
+          const repaired = await extractSingleQuestionFocused({
+            pageNumber,
+            imageJpegBase64,
+            questionNumber: q.number,
+            combinationMode,
+            model,
+            openaiApiKey,
+            geminiApiKey,
+            customInstructions,
+            idx,
+          });
+          if (repaired && (!repaired.needsReview || repaired.options.length > q.options.length)) {
+            questions[idx] = repaired;
+          }
+        } catch (repairErr) {
+          console.warn(`[Pass 2 Focused Repair] Q#${q.number} failed on page ${pageNumber}:`, repairErr);
+        }
+      }
+    }
 
     return { pageNumber, questions };
   });

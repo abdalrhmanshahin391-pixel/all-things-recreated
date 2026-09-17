@@ -58,18 +58,28 @@ const IDB_NAME = "mcq_124_pro_cache";
 const IDB_STORE = "page_images";
 const IDB_VERSION = 1;
 
+let cachedDb: IDBDatabase | null = null;
+
 function openPageImageDb(): Promise<IDBDatabase | null> {
   if (typeof window === "undefined" || !window.indexedDB) return Promise.resolve(null);
+  if (cachedDb) return Promise.resolve(cachedDb);
   return new Promise((resolve) => {
-    const req = window.indexedDB.open(IDB_NAME, IDB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(IDB_STORE)) {
-        db.createObjectStore(IDB_STORE, { keyPath: "pageNum" });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => resolve(null);
+    try {
+      const req = window.indexedDB.open(IDB_NAME, IDB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE, { keyPath: "pageNum" });
+        }
+      };
+      req.onsuccess = () => {
+        cachedDb = req.result;
+        resolve(req.result);
+      };
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
   });
 }
 
