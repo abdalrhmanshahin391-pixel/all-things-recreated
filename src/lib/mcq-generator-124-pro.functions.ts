@@ -367,22 +367,37 @@ export function normalizeExtractedQuestion(q: any, pageNumber: number, idx: numb
     options.some((o: { letter: string; text: string }) => !comboOptionPattern.test(o.text.trim()));
 
   // Check for Orphaned / Incomplete Combination Fragment (User Issue 4)
-  // Options are combination numbers ("1.3.4", "2.3.4", etc.) but stem does NOT contain statements 1 and 2
+  // Options are combination numbers ("1.3.4", "2.3.4", etc.) but the question has no real text statements.
   const stemHasStatements = /1[\.\s].+2[\.\s]/s.test(stem);
+
+  // Detect when model confused options (e.g. "1.3.4") for statements — rawStatements[] is populated
+  // but every extracted statement is itself just a number code, not real text.
+  const statementsAreJustNumberCodes =
+    rawStatements.length > 0 &&
+    rawStatements.every((s: string) => comboOptionPattern.test(s.replace(/^\d+[\.\s]+/, "").trim()));
+
+  // A combination question has REAL statements only if statements exist and are not just number codes.
+  const hasRealStatements = rawStatements.length > 0 && !statementsAreJustNumberCodes;
+
   let needsReview = Boolean(q.needs_review);
   let reviewReason = q.review_reason ? String(q.review_reason) : null;
   let isApproved = q.is_approved !== false && !needsReview;
 
-  if (isComboOptions && !stemHasStatements) {
+  // Flag as orphaned fragment when options are all combo codes but there are no real text statements.
+  // Covers three scenarios:
+  //   (a) No statements extracted at all AND stem has no numbered list
+  //   (b) Statements extracted but they are themselves just number codes (model confused options for statements)
+  //   (c) Stem has embedded statement-like text but statements[] was never extracted separately
+  if (isComboOptions && (!hasRealStatements || statementsAreJustNumberCodes)) {
     needsReview = true;
     isApproved = false;
     reviewReason =
-      "Incomplete combination fragment: choices reference numbered statements (1, 2, 3...) that are missing from this page or question stem.";
+      "Incomplete combination fragment: choices reference numbered statements (1, 2, 3...) that are missing from this question. The numbered statements must appear on a previous page or were not extracted. Manual review required.";
   }
 
-  // Bug Fix 1: Combo options present AND stem has embedded statements text BUT statements[] array is empty.
-  // The model merged statements into the stem without extracting them separately → flag for review.
-  if (isComboOptions && stemHasStatements && rawStatements.length === 0) {
+  // Additional check: combo options + stem has embedded statement text but statements[] empty
+  // (model merged everything into stem instead of splitting into statements array)
+  if (isComboOptions && hasRealStatements && stemHasStatements && rawStatements.length === 0) {
     needsReview = true;
     isApproved = false;
     reviewReason =
