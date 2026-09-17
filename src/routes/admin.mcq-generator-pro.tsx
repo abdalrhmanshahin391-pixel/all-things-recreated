@@ -386,9 +386,120 @@ function McqGeneratorPro() {
   const [importSubjectId, setImportSubjectId] = useState("");
   const [importing, setImporting]       = useState(false);
   const [importResult, setImportResult] = useState<{inserted:number;skipped:number;errors:string[]} | null>(null);
+  const [isLocalMode, setIsLocalMode]   = useState(false);
+  const [showSqlBanner, setShowSqlBanner] = useState(true);
 
   // ── Key status ──
   const [keyStatus, setKeyStatus]       = useState<{hasGemini:boolean;hasOpenAI:boolean} | null>(null);
+
+  function copySetupSql() {
+    const sql = `-- MCQ Generator Pro Database Master Setup
+CREATE TABLE IF NOT EXISTS mcq_pro_sessions (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id             uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  pdf_name            text        NOT NULL,
+  total_pages         int         NOT NULL DEFAULT 0,
+  pages_processed     int         NOT NULL DEFAULT 0,
+  status              text        NOT NULL DEFAULT 'pending',
+  model               text        NOT NULL DEFAULT 'gemini-2.5-flash',
+  combination_mode    text        NOT NULL DEFAULT 'keep',
+  missing_opts_mode   text        NOT NULL DEFAULT 'manual',
+  ai_notes            text,
+  questions_extracted int         NOT NULL DEFAULT 0,
+  duplicates_found    int         NOT NULL DEFAULT 0,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now(),
+  answering_method    text,
+  answering_model     text,
+  answering_provider  text,
+  answering_instructions text,
+  study_material_name text,
+  study_material_text text,
+  answering_status    text        NOT NULL DEFAULT 'idle',
+  total_answered      int         NOT NULL DEFAULT 0,
+  total_needs_review  int         NOT NULL DEFAULT 0,
+  phase3_model        text,
+  phase3_provider     text,
+  phase3_instructions text,
+  phase3_show_book_answer boolean NOT NULL DEFAULT true,
+  phase3_status       text        NOT NULL DEFAULT 'idle',
+  total_explanations  int         NOT NULL DEFAULT 0,
+  total_conflicts     int         NOT NULL DEFAULT 0,
+  phase4_model        text,
+  phase4_provider     text,
+  phase4_status       text        NOT NULL DEFAULT 'idle',
+  phase4_total_checked int        NOT NULL DEFAULT 0,
+  phase4_issues_count int         NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS mcq_pro_questions (
+  id                      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id              uuid        NOT NULL REFERENCES mcq_pro_sessions(id) ON DELETE CASCADE,
+  page_number             int         NOT NULL,
+  question_number         int,
+  stem                    text        NOT NULL,
+  options                 jsonb       NOT NULL DEFAULT '[]',
+  question_type           text        NOT NULL DEFAULT 'single_choice',
+  needs_manual_options    boolean     NOT NULL DEFAULT false,
+  options_generated_by_ai boolean     NOT NULL DEFAULT false,
+  is_duplicate            boolean     NOT NULL DEFAULT false,
+  duplicate_of_id         uuid        REFERENCES mcq_pro_questions(id) ON DELETE SET NULL,
+  review_status           text        NOT NULL DEFAULT 'pending',
+  sort_order              int         NOT NULL DEFAULT 0,
+  created_at              timestamptz NOT NULL DEFAULT now(),
+  answer_source           text,
+  selected_answer         jsonb,
+  answer_text             jsonb,
+  confidence              text,
+  needs_review            boolean     NOT NULL DEFAULT false,
+  review_reason           text,
+  source_reference        text,
+  answering_model         text,
+  answering_provider      text,
+  answering_instructions  text,
+  answering_status        text        NOT NULL DEFAULT 'unanswered',
+  internal_reasoning      text,
+  answered_at             timestamptz,
+  concept                 text,
+  explanation             text,
+  explanation_summary_table text,
+  book_answer             text,
+  book_answer_found       boolean     NOT NULL DEFAULT false,
+  possible_answer_conflict boolean    NOT NULL DEFAULT false,
+  answer_conflict_note    text,
+  explanation_model       text,
+  explanation_status      text        NOT NULL DEFAULT 'unexplained',
+  explained_at            timestamptz,
+  verification_status     text        NOT NULL DEFAULT 'unverified',
+  verification_report     jsonb,
+  verified_at             timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS mcq_pro_questions_session_idx ON mcq_pro_questions(session_id);
+CREATE INDEX IF NOT EXISTS mcq_pro_questions_page_idx    ON mcq_pro_questions(session_id, page_number);
+
+ALTER TABLE mcq_pro_sessions  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mcq_pro_questions ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'mcq_pro_sessions_admin_all') THEN
+    CREATE POLICY "mcq_pro_sessions_admin_all" ON mcq_pro_sessions FOR ALL
+      USING (auth.uid() IS NOT NULL AND (SELECT has_role(auth.uid(), 'admin')))
+      WITH CHECK (auth.uid() IS NOT NULL AND (SELECT has_role(auth.uid(), 'admin')));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'mcq_pro_questions_admin_all') THEN
+    CREATE POLICY "mcq_pro_questions_admin_all" ON mcq_pro_questions FOR ALL
+      USING (auth.uid() IS NOT NULL AND (SELECT has_role(auth.uid(), 'admin')))
+      WITH CHECK (auth.uid() IS NOT NULL AND (SELECT has_role(auth.uid(), 'admin')));
+  END IF;
+END $$;
+`;
+    navigator.clipboard.writeText(sql).then(() => {
+      toast.success("Master SQL script copied! Run it in Supabase SQL Editor to enable cloud history.");
+    }).catch(() => {
+      toast.error("Could not copy to clipboard.");
+    });
+  }
 
   // ─── Load sessions on mount ──────────────────────────────────────────────
 
@@ -398,7 +509,7 @@ function McqGeneratorPro() {
       const data = await listMcqSessions();
       setSessions(data as Session[]);
     } catch (e: any) {
-      toast.error("Could not load sessions: " + (e?.message ?? String(e)));
+      console.warn("Could not load sessions:", e);
     } finally {
       setSessionsLoading(false);
     }
@@ -521,8 +632,12 @@ function McqGeneratorPro() {
         },
       });
       sessionId = sess.sessionId;
-      log(`✅ Session created (${sessionId.slice(0, 8)}…)`);
+      const isLocal = Boolean(sess.isLocal);
+      setIsLocalMode(isLocal);
+      log(`✅ Session created (${sessionId.slice(0, 8)}…)${isLocal ? " [In-Browser Mode]" : ""}`);
       await loadSessions();
+
+      const localExtractedQuestions: McqQuestion[] = [];
 
       for (let p = 1; p <= numPages; p++) {
         if (cancelledRef.current) {
@@ -544,8 +659,19 @@ function McqGeneratorPro() {
               sessionId,
               pageNumber: p,
               imageBase64: base64,
+              sessionConfig: {
+                totalPages: numPages,
+                model: modelId as any,
+                combinationMode,
+                missingOptsMode,
+                aiNotes: aiNotes || undefined,
+              },
             },
           });
+
+          if (Array.isArray(result.extractedQuestions)) {
+            localExtractedQuestions.push(...(result.extractedQuestions as McqQuestion[]));
+          }
 
           setPagesQCount((prev) => ({ ...prev, [p]: result.questionsFound }));
           log(`  ✔ Page ${p}: ${result.questionsFound} question${result.questionsFound === 1 ? "" : "s"} found`);
@@ -556,12 +682,36 @@ function McqGeneratorPro() {
 
       if (!cancelledRef.current) {
         log("⚙️ Running duplicate detection…");
-        const fin = await finalizeSession({ data: { sessionId } });
+        const fin = await finalizeSession({
+          data: { sessionId, questionsData: localExtractedQuestions },
+        });
         log(`✅ Done! Duplicates found: ${fin.duplicatesFound}`);
 
-        const fullData = await getMcqSession({ data: { sessionId } });
-        setActiveSession(fullData.session as Session);
-        setActiveQuestions(fullData.questions as McqQuestion[]);
+        if (isLocal) {
+          const dupeIdSet = new Set(fin.duplicateIds || []);
+          const finalQuestions = localExtractedQuestions.map((q) =>
+            dupeIdSet.has(q.id) ? { ...q, is_duplicate: true } : q
+          );
+          const localSessionObj: Session = {
+            id: sessionId,
+            pdf_name: file.name,
+            total_pages: numPages,
+            pages_processed: numPages,
+            questions_extracted: finalQuestions.length,
+            duplicates_found: fin.duplicatesFound,
+            status: "done",
+            model: modelId,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          setActiveSession(localSessionObj);
+          setActiveQuestions(finalQuestions);
+        } else {
+          const fullData = await getMcqSession({ data: { sessionId } });
+          setActiveSession(fullData.session as Session);
+          setActiveQuestions(fullData.questions as McqQuestion[]);
+        }
+
         setStep("review");
         await loadSessions();
         toast.success("Extraction complete! Review your questions or proceed to Phase 2 Solving.");
@@ -616,12 +766,20 @@ function McqGeneratorPro() {
     setAnswerKeyBusy(true);
     try {
       const res = await applyAnswerKeyBatch({
-        data: { sessionId: activeSession.id, entries },
+        data: { sessionId: activeSession.id, entries, questionsData: activeQuestions },
       });
       toast.success(`Applied ${res.appliedCount} answers! (${res.needsReviewCount} need review)`);
-      const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
-      setActiveSession(updated.session as Session);
-      setActiveQuestions(updated.questions as McqQuestion[]);
+      if (res.updatedMap) {
+        setActiveQuestions((prev) =>
+          prev.map((q) => (res.updatedMap && res.updatedMap[q.id] ? { ...q, ...res.updatedMap[q.id] } : q))
+        );
+      } else {
+        try {
+          const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
+          if (updated.session) setActiveSession(updated.session as Session);
+          if (updated.questions?.length) setActiveQuestions(updated.questions as McqQuestion[]);
+        } catch {}
+      }
       setStep("solve_complete");
     } catch (e: any) {
       toast.error("Failed to apply answer key: " + (e?.message || String(e)));
@@ -647,14 +805,22 @@ function McqGeneratorPro() {
 
       toast.loading(`OCR found ${parsed.entries.length} items. Mapping to questions…`, { id: "ocr-key" });
       const res = await applyAnswerKeyBatch({
-        data: { sessionId: activeSession.id, entries: parsed.entries },
+        data: { sessionId: activeSession.id, entries: parsed.entries, questionsData: activeQuestions },
       });
       toast.dismiss("ocr-key");
       toast.success(`Applied ${res.appliedCount} answers! (${res.needsReviewCount} need review)`);
 
-      const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
-      setActiveSession(updated.session as Session);
-      setActiveQuestions(updated.questions as McqQuestion[]);
+      if (res.updatedMap) {
+        setActiveQuestions((prev) =>
+          prev.map((q) => (res.updatedMap && res.updatedMap[q.id] ? { ...q, ...res.updatedMap[q.id] } : q))
+        );
+      } else {
+        try {
+          const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
+          if (updated.session) setActiveSession(updated.session as Session);
+          if (updated.questions?.length) setActiveQuestions(updated.questions as McqQuestion[]);
+        } catch {}
+      }
       setStep("solve_complete");
     } catch (e: any) {
       toast.dismiss("ocr-key");
@@ -731,6 +897,7 @@ function McqGeneratorPro() {
               model: solveModel as any,
               instructions: solveInstructions || undefined,
               studyMaterialText: studyMaterialText || undefined,
+              questionData: q,
             },
           });
 
@@ -741,9 +908,11 @@ function McqGeneratorPro() {
                     ...item,
                     answer_source: solveMethod,
                     selected_answer: res.selectedAnswer,
+                    answer_text: res.answerText,
                     confidence: res.confidence,
                     needs_review: res.needsReview,
                     review_reason: res.reviewReason,
+                    source_reference: res.sourceReference ?? item.source_reference,
                     answering_status: res.needsReview ? "needs_review" : "answered",
                   }
                 : item
@@ -762,10 +931,16 @@ function McqGeneratorPro() {
       }
 
       if (!solvingCancelledRef.current) {
-        await completeAnsweringSession({ data: { sessionId: activeSession.id } });
-        const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
-        setActiveSession(updated.session as Session);
-        setActiveQuestions(updated.questions as McqQuestion[]);
+        try {
+          await completeAnsweringSession({ data: { sessionId: activeSession.id } });
+        } catch {}
+        if (!activeSession.id.startsWith("local-")) {
+          try {
+            const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
+            if (updated.session) setActiveSession(updated.session as Session);
+            if (updated.questions?.length) setActiveQuestions(updated.questions as McqQuestion[]);
+          } catch {}
+        }
         setStep("solve_complete");
         toast.success("Answering complete! Review determined answers.");
       }
@@ -849,6 +1024,9 @@ function McqGeneratorPro() {
               model: phase3Model as any,
               instructions: phase3Instructions || undefined,
               showBookAnswer,
+              questionData: q,
+              studyMaterialText: studyMaterialText || activeSession.study_material_text || undefined,
+              studyMaterialName: studyMaterialFile?.name || activeSession.study_material_name || undefined,
             },
           });
 
@@ -857,6 +1035,11 @@ function McqGeneratorPro() {
               item.id === q.id
                 ? {
                     ...item,
+                    concept: res.concept ?? item.concept,
+                    explanation: res.explanation ?? item.explanation,
+                    explanation_summary_table: res.explanationSummaryTable ?? item.explanation_summary_table,
+                    book_answer: res.bookAnswer ?? item.book_answer,
+                    book_answer_found: res.bookAnswerFound,
                     explanation_status: "explained",
                     possible_answer_conflict: res.hasConflict,
                     answer_conflict_note: res.conflictNote,
@@ -877,10 +1060,16 @@ function McqGeneratorPro() {
       }
 
       if (!phase3CancelledRef.current) {
-        await completeExplanationSession({ data: { sessionId: activeSession.id } });
-        const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
-        setActiveSession(updated.session as Session);
-        setActiveQuestions(updated.questions as McqQuestion[]);
+        try {
+          await completeExplanationSession({ data: { sessionId: activeSession.id } });
+        } catch {}
+        if (!activeSession.id.startsWith("local-")) {
+          try {
+            const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
+            if (updated.session) setActiveSession(updated.session as Session);
+            if (updated.questions?.length) setActiveQuestions(updated.questions as McqQuestion[]);
+          } catch {}
+        }
         setStep("explanation_complete");
         toast.success("All explanations generated successfully!");
       }
@@ -946,6 +1135,8 @@ function McqGeneratorPro() {
               sessionId: activeSession.id,
               questionId: q.id,
               model: phase4Model as any,
+              questionData: q,
+              studyMaterialText: studyMaterialText || activeSession.study_material_text || undefined,
             },
           });
 
@@ -973,10 +1164,16 @@ function McqGeneratorPro() {
       }
 
       if (!phase4CancelledRef.current) {
-        await completeVerificationSession({ data: { sessionId: activeSession.id } });
-        const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
-        setActiveSession(updated.session as Session);
-        setActiveQuestions(updated.questions as McqQuestion[]);
+        try {
+          await completeVerificationSession({ data: { sessionId: activeSession.id } });
+        } catch {}
+        if (!activeSession.id.startsWith("local-")) {
+          try {
+            const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
+            if (updated.session) setActiveSession(updated.session as Session);
+            if (updated.questions?.length) setActiveQuestions(updated.questions as McqQuestion[]);
+          } catch {}
+        }
         setStep("verification_report");
         toast.success("Independent verification audit complete!");
       }
@@ -1154,7 +1351,11 @@ function McqGeneratorPro() {
     setImportResult(null);
     try {
       const result = await importSessionQuestions({
-        data: { sessionId: activeSession.id, subjectId: importSubjectId },
+        data: {
+          sessionId: activeSession.id,
+          subjectId: importSubjectId,
+          questionsData: activeQuestions,
+        },
       });
       setImportResult(result);
       if (result.inserted > 0) {
@@ -1227,6 +1428,38 @@ function McqGeneratorPro() {
           <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-3 flex items-center gap-3 text-amber-800 text-sm">
             <Key size={18} className="shrink-0" />
             <span>No AI API keys configured. Go to <a href="/admin/ai-keys" className="underline font-bold">/admin/ai-keys</a> to add a Gemini or OpenAI key.</span>
+          </div>
+        )}
+
+        {/* ── Database Setup Tip ───────────────────────────────────────────── */}
+        {showSqlBanner && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-sm text-blue-900 shadow-sm">
+            <div className="flex items-start gap-3">
+              <Sparkles size={18} className="text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Supabase Cloud History:</span>
+                <span className="text-blue-800 ml-1">
+                  MCQ Generator Pro operates directly in your browser. To also enable permanent cloud history in your database, execute the master SQL in your Supabase SQL Editor.
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={copySetupSql}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                <Copy size={13} /> Copy Setup SQL
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSqlBanner(false)}
+                className="text-xs text-blue-500 hover:text-blue-700 p-1 rounded-md"
+                title="Dismiss"
+              >
+                <X size={15} />
+              </button>
+            </div>
           </div>
         )}
 

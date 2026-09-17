@@ -55,6 +55,19 @@ export const ModelIdSchema = z.enum([
 const SESSIONS_TABLE = "mcq_pro_sessions";
 const QUESTIONS_TABLE = "mcq_pro_questions";
 
+export function isMissingTableError(err: any): boolean {
+  if (!err) return false;
+  const msg = String(err?.message || "").toLowerCase();
+  const code = String(err?.code || "");
+  return (
+    code === "PGRST204" ||
+    code === "42P01" ||
+    msg.includes("schema cache") ||
+    msg.includes("does not exist") ||
+    msg.includes("could not find the table")
+  );
+}
+
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
 async function ensureAdmin(context: any) {
@@ -309,23 +322,43 @@ export const createMcqSession = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = await ensureAdmin(context);
 
-    const { data: session, error } = await supabase
-      .from(SESSIONS_TABLE)
-      .insert({
-        user_id: userId,
-        pdf_name: data.pdfName,
-        total_pages: data.totalPages,
-        model: data.model,
-        combination_mode: data.combinationMode,
-        missing_opts_mode: data.missingOptsMode,
-        ai_notes: data.aiNotes ?? null,
-        status: "running",
-      })
-      .select("id")
-      .single();
+    try {
+      const { data: session, error } = await supabase
+        .from(SESSIONS_TABLE)
+        .insert({
+          user_id: userId,
+          pdf_name: data.pdfName,
+          total_pages: data.totalPages,
+          model: data.model,
+          combination_mode: data.combinationMode,
+          missing_opts_mode: data.missingOptsMode,
+          ai_notes: data.aiNotes ?? null,
+          status: "running",
+        })
+        .select("id")
+        .single();
 
-    if (error) throw error;
-    return { sessionId: session.id as string };
+      if (error) {
+        if (isMissingTableError(error)) {
+          return {
+            sessionId: `local-${Date.now()}`,
+            isLocal: true,
+            tableMissing: true,
+          };
+        }
+        throw error;
+      }
+      return { sessionId: session.id as string, isLocal: false, tableMissing: false };
+    } catch (err: any) {
+      if (isMissingTableError(err)) {
+        return {
+          sessionId: `local-${Date.now()}`,
+          isLocal: true,
+          tableMissing: true,
+        };
+      }
+      throw err;
+    }
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -333,9 +366,18 @@ export const createMcqSession = createServerFn({ method: "POST" })
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ProcessPageInput = z.object({
-  sessionId: z.string().uuid(),
+  sessionId: z.string(),
   pageNumber: z.number().int().min(1),
   imageBase64: z.string().min(100).max(20_000_000),
+  sessionConfig: z
+    .object({
+      totalPages: z.number().int().min(1),
+      model: ModelIdSchema,
+      combinationMode: z.enum(["keep", "convert"]).default("keep"),
+      missingOptsMode: z.enum(["manual", "ai_generate"]).default("manual"),
+      aiNotes: z.string().max(4000).optional(),
+    })
+    .optional(),
 });
 
 export const processPageImage = createServerFn({ method: "POST" })
@@ -344,15 +386,37 @@ export const processPageImage = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
 
-    // Load session config
-    const { data: session, error: sErr } = await supabase
-      .from(SESSIONS_TABLE)
-      .select(
-        "id, total_pages, model, combination_mode, missing_opts_mode, ai_notes, status",
-      )
-      .eq("id", data.sessionId)
-      .single();
-    if (sErr) throw sErr;
+    const isLocal = data.sessionId.startsWith("local-");
+    let session: any = null;
+
+    if (!isLocal) {
+      try {
+        const { data: s, error: sErr } = await supabase
+          .from(SESSIONS_TABLE)
+          .select(
+            "id, total_pages, model, combination_mode, missing_opts_mode, ai_notes, status",
+          )
+          .eq("id", data.sessionId)
+          .single();
+        if (!sErr && s) session = s;
+      } catch {}
+    }
+
+    if (!session) {
+      if (!data.sessionConfig) {
+        throw new Error("Session configuration not provided for local execution.");
+      }
+      session = {
+        id: data.sessionId,
+        total_pages: data.sessionConfig.totalPages,
+        model: data.sessionConfig.model,
+        combination_mode: data.sessionConfig.combinationMode,
+        missing_opts_mode: data.sessionConfig.missingOptsMode,
+        ai_notes: data.sessionConfig.aiNotes,
+        status: "running",
+      };
+    }
+
     if (session.status === "cancelled")
       throw new Error("Session was cancelled.");
 
@@ -384,16 +448,19 @@ export const processPageImage = createServerFn({ method: "POST" })
         rawText = await callOpenAIVision(apiKey, systemPrompt, data.imageBase64);
       }
     } catch (aiErr: any) {
-      // Increment pages_processed even on error so progress advances
-      const { data: curOnErr } = await supabase
-        .from(SESSIONS_TABLE)
-        .select("pages_processed")
-        .eq("id", data.sessionId)
-        .single();
-      await supabase
-        .from(SESSIONS_TABLE)
-        .update({ pages_processed: (curOnErr?.pages_processed ?? 0) + 1 })
-        .eq("id", data.sessionId);
+      if (!isLocal) {
+        try {
+          const { data: curOnErr } = await supabase
+            .from(SESSIONS_TABLE)
+            .select("pages_processed")
+            .eq("id", data.sessionId)
+            .single();
+          await supabase
+            .from(SESSIONS_TABLE)
+            .update({ pages_processed: (curOnErr?.pages_processed ?? 0) + 1 })
+            .eq("id", data.sessionId);
+        } catch {}
+      }
       throw new Error(
         `AI call failed on page ${data.pageNumber}: ${aiErr?.message ?? String(aiErr)}`,
       );
@@ -404,21 +471,26 @@ export const processPageImage = createServerFn({ method: "POST" })
       ? parsed.questions
       : [];
 
-    let insertedCount = 0;
+    let rows: any[] = [];
     if (rawQuestions.length > 0) {
-      // Get current max sort_order for this session
-      const { data: maxRow } = await supabase
-        .from(QUESTIONS_TABLE)
-        .select("sort_order")
-        .eq("session_id", data.sessionId)
-        .order("sort_order", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      let nextOrder = (maxRow?.sort_order ?? 0) + 1;
+      let nextOrder = (data.pageNumber - 1) * 20 + 1;
+      if (!isLocal) {
+        try {
+          const { data: maxRow } = await supabase
+            .from(QUESTIONS_TABLE)
+            .select("sort_order")
+            .eq("session_id", data.sessionId)
+            .order("sort_order", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (maxRow?.sort_order != null) nextOrder = maxRow.sort_order + 1;
+        } catch {}
+      }
 
-      const rows = rawQuestions.map((q: any, i: number) => {
+      rows = rawQuestions.map((q: any, i: number) => {
         const opts = Array.isArray(q.options) ? q.options : [];
         return {
+          id: crypto.randomUUID(),
           session_id: data.sessionId,
           page_number: data.pageNumber,
           question_number:
@@ -434,35 +506,42 @@ export const processPageImage = createServerFn({ method: "POST" })
               : "single_choice",
           needs_manual_options: Boolean(q.needs_manual_options),
           options_generated_by_ai: Boolean(q.options_generated_by_ai),
+          review_status: "pending",
           sort_order: nextOrder + i,
         };
       });
 
-      const { data: inserted, error: insErr } = await supabase
-        .from(QUESTIONS_TABLE)
-        .insert(rows)
-        .select("id");
-      if (insErr) throw insErr;
-      insertedCount = inserted?.length ?? 0;
+      if (!isLocal) {
+        try {
+          await supabase.from(QUESTIONS_TABLE).insert(rows);
+        } catch (insErr: any) {
+          if (!isMissingTableError(insErr)) throw insErr;
+        }
+      }
     }
 
-    // Increment pages_processed + questions_extracted on session (read then write)
-    const { data: cur } = await supabase
-      .from(SESSIONS_TABLE)
-      .select("pages_processed, questions_extracted")
-      .eq("id", data.sessionId)
-      .single();
-    await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        pages_processed: (cur?.pages_processed ?? 0) + 1,
-        questions_extracted: (cur?.questions_extracted ?? 0) + insertedCount,
-      })
-      .eq("id", data.sessionId);
+    if (!isLocal) {
+      try {
+        const { data: cur } = await supabase
+          .from(SESSIONS_TABLE)
+          .select("pages_processed, questions_extracted")
+          .eq("id", data.sessionId)
+          .single();
+        await supabase
+          .from(SESSIONS_TABLE)
+          .update({
+            pages_processed: (cur?.pages_processed ?? 0) + 1,
+            questions_extracted: (cur?.questions_extracted ?? 0) + rows.length,
+          })
+          .eq("id", data.sessionId);
+      } catch {}
+    }
 
     return {
       pageNumber: data.pageNumber,
-      questionsFound: insertedCount,
+      questionsFound: rows.length,
+      extractedQuestions: rows,
+      isLocal,
     };
   });
 
@@ -471,8 +550,9 @@ export const processPageImage = createServerFn({ method: "POST" })
 // ─────────────────────────────────────────────────────────────────────────────
 
 const FinalizeInput = z.object({
-  sessionId: z.string().uuid(),
+  sessionId: z.string(),
   failed: z.boolean().optional().default(false),
+  questionsData: z.array(z.any()).optional(),
 });
 
 export const finalizeSession = createServerFn({ method: "POST" })
@@ -480,22 +560,32 @@ export const finalizeSession = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => FinalizeInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
+    const isLocal = data.sessionId.startsWith("local-");
 
     if (data.failed) {
-      await supabase
-        .from(SESSIONS_TABLE)
-        .update({ status: "failed" })
-        .eq("id", data.sessionId);
+      if (!isLocal) {
+        try {
+          await supabase
+            .from(SESSIONS_TABLE)
+            .update({ status: "failed" })
+            .eq("id", data.sessionId);
+        } catch {}
+      }
       return { duplicatesFound: 0 };
     }
 
-    // Load all questions for this session
-    const { data: questions, error: qErr } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id, stem, options")
-      .eq("session_id", data.sessionId)
-      .order("sort_order", { ascending: true });
-    if (qErr) throw qErr;
+    // Load all questions for this session (from DB or questionsData)
+    let questions = data.questionsData;
+    if (!questions && !isLocal) {
+      try {
+        const { data: qData, error: qErr } = await supabase
+          .from(QUESTIONS_TABLE)
+          .select("id, stem, options")
+          .eq("session_id", data.sessionId)
+          .order("sort_order", { ascending: true });
+        if (!qErr) questions = qData ?? [];
+      } catch {}
+    }
 
     // Duplicate detection: same normalized stem + same option bodies
     const seen = new Map<string, string>(); // key → first question id
@@ -510,41 +600,52 @@ export const finalizeSession = createServerFn({ method: "POST" })
       }
     }
 
-    // Mark duplicates
-    if (dupeUpdates.length > 0) {
-      for (const { id, duplicate_of_id } of dupeUpdates) {
+    // Mark duplicates in DB if available
+    if (!isLocal) {
+      try {
+        if (dupeUpdates.length > 0) {
+          for (const { id, duplicate_of_id } of dupeUpdates) {
+            await supabase
+              .from(QUESTIONS_TABLE)
+              .update({ is_duplicate: true, duplicate_of_id })
+              .eq("id", id);
+          }
+        }
+
         await supabase
-          .from(QUESTIONS_TABLE)
-          .update({ is_duplicate: true, duplicate_of_id })
-          .eq("id", id);
-      }
+          .from(SESSIONS_TABLE)
+          .update({ status: "done", duplicates_found: dupeUpdates.length })
+          .eq("id", data.sessionId);
+      } catch {}
     }
 
-    // Mark session done
-    await supabase
-      .from(SESSIONS_TABLE)
-      .update({ status: "done", duplicates_found: dupeUpdates.length })
-      .eq("id", data.sessionId);
-
-    return { duplicatesFound: dupeUpdates.length };
+    return {
+      duplicatesFound: dupeUpdates.length,
+      duplicateIds: dupeUpdates.map((d) => d.id),
+    };
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. cancelSession
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CancelInput = z.object({ sessionId: z.string().uuid() });
+const CancelInput = z.object({ sessionId: z.string() });
 
 export const cancelMcqSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => CancelInput.parse(d))
   .handler(async ({ data, context }) => {
+    if (data.sessionId.startsWith("local-")) return { ok: true };
     const { supabase } = await ensureAdmin(context);
-    const { error } = await supabase
-      .from(SESSIONS_TABLE)
-      .update({ status: "cancelled" })
-      .eq("id", data.sessionId);
-    if (error) throw error;
+    try {
+      const { error } = await supabase
+        .from(SESSIONS_TABLE)
+        .update({ status: "cancelled" })
+        .eq("id", data.sessionId);
+      if (error && !isMissingTableError(error)) throw error;
+    } catch (err: any) {
+      if (!isMissingTableError(err)) throw err;
+    }
     return { ok: true };
   });
 
@@ -556,64 +657,90 @@ export const listMcqSessions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase } = await ensureAdmin(context);
-    const { data, error } = await supabase
-      .from(SESSIONS_TABLE)
-      .select(
-        "id, pdf_name, total_pages, pages_processed, questions_extracted, duplicates_found, status, model, created_at, updated_at",
-      )
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (error) throw error;
-    return data ?? [];
+    try {
+      const { data, error } = await supabase
+        .from(SESSIONS_TABLE)
+        .select(
+          "id, pdf_name, total_pages, pages_processed, questions_extracted, duplicates_found, status, model, created_at, updated_at",
+        )
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) {
+        if (isMissingTableError(error)) return [];
+        throw error;
+      }
+      return data ?? [];
+    } catch (err: any) {
+      if (isMissingTableError(err)) return [];
+      throw err;
+    }
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 6. getMcqSession — session details + all questions
 // ─────────────────────────────────────────────────────────────────────────────
 
-const GetSessionInput = z.object({ sessionId: z.string().uuid() });
+const GetSessionInput = z.object({ sessionId: z.string() });
 
 export const getMcqSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => GetSessionInput.parse(d))
   .handler(async ({ data, context }) => {
+    if (data.sessionId.startsWith("local-")) {
+      return { session: null, questions: [] };
+    }
     const { supabase } = await ensureAdmin(context);
+    try {
+      const { data: session, error: sErr } = await supabase
+        .from(SESSIONS_TABLE)
+        .select("*")
+        .eq("id", data.sessionId)
+        .single();
+      if (sErr) {
+        if (isMissingTableError(sErr)) return { session: null, questions: [] };
+        throw sErr;
+      }
 
-    const { data: session, error: sErr } = await supabase
-      .from(SESSIONS_TABLE)
-      .select("*")
-      .eq("id", data.sessionId)
-      .single();
-    if (sErr) throw sErr;
+      const { data: questions, error: qErr } = await supabase
+        .from(QUESTIONS_TABLE)
+        .select("*")
+        .eq("session_id", data.sessionId)
+        .order("sort_order", { ascending: true });
+      if (qErr) {
+        if (isMissingTableError(qErr)) return { session, questions: [] };
+        throw qErr;
+      }
 
-    const { data: questions, error: qErr } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("*")
-      .eq("session_id", data.sessionId)
-      .order("sort_order", { ascending: true });
-    if (qErr) throw qErr;
-
-    return { session, questions: questions ?? [] };
+      return { session, questions: questions ?? [] };
+    } catch (err: any) {
+      if (isMissingTableError(err)) return { session: null, questions: [] };
+      throw err;
+    }
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 7. deleteMcqSession
 // ─────────────────────────────────────────────────────────────────────────────
 
-const DeleteSessionInput = z.object({ sessionId: z.string().uuid() });
+const DeleteSessionInput = z.object({ sessionId: z.string() });
 
 export const deleteMcqSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => DeleteSessionInput.parse(d))
   .handler(async ({ data, context }) => {
+    if (data.sessionId.startsWith("local-")) return { ok: true };
     const { supabase } = await ensureAdmin(context);
-    // Questions cascade-delete automatically
-    const { error } = await supabase
-      .from(SESSIONS_TABLE)
-      .delete()
-      .eq("id", data.sessionId);
-    if (error) throw error;
-    return { ok: true };
+    try {
+      const { error } = await supabase
+        .from(SESSIONS_TABLE)
+        .delete()
+        .eq("id", data.sessionId);
+      if (error && !isMissingTableError(error)) throw error;
+      return { ok: true };
+    } catch (err: any) {
+      if (isMissingTableError(err)) return { ok: true };
+      throw err;
+    }
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -621,7 +748,7 @@ export const deleteMcqSession = createServerFn({ method: "POST" })
 // ─────────────────────────────────────────────────────────────────────────────
 
 const UpdateQuestionInput = z.object({
-  questionId: z.string().uuid(),
+  questionId: z.string(),
   stem: z.string().min(1).max(5000).optional(),
   options: z
     .array(
@@ -650,11 +777,15 @@ export const updateMcqQuestion = createServerFn({ method: "POST" })
     if (data.review_status !== undefined)
       patch.review_status = data.review_status;
 
-    const { error } = await supabase
-      .from(QUESTIONS_TABLE)
-      .update(patch)
-      .eq("id", data.questionId);
-    if (error) throw error;
+    try {
+      const { error } = await supabase
+        .from(QUESTIONS_TABLE)
+        .update(patch)
+        .eq("id", data.questionId);
+      if (error && !isMissingTableError(error)) throw error;
+    } catch (err: any) {
+      if (!isMissingTableError(err)) throw err;
+    }
     return { ok: true };
   });
 
@@ -663,7 +794,7 @@ export const updateMcqQuestion = createServerFn({ method: "POST" })
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BulkReviewInput = z.object({
-  questionIds: z.array(z.string().uuid()).min(1).max(2000),
+  questionIds: z.array(z.string()).min(1).max(2000),
   review_status: z.enum(["accepted", "rejected", "pending"]),
 });
 
@@ -672,11 +803,15 @@ export const bulkUpdateReviewStatus = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => BulkReviewInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
-    const { error } = await supabase
-      .from(QUESTIONS_TABLE)
-      .update({ review_status: data.review_status })
-      .in("id", data.questionIds);
-    if (error) throw error;
+    try {
+      const { error } = await supabase
+        .from(QUESTIONS_TABLE)
+        .update({ review_status: data.review_status })
+        .in("id", data.questionIds);
+      if (error && !isMissingTableError(error)) throw error;
+    } catch (err: any) {
+      if (!isMissingTableError(err)) throw err;
+    }
     return { ok: true };
   });
 
@@ -684,21 +819,27 @@ export const bulkUpdateReviewStatus = createServerFn({ method: "POST" })
 // 10. rejectAllDuplicates — reject all is_duplicate=true questions in a session
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RejectDupesInput = z.object({ sessionId: z.string().uuid() });
+const RejectDupesInput = z.object({ sessionId: z.string() });
 
 export const rejectAllDuplicates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => RejectDupesInput.parse(d))
   .handler(async ({ data, context }) => {
+    if (data.sessionId.startsWith("local-")) return { rejectedCount: 0 };
     const { supabase } = await ensureAdmin(context);
-    const { data: updated, error } = await supabase
-      .from(QUESTIONS_TABLE)
-      .update({ review_status: "rejected" })
-      .eq("session_id", data.sessionId)
-      .eq("is_duplicate", true)
-      .select("id");
-    if (error) throw error;
-    return { rejectedCount: updated?.length ?? 0 };
+    try {
+      const { data: updated, error } = await supabase
+        .from(QUESTIONS_TABLE)
+        .update({ review_status: "rejected" })
+        .eq("session_id", data.sessionId)
+        .eq("is_duplicate", true)
+        .select("id");
+      if (error && !isMissingTableError(error)) throw error;
+      return { rejectedCount: updated?.length ?? 0 };
+    } catch (err: any) {
+      if (isMissingTableError(err)) return { rejectedCount: 0 };
+      throw err;
+    }
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -706,9 +847,10 @@ export const rejectAllDuplicates = createServerFn({ method: "POST" })
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ImportInput = z.object({
-  sessionId: z.string().uuid(),
-  subjectId: z.string().uuid(),
-  questionIds: z.array(z.string().uuid()).min(1).max(2000).optional(),
+  sessionId: z.string(),
+  subjectId: z.string(),
+  questionIds: z.array(z.string()).min(1).max(2000).optional(),
+  questionsData: z.array(z.any()).optional(),
   // if questionIds omitted, imports ALL accepted questions
 });
 
@@ -741,20 +883,33 @@ export const importSessionQuestions = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
 
-    // Build query for questions to import
-    let qQuery = supabase
-      .from(QUESTIONS_TABLE)
-      .select("id, stem, options, question_type, selected_answer, answer_text, source_reference, explanation")
-      .eq("session_id", data.sessionId)
-      .eq("review_status", "accepted")
-      .order("sort_order", { ascending: true });
+    let questions: any[] = [];
+    if (data.questionsData && data.questionsData.length > 0) {
+      questions = data.questionsData.filter((q: any) => {
+        if (q.review_status !== "accepted") return false;
+        if (data.questionIds && data.questionIds.length > 0) {
+          return data.questionIds.includes(q.id);
+        }
+        return true;
+      });
+    } else {
+      // Build query for questions to import from DB
+      let qQuery = supabase
+        .from(QUESTIONS_TABLE)
+        .select("id, stem, options, question_type, selected_answer, answer_text, source_reference, explanation")
+        .eq("session_id", data.sessionId)
+        .eq("review_status", "accepted")
+        .order("sort_order", { ascending: true });
 
-    if (data.questionIds && data.questionIds.length > 0) {
-      qQuery = qQuery.in("id", data.questionIds);
+      if (data.questionIds && data.questionIds.length > 0) {
+        qQuery = qQuery.in("id", data.questionIds);
+      }
+
+      const { data: dbQuestions, error: qErr } = await qQuery;
+      if (qErr) throw qErr;
+      questions = dbQuestions ?? [];
     }
 
-    const { data: questions, error: qErr } = await qQuery;
-    if (qErr) throw qErr;
     if (!questions || questions.length === 0) {
       return { inserted: 0, skipped: 0, errors: [] };
     }
@@ -825,7 +980,7 @@ export const importSessionQuestions = createServerFn({ method: "POST" })
         nextOrder++;
       } catch (e: any) {
         errors.push(
-          `Q(${q.id.slice(0, 8)}): ${e?.message ?? String(e)}`.slice(0, 200),
+          `Q(${String(q.id).slice(0, 8)}): ${e?.message ?? String(e)}`.slice(0, 200),
         );
       }
     }
@@ -1076,7 +1231,7 @@ function validateAnswerSelection(
 // ─────────────────────────────────────────────────────────────────────────────
 
 const InitiateAnsweringInput = z.object({
-  sessionId: z.string().uuid(),
+  sessionId: z.string(),
   method: z.enum(["ai", "study_material", "user_answer_key"]),
   model: ModelIdSchema.optional(),
   instructions: z.string().max(4000).optional(),
@@ -1088,24 +1243,29 @@ export const initiateAnsweringSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => InitiateAnsweringInput.parse(d))
   .handler(async ({ data, context }) => {
+    if (data.sessionId.startsWith("local-")) return { ok: true };
     const { supabase } = await ensureAdmin(context);
 
     const modelDef = data.model ? MODELS[data.model] : null;
 
-    const { error } = await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        answering_method: data.method,
-        answering_model: data.model ?? null,
-        answering_provider: modelDef?.provider ?? null,
-        answering_instructions: data.instructions ?? null,
-        study_material_name: data.studyMaterialName ?? null,
-        study_material_text: data.studyMaterialText ?? null,
-        answering_status: "running",
-      })
-      .eq("id", data.sessionId);
+    try {
+      const { error } = await supabase
+        .from(SESSIONS_TABLE)
+        .update({
+          answering_method: data.method,
+          answering_model: data.model ?? null,
+          answering_provider: modelDef?.provider ?? null,
+          answering_instructions: data.instructions ?? null,
+          study_material_name: data.studyMaterialName ?? null,
+          study_material_text: data.studyMaterialText ?? null,
+          answering_status: "running",
+        })
+        .eq("id", data.sessionId);
 
-    if (error) throw error;
+      if (error && !isMissingTableError(error)) throw error;
+    } catch (err: any) {
+      if (!isMissingTableError(err)) throw err;
+    }
     return { ok: true };
   });
 
@@ -1114,12 +1274,13 @@ export const initiateAnsweringSession = createServerFn({ method: "POST" })
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SolveQuestionInput = z.object({
-  sessionId: z.string().uuid(),
-  questionId: z.string().uuid(),
+  sessionId: z.string(),
+  questionId: z.string(),
   method: z.enum(["ai", "study_material"]),
   model: ModelIdSchema,
   instructions: z.string().max(4000).optional(),
   studyMaterialText: z.string().max(100_000).optional(),
+  questionData: z.any().optional(),
 });
 
 export const solveSingleQuestion = createServerFn({ method: "POST" })
@@ -1127,15 +1288,22 @@ export const solveSingleQuestion = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => SolveQuestionInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
+    const isLocal = data.sessionId.startsWith("local-");
 
-    // Fetch the question
-    const { data: q, error: qErr } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id, stem, options, question_type, question_number")
-      .eq("id", data.questionId)
-      .single();
+    // Fetch the question (from questionData or DB)
+    let q = data.questionData;
+    if (!q) {
+      try {
+        const { data: qDb, error: qErr } = await supabase
+          .from(QUESTIONS_TABLE)
+          .select("id, stem, options, question_type, question_number")
+          .eq("id", data.questionId)
+          .single();
+        if (!qErr && qDb) q = qDb;
+      } catch {}
+    }
 
-    if (qErr || !q) throw new Error("Question not found");
+    if (!q) throw new Error("Question not found");
 
     const modelDef = MODELS[data.model];
     if (!modelDef) throw new Error(`Unknown model: ${data.model}`);
@@ -1196,15 +1364,18 @@ INSTRUCTION FOR METHOD B: Answer strictly according to the study material above.
         );
       }
     } catch (apiErr: any) {
-      // Record failure on question
-      await supabase
-        .from(QUESTIONS_TABLE)
-        .update({
-          answering_status: "failed",
-          needs_review: true,
-          review_reason: `AI API error: ${apiErr?.message || String(apiErr)}`,
-        })
-        .eq("id", data.questionId);
+      if (!isLocal) {
+        try {
+          await supabase
+            .from(QUESTIONS_TABLE)
+            .update({
+              answering_status: "failed",
+              needs_review: true,
+              review_reason: `AI API error: ${apiErr?.message || String(apiErr)}`,
+            })
+            .eq("id", data.questionId);
+        } catch {}
+      }
       throw apiErr;
     }
 
@@ -1243,40 +1414,44 @@ INSTRUCTION FOR METHOD B: Answer strictly according to the study material above.
       answered_at: new Date().toISOString(),
     };
 
-    const { error: updErr } = await supabase
-      .from(QUESTIONS_TABLE)
-      .update(updatePayload)
-      .eq("id", data.questionId);
+    if (!isLocal) {
+      try {
+        await supabase
+          .from(QUESTIONS_TABLE)
+          .update(updatePayload)
+          .eq("id", data.questionId);
 
-    if (updErr) throw updErr;
+        // Recalculate session counters
+        const { count: answeredCount } = await supabase
+          .from(QUESTIONS_TABLE)
+          .select("id", { count: "exact", head: true })
+          .eq("session_id", data.sessionId)
+          .in("answering_status", ["answered", "needs_review"]);
 
-    // Recalculate session counters
-    const { count: answeredCount } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", data.sessionId)
-      .in("answering_status", ["answered", "needs_review"]);
+        const { count: reviewCount } = await supabase
+          .from(QUESTIONS_TABLE)
+          .select("id", { count: "exact", head: true })
+          .eq("session_id", data.sessionId)
+          .eq("needs_review", true);
 
-    const { count: reviewCount } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", data.sessionId)
-      .eq("needs_review", true);
-
-    await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        total_answered: answeredCount ?? 0,
-        total_needs_review: reviewCount ?? 0,
-      })
-      .eq("id", data.sessionId);
+        await supabase
+          .from(SESSIONS_TABLE)
+          .update({
+            total_answered: answeredCount ?? 0,
+            total_needs_review: reviewCount ?? 0,
+          })
+          .eq("id", data.sessionId);
+      } catch {}
+    }
 
     return {
       questionId: data.questionId,
       selectedAnswer: validation.selectedAnswer,
+      answerText: validation.answerText,
       needsReview,
       reviewReason,
       confidence,
+      sourceReference: parsed.source_reference ? String(parsed.source_reference).trim() : null,
     };
   });
 
@@ -1400,13 +1575,14 @@ export function parseAnswerKeyEntries(text: string): Array<{ number?: string; le
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ApplyAnswerKeyInput = z.object({
-  sessionId: z.string().uuid(),
+  sessionId: z.string(),
   entries: z.array(
     z.object({
       number: z.string().optional(),
       letter: z.string().min(1),
     })
   ).min(1).max(2000),
+  questionsData: z.array(z.any()).optional(),
 });
 
 export const applyAnswerKeyBatch = createServerFn({ method: "POST" })
@@ -1414,19 +1590,29 @@ export const applyAnswerKeyBatch = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ApplyAnswerKeyInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
+    const isLocal = data.sessionId.startsWith("local-");
 
-    // Fetch all questions for this session
-    const { data: questions, error: qErr } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id, stem, options, question_type, question_number, sort_order")
-      .eq("session_id", data.sessionId)
-      .order("sort_order", { ascending: true });
+    let questions: any[] = [];
+    if (data.questionsData && data.questionsData.length > 0) {
+      questions = data.questionsData;
+    } else {
+      try {
+        const { data: qData, error: qErr } = await supabase
+          .from(QUESTIONS_TABLE)
+          .select("id, stem, options, question_type, question_number, sort_order")
+          .eq("session_id", data.sessionId)
+          .order("sort_order", { ascending: true });
+        if (!qErr && qData) questions = qData;
+      } catch {}
+    }
 
-    if (qErr || !questions) throw new Error("Could not load questions for session");
+    if (!questions || questions.length === 0) {
+      throw new Error("Could not load questions for session");
+    }
 
     // Index questions by printed question_number and by array index
     const qByNumber = new Map<string, any>();
-    (questions as any[]).forEach((q: any, idx: number) => {
+    questions.forEach((q: any) => {
       if (q.question_number != null) {
         qByNumber.set(String(q.question_number), q);
       }
@@ -1434,6 +1620,7 @@ export const applyAnswerKeyBatch = createServerFn({ method: "POST" })
 
     let appliedCount = 0;
     let needsReviewCount = 0;
+    const updatedMap: Record<string, any> = {};
 
     for (let i = 0; i < data.entries.length; i++) {
       const entry = data.entries[i];
@@ -1460,37 +1647,48 @@ export const applyAnswerKeyBatch = createServerFn({ method: "POST" })
       const needsReview = !validation.valid;
       if (needsReview) needsReviewCount++;
 
-      await supabase
-        .from(QUESTIONS_TABLE)
-        .update({
-          answer_source: "user_answer_key",
-          selected_answer: validation.selectedAnswer,
-          answer_text: validation.answerText,
-          confidence: "high",
-          needs_review: needsReview,
-          review_reason: needsReview
-            ? (validation.errorReason || "Answer key does not match question options")
-            : null,
-          answering_status: needsReview ? "needs_review" : "answered",
-          answered_at: new Date().toISOString(),
-        })
-        .eq("id", targetQ.id);
+      const payload = {
+        answer_source: "user_answer_key",
+        selected_answer: validation.selectedAnswer,
+        answer_text: validation.answerText,
+        confidence: "high" as const,
+        needs_review: needsReview,
+        review_reason: needsReview
+          ? (validation.errorReason || "Answer key does not match question options")
+          : null,
+        answering_status: needsReview ? "needs_review" : "answered",
+        answered_at: new Date().toISOString(),
+      };
+
+      updatedMap[targetQ.id] = payload;
+
+      if (!isLocal) {
+        try {
+          await supabase
+            .from(QUESTIONS_TABLE)
+            .update(payload)
+            .eq("id", targetQ.id);
+        } catch {}
+      }
 
       appliedCount++;
     }
 
-    // Update session status & counters
-    await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        answering_method: "user_answer_key",
-        answering_status: "completed",
-        total_answered: appliedCount,
-        total_needs_review: needsReviewCount,
-      })
-      .eq("id", data.sessionId);
+    if (!isLocal) {
+      try {
+        await supabase
+          .from(SESSIONS_TABLE)
+          .update({
+            answering_method: "user_answer_key",
+            answering_status: "completed",
+            total_answered: appliedCount,
+            total_needs_review: needsReviewCount,
+          })
+          .eq("id", data.sessionId);
+      } catch {}
+    }
 
-    return { appliedCount, totalEntries: data.entries.length, needsReviewCount };
+    return { appliedCount, totalEntries: data.entries.length, needsReviewCount, updatedMap };
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1498,7 +1696,7 @@ export const applyAnswerKeyBatch = createServerFn({ method: "POST" })
 // ─────────────────────────────────────────────────────────────────────────────
 
 const UpdateManualAnswerInput = z.object({
-  questionId: z.string().uuid(),
+  questionId: z.string(),
   selected_answer: z.union([z.string(), z.array(z.string())]),
   answer_text: z.union([z.string(), z.array(z.string())]).optional(),
   needs_review: z.boolean().optional(),
@@ -1523,12 +1721,16 @@ export const updateQuestionAnswerManual = createServerFn({ method: "POST" })
     if (data.review_reason !== undefined) patch.review_reason = data.review_reason;
     if (data.source_reference !== undefined) patch.source_reference = data.source_reference;
 
-    const { error } = await supabase
-      .from(QUESTIONS_TABLE)
-      .update(patch)
-      .eq("id", data.questionId);
+    try {
+      const { error } = await supabase
+        .from(QUESTIONS_TABLE)
+        .update(patch)
+        .eq("id", data.questionId);
 
-    if (error) throw error;
+      if (error && !isMissingTableError(error)) throw error;
+    } catch (err: any) {
+      if (!isMissingTableError(err)) throw err;
+    }
     return { ok: true };
   });
 
@@ -1536,41 +1738,46 @@ export const updateQuestionAnswerManual = createServerFn({ method: "POST" })
 // 19. clearSessionAnswers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ClearAnswersInput = z.object({ sessionId: z.string().uuid() });
+const ClearAnswersInput = z.object({ sessionId: z.string() });
 
 export const clearSessionAnswers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ClearAnswersInput.parse(d))
   .handler(async ({ data, context }) => {
+    if (data.sessionId.startsWith("local-")) return { ok: true };
     const { supabase } = await ensureAdmin(context);
 
-    await supabase
-      .from(QUESTIONS_TABLE)
-      .update({
-        answer_source: null,
-        selected_answer: null,
-        answer_text: null,
-        confidence: null,
-        needs_review: false,
-        review_reason: null,
-        source_reference: null,
-        answering_model: null,
-        answering_provider: null,
-        answering_instructions: null,
-        answering_status: "unanswered",
-        internal_reasoning: null,
-        answered_at: null,
-      })
-      .eq("session_id", data.sessionId);
+    try {
+      await supabase
+        .from(QUESTIONS_TABLE)
+        .update({
+          answer_source: null,
+          selected_answer: null,
+          answer_text: null,
+          confidence: null,
+          needs_review: false,
+          review_reason: null,
+          source_reference: null,
+          answering_model: null,
+          answering_provider: null,
+          answering_instructions: null,
+          answering_status: "unanswered",
+          internal_reasoning: null,
+          answered_at: null,
+        })
+        .eq("session_id", data.sessionId);
 
-    await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        answering_status: "idle",
-        total_answered: 0,
-        total_needs_review: 0,
-      })
-      .eq("id", data.sessionId);
+      await supabase
+        .from(SESSIONS_TABLE)
+        .update({
+          answering_status: "idle",
+          total_answered: 0,
+          total_needs_review: 0,
+        })
+        .eq("id", data.sessionId);
+    } catch (err: any) {
+      if (!isMissingTableError(err)) throw err;
+    }
 
     return { ok: true };
   });
@@ -1579,34 +1786,39 @@ export const clearSessionAnswers = createServerFn({ method: "POST" })
 // 20. completeAnsweringSession
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CompleteAnsweringInput = z.object({ sessionId: z.string().uuid() });
+const CompleteAnsweringInput = z.object({ sessionId: z.string() });
 
 export const completeAnsweringSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => CompleteAnsweringInput.parse(d))
   .handler(async ({ data, context }) => {
+    if (data.sessionId.startsWith("local-")) return { ok: true };
     const { supabase } = await ensureAdmin(context);
 
-    const { count: answeredCount } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", data.sessionId)
-      .in("answering_status", ["answered", "needs_review"]);
+    try {
+      const { count: answeredCount } = await supabase
+        .from(QUESTIONS_TABLE)
+        .select("id", { count: "exact", head: true })
+        .eq("session_id", data.sessionId)
+        .in("answering_status", ["answered", "needs_review"]);
 
-    const { count: reviewCount } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", data.sessionId)
-      .eq("needs_review", true);
+      const { count: reviewCount } = await supabase
+        .from(QUESTIONS_TABLE)
+        .select("id", { count: "exact", head: true })
+        .eq("session_id", data.sessionId)
+        .eq("needs_review", true);
 
-    await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        answering_status: "completed",
-        total_answered: answeredCount ?? 0,
-        total_needs_review: reviewCount ?? 0,
-      })
-      .eq("id", data.sessionId);
+      await supabase
+        .from(SESSIONS_TABLE)
+        .update({
+          answering_status: "completed",
+          total_answered: answeredCount ?? 0,
+          total_needs_review: reviewCount ?? 0,
+        })
+        .eq("id", data.sessionId);
+    } catch (err: any) {
+      if (!isMissingTableError(err)) throw err;
+    }
 
     return { ok: true };
   });
@@ -1745,7 +1957,7 @@ Return STRICT JSON only:
 // ─────────────────────────────────────────────────────────────────────────────
 
 const InitiateExplanationInput = z.object({
-  sessionId: z.string().uuid(),
+  sessionId: z.string(),
   model: ModelIdSchema,
   instructions: z.string().max(4000).optional(),
   showBookAnswer: z.boolean().default(true),
@@ -1755,21 +1967,26 @@ export const initiateExplanationSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => InitiateExplanationInput.parse(d))
   .handler(async ({ data, context }) => {
+    if (data.sessionId.startsWith("local-")) return { ok: true };
     const { supabase } = await ensureAdmin(context);
     const modelDef = MODELS[data.model];
 
-    const { error } = await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        phase3_model: data.model,
-        phase3_provider: modelDef.provider,
-        phase3_instructions: data.instructions ?? null,
-        phase3_show_book_answer: data.showBookAnswer,
-        phase3_status: "running",
-      })
-      .eq("id", data.sessionId);
+    try {
+      const { error } = await supabase
+        .from(SESSIONS_TABLE)
+        .update({
+          phase3_model: data.model,
+          phase3_provider: modelDef?.provider,
+          phase3_instructions: data.instructions ?? null,
+          phase3_show_book_answer: data.showBookAnswer,
+          phase3_status: "running",
+        })
+        .eq("id", data.sessionId);
 
-    if (error) throw error;
+      if (error && !isMissingTableError(error)) throw error;
+    } catch (err: any) {
+      if (!isMissingTableError(err)) throw err;
+    }
     return { ok: true };
   });
 
@@ -1778,11 +1995,14 @@ export const initiateExplanationSession = createServerFn({ method: "POST" })
 // ─────────────────────────────────────────────────────────────────────────────
 
 const GenerateExplanationInput = z.object({
-  sessionId: z.string().uuid(),
-  questionId: z.string().uuid(),
+  sessionId: z.string(),
+  questionId: z.string(),
   model: ModelIdSchema,
   instructions: z.string().max(4000).optional(),
   showBookAnswer: z.boolean().default(true),
+  questionData: z.any().optional(),
+  studyMaterialText: z.string().max(100_000).optional(),
+  studyMaterialName: z.string().max(300).optional(),
 });
 
 export const generateSingleExplanation = createServerFn({ method: "POST" })
@@ -1790,22 +2010,36 @@ export const generateSingleExplanation = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => GenerateExplanationInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
+    const isLocal = data.sessionId.startsWith("local-");
 
-    // Fetch session study material
-    const { data: sess, error: sErr } = await supabase
-      .from(SESSIONS_TABLE)
-      .select("study_material_text, study_material_name")
-      .eq("id", data.sessionId)
-      .single();
-    if (sErr || !sess) throw new Error("Session not found");
+    let sess: any = null;
+    if (!isLocal) {
+      try {
+        const { data: s, error: sErr } = await supabase
+          .from(SESSIONS_TABLE)
+          .select("study_material_text, study_material_name")
+          .eq("id", data.sessionId)
+          .single();
+        if (!sErr && s) sess = s;
+      } catch {}
+    }
 
-    // Fetch question
-    const { data: q, error: qErr } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id, stem, options, question_type, selected_answer, answer_text, page_number, question_number")
-      .eq("id", data.questionId)
-      .single();
-    if (qErr || !q) throw new Error("Question not found");
+    const studyText = data.studyMaterialText || sess?.study_material_text || "";
+    const studyName = data.studyMaterialName || sess?.study_material_name || "";
+
+    let q = data.questionData;
+    if (!q) {
+      try {
+        const { data: qDb, error: qErr } = await supabase
+          .from(QUESTIONS_TABLE)
+          .select("id, stem, options, question_type, selected_answer, answer_text, page_number, question_number")
+          .eq("id", data.questionId)
+          .single();
+        if (!qErr && qDb) q = qDb;
+      } catch {}
+    }
+
+    if (!q) throw new Error("Question not found");
 
     const optionsList: Array<{ letter: string; body: string }> = Array.isArray(q.options)
       ? q.options
@@ -1821,14 +2055,14 @@ export const generateSingleExplanation = createServerFn({ method: "POST" })
 
     // Retrieve relevant context from study material if present
     let retrievedContext = "";
-    if (sess.study_material_text?.trim()) {
+    if (studyText.trim()) {
       const retrieved = retrieveRelevantSourceContext(
-        sess.study_material_text,
+        studyText,
         q.stem,
         optionsList
       );
       if (retrieved.context) {
-        retrievedContext = `RELEVANT STUDY MATERIAL EXCERPT (${sess.study_material_name || "Provided Source"}):\n"""\n${retrieved.context}\n"""\n\n`;
+        retrievedContext = `RELEVANT STUDY MATERIAL EXCERPT (${studyName || "Provided Source"}):\n"""\n${retrieved.context}\n"""\n\n`;
       }
     }
 
@@ -1852,6 +2086,7 @@ Option ${determinedAnswerStr}${q.answer_text ? ` (${JSON.stringify(q.answer_text
     userPrompt += `\nGenerate the structured explanation and summary table according to system instructions.`;
 
     const modelDef = MODELS[data.model];
+    if (!modelDef) throw new Error(`Unknown model: ${data.model}`);
     let rawOutput = "";
 
     try {
@@ -1873,12 +2108,16 @@ Option ${determinedAnswerStr}${q.answer_text ? ` (${JSON.stringify(q.answer_text
         );
       }
     } catch (apiErr: any) {
-      await supabase
-        .from(QUESTIONS_TABLE)
-        .update({
-          explanation_status: "failed",
-        })
-        .eq("id", data.questionId);
+      if (!isLocal) {
+        try {
+          await supabase
+            .from(QUESTIONS_TABLE)
+            .update({
+              explanation_status: "failed",
+            })
+            .eq("id", data.questionId);
+        } catch {}
+      }
       throw apiErr;
     }
 
@@ -1891,7 +2130,7 @@ Option ${determinedAnswerStr}${q.answer_text ? ` (${JSON.stringify(q.answer_text
     }
 
     // If showBookAnswer is enabled and book_answer exists, append it
-    if (data.showBookAnswer && sess.study_material_text && parsed.book_answer) {
+    if (data.showBookAnswer && studyText && parsed.book_answer) {
       fullExplanation += `\n\n**Answer from the Book**\n${parsed.book_answer}`;
     }
 
@@ -1911,39 +2150,45 @@ Option ${determinedAnswerStr}${q.answer_text ? ` (${JSON.stringify(q.answer_text
       explained_at: new Date().toISOString(),
     };
 
-    const { error: updErr } = await supabase
-      .from(QUESTIONS_TABLE)
-      .update(updatePayload)
-      .eq("id", data.questionId);
+    if (!isLocal) {
+      try {
+        await supabase
+          .from(QUESTIONS_TABLE)
+          .update(updatePayload)
+          .eq("id", data.questionId);
 
-    if (updErr) throw updErr;
+        // Recalculate session explanation counters
+        const { count: expCount } = await supabase
+          .from(QUESTIONS_TABLE)
+          .select("id", { count: "exact", head: true })
+          .eq("session_id", data.sessionId)
+          .eq("explanation_status", "explained");
 
-    // Recalculate session explanation counters
-    const { count: expCount } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", data.sessionId)
-      .eq("explanation_status", "explained");
+        const { count: conflictCount } = await supabase
+          .from(QUESTIONS_TABLE)
+          .select("id", { count: "exact", head: true })
+          .eq("session_id", data.sessionId)
+          .eq("possible_answer_conflict", true);
 
-    const { count: conflictCount } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", data.sessionId)
-      .eq("possible_answer_conflict", true);
-
-    await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        total_explanations: expCount ?? 0,
-        total_conflicts: conflictCount ?? 0,
-      })
-      .eq("id", data.sessionId);
+        await supabase
+          .from(SESSIONS_TABLE)
+          .update({
+            total_explanations: expCount ?? 0,
+            total_conflicts: conflictCount ?? 0,
+          })
+          .eq("id", data.sessionId);
+      } catch {}
+    }
 
     return {
       questionId: data.questionId,
       hasConflict,
       conflictNote,
       bookAnswerFound: Boolean(parsed.book_answer_found),
+      concept: updatePayload.concept,
+      explanation: fullExplanation,
+      explanationSummaryTable: updatePayload.explanation_summary_table,
+      bookAnswer: updatePayload.book_answer,
     };
   });
 
@@ -1951,32 +2196,39 @@ Option ${determinedAnswerStr}${q.answer_text ? ` (${JSON.stringify(q.answer_text
 // 23. completeExplanationSession
 // ─────────────────────────────────────────────────────────────────────────────
 
+const CompleteExplanationInput = z.object({ sessionId: z.string() });
+
 export const completeExplanationSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => CompleteAnsweringInput.parse(d))
+  .inputValidator((d: unknown) => CompleteExplanationInput.parse(d))
   .handler(async ({ data, context }) => {
+    if (data.sessionId.startsWith("local-")) return { ok: true };
     const { supabase } = await ensureAdmin(context);
 
-    const { count: expCount } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", data.sessionId)
-      .eq("explanation_status", "explained");
+    try {
+      const { count: expCount } = await supabase
+        .from(QUESTIONS_TABLE)
+        .select("id", { count: "exact", head: true })
+        .eq("session_id", data.sessionId)
+        .eq("explanation_status", "explained");
 
-    const { count: conflictCount } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", data.sessionId)
-      .eq("possible_answer_conflict", true);
+      const { count: conflictCount } = await supabase
+        .from(QUESTIONS_TABLE)
+        .select("id", { count: "exact", head: true })
+        .eq("session_id", data.sessionId)
+        .eq("possible_answer_conflict", true);
 
-    await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        phase3_status: "completed",
-        total_explanations: expCount ?? 0,
-        total_conflicts: conflictCount ?? 0,
-      })
-      .eq("id", data.sessionId);
+      await supabase
+        .from(SESSIONS_TABLE)
+        .update({
+          phase3_status: "completed",
+          total_explanations: expCount ?? 0,
+          total_conflicts: conflictCount ?? 0,
+        })
+        .eq("id", data.sessionId);
+    } catch (err: any) {
+      if (!isMissingTableError(err)) throw err;
+    }
 
     return { ok: true };
   });
@@ -2044,7 +2296,7 @@ Return STRICT JSON only:
 // ─────────────────────────────────────────────────────────────────────────────
 
 const InitiateVerificationInput = z.object({
-  sessionId: z.string().uuid(),
+  sessionId: z.string(),
   model: ModelIdSchema,
 });
 
@@ -2052,19 +2304,24 @@ export const initiateVerificationSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => InitiateVerificationInput.parse(d))
   .handler(async ({ data, context }) => {
+    if (data.sessionId.startsWith("local-")) return { ok: true };
     const { supabase } = await ensureAdmin(context);
     const modelDef = MODELS[data.model];
 
-    const { error } = await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        phase4_model: data.model,
-        phase4_provider: modelDef.provider,
-        phase4_status: "running",
-      })
-      .eq("id", data.sessionId);
+    try {
+      const { error } = await supabase
+        .from(SESSIONS_TABLE)
+        .update({
+          phase4_model: data.model,
+          phase4_provider: modelDef?.provider,
+          phase4_status: "running",
+        })
+        .eq("id", data.sessionId);
 
-    if (error) throw error;
+      if (error && !isMissingTableError(error)) throw error;
+    } catch (err: any) {
+      if (!isMissingTableError(err)) throw err;
+    }
     return { ok: true };
   });
 
@@ -2073,9 +2330,11 @@ export const initiateVerificationSession = createServerFn({ method: "POST" })
 // ─────────────────────────────────────────────────────────────────────────────
 
 const VerifyQuestionInput = z.object({
-  sessionId: z.string().uuid(),
-  questionId: z.string().uuid(),
+  sessionId: z.string(),
+  questionId: z.string(),
   model: ModelIdSchema,
+  questionData: z.any().optional(),
+  studyMaterialText: z.string().max(100_000).optional(),
 });
 
 export const verifySingleQuestion = createServerFn({ method: "POST" })
@@ -2083,24 +2342,39 @@ export const verifySingleQuestion = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => VerifyQuestionInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
+    const isLocal = data.sessionId.startsWith("local-");
 
     // Fetch session
-    const { data: sess } = await supabase
-      .from(SESSIONS_TABLE)
-      .select("study_material_text, study_material_name")
-      .eq("id", data.sessionId)
-      .single();
+    let sess: any = null;
+    if (!isLocal) {
+      try {
+        const { data: s } = await supabase
+          .from(SESSIONS_TABLE)
+          .select("study_material_text, study_material_name")
+          .eq("id", data.sessionId)
+          .single();
+        if (s) sess = s;
+      } catch {}
+    }
 
-    // Fetch question
-    const { data: q, error: qErr } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select(
-        "id, page_number, question_number, stem, options, question_type, selected_answer, answer_text, source_reference, concept, explanation, book_answer"
-      )
-      .eq("id", data.questionId)
-      .single();
+    const studyText = data.studyMaterialText || sess?.study_material_text || "";
 
-    if (qErr || !q) throw new Error("Question not found");
+    // Fetch question (from questionData or DB)
+    let q = data.questionData;
+    if (!q) {
+      try {
+        const { data: qDb, error: qErr } = await supabase
+          .from(QUESTIONS_TABLE)
+          .select(
+            "id, page_number, question_number, stem, options, question_type, selected_answer, answer_text, source_reference, concept, explanation, book_answer"
+          )
+          .eq("id", data.questionId)
+          .single();
+        if (!qErr && qDb) q = qDb;
+      } catch {}
+    }
+
+    if (!q) throw new Error("Question not found");
 
     const optionsList: Array<{ letter: string; body: string }> = Array.isArray(q.options)
       ? q.options
@@ -2115,8 +2389,8 @@ export const verifySingleQuestion = createServerFn({ method: "POST" })
       : String(q.selected_answer ?? "None");
 
     let sourceContext = "";
-    if (sess?.study_material_text?.trim()) {
-      const ret = retrieveRelevantSourceContext(sess.study_material_text, q.stem, optionsList);
+    if (studyText.trim()) {
+      const ret = retrieveRelevantSourceContext(studyText, q.stem, optionsList);
       sourceContext = `AVAILABLE STUDY MATERIAL EXCERPT:\n"""\n${ret.context}\n"""\n\n`;
     }
 
@@ -2145,6 +2419,7 @@ ${q.book_answer || "None"}
 Audit all 6 dimensions strictly according to the system instructions. Attach accurate problem_type and severity to any detected issues.`;
 
     const modelDef = MODELS[data.model];
+    if (!modelDef) throw new Error(`Unknown model: ${data.model}`);
     let rawOutput = "";
 
     try {
@@ -2166,12 +2441,16 @@ Audit all 6 dimensions strictly according to the system instructions. Attach acc
         );
       }
     } catch (apiErr: any) {
-      await supabase
-        .from(QUESTIONS_TABLE)
-        .update({
-          verification_status: "error",
-        })
-        .eq("id", data.questionId);
+      if (!isLocal) {
+        try {
+          await supabase
+            .from(QUESTIONS_TABLE)
+            .update({
+              verification_status: "error",
+            })
+            .eq("id", data.questionId);
+        } catch {}
+      }
       throw apiErr;
     }
 
@@ -2195,37 +2474,39 @@ Audit all 6 dimensions strictly according to the system instructions. Attach acc
         ? "error"
         : "flagged";
 
-    const { error: updErr } = await supabase
-      .from(QUESTIONS_TABLE)
-      .update({
-        verification_status: status,
-        verification_report: verifiedIssues,
-        verified_at: new Date().toISOString(),
-      })
-      .eq("id", data.questionId);
+    if (!isLocal) {
+      try {
+        await supabase
+          .from(QUESTIONS_TABLE)
+          .update({
+            verification_status: status,
+            verification_report: verifiedIssues,
+            verified_at: new Date().toISOString(),
+          })
+          .eq("id", data.questionId);
 
-    if (updErr) throw updErr;
+        // Recalculate session verification counters
+        const { count: totalChecked } = await supabase
+          .from(QUESTIONS_TABLE)
+          .select("id", { count: "exact", head: true })
+          .eq("session_id", data.sessionId)
+          .in("verification_status", ["passed", "flagged", "error"]);
 
-    // Recalculate session verification counters
-    const { count: totalChecked } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", data.sessionId)
-      .in("verification_status", ["passed", "flagged", "error"]);
+        const { count: issuesCount } = await supabase
+          .from(QUESTIONS_TABLE)
+          .select("id", { count: "exact", head: true })
+          .eq("session_id", data.sessionId)
+          .in("verification_status", ["flagged", "error"]);
 
-    const { count: issuesCount } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", data.sessionId)
-      .in("verification_status", ["flagged", "error"]);
-
-    await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        phase4_total_checked: totalChecked ?? 0,
-        phase4_issues_count: issuesCount ?? 0,
-      })
-      .eq("id", data.sessionId);
+        await supabase
+          .from(SESSIONS_TABLE)
+          .update({
+            phase4_total_checked: totalChecked ?? 0,
+            phase4_issues_count: issuesCount ?? 0,
+          })
+          .eq("id", data.sessionId);
+      } catch {}
+    }
 
     return {
       questionId: data.questionId,
@@ -2239,34 +2520,39 @@ Audit all 6 dimensions strictly according to the system instructions. Attach acc
 // 26. completeVerificationSession
 // ─────────────────────────────────────────────────────────────────────────────
 
+const CompleteVerificationInput = z.object({ sessionId: z.string() });
+
 export const completeVerificationSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => CompleteAnsweringInput.parse(d))
+  .inputValidator((d: unknown) => CompleteVerificationInput.parse(d))
   .handler(async ({ data, context }) => {
+    if (data.sessionId.startsWith("local-")) return { ok: true };
     const { supabase } = await ensureAdmin(context);
 
-    const { count: totalChecked } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", data.sessionId)
-      .in("verification_status", ["passed", "flagged", "error"]);
+    try {
+      const { count: totalChecked } = await supabase
+        .from(QUESTIONS_TABLE)
+        .select("id", { count: "exact", head: true })
+        .eq("session_id", data.sessionId)
+        .in("verification_status", ["passed", "flagged", "error"]);
 
-    const { count: issuesCount } = await supabase
-      .from(QUESTIONS_TABLE)
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", data.sessionId)
-      .in("verification_status", ["flagged", "error"]);
+      const { count: issuesCount } = await supabase
+        .from(QUESTIONS_TABLE)
+        .select("id", { count: "exact", head: true })
+        .eq("session_id", data.sessionId)
+        .in("verification_status", ["flagged", "error"]);
 
-    await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        phase4_status: "completed",
-        phase4_total_checked: totalChecked ?? 0,
-        phase4_issues_count: issuesCount ?? 0,
-      })
-      .eq("id", data.sessionId);
+      await supabase
+        .from(SESSIONS_TABLE)
+        .update({
+          phase4_status: "completed",
+          phase4_total_checked: totalChecked ?? 0,
+          phase4_issues_count: issuesCount ?? 0,
+        })
+        .eq("id", data.sessionId);
+    } catch (err: any) {
+      if (!isMissingTableError(err)) throw err;
+    }
 
     return { ok: true };
   });
-
-
