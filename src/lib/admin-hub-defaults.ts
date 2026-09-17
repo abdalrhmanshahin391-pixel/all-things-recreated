@@ -68,6 +68,7 @@ export const DEFAULT_LAYOUT: HubLayout = {
         t("/admin/lecture-centre", "Lecture Centre", "GraduationCap"),
         t("/admin/lectures", "Lectures Syllabus", "Video"),
         t("/admin/questions", "Questions", "ListPlus"),
+        t("/admin/mcq-generator-124-pro", "MCQ Generator 1.24 Pro", "ShieldAlert", "مولّد 1.24 الاحترافي"),
         t("/admin/question-generator", "Questions Generator", "Sparkles"),
         t("/admin/question-bank", "Question Bank", "Library"),
 
