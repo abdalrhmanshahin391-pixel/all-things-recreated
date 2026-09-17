@@ -160,44 +160,59 @@ export interface ExtractedQuestion {
   comboSets: string[][];
   originalCombinations: Array<{ letter: string; text: string }>;
   isDuplicate?: boolean;
+  needsReview?: boolean;
+  reviewReason?: string | null;
+  isApproved?: boolean;
 }
 
 function buildExtractionSystemPrompt(combinationMode: "mode1_keep_original" | "mode2_convert_multiple", customInstructions?: string): string {
-  return `You are a medical examination transcription engine reading high-resolution photographs/scans of medical exam papers.
-Your mission is to transcribe EVERY question from this page VERBATIM with zero hallucination.
+  return `You are an expert medical examination transcription engine reading high-resolution photographs/scans of medical exam papers.
+Your mission is to transcribe EVERY question from this page VERBATIM with 100% fidelity and zero hallucination.
 
-COMBINATION QUESTION MODE SELECTED BY SYSTEM:
+QUESTION TAXONOMY & EXTRACTION RULES:
+
+1. ORDINARY / STANDARD MCQs (The vast majority of questions):
+   - Consists of a question stem (e.g. "All the following are interstitial lung diseases, except:" or "Drugs of first line are all listed below except:") followed by choices labeled a), b), c), d) or A), B), C), D).
+   - In ordinary MCQs, choices contain names of drugs, clinical findings, diseases, or standard answer sentences.
+   - CRITICAL RULE: ALWAYS extract choices labeled a), b), c), d) into the "options" array with letters "A", "B", "C", "D".
+   - STRICT: NEVER convert choices a), b), c), d) into numbers (1, 2, 3, 4).
+   - STRICT: NEVER merge choices into the question stem.
+   - STRICT: NEVER return an empty options array for ordinary MCQs.
+   - Set "question_type": "ordinary".
+
+2. COMBINATION QUESTIONS:
+   - A question is a Combination Question ONLY IF the printed paper contains BOTH:
+     (a) Numbered statements (1. ... 2. ... 3. ... 4. ...) inside the question body, AND
+     (b) Choices referencing those numbers (e.g. "a) 3.4", "b) 1.2.3.4", "c) 2.3", "d) 1.4" or "A) 1, 2").
 ${
   combinationMode === "mode1_keep_original"
-    ? `MODE 1 — KEEP ORIGINAL COMBINATION FORMAT:
-- If a question has numbered statements (1, 2, 3, 4) followed by combination choices (e.g. A) 1,2; B) 2,3; C) 1,2,3; D) 1,2,4):
-  * Keep the numbered statements inside the question "stem":
-    Example stem:
-    Which are typical for TB pleurisy?
-    1. predominance of lymphocytes
-    2. low glucose level
-    3. relative density of the fluid 1015 and more
-    4. protein level 30 g/l and more
-  * Keep the answer choices as single choice options:
-    A) 1.2
-    B) 1.3.4
-    C) 1.2.3.4
-    D) 3.4
-  * Set "question_type": "combination".
-  * Store the combination list in "combinations": [{"letter":"A","text":"1.2"},{"letter":"B","text":"1.3.4"}].`
-    : `MODE 2 — CONVERT TO MULTIPLE ANSWERS:
-- If a question has numbered statements (1, 2, 3, 4) followed by combination choices (e.g. A) 1,2; B) 2,3; C) 1,2,3):
-  * Set "stem" to ONLY the introductory question line (e.g. "Which are typical for TB pleurisy?").
-  * Convert the numbered statements (1, 2, 3, 4) into the independent choices in "options" (A: statement 1, B: statement 2, C: statement 3, D: statement 4).
-  * Set "question_type": "multiple_answer".
-  * Preserve the original printed combination choices in "printed_combinations": [{"letter":"A","text":"1.2"},{"letter":"B","text":"2.3"}].`
+    ? `   - MODE 1 — KEEP ORIGINAL COMBINATION FORMAT:
+     * The numbered statements stay inside the "stem" (e.g. "BCG vaccine is a protection against... 1. Post-primary... 2. Primary...").
+     * The combination choices MUST be extracted directly into the "options" array:
+       [{"letter": "A", "text": "3.4"}, {"letter": "B", "text": "1.2.3.4"}, {"letter": "C", "text": "2.3"}, {"letter": "D", "text": "1.4"}].
+     * DO NOT leave "options" empty!
+     * Set "question_type": "combination".
+     * Also record choices in "printed_combinations".`
+    : `   - MODE 2 — CONVERT TO MULTIPLE ANSWERS:
+     * The numbered statements become the "options" (A: statement 1, B: statement 2...).
+     * Set "question_type": "multiple_answer".
+     * The original printed combination choices are preserved in "printed_combinations": [{"letter":"A","text":"3.4"}, {"letter":"B","text":"1.2.3.4"}].`
 }
 
-Rules:
+3. ORPHANED / TRUNCATED FRAGMENTS (CRITICAL GUARDRAIL):
+   - Look out for fragments cut off from the previous page or column! For example, text starting with "4. positive reaction to treatment" followed by choices a) 1.3.4, b) 2.3.4:
+   - Notice that "4." is NOT a question number! It is statement #4 of a multi-statement question whose stem and statements 1, 2, 3 were cut off or printed on the preceding page.
+   - In such cases:
+     * Extract what is visible so the instructor can review, edit, or delete it.
+     * Set "needs_review": true
+     * Set "review_reason": "Incomplete combination fragment: choices reference numbered statements (1, 2, 3...) that are missing from this page."
+     * Set "is_approved": false
+
+General Rules:
 1. Extract every question on this page in natural reading order.
 2. If choices are labeled "a)", "A.", "1-", normalize to standard letters A, B, C, D...
-3. If a question is missing some options (e.g. only 3 choices visible due to cropping or print defects), transcribe only the visible options. Do not make up options in this step.
-4. If an answer is visibly circled, highlighted, underlined, or explicitly printed (e.g. "Ans: C" or "miliary tb" handwritten), extract it in "detected_answer". If none, return null.
+3. If an ordinary question is missing some options (e.g. only 3 choices visible due to cropping), transcribe only the visible options. Do not invent options here.
+4. If an answer is visibly circled, highlighted, underlined, or explicitly printed (e.g. "Ans: C"), extract it in "detected_answer". If none, return null.
 5. If the page has no questions (cover, blank, or header only), return {"questions": []}.
 ${customInstructions ? `Special User Instructions:\n${customInstructions}\n` : ""}
 
@@ -205,19 +220,114 @@ Return STRICT JSON:
 {
   "questions": [
     {
-      "number": "19",
+      "number": "6",
       "question_type": "ordinary|combination|multiple_answer",
-      "stem": "question stem text verbatim",
+      "stem": "question prompt verbatim",
       "options": [
-        { "letter": "A", "text": "option text" }
+        { "letter": "A", "text": "option text" },
+        { "letter": "B", "text": "option text" },
+        { "letter": "C", "text": "option text" },
+        { "letter": "D", "text": "option text" }
       ],
       "printed_combinations": [
-        { "letter": "A", "text": "1,2" }
+        { "letter": "A", "text": "3.4" }
       ],
-      "detected_answer": "C or null"
+      "detected_answer": "C or null",
+      "needs_review": false,
+      "review_reason": null,
+      "is_approved": true
     }
   ]
 }`;
+}
+
+export function normalizeExtractedQuestion(q: any, pageNumber: number, idx: number): ExtractedQuestion {
+  const qNum = String(q.number || idx + 1).trim();
+  let stem = String(q.stem || "").trim();
+  let rawOptions = Array.isArray(q.options) ? q.options : [];
+
+  const printedCombos = Array.isArray(q.printed_combinations)
+    ? q.printed_combinations.map((c: any) => ({
+        letter: String(c.letter || "").toUpperCase(),
+        text: String(c.text || "").trim(),
+      }))
+    : [];
+
+  // If options array was left empty by the model but printed_combinations exists (e.g. combination question)
+  if (rawOptions.length === 0 && printedCombos.length > 0) {
+    rawOptions = printedCombos;
+  }
+
+  let options = rawOptions
+    .map((o: any, oIdx: number) => ({
+      letter: String(o.letter || String.fromCharCode(65 + oIdx)).toUpperCase(),
+      text: String(o.text || o.body || "").trim(),
+    }))
+    .filter((o: any) => o.text);
+
+  // Fallback: If options is still empty, check if stem accidentally absorbed options 1. ... 2. ... 3. ... 4.
+  // e.g. "All the following are interstitial lung diseases, except: 1. Exogenous... 2. Fibrosing..."
+  if (options.length === 0) {
+    const inlineMatch = stem.match(/^(.*?)[:\?]\s*(?:1\.\s*(.*?)\s*2\.\s*(.*?)\s*3\.\s*(.*?)\s*4\.\s*(.*?))$/s);
+    if (inlineMatch) {
+      const cleanPrompt = inlineMatch[1].trim() + (stem.includes("?") ? "?" : ":");
+      options = [
+        { letter: "A", text: inlineMatch[2].trim() },
+        { letter: "B", text: inlineMatch[3].trim() },
+        { letter: "C", text: inlineMatch[4].trim() },
+        { letter: "D", text: inlineMatch[5].trim() },
+      ];
+      stem = cleanPrompt;
+      q.question_type = "ordinary";
+    }
+  }
+
+  // If options are labeled 1. ... 2. ... 3. ... 4. ... without combination numbers, normalize to clean text
+  const isComboOptions = options.length > 0 && options.every((o: { letter: string; text: string }) => /^[\d\s.,;+]+$/.test(o.text.trim()));
+  if (!isComboOptions && options.length >= 2 && options.every((o: { letter: string; text: string }) => /^[1-4]\.\s*/.test(o.text))) {
+    options = options.map((o: { letter: string; text: string }, oIdx: number) => ({
+      letter: String.fromCharCode(65 + oIdx),
+      text: o.text.replace(/^[1-4]\.\s*/, "").trim(),
+    }));
+    q.question_type = "ordinary";
+  }
+
+  // Check for Orphaned / Incomplete Combination Fragment (User Issue 4)
+  // Options are combination numbers ("1.3.4", "2.3.4", etc.) but stem does NOT contain statements 1 and 2
+  const stemHasStatements = /1[\.\s].+2[\.\s]/s.test(stem);
+  let needsReview = Boolean(q.needs_review);
+  let reviewReason = q.review_reason ? String(q.review_reason) : null;
+  let isApproved = q.is_approved !== false && !needsReview;
+
+  if (isComboOptions && !stemHasStatements) {
+    needsReview = true;
+    isApproved = false;
+    reviewReason =
+      "Incomplete combination fragment: choices reference numbered statements (1, 2, 3...) that are missing from this page or question stem.";
+  }
+
+  const isTwoChoice = options.length === 2 && options.some((o: any) => /^(true|false|yes|no)$/i.test(o.text));
+  const hasMissingOptions = options.length < 4 && !isTwoChoice;
+  const missingOptionsCount = hasMissingOptions ? 4 - options.length : 0;
+
+  return {
+    id: `q-p${pageNumber}-${idx + 1}-${Date.now().toString(36)}`,
+    pageNumber,
+    number: qNum,
+    questionType:
+      (q.question_type as any) ||
+      (isComboOptions ? "combination" : printedCombos.length > 0 ? "combination" : "ordinary"),
+    stem,
+    options,
+    hasMissingOptions,
+    missingOptionsCount,
+    detectedAnswer: q.detected_answer ? String(q.detected_answer).trim() : null,
+    comboSets: printedCombos.map((c: any) => c.text.match(/\d+/g) || []),
+    originalCombinations: printedCombos,
+    needsReview,
+    reviewReason,
+    isApproved,
+  };
 }
 
 // ── 1. Page Vision Extraction (Standard Mode) ─────────────────────────────────
@@ -254,39 +364,9 @@ export const extractPageQuestions124 = createServerFn({ method: "POST" })
     const parsed = parseJsonObject(rawOutput);
     const rawQuestions = Array.isArray(parsed?.questions) ? parsed.questions : [];
 
-    const questions: ExtractedQuestion[] = rawQuestions.map((q: any, idx: number) => {
-      const qNum = String(q.number || idx + 1).trim();
-      const rawOptions = Array.isArray(q.options) ? q.options : [];
-      const options = rawOptions.map((o: any, oIdx: number) => ({
-        letter: String(o.letter || String.fromCharCode(65 + oIdx)).toUpperCase(),
-        text: String(o.text || o.body || "").trim(),
-      })).filter((o: any) => o.text);
-
-      const isTwoChoice = options.length === 2 && options.some((o: any) => /^(true|false|yes|no)$/i.test(o.text));
-      const hasMissingOptions = options.length < 4 && !isTwoChoice;
-      const missingOptionsCount = hasMissingOptions ? 4 - options.length : 0;
-
-      const printedCombos = Array.isArray(q.printed_combinations)
-        ? q.printed_combinations.map((c: any) => ({
-            letter: String(c.letter || "").toUpperCase(),
-            text: String(c.text || "").trim(),
-          }))
-        : [];
-
-      return {
-        id: `q-p${pageNumber}-${idx + 1}-${Date.now().toString(36)}`,
-        pageNumber,
-        number: qNum,
-        questionType: q.question_type || (printedCombos.length > 0 ? "combination" : "ordinary"),
-        stem: String(q.stem || "").trim(),
-        options,
-        hasMissingOptions,
-        missingOptionsCount,
-        detectedAnswer: q.detected_answer ? String(q.detected_answer).trim() : null,
-        comboSets: printedCombos.map((c: any) => (c.text.match(/\d+/g) || [])),
-        originalCombinations: printedCombos,
-      };
-    });
+    const questions: ExtractedQuestion[] = rawQuestions.map((q: any, idx: number) =>
+      normalizeExtractedQuestion(q, pageNumber, idx)
+    );
 
     return { pageNumber, questions };
   });
@@ -768,37 +848,7 @@ export const retrieveOpenAiBatchExtractionResults124 = createServerFn({ method: 
 
         for (let idx = 0; idx < rawQs.length; idx++) {
           const q = rawQs[idx];
-          const qNum = String(q.number || idx + 1).trim();
-          const rawOptions = Array.isArray(q.options) ? q.options : [];
-          const options = rawOptions.map((o: any, oIdx: number) => ({
-            letter: String(o.letter || String.fromCharCode(65 + oIdx)).toUpperCase(),
-            text: String(o.text || o.body || "").trim(),
-          })).filter((o: any) => o.text);
-
-          const isTwoChoice = options.length === 2 && options.some((o: any) => /^(true|false|yes|no)$/i.test(o.text));
-          const hasMissingOptions = options.length < 4 && !isTwoChoice;
-          const missingOptionsCount = hasMissingOptions ? 4 - options.length : 0;
-
-          const printedCombos = Array.isArray(q.printed_combinations)
-            ? q.printed_combinations.map((c: any) => ({
-                letter: String(c.letter || "").toUpperCase(),
-                text: String(c.text || "").trim(),
-              }))
-            : [];
-
-          allQuestions.push({
-            id: `q-p${pageNumber}-${idx + 1}-${Date.now().toString(36)}`,
-            pageNumber,
-            number: qNum,
-            questionType: q.question_type || (printedCombos.length > 0 ? "combination" : "ordinary"),
-            stem: String(q.stem || "").trim(),
-            options,
-            hasMissingOptions,
-            missingOptionsCount,
-            detectedAnswer: q.detected_answer ? String(q.detected_answer).trim() : null,
-            comboSets: printedCombos.map((c: any) => (c.text.match(/\d+/g) || [])),
-            originalCombinations: printedCombos,
-          });
+          allQuestions.push(normalizeExtractedQuestion(q, pageNumber, idx));
         }
       } catch {}
     }

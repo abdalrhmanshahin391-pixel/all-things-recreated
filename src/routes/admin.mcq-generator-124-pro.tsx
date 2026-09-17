@@ -7,7 +7,7 @@ import {
   AlertTriangle, ArrowRight, RefreshCw, Upload, Eye, Trash2, Check, X, Layers,
   BookOpen, ListFilter, Copy, HelpCircle, Terminal, Flame, Database, ChevronRight,
   ExternalLink, ChevronDown, ChevronUp, Search, PlusCircle, Wrench, Square,
-  Clock, Bookmark, Download, FolderArchive, Play, Radio
+  Clock, Bookmark, Download, FolderArchive, Play, Radio, Edit3
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
@@ -539,11 +539,97 @@ export function McqGenerator124ProPage() {
     }
   }
 
+  // ── Question Editing, Deletion & Approval in Extraction Phase ──────────────
+  const [editingQuestion, setEditingQuestion] = useState<SolvedQuestionState | null>(null);
+  const [editNumber, setEditNumber] = useState<string>("");
+  const [editType, setEditType] = useState<"ordinary" | "combination" | "multiple_answer">("ordinary");
+  const [editStem, setEditStem] = useState<string>("");
+  const [editOptions, setEditOptions] = useState<Array<{ letter: string; text: string }>>([]);
+
+  function openEditQuestion(q: SolvedQuestionState) {
+    setEditingQuestion(q);
+    setEditNumber(q.number || "");
+    setEditType((q.questionType as any) || "ordinary");
+    setEditStem(q.stem || "");
+    setEditOptions(q.options.map((o) => ({ letter: o.letter, text: o.text })));
+  }
+
+  function handleSaveEditedQuestion() {
+    if (!editingQuestion) return;
+    if (!editStem.trim()) {
+      toast.error("Question stem cannot be empty.");
+      return;
+    }
+
+    const cleanOptions = editOptions
+      .map((o, idx) => ({
+        letter: o.letter.trim() || String.fromCharCode(65 + idx),
+        text: o.text.trim(),
+      }))
+      .filter((o) => o.text);
+
+    const isTwoChoice = cleanOptions.length === 2 && cleanOptions.some((o) => /^(true|false|yes|no)$/i.test(o.text));
+    const hasMissing = cleanOptions.length < 4 && !isTwoChoice;
+
+    setExtractedQuestions((prev) =>
+      prev.map((item) => {
+        if (item.id === editingQuestion.id) {
+          return {
+            ...item,
+            number: editNumber.trim() || item.number,
+            questionType: editType,
+            stem: editStem.trim(),
+            options: cleanOptions,
+            hasMissingOptions: hasMissing,
+            missingOptionsCount: hasMissing ? 4 - cleanOptions.length : 0,
+            needsReview: false,
+            reviewReason: null,
+            isApproved: true,
+          };
+        }
+        return item;
+      })
+    );
+
+    toast.success(`Question #${editNumber || editingQuestion.number} updated & approved!`);
+    setEditingQuestion(null);
+  }
+
+  function handleDeleteQuestion(id: string) {
+    setExtractedQuestions((prev) => prev.filter((item) => item.id !== id));
+    if (editingQuestion?.id === id) setEditingQuestion(null);
+    if (resolvingMissingQ?.id === id) setResolvingMissingQ(null);
+    if (inspectingQuestion?.id === id) setInspectingQuestion(null);
+    toast.success("Question deleted from workspace");
+  }
+
+  function handleApproveQuestion(id: string) {
+    setExtractedQuestions((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          return {
+            ...item,
+            needsReview: false,
+            reviewReason: null,
+            isApproved: true,
+          };
+        }
+        return item;
+      })
+    );
+    toast.success("Question approved!");
+  }
+
   // ── Start Stage 2 Solving & Explaining ────────────────────────────────────
   async function startSolving() {
-    const active = extractedQuestions.filter((q) => !q.isIgnored && !q.isDuplicate);
+    const unapproved = extractedQuestions.filter((q) => q.isApproved === false && !q.isIgnored && !q.isDuplicate);
+    if (unapproved.length > 0) {
+      toast.info(`Skipping ${unapproved.length} unapproved/fragmented question(s). You can review/approve them in Phase 1.`);
+    }
+
+    const active = extractedQuestions.filter((q) => !q.isIgnored && !q.isDuplicate && q.isApproved !== false);
     if (active.length === 0) {
-      toast.error("No active questions to solve.");
+      toast.error("No approved active questions to solve. Please approve or complete any pending questions.");
       return;
     }
 
@@ -558,7 +644,7 @@ export function McqGenerator124ProPage() {
 
     for (let i = 0; i < updated.length; i++) {
       const q = updated[i];
-      if (q.isIgnored || q.isDuplicate) continue;
+      if (q.isIgnored || q.isDuplicate || q.isApproved === false) continue;
 
       if (stopRequestedRef.current) {
         toast.info(`Solving stopped on question #${q.number}. Retained all solved questions.`);
@@ -1197,6 +1283,13 @@ export function McqGenerator124ProPage() {
                       </button>
                     )}
 
+                    {extractedQuestions.some((q) => q.needsReview && !q.isApproved) && (
+                      <span className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-xs font-bold text-amber-300 flex items-center gap-1.5 shadow-sm">
+                        <AlertTriangle size={13} className="text-amber-400" />
+                        {extractedQuestions.filter((q) => q.needsReview && !q.isApproved).length} Incomplete Fragment(s) Awaiting Review
+                      </span>
+                    )}
+
                     {stage1Done && (
                       <button
                         onClick={() => setCurrentStage("solve")}
@@ -1216,11 +1309,49 @@ export function McqGenerator124ProPage() {
                       className={`p-4 rounded-xl border transition-all ${
                         q.isDuplicate
                           ? "bg-red-950/20 border-red-800/40 opacity-50"
+                          : q.needsReview && !q.isApproved
+                          ? "bg-amber-950/30 border-amber-600/60"
                           : q.hasMissingOptions
                           ? "bg-amber-950/20 border-amber-700/50"
                           : "bg-slate-950 border-slate-800 hover:border-slate-700"
                       }`}
                     >
+                      {/* Warning for unapproved incomplete fragments */}
+                      {q.needsReview && !q.isApproved && (
+                        <div className="bg-amber-500/15 border border-amber-500/40 rounded-xl p-3 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex items-start gap-2.5">
+                            <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
+                            <div>
+                              <div className="text-xs font-bold text-amber-300">Requires Educator Review / Approval</div>
+                              <div className="text-[11px] text-amber-200/80 mt-0.5">
+                                {q.reviewReason || "Incomplete combination fragment missing statements or stem."}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={() => handleApproveQuestion(q.id)}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1 shadow-sm transition-all"
+                            >
+                              <Check size={12} /> Approve
+                            </button>
+                            <button
+                              onClick={() => openEditQuestion(q)}
+                              className="px-2.5 py-1 rounded-lg bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs flex items-center gap-1 shadow-sm transition-all"
+                            >
+                              <Edit3 size={12} /> Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteQuestion(q.id)}
+                              className="px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold text-xs flex items-center gap-1 transition-all"
+                              title="Delete fragment"
+                            >
+                              <Trash2 size={12} /> Delete
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex items-start justify-between gap-4 mb-2">
                         <div className="flex items-center gap-2">
                           <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-slate-300 font-bold">
@@ -1242,9 +1373,14 @@ export function McqGenerator124ProPage() {
                               Missing Options ({q.options.length}/4)
                             </span>
                           )}
+                          {q.needsReview && !q.isApproved && (
+                            <span className="px-2 py-0.5 rounded bg-amber-500/30 text-[10px] font-bold text-amber-300 border border-amber-500/50">
+                              Needs Approval
+                            </span>
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           {q.hasMissingOptions && (
                             <button
                               onClick={() => setResolvingMissingQ(q)}
@@ -1254,8 +1390,22 @@ export function McqGenerator124ProPage() {
                             </button>
                           )}
                           <button
+                            onClick={() => openEditQuestion(q)}
+                            className="p-1.5 rounded hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors"
+                            title="Edit Question"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteQuestion(q.id)}
+                            className="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
+                            title="Delete Question"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                          <button
                             onClick={() => setInspectingQuestion(q)}
-                            className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
+                            className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
                             title="Inspect page image"
                           >
                             <Eye size={14} />
@@ -1833,6 +1983,145 @@ export function McqGenerator124ProPage() {
                 className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all"
               >
                 <Sparkles size={14} /> Let AI Auto-Generate Plausible Medical Distractor(s)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Question Modal (Phase 1) ────────────────────────────────── */}
+      {editingQuestion && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Edit3 size={16} className="text-blue-400" /> Edit Question #{editNumber} · Page {editingQuestion.pageNumber}
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Update stem, choices, or question type. Saving will mark this question as reviewed and approved.
+                </p>
+              </div>
+              <button onClick={() => setEditingQuestion(null)} className="text-slate-400 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              {editingQuestion.needsReview && (
+                <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-xs text-amber-300 flex items-start gap-2">
+                  <AlertTriangle size={15} className="shrink-0 mt-0.5 text-amber-400" />
+                  <div>
+                    <span className="font-bold">Original Notice:</span> {editingQuestion.reviewReason || "Incomplete combination fragment missing statements or stem."}
+                    <div className="text-[11px] text-amber-200/80 mt-0.5">
+                      You can complete the missing question stem or numbered statements below, or delete this question from the workspace.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Question Number</label>
+                  <input
+                    type="text"
+                    value={editNumber}
+                    onChange={(e) => setEditNumber(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white font-mono"
+                    placeholder="e.g. 6 or 4"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">Question Type</label>
+                  <select
+                    value={editType}
+                    onChange={(e) => setEditType(e.target.value as any)}
+                    className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white font-mono"
+                  >
+                    <option value="ordinary">ordinary (Standard Single Choice)</option>
+                    <option value="combination">combination (Numbered Statements)</option>
+                    <option value="multiple_answer">multiple_answer (Multi-Select)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">Question Stem / Premise</label>
+                <textarea
+                  value={editStem}
+                  onChange={(e) => setEditStem(e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white leading-relaxed resize-y font-mono"
+                  placeholder="Enter or paste the complete question stem..."
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-slate-300">Answer Options ({editOptions.length})</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const letters = ["A", "B", "C", "D", "E", "F"];
+                      const nextLetter = letters[editOptions.length] || String.fromCharCode(65 + editOptions.length);
+                      setEditOptions([...editOptions, { letter: nextLetter, text: "" }]);
+                    }}
+                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-amber-300 flex items-center gap-1"
+                  >
+                    <PlusCircle size={12} /> Add Option
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {editOptions.map((opt, optIdx) => (
+                    <div key={optIdx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={opt.letter}
+                        onChange={(e) => {
+                          const val = e.target.value.toUpperCase();
+                          setEditOptions(editOptions.map((o, i) => (i === optIdx ? { ...o, letter: val } : o)));
+                        }}
+                        className="w-12 px-2 py-1.5 text-center text-xs font-mono font-bold bg-slate-950 border border-slate-700 rounded-lg text-amber-400"
+                      />
+                      <input
+                        type="text"
+                        value={opt.text}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditOptions(editOptions.map((o, i) => (i === optIdx ? { ...o, text: val } : o)));
+                        }}
+                        className="flex-1 px-3 py-1.5 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white"
+                        placeholder={`Option ${opt.letter} text...`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setEditOptions(editOptions.filter((_, i) => i !== optIdx))}
+                        className="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400"
+                        title="Remove Option"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => setEditingQuestion(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEditedQuestion}
+                className="px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-400 text-white text-xs font-black flex items-center gap-1.5 shadow-lg shadow-blue-500/20"
+              >
+                <Check size={14} /> Save Question
               </button>
             </div>
           </div>
