@@ -60,6 +60,7 @@ import { Route as AdminLectureCentreRouteImport } from './routes/admin.lecture-c
 import { Route as AdminLecturesRouteImport } from './routes/admin.lectures'
 import { Route as AdminLegalRouteImport } from './routes/admin.legal'
 import { Route as AdminMarketingRouteImport } from './routes/admin.marketing'
+import { Route as AdminMcqGeneratorProRouteImport } from './routes/admin.mcq-generator-pro'
 import { Route as AdminNavigationRouteImport } from './routes/admin.navigation'
 import { Route as AdminNotificationsRouteImport } from './routes/admin.notifications'
 import { Route as AdminPackagesRouteImport } from './routes/admin.packages'
@@ -399,6 +400,11 @@ const AdminLegalRoute = AdminLegalRouteImport.update({
 const AdminMarketingRoute = AdminMarketingRouteImport.update({
   id: '/admin/marketing',
   path: '/admin/marketing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminMcqGeneratorProRoute = AdminMcqGeneratorProRouteImport.update({
+  id: '/admin/mcq-generator-pro',
+  path: '/admin/mcq-generator-pro',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminNavigationRoute = AdminNavigationRouteImport.update({
@@ -869,6 +875,7 @@ export interface FileRoutesByFullPath {
   '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
+  '/admin/mcq-generator-pro': typeof AdminMcqGeneratorProRoute
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/packages': typeof AdminPackagesRoute
@@ -999,6 +1006,7 @@ export interface FileRoutesByTo {
   '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
+  '/admin/mcq-generator-pro': typeof AdminMcqGeneratorProRoute
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/packages': typeof AdminPackagesRoute
@@ -1131,6 +1139,7 @@ export interface FileRoutesById {
   '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
+  '/admin/mcq-generator-pro': typeof AdminMcqGeneratorProRoute
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/packages': typeof AdminPackagesRoute
@@ -1268,6 +1277,7 @@ export interface FileRouteTypes {
     | '/admin/lectures'
     | '/admin/legal'
     | '/admin/marketing'
+    | '/admin/mcq-generator-pro'
     | '/admin/navigation'
     | '/admin/notifications'
     | '/admin/packages'
@@ -1398,6 +1408,7 @@ export interface FileRouteTypes {
     | '/admin/lectures'
     | '/admin/legal'
     | '/admin/marketing'
+    | '/admin/mcq-generator-pro'
     | '/admin/navigation'
     | '/admin/notifications'
     | '/admin/packages'
@@ -1529,6 +1540,7 @@ export interface FileRouteTypes {
     | '/admin/lectures'
     | '/admin/legal'
     | '/admin/marketing'
+    | '/admin/mcq-generator-pro'
     | '/admin/navigation'
     | '/admin/notifications'
     | '/admin/packages'
@@ -1665,6 +1677,7 @@ export interface RootRouteChildren {
   AdminLecturesRoute: typeof AdminLecturesRoute
   AdminLegalRoute: typeof AdminLegalRoute
   AdminMarketingRoute: typeof AdminMarketingRoute
+  AdminMcqGeneratorProRoute: typeof AdminMcqGeneratorProRoute
   AdminNavigationRoute: typeof AdminNavigationRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminPackagesRoute: typeof AdminPackagesRoute
@@ -2082,6 +2095,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/marketing'
       fullPath: '/admin/marketing'
       preLoaderRoute: typeof AdminMarketingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/mcq-generator-pro': {
+      id: '/admin/mcq-generator-pro'
+      path: '/admin/mcq-generator-pro'
+      fullPath: '/admin/mcq-generator-pro'
+      preLoaderRoute: typeof AdminMcqGeneratorProRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/navigation': {
@@ -2859,6 +2879,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminLecturesRoute: AdminLecturesRoute,
   AdminLegalRoute: AdminLegalRoute,
   AdminMarketingRoute: AdminMarketingRoute,
+  AdminMcqGeneratorProRoute: AdminMcqGeneratorProRoute,
   AdminNavigationRoute: AdminNavigationRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
   AdminPackagesRoute: AdminPackagesRoute,
