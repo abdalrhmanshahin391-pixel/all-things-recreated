@@ -8,6 +8,7 @@ import {
   FileText, Layers, MoreHorizontal, RotateCcw, Save, X,
   ChevronsUpDown, AlertCircle, Star, Sparkles, Check, HelpCircle,
   Play, Pause, ArrowRight, BookMarked, KeyRound, ListOrdered,
+  ShieldCheck, ShieldX, FileWarning, Search, ExternalLink,
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { FloatingMedicalBackdrop } from "@/components/home/FloatingMedicalBackdrop";
@@ -40,6 +41,14 @@ import {
   updateQuestionAnswerManual,
   clearSessionAnswers,
   completeAnsweringSession,
+  // Phase 3 & 4
+  initiateExplanationSession,
+  generateSingleExplanation,
+  completeExplanationSession,
+  initiateVerificationSession,
+  verifySingleQuestion,
+  completeVerificationSession,
+  type VerificationIssue,
 } from "@/lib/mcq-generator-pro.functions";
 
 // ─── Route ────────────────────────────────────────────────────────────────────
@@ -48,7 +57,7 @@ export const Route = createFileRoute("/admin/mcq-generator-pro")({
   head: () => ({
     meta: [
       { title: "MCQ Generator Pro — AquaQBank Admin" },
-      { name: "description", content: "Restricted admin tool to extract and solve MCQ questions from scanned PDF exams." },
+      { name: "description", content: "Admin tool to extract, solve, explain, and verify medical MCQs." },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -78,6 +87,19 @@ type Session = {
   answering_status?: "idle" | "running" | "completed" | "failed" | "cancelled";
   total_answered?: number;
   total_needs_review?: number;
+  // Phase 3 & 4
+  phase3_model?: string | null;
+  phase3_provider?: string | null;
+  phase3_instructions?: string | null;
+  phase3_show_book_answer?: boolean;
+  phase3_status?: "idle" | "running" | "completed" | "failed" | "cancelled";
+  total_explanations?: number;
+  total_conflicts?: number;
+  phase4_model?: string | null;
+  phase4_provider?: string | null;
+  phase4_status?: "idle" | "running" | "completed" | "failed" | "cancelled";
+  phase4_total_checked?: number;
+  phase4_issues_count?: number;
 };
 
 type McqOption = { letter: string; body: string };
@@ -97,7 +119,7 @@ type McqQuestion = {
   sort_order: number;
   // Phase 2
   answer_source?: "ai" | "study_material" | "user_answer_key" | null;
-  selected_answer?: any; // string or string[]
+  selected_answer?: any;
   answer_text?: any;
   confidence?: "high" | "medium" | "low" | null;
   needs_review?: boolean;
@@ -109,10 +131,28 @@ type McqQuestion = {
   answering_status?: "unanswered" | "answered" | "failed" | "needs_review";
   internal_reasoning?: string | null;
   answered_at?: string | null;
+  // Phase 3 & 4
+  concept?: string | null;
+  explanation?: string | null;
+  explanation_summary_table?: string | null;
+  book_answer?: string | null;
+  book_answer_found?: boolean;
+  possible_answer_conflict?: boolean;
+  answer_conflict_note?: string | null;
+  explanation_model?: string | null;
+  explanation_status?: "unexplained" | "explained" | "failed";
+  explained_at?: string | null;
+  verification_status?: "unverified" | "passed" | "flagged" | "error";
+  verification_report?: VerificationIssue[];
+  verified_at?: string | null;
 };
 
 type FilterTab =
   | "all"
+  | "conflicts"
+  | "flagged"
+  | "explained"
+  | "unexplained"
   | "needs_review"
   | "answered"
   | "unanswered"
@@ -133,6 +173,12 @@ type Step =
   | "solve_setup"
   | "solve_progress"
   | "solve_complete"
+  | "explanation_setup"
+  | "explanation_progress"
+  | "explanation_complete"
+  | "verification_setup"
+  | "verification_progress"
+  | "verification_report"
   | "import";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -183,6 +229,53 @@ function blobToBase64(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function SummaryTableRenderer({ markdown }: { markdown: string }) {
+  if (!markdown?.trim()) return null;
+  const lines = markdown.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("|") && l.endsWith("|"));
+  if (lines.length < 3) return <pre className="text-xs font-mono p-2 bg-muted rounded">{markdown}</pre>;
+
+  const header = lines[0].slice(1, -1).split("|").map((c) => c.trim());
+  const rows = lines.slice(2).map((l) => l.slice(1, -1).split("|").map((c) => c.trim()));
+
+  return (
+    <div className="overflow-x-auto my-2 rounded-xl border border-border">
+      <table className="w-full text-xs text-left">
+        <thead className="bg-muted/60 font-bold border-b border-border">
+          <tr>
+            {header.map((h, i) => (
+              <th key={i} className="px-3 py-2">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.map((r, ri) => {
+            const isCorrect = r.some((c) => c.includes("✓") || c.toLowerCase().includes("correct"));
+            return (
+              <tr key={ri} className={isCorrect ? "bg-emerald-50/40 font-medium" : "hover:bg-muted/20"}>
+                {r.map((c, ci) => (
+                  <td key={ci} className="px-3 py-2">
+                    {c.includes("✓") ? (
+                      <span className="text-emerald-700 font-bold inline-flex items-center gap-1">
+                        <Check size={12} /> {c}
+                      </span>
+                    ) : c.includes("✗") ? (
+                      <span className="text-red-600 font-bold inline-flex items-center gap-1">
+                        <X size={12} /> {c}
+                      </span>
+                    ) : (
+                      c
+                    )}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -239,6 +332,32 @@ function McqGeneratorPro() {
   const [solveTotalToRun, setSolveTotalToRun] = useState(0);
   const [solveLog, setSolveLog]         = useState<string[]>([]);
   const [solveErrorCount, setSolveErrorCount] = useState(0);
+
+  // ── Phase 3 Explanation State ──
+  const [phase3Model, setPhase3Model]   = useState("gemini-2.5-flash");
+  const [showBookAnswer, setShowBookAnswer] = useState(true);
+  const [phase3Instructions, setPhase3Instructions] = useState("");
+  const [phase3Active, setPhase3Active] = useState(false);
+  const [phase3Paused, setPhase3Paused] = useState(false);
+  const phase3PausedRef                 = useRef(false);
+  const phase3CancelledRef              = useRef(false);
+  const [phase3Index, setPhase3Index]   = useState(0);
+  const [phase3Total, setPhase3Total]   = useState(0);
+  const [phase3Log, setPhase3Log]       = useState<string[]>([]);
+  const [phase3Errors, setPhase3Errors] = useState(0);
+
+  // ── Phase 4 Verification State ──
+  const [phase4Model, setPhase4Model]   = useState("gemini-2.5-pro");
+  const [phase4Scope, setPhase4Scope]   = useState<"all" | "answered_only">("answered_only");
+  const [phase4Active, setPhase4Active] = useState(false);
+  const [phase4Paused, setPhase4Paused] = useState(false);
+  const phase4PausedRef                 = useRef(false);
+  const phase4CancelledRef              = useRef(false);
+  const [phase4Index, setPhase4Index]   = useState(0);
+  const [phase4Total, setPhase4Total]   = useState(0);
+  const [phase4Log, setPhase4Log]       = useState<string[]>([]);
+  const [phase4Errors, setPhase4Errors] = useState(0);
+  const [verificationFilter, setVerificationFilter] = useState<string>("all");
 
   // ── Review & Overrides ──
   const [filterTab, setFilterTab]       = useState<FilterTab>("all");
@@ -557,7 +676,6 @@ function McqGeneratorPro() {
       return;
     }
 
-    // Method A or B
     const questionsToSolve = activeQuestions.filter((q) => q.review_status !== "rejected");
     if (questionsToSolve.length === 0) {
       toast.error("No questions available to solve.");
@@ -616,7 +734,6 @@ function McqGeneratorPro() {
             },
           });
 
-          // Update question in local state
           setActiveQuestions((prev) =>
             prev.map((item) =>
               item.id === q.id
@@ -671,6 +788,202 @@ function McqGeneratorPro() {
       toast.success("Answers cleared.");
     } catch (e: any) {
       toast.error("Failed to clear answers: " + (e?.message || String(e)));
+    }
+  }
+
+  // ─── Phase 3: Explanations Execution ──────────────────────────────────────
+
+  async function handleStartExplanations() {
+    if (!activeSession) return;
+    const questionsToExplain = activeQuestions.filter((q) => q.review_status !== "rejected" && q.selected_answer != null);
+    if (questionsToExplain.length === 0) {
+      toast.error("No answered questions available to explain. Complete Phase 2 first.");
+      return;
+    }
+
+    setPhase3Active(true);
+    setPhase3Paused(false);
+    phase3PausedRef.current = false;
+    phase3CancelledRef.current = false;
+    setPhase3Log([]);
+    setPhase3Errors(0);
+    setPhase3Total(questionsToExplain.length);
+    setPhase3Index(0);
+    setStep("explanation_progress");
+
+    const log = (msg: string) => setPhase3Log((prev) => [...prev, msg]);
+
+    try {
+      await initiateExplanationSession({
+        data: {
+          sessionId: activeSession.id,
+          model: phase3Model as any,
+          instructions: phase3Instructions || undefined,
+          showBookAnswer,
+        },
+      });
+
+      log(`💡 Generating explanations with model: ${MODEL_OPTIONS.find((m) => m.id === phase3Model)?.label || phase3Model}`);
+      if (activeSession.study_material_text) {
+        log(`📖 Study source active: ${activeSession.study_material_name || "Provided Source"}`);
+      }
+
+      for (let i = 0; i < questionsToExplain.length; i++) {
+        if (phase3CancelledRef.current) {
+          log("⛔ Explanation generation cancelled by user.");
+          break;
+        }
+
+        while (phase3PausedRef.current) {
+          await new Promise((r) => setTimeout(r, 500));
+        }
+
+        const q = questionsToExplain[i];
+        setPhase3Index(i + 1);
+
+        try {
+          const res = await generateSingleExplanation({
+            data: {
+              sessionId: activeSession.id,
+              questionId: q.id,
+              model: phase3Model as any,
+              instructions: phase3Instructions || undefined,
+              showBookAnswer,
+            },
+          });
+
+          setActiveQuestions((prev) =>
+            prev.map((item) =>
+              item.id === q.id
+                ? {
+                    ...item,
+                    explanation_status: "explained",
+                    possible_answer_conflict: res.hasConflict,
+                    answer_conflict_note: res.conflictNote,
+                  }
+                : item
+            )
+          );
+
+          if (res.hasConflict) {
+            log(`  ⚠️ Q${q.question_number || i + 1}: Generated explanation (Potential answer conflict noted)`);
+          } else {
+            log(`  ✔ Q${q.question_number || i + 1}: Generated medical explanation`);
+          }
+        } catch (itemErr: any) {
+          setPhase3Errors((prev) => prev + 1);
+          log(`  ❌ Q${q.question_number || i + 1} Error: ${itemErr?.message || String(itemErr)}`);
+        }
+      }
+
+      if (!phase3CancelledRef.current) {
+        await completeExplanationSession({ data: { sessionId: activeSession.id } });
+        const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
+        setActiveSession(updated.session as Session);
+        setActiveQuestions(updated.questions as McqQuestion[]);
+        setStep("explanation_complete");
+        toast.success("All explanations generated successfully!");
+      }
+    } catch (e: any) {
+      toast.error("Explanation generation failed: " + (e?.message || String(e)));
+    } finally {
+      setPhase3Active(false);
+    }
+  }
+
+  // ─── Phase 4: Verification Execution ──────────────────────────────────────
+
+  async function handleStartVerification() {
+    if (!activeSession) return;
+    const questionsToVerify =
+      phase4Scope === "answered_only"
+        ? activeQuestions.filter((q) => q.review_status !== "rejected" && q.selected_answer != null)
+        : activeQuestions.filter((q) => q.review_status !== "rejected");
+
+    if (questionsToVerify.length === 0) {
+      toast.error("No questions available in selected scope.");
+      return;
+    }
+
+    setPhase4Active(true);
+    setPhase4Paused(false);
+    phase4PausedRef.current = false;
+    phase4CancelledRef.current = false;
+    setPhase4Log([]);
+    setPhase4Errors(0);
+    setPhase4Total(questionsToVerify.length);
+    setPhase4Index(0);
+    setStep("verification_progress");
+
+    const log = (msg: string) => setPhase4Log((prev) => [...prev, msg]);
+
+    try {
+      await initiateVerificationSession({
+        data: {
+          sessionId: activeSession.id,
+          model: phase4Model as any,
+        },
+      });
+
+      log(`🛡️ Quality verification running with model: ${MODEL_OPTIONS.find((m) => m.id === phase4Model)?.label || phase4Model}`);
+
+      for (let i = 0; i < questionsToVerify.length; i++) {
+        if (phase4CancelledRef.current) {
+          log("⛔ Verification cancelled by user.");
+          break;
+        }
+
+        while (phase4PausedRef.current) {
+          await new Promise((r) => setTimeout(r, 500));
+        }
+
+        const q = questionsToVerify[i];
+        setPhase4Index(i + 1);
+
+        try {
+          const res = await verifySingleQuestion({
+            data: {
+              sessionId: activeSession.id,
+              questionId: q.id,
+              model: phase4Model as any,
+            },
+          });
+
+          setActiveQuestions((prev) =>
+            prev.map((item) =>
+              item.id === q.id
+                ? {
+                    ...item,
+                    verification_status: res.status,
+                    verification_report: res.issues,
+                  }
+                : item
+            )
+          );
+
+          if (res.status === "passed") {
+            log(`  ✔ Q${q.question_number || i + 1} (PDF Page ${q.page_number}): Passed clean — 0 defects`);
+          } else {
+            log(`  ⚠️ Q${q.question_number || i + 1} (PDF Page ${q.page_number}): ${res.issuesCount} issue(s) detected`);
+          }
+        } catch (itemErr: any) {
+          setPhase4Errors((prev) => prev + 1);
+          log(`  ❌ Q${q.question_number || i + 1} Error: ${itemErr?.message || String(itemErr)}`);
+        }
+      }
+
+      if (!phase4CancelledRef.current) {
+        await completeVerificationSession({ data: { sessionId: activeSession.id } });
+        const updated = await getMcqSession({ data: { sessionId: activeSession.id } });
+        setActiveSession(updated.session as Session);
+        setActiveQuestions(updated.questions as McqQuestion[]);
+        setStep("verification_report");
+        toast.success("Independent verification audit complete!");
+      }
+    } catch (e: any) {
+      toast.error("Verification failed: " + (e?.message || String(e)));
+    } finally {
+      setPhase4Active(false);
     }
   }
 
@@ -729,15 +1042,19 @@ function McqGeneratorPro() {
 
   function filteredQuestions(): McqQuestion[] {
     switch (filterTab) {
-      case "needs_review": return activeQuestions.filter((q) => q.needs_review);
-      case "answered":     return activeQuestions.filter((q) => q.answering_status === "answered");
-      case "unanswered":   return activeQuestions.filter((q) => !q.answering_status || q.answering_status === "unanswered");
-      case "duplicates":   return activeQuestions.filter((q) => q.is_duplicate);
+      case "conflicts":   return activeQuestions.filter((q) => q.possible_answer_conflict);
+      case "flagged":     return activeQuestions.filter((q) => q.verification_status === "flagged" || q.verification_status === "error");
+      case "explained":   return activeQuestions.filter((q) => q.explanation_status === "explained");
+      case "unexplained": return activeQuestions.filter((q) => !q.explanation_status || q.explanation_status === "unexplained");
+      case "needs_review":return activeQuestions.filter((q) => q.needs_review);
+      case "answered":    return activeQuestions.filter((q) => q.answering_status === "answered");
+      case "unanswered":  return activeQuestions.filter((q) => !q.answering_status || q.answering_status === "unanswered");
+      case "duplicates":  return activeQuestions.filter((q) => q.is_duplicate);
       case "needs_options":return activeQuestions.filter((q) => q.needs_manual_options);
-      case "accepted":     return activeQuestions.filter((q) => q.review_status === "accepted");
-      case "rejected":     return activeQuestions.filter((q) => q.review_status === "rejected");
-      case "pending":      return activeQuestions.filter((q) => q.review_status === "pending");
-      default:             return activeQuestions;
+      case "accepted":    return activeQuestions.filter((q) => q.review_status === "accepted");
+      case "rejected":    return activeQuestions.filter((q) => q.review_status === "rejected");
+      case "pending":     return activeQuestions.filter((q) => q.review_status === "pending");
+      default:            return activeQuestions;
     }
   }
 
@@ -831,7 +1148,7 @@ function McqGeneratorPro() {
       toast.error("No accepted questions to import. Accept some questions first.");
       return;
     }
-    if (!confirm(`Import ${acceptedCount} accepted question${acceptedCount === 1 ? "" : "s"} to the selected subject?`)) return;
+    if (!confirm(`Import ${acceptedCount} accepted question${acceptedCount === 1 ? "" : "s"} (with answers and explanations) to the selected subject?`)) return;
 
     setImporting(true);
     setImportResult(null);
@@ -855,16 +1172,24 @@ function McqGeneratorPro() {
   // ─── Stats derived from active questions ─────────────────────────────────
 
   const stats = {
-    total:       activeQuestions.length,
-    accepted:    activeQuestions.filter((q) => q.review_status === "accepted").length,
-    rejected:    activeQuestions.filter((q) => q.review_status === "rejected").length,
-    pending:     activeQuestions.filter((q) => q.review_status === "pending").length,
-    duplicates:  activeQuestions.filter((q) => q.is_duplicate).length,
-    needsOpts:   activeQuestions.filter((q) => q.needs_manual_options).length,
-    // Phase 2 stats
-    answered:    activeQuestions.filter((q) => q.answering_status === "answered").length,
-    needsReview: activeQuestions.filter((q) => q.needs_review).length,
-    unanswered:  activeQuestions.filter((q) => !q.answering_status || q.answering_status === "unanswered").length,
+    total:           activeQuestions.length,
+    accepted:        activeQuestions.filter((q) => q.review_status === "accepted").length,
+    rejected:        activeQuestions.filter((q) => q.review_status === "rejected").length,
+    pending:         activeQuestions.filter((q) => q.review_status === "pending").length,
+    duplicates:      activeQuestions.filter((q) => q.is_duplicate).length,
+    needsOpts:       activeQuestions.filter((q) => q.needs_manual_options).length,
+    // Phase 2
+    answered:        activeQuestions.filter((q) => q.answering_status === "answered").length,
+    needsReview:     activeQuestions.filter((q) => q.needs_review).length,
+    unanswered:      activeQuestions.filter((q) => !q.answering_status || q.answering_status === "unanswered").length,
+    // Phase 3
+    explained:       activeQuestions.filter((q) => q.explanation_status === "explained").length,
+    unexplained:     activeQuestions.filter((q) => !q.explanation_status || q.explanation_status === "unexplained").length,
+    conflicts:       activeQuestions.filter((q) => q.possible_answer_conflict).length,
+    // Phase 4
+    verifiedTotal:   activeQuestions.filter((q) => q.verification_status && q.verification_status !== "unverified").length,
+    verifiedClean:   activeQuestions.filter((q) => q.verification_status === "passed").length,
+    verifiedFlagged: activeQuestions.filter((q) => q.verification_status === "flagged" || q.verification_status === "error").length,
   };
 
   // ─── Guard ───────────────────────────────────────────────────────────────
@@ -893,7 +1218,7 @@ function McqGeneratorPro() {
           <div>
             <p className="text-xs font-black uppercase tracking-widest text-red-500">Restricted Area</p>
             <h1 className="text-2xl font-black text-red-800 tracking-tight">MCQ Generator Pro</h1>
-            <p className="text-sm text-red-600 mt-0.5">Admin Engine — Phase 1: Extraction & Phase 2: Answering / Solving</p>
+            <p className="text-sm text-red-600 mt-0.5">Admin Pipeline — Phase 1 (Extract) · Phase 2 (Solve) · Phase 3 (Explain) · Phase 4 (Verify)</p>
           </div>
         </div>
 
@@ -941,16 +1266,26 @@ function McqGeneratorPro() {
                 >
                   <FileText size={20} className="text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <p className="font-bold text-sm truncate">{s.pdf_name}</p>
                       {s.answering_status === "completed" && (
                         <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300">
-                          Phase 2 Solved
+                          P2 Solved
+                        </span>
+                      )}
+                      {s.phase3_status === "completed" && (
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-300">
+                          P3 Explained
+                        </span>
+                      )}
+                      {s.phase4_status === "completed" && (
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-300">
+                          P4 Verified
                         </span>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {fmtDate(s.created_at)} · {s.total_pages} pages · {s.questions_extracted} Qs · {s.total_answered || 0} answered · {s.duplicates_found} dupes
+                      {fmtDate(s.created_at)} · {s.total_pages} pages · {s.questions_extracted} Qs · {s.total_answered || 0} answered · {s.total_explanations || 0} explained
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -975,29 +1310,34 @@ function McqGeneratorPro() {
         {/* ── Step Tabs ────────────────────────────────────────────────────── */}
         <div className="flex flex-wrap gap-1 rounded-xl border-2 border-border bg-card p-1 w-fit">
           {[
-            { id: "configure", label: "⚙️ 1. Extract Setup" },
+            { id: "configure", label: "⚙️ 1. Extract" },
             { id: "processing", label: "⚡ Extract Running", hidden: step !== "processing" },
-            { id: "review", label: `🔍 2. Review MCQs (${stats.total})`, disabled: !activeSession },
-            { id: "solve_setup", label: "🧠 3. Solve Answers (Phase 2)", disabled: !activeSession },
-            { id: "import", label: "📥 4. Import to Course", disabled: !activeSession },
+            { id: "solve_setup", label: `🧠 2. Solve (${stats.answered}/${stats.total})`, disabled: !activeSession },
+            { id: "explanation_setup", label: `💡 3. Explain (${stats.explained}/${stats.total})`, disabled: !activeSession },
+            { id: "verification_setup", label: "🛡️ 4. Verify (Optional)", disabled: !activeSession },
+            { id: "review", label: `🔍 Review MCQs (${stats.total})`, disabled: !activeSession },
+            { id: "import", label: "📥 Import to Course", disabled: !activeSession },
           ]
             .filter((tab) => !tab.hidden)
             .map((tab) => {
               const isCurrent =
                 step === tab.id ||
-                (tab.id === "solve_setup" && (step === "solve_progress" || step === "solve_complete"));
+                (tab.id === "solve_setup" && (step === "solve_progress" || step === "solve_complete")) ||
+                (tab.id === "explanation_setup" && (step === "explanation_progress" || step === "explanation_complete")) ||
+                (tab.id === "verification_setup" && (step === "verification_progress" || step === "verification_report"));
+
               return (
                 <button
                   key={tab.id}
                   type="button"
                   disabled={tab.disabled}
                   onClick={() => {
-                    if (tab.disabled || step === "processing" || step === "solve_progress") return;
+                    if (tab.disabled || step === "processing" || step === "solve_progress" || step === "phase3Active" as any) return;
                     setStep(tab.id as Step);
                   }}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                  className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                     isCurrent
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-primary text-primary-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted"
                   }`}
                 >
@@ -1250,7 +1590,7 @@ function McqGeneratorPro() {
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
-                    <BrainIcon className="text-primary" /> Phase 2 — MCQ Answering & Solving
+                    <Cpu className="text-primary" /> Phase 2 — MCQ Answering & Solving
                   </h2>
                   <p className="text-xs text-muted-foreground mt-1">
                     Determine the correct answer for each extracted question. No explanations are generated in this phase.
@@ -1592,7 +1932,7 @@ function McqGeneratorPro() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            PHASE 2 — SOLVE COMPLETE / SUMMARY
+            PHASE 2 — SOLVE COMPLETE
         ══════════════════════════════════════════════════════════════════ */}
         {step === "solve_complete" && activeSession && (
           <div className="space-y-6">
@@ -1604,12 +1944,11 @@ function McqGeneratorPro() {
                     Phase 2 Answering Complete!
                   </h2>
                   <p className="text-xs text-emerald-700 mt-0.5">
-                    All questions have been evaluated. Review the answers or proceed to the next step.
+                    All questions have been evaluated. Review the answers or proceed to Phase 3 Explanations.
                   </p>
                 </div>
               </div>
 
-              {/* Summary Stats Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-4">
                 <div className="rounded-xl border border-emerald-200 bg-white/80 p-3 text-center">
                   <p className="text-2xl font-black text-foreground">{stats.total}</p>
@@ -1629,36 +1968,21 @@ function McqGeneratorPro() {
                 </div>
               </div>
 
-              <div className="rounded-xl bg-white/60 border border-emerald-200 p-3 text-xs space-y-1 text-emerald-900">
-                <p><strong>Method Used:</strong> {activeSession.answering_method || solveMethod}</p>
-                {activeSession.answering_model && (
-                  <p><strong>Model:</strong> {MODEL_OPTIONS.find((m) => m.id === activeSession.answering_model)?.label || activeSession.answering_model}</p>
-                )}
-                {activeSession.answering_instructions && (
-                  <p><strong>Instructions:</strong> {activeSession.answering_instructions}</p>
-                )}
-              </div>
-
-              {/* Phase 3 Notice & Actions */}
+              {/* Hand-off buttons */}
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 <button
                   type="button"
                   onClick={() => setStep("review")}
-                  className="flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-primary-foreground font-black text-sm hover:opacity-90"
+                  className="flex items-center gap-2 rounded-xl bg-card border-2 border-border px-5 py-2.5 text-xs font-bold hover:bg-muted"
                 >
-                  <Eye size={15} /> Review Answers
+                  <Eye size={14} /> Review Answers
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    toast.info(
-                      "Phase 2 Complete! Phase 3 (Explanation Generation) will be integrated here in the next update.",
-                      { duration: 5000 }
-                    );
-                  }}
-                  className="flex items-center gap-2 rounded-xl border-2 border-primary/40 bg-card px-5 py-2.5 text-sm font-bold hover:bg-muted"
+                  onClick={() => setStep("explanation_setup")}
+                  className="flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-primary-foreground font-black text-sm hover:opacity-90 shadow-sm"
                 >
-                  <Sparkles size={15} className="text-primary" /> Start Explanations (Phase 3)
+                  <Sparkles size={15} /> Proceed to Phase 3: Explanations →
                 </button>
                 <button
                   type="button"
@@ -1673,7 +1997,604 @@ function McqGeneratorPro() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            STEP 3 — REVIEW (WITH PHASE 2 ANSWERS)
+            PHASE 3 — EXPLANATION SETUP
+        ══════════════════════════════════════════════════════════════════ */}
+        {step === "explanation_setup" && activeSession && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border-2 border-border bg-card p-6">
+              <div className="mb-4">
+                <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
+                  <Sparkles className="text-primary" /> Phase 3 — AI Medical Explanation Generator
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Generates structured, high-yield medical explanations based on AquavisionX architecture (Concept, Why Right, distractor analysis, and Option Summary Table).
+                </p>
+              </div>
+
+              {/* Source Info Card */}
+              <div className="rounded-xl border border-border bg-muted/20 p-4 mb-6 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+                  <BookOpen size={16} className="text-primary" />
+                  <span>Explanation Knowledge Source:</span>
+                </div>
+                {activeSession.study_material_text ? (
+                  <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+                    <p className="font-bold">✓ Case B — Study Source Provided ({activeSession.study_material_name || "Textbook PDF"})</p>
+                    <p className="text-[11px] text-emerald-700 mt-0.5">
+                      The AI will retrieve the most relevant sections per question and synthesize with medical knowledge.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground bg-card border border-border rounded-lg p-2.5">
+                    <p className="font-bold text-foreground">Case A — No Study Source Provided</p>
+                    <p className="text-[11px] mt-0.5">
+                      The AI will independently generate the medical explanation using clinical and pathophysiological knowledge.
+                    </p>
+                  </div>
+                )}
+
+                {/* Show Book Answer Toggle */}
+                {activeSession.study_material_text && (
+                  <label className="flex items-center gap-2 pt-2 text-xs font-bold cursor-pointer text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={showBookAnswer}
+                      onChange={(e) => setShowBookAnswer(e.target.checked)}
+                      className="accent-primary"
+                    />
+                    <span>[✓] Show separate "Answer from the Book" section at the end of each explanation</span>
+                  </label>
+                )}
+              </div>
+
+              {/* Model & Instructions */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-black uppercase tracking-wider text-muted-foreground block mb-2">
+                    Explanation AI Model
+                  </label>
+                  <div className="space-y-2">
+                    {[
+                      { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash (Fast & Balanced)" },
+                      { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro (Deep Clinical Reasoning)" },
+                      { id: "openai-gpt4o", label: "OpenAI GPT-4o (High Capability Multimodal)" },
+                    ].map((m) => (
+                      <label
+                        key={m.id}
+                        className={`flex items-center gap-3 rounded-xl border-2 px-3 py-2.5 cursor-pointer text-xs transition-colors ${
+                          phase3Model === m.id ? "border-primary bg-primary/5 font-bold" : "border-border hover:border-primary/40"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="p3Model"
+                          value={m.id}
+                          checked={phase3Model === m.id}
+                          onChange={() => setPhase3Model(m.id)}
+                          className="accent-primary"
+                        />
+                        <span>{m.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-black uppercase tracking-wider text-muted-foreground block mb-2">
+                    Additional Explanation Instructions (Optional)
+                  </label>
+                  <textarea
+                    value={phase3Instructions}
+                    onChange={(e) => setPhase3Instructions(e.target.value)}
+                    placeholder="e.g. Focus on high-yield USMLE Step 1 concepts. Explain pharmacology mechanisms step-by-step. Keep distractors concise..."
+                    rows={5}
+                    className="w-full rounded-xl border-2 border-border bg-muted/30 p-3 text-xs focus:outline-none focus:border-primary resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
+                <button
+                  type="button"
+                  onClick={() => setStep("review")}
+                  className="px-4 py-2 rounded-xl border border-border text-xs font-bold hover:bg-muted"
+                >
+                  ← Back to Review
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartExplanations}
+                  disabled={stats.answered === 0}
+                  className="flex items-center gap-2 rounded-xl bg-primary px-7 py-3 text-primary-foreground font-black text-sm hover:opacity-90 disabled:opacity-40 shadow-sm"
+                >
+                  <Sparkles size={16} /> Generate Explanations ({stats.answered} Answered Qs)
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            PHASE 3 — EXPLANATION PROGRESS
+        ══════════════════════════════════════════════════════════════════ */}
+        {step === "explanation_progress" && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border-2 border-border bg-card p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="font-black text-lg flex items-center gap-2">
+                    <Loader2 className="animate-spin text-primary" size={20} />
+                    {phase3Paused ? "Explanations Paused" : "Generating Explanations (Phase 3)…"}
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Model: {MODEL_OPTIONS.find((m) => m.id === phase3Model)?.label || phase3Model}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !phase3Paused;
+                      setPhase3Paused(next);
+                      phase3PausedRef.current = next;
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-bold hover:bg-muted"
+                  >
+                    {phase3Paused ? <Play size={14} /> : <Pause size={14} />}
+                    {phase3Paused ? "Resume" : "Pause"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      phase3CancelledRef.current = true;
+                      toast.info("Stopping explanations after current question…");
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl border border-red-300 bg-red-50 text-red-600 px-3 py-1.5 text-xs font-bold hover:bg-red-100"
+                  >
+                    <X size={14} /> Stop
+                  </button>
+                </div>
+              </div>
+
+              {phase3Total > 0 && (
+                <div className="mb-4">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Question {phase3Index} of {phase3Total}</span>
+                    <span>{Math.round((phase3Index / phase3Total) * 100)}%</span>
+                  </div>
+                  <div className="h-3 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-200"
+                      style={{ width: `${(phase3Index / phase3Total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
+                  <p className="text-xl font-black text-foreground">{phase3Index}</p>
+                  <p className="text-[11px] text-muted-foreground">Processed</p>
+                </div>
+                <div className="rounded-xl border border-border bg-emerald-50/50 p-3 text-center">
+                  <p className="text-xl font-black text-emerald-700">{stats.explained}</p>
+                  <p className="text-[11px] text-emerald-800">Explained</p>
+                </div>
+                <div className="rounded-xl border border-border bg-amber-50/50 p-3 text-center">
+                  <p className="text-xl font-black text-amber-700">{stats.conflicts}</p>
+                  <p className="text-[11px] text-amber-800">Answer Conflicts</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-muted/30 p-3 max-h-64 overflow-y-auto font-mono text-xs space-y-0.5">
+                {phase3Log.map((line, i) => (
+                  <p
+                    key={i}
+                    className={
+                      line.includes("❌")
+                        ? "text-red-600"
+                        : line.includes("⚠️")
+                        ? "text-amber-600"
+                        : line.includes("✔")
+                        ? "text-emerald-600"
+                        : "text-foreground/70"
+                    }
+                  >
+                    {line}
+                  </p>
+                ))}
+                {phase3Active && !phase3Paused && <p className="text-primary animate-pulse">▌</p>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            PHASE 3 — EXPLANATION COMPLETE
+        ══════════════════════════════════════════════════════════════════ */}
+        {step === "explanation_complete" && activeSession && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border-2 border-blue-300 bg-blue-50/40 p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <CheckCircle2 size={32} className="text-blue-600" />
+                <div>
+                  <h2 className="text-xl font-black text-blue-900 tracking-tight">
+                    Phase 3 Explanations Complete!
+                  </h2>
+                  <p className="text-xs text-blue-700 mt-0.5">
+                    Medical explanations, why-wrong rationale, and summary tables have been synthesized.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 my-4">
+                <div className="rounded-xl border border-blue-200 bg-white/80 p-3 text-center">
+                  <p className="text-2xl font-black text-foreground">{stats.explained}</p>
+                  <p className="text-xs text-muted-foreground">Explanations Ready</p>
+                </div>
+                <div className="rounded-xl border border-blue-200 bg-white/80 p-3 text-center">
+                  <p className="text-2xl font-black text-amber-600">{stats.conflicts}</p>
+                  <p className="text-xs text-muted-foreground">Possible Conflicts</p>
+                </div>
+                <div className="rounded-xl border border-blue-200 bg-white/80 p-3 text-center">
+                  <p className="text-2xl font-black text-red-600">{phase3Errors}</p>
+                  <p className="text-xs text-muted-foreground">Errors</p>
+                </div>
+              </div>
+
+              {/* Hand-off buttons */}
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep("review")}
+                  className="flex items-center gap-2 rounded-xl bg-card border-2 border-border px-5 py-2.5 text-xs font-bold hover:bg-muted"
+                >
+                  <Eye size={14} /> Review Explanations
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStep("verification_setup")}
+                  className="flex items-center gap-2 rounded-xl bg-purple-600 px-6 py-2.5 text-white font-black text-sm hover:opacity-90 shadow-sm"
+                >
+                  <ShieldCheck size={16} /> Proceed to Phase 4: Verification (Optional) →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStep("import")}
+                  className="ml-auto flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground"
+                >
+                  <Import size={13} /> Skip to Course Import →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            PHASE 4 — VERIFICATION SETUP (OPTIONAL)
+        ══════════════════════════════════════════════════════════════════ */}
+        {step === "verification_setup" && activeSession && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border-2 border-purple-300 bg-card p-6">
+              <div className="mb-4">
+                <h2 className="text-xl font-black tracking-tight flex items-center gap-2 text-purple-950">
+                  <ShieldCheck className="text-purple-600" /> Phase 4 — Independent Quality Control & Verification
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Optional quality auditing stage. Performs a rigorous 6-dimension audit (Extraction, Options, Answer, Source, Explanation, Book Answer) and preserves the exact original PDF page reference without modifying your data.
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4 my-4">
+                <div>
+                  <label className="text-xs font-black uppercase tracking-wider text-muted-foreground block mb-2">
+                    Auditor AI Model
+                  </label>
+                  <div className="space-y-2">
+                    {[
+                      { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro (Recommended for Audit)" },
+                      { id: "openai-gpt4o", label: "OpenAI GPT-4o (Cross-Provider Verification)" },
+                      { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash (Fast Audit)" },
+                    ].map((m) => (
+                      <label
+                        key={m.id}
+                        className={`flex items-center gap-3 rounded-xl border-2 px-3 py-2.5 cursor-pointer text-xs transition-colors ${
+                          phase4Model === m.id ? "border-purple-600 bg-purple-50/50 font-bold" : "border-border hover:border-purple-300"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="p4Model"
+                          value={m.id}
+                          checked={phase4Model === m.id}
+                          onChange={() => setPhase4Model(m.id)}
+                          className="accent-purple-600"
+                        />
+                        <span>{m.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-black uppercase tracking-wider text-muted-foreground block mb-2">
+                    Audit Scope
+                  </label>
+                  <div className="space-y-2">
+                    <label className={`flex gap-3 rounded-xl border-2 px-4 py-3 cursor-pointer text-xs transition-colors ${phase4Scope === "answered_only" ? "border-purple-600 bg-purple-50/50 font-bold" : "border-border"}`}>
+                      <input
+                        type="radio"
+                        name="p4Scope"
+                        checked={phase4Scope === "answered_only"}
+                        onChange={() => setPhase4Scope("answered_only")}
+                        className="accent-purple-600 mt-0.5"
+                      />
+                      <div>
+                        <p className="font-bold">Answered Questions Only ({stats.answered} Qs)</p>
+                        <p className="text-[11px] text-muted-foreground">Audits extraction, options, determined answer, and explanation integrity.</p>
+                      </div>
+                    </label>
+                    <label className={`flex gap-3 rounded-xl border-2 px-4 py-3 cursor-pointer text-xs transition-colors ${phase4Scope === "all" ? "border-purple-600 bg-purple-50/50 font-bold" : "border-border"}`}>
+                      <input
+                        type="radio"
+                        name="p4Scope"
+                        checked={phase4Scope === "all"}
+                        onChange={() => setPhase4Scope("all")}
+                        className="accent-purple-600 mt-0.5"
+                      />
+                      <div>
+                        <p className="font-bold">All Extracted Questions ({stats.total} Qs)</p>
+                        <p className="text-[11px] text-muted-foreground">Scans every question, even if not yet answered.</p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
+                <button
+                  type="button"
+                  onClick={() => setStep("review")}
+                  className="px-4 py-2 rounded-xl border border-border text-xs font-bold hover:bg-muted"
+                >
+                  ← Back to Review
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep("import")}
+                    className="px-4 py-2 rounded-xl border border-border text-xs font-bold hover:bg-muted"
+                  >
+                    Skip Verification
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStartVerification}
+                    className="flex items-center gap-2 rounded-xl bg-purple-600 px-7 py-3 text-white font-black text-sm hover:opacity-90 shadow-sm"
+                  >
+                    <ShieldCheck size={16} /> Run Quality Audit
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            PHASE 4 — VERIFICATION PROGRESS
+        ══════════════════════════════════════════════════════════════════ */}
+        {step === "verification_progress" && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border-2 border-purple-300 bg-card p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="font-black text-lg flex items-center gap-2 text-purple-950">
+                    <Loader2 className="animate-spin text-purple-600" size={20} />
+                    {phase4Paused ? "Audit Paused" : "Auditing Questions (Phase 4)…"}
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Model: {MODEL_OPTIONS.find((m) => m.id === phase4Model)?.label || phase4Model}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !phase4Paused;
+                      setPhase4Paused(next);
+                      phase4PausedRef.current = next;
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-bold hover:bg-muted"
+                  >
+                    {phase4Paused ? <Play size={14} /> : <Pause size={14} />}
+                    {phase4Paused ? "Resume" : "Pause"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      phase4CancelledRef.current = true;
+                      toast.info("Stopping verification audit…");
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl border border-red-300 bg-red-50 text-red-600 px-3 py-1.5 text-xs font-bold hover:bg-red-100"
+                  >
+                    <X size={14} /> Stop
+                  </button>
+                </div>
+              </div>
+
+              {phase4Total > 0 && (
+                <div className="mb-4">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Question {phase4Index} of {phase4Total}</span>
+                    <span>{Math.round((phase4Index / phase4Total) * 100)}%</span>
+                  </div>
+                  <div className="h-3 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-purple-600 transition-all duration-200"
+                      style={{ width: `${(phase4Index / phase4Total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
+                  <p className="text-xl font-black text-foreground">{phase4Index}</p>
+                  <p className="text-[11px] text-muted-foreground">Audited</p>
+                </div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 text-center">
+                  <p className="text-xl font-black text-emerald-700">{stats.verifiedClean}</p>
+                  <p className="text-[11px] text-emerald-800">Clean / Passed</p>
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3 text-center">
+                  <p className="text-xl font-black text-amber-700">{stats.verifiedFlagged}</p>
+                  <p className="text-[11px] text-amber-800">Flagged Issues</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-muted/30 p-3 max-h-64 overflow-y-auto font-mono text-xs space-y-0.5">
+                {phase4Log.map((line, i) => (
+                  <p
+                    key={i}
+                    className={
+                      line.includes("❌")
+                        ? "text-red-600"
+                        : line.includes("⚠️")
+                        ? "text-amber-600"
+                        : line.includes("✔")
+                        ? "text-emerald-600"
+                        : "text-foreground/70"
+                    }
+                  >
+                    {line}
+                  </p>
+                ))}
+                {phase4Active && !phase4Paused && <p className="text-purple-600 animate-pulse">▌</p>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            PHASE 4 — VERIFICATION REPORT DASHBOARD
+        ══════════════════════════════════════════════════════════════════ */}
+        {step === "verification_report" && activeSession && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border-2 border-purple-300 bg-card p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <ShieldCheck size={32} className="text-purple-600" />
+                <div>
+                  <h2 className="text-xl font-black text-purple-950 tracking-tight">
+                    Independent Verification Report
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Original PDF page numbers preserved for all detected items. No data was automatically altered.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 my-4">
+                <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
+                  <p className="text-2xl font-black text-foreground">{stats.verifiedTotal}</p>
+                  <p className="text-xs text-muted-foreground">Total Audited</p>
+                </div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-center">
+                  <p className="text-2xl font-black text-emerald-700">{stats.verifiedClean}</p>
+                  <p className="text-xs text-emerald-800">No Issues Detected</p>
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center">
+                  <p className="text-2xl font-black text-amber-700">{stats.verifiedFlagged}</p>
+                  <p className="text-xs text-amber-800">Needs Review / Flagged</p>
+                </div>
+              </div>
+
+              {/* Reported Issues List */}
+              <div className="space-y-3 mt-6">
+                <h3 className="text-sm font-black text-foreground flex items-center gap-2">
+                  <FileWarning size={16} className="text-amber-600" /> Detected Audit Items
+                </h3>
+
+                {activeQuestions.filter((q) => q.verification_report && q.verification_report.length > 0).length === 0 ? (
+                  <div className="p-6 text-center text-xs text-muted-foreground rounded-xl border border-border bg-muted/20">
+                    🎉 Excellent! No errors or defects were detected during verification.
+                  </div>
+                ) : (
+                  activeQuestions
+                    .filter((q) => q.verification_report && q.verification_report.length > 0)
+                    .map((q) => (
+                      <div key={q.id} className="rounded-xl border border-amber-300 bg-amber-50/30 p-4 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-xs bg-amber-100 text-amber-900 px-2 py-0.5 rounded">
+                              PDF Page {q.page_number}
+                            </span>
+                            <span className="font-bold text-xs">
+                              Question #{q.question_number || q.sort_order}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStep("review");
+                              setFilterTab("flagged");
+                            }}
+                            className="text-xs text-primary font-bold hover:underline"
+                          >
+                            Inspect in Review →
+                          </button>
+                        </div>
+
+                        <div className="space-y-1.5 pt-1">
+                          {q.verification_report?.map((issue, idx) => (
+                            <div key={idx} className="rounded-lg bg-card border border-border p-2.5 text-xs space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                                  issue.severity === "critical" || issue.severity === "high"
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-amber-100 text-amber-800"
+                                }`}>
+                                  {issue.severity}
+                                </span>
+                                <span className="font-mono text-muted-foreground">[{issue.problem_type}]</span>
+                                <span className="text-muted-foreground">Affected: {issue.affected_component}</span>
+                              </div>
+                              <p className="text-foreground">{issue.description}</p>
+                              {issue.suggested_action && (
+                                <p className="text-primary font-medium text-[11px]">
+                                  Suggested: {issue.suggested_action}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                )}
+              </div>
+
+              <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
+                <button
+                  type="button"
+                  onClick={() => setStep("review")}
+                  className="px-5 py-2.5 rounded-xl border border-border text-xs font-bold hover:bg-muted"
+                >
+                  ← Go to Review
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStep("import")}
+                  className="flex items-center gap-2 rounded-xl bg-primary px-7 py-2.5 text-primary-foreground font-black text-sm hover:opacity-90"
+                >
+                  <Import size={15} /> Proceed to Course Import →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            STEP 3 — REVIEW (WITH ANSWERS, EXPLANATIONS, AND AUDITS)
         ══════════════════════════════════════════════════════════════════ */}
         {step === "review" && activeSession && (
           <div className="space-y-4">
@@ -1681,14 +2602,14 @@ function McqGeneratorPro() {
             {/* Stats bar */}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
               {[
-                { label: "Total",      value: stats.total,      color: "text-foreground" },
-                { label: "Answered",   value: stats.answered,   color: "text-emerald-600 font-black" },
-                { label: "Needs Rev",  value: stats.needsReview, color: "text-amber-600 font-black" },
-                { label: "Unanswered", value: stats.unanswered, color: "text-muted-foreground" },
-                { label: "Accepted",   value: stats.accepted,   color: "text-emerald-600" },
-                { label: "Rejected",   value: stats.rejected,   color: "text-red-600" },
-                { label: "Duplicates", value: stats.duplicates, color: "text-purple-600" },
-                { label: "Needs Opts", value: stats.needsOpts,  color: "text-orange-600" },
+                { label: "Total",      value: stats.total,       color: "text-foreground" },
+                { label: "Answered",   value: stats.answered,    color: "text-emerald-600 font-black" },
+                { label: "Explained",  value: stats.explained,   color: "text-blue-600 font-black" },
+                { label: "Conflicts",  value: stats.conflicts,   color: "text-amber-600 font-black" },
+                { label: "Flagged",    value: stats.verifiedFlagged, color: "text-purple-600 font-black" },
+                { label: "Accepted",   value: stats.accepted,    color: "text-emerald-600" },
+                { label: "Rejected",   value: stats.rejected,    color: "text-red-600" },
+                { label: "Duplicates", value: stats.duplicates,  color: "text-purple-600" },
               ].map((s) => (
                 <div key={s.label} className="rounded-xl border-2 border-border bg-card p-2 text-center">
                   <p className={`text-xl font-black ${s.color}`}>{s.value}</p>
@@ -1702,9 +2623,23 @@ function McqGeneratorPro() {
               <button
                 type="button"
                 onClick={() => setStep("solve_setup")}
+                className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3.5 py-2 font-bold text-xs hover:bg-muted"
+              >
+                <Cpu size={14} /> P2 Solve
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep("explanation_setup")}
                 className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-primary-foreground font-black text-xs hover:opacity-90 shadow-sm"
               >
-                <BrainIcon size={14} /> Solve Answers (Phase 2)
+                <Sparkles size={14} /> P3 Explain
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep("verification_setup")}
+                className="flex items-center gap-1.5 rounded-xl border-2 border-purple-300 bg-purple-50 text-purple-900 px-3.5 py-2 font-bold text-xs hover:bg-purple-100"
+              >
+                <ShieldCheck size={14} /> P4 Verify
               </button>
               {stats.duplicates > 0 && (
                 <button
@@ -1749,13 +2684,15 @@ function McqGeneratorPro() {
             <div className="flex flex-wrap gap-1">
               {[
                 { id: "all", label: "All", count: stats.total },
-                { id: "needs_review", label: "⚠️ Needs Review", count: stats.needsReview, highlight: stats.needsReview > 0 },
+                { id: "conflicts", label: "⚠️ Answer Conflicts", count: stats.conflicts, highlight: stats.conflicts > 0 },
+                { id: "flagged", label: "🛡️ Audit Flagged", count: stats.verifiedFlagged, highlight: stats.verifiedFlagged > 0 },
+                { id: "needs_review", label: "Needs Review", count: stats.needsReview },
+                { id: "explained", label: "💡 Explained", count: stats.explained },
+                { id: "unexplained", label: "Unexplained", count: stats.unexplained },
                 { id: "answered", label: "✓ Answered", count: stats.answered },
-                { id: "unanswered", label: "Unanswered", count: stats.unanswered },
                 { id: "accepted", label: "Accepted", count: stats.accepted },
                 { id: "rejected", label: "Rejected", count: stats.rejected },
                 { id: "duplicates", label: "Duplicates", count: stats.duplicates },
-                { id: "needs_options", label: "Needs Options", count: stats.needsOpts },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -1763,7 +2700,7 @@ function McqGeneratorPro() {
                   onClick={() => setFilterTab(tab.id as FilterTab)}
                   className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
                     filterTab === tab.id
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-primary text-primary-foreground shadow-sm"
                       : tab.highlight
                       ? "bg-amber-100 border-2 border-amber-300 text-amber-900"
                       : "bg-card border-2 border-border text-muted-foreground hover:text-foreground"
@@ -1791,6 +2728,7 @@ function McqGeneratorPro() {
                       className={`rounded-2xl border-2 bg-card transition-colors ${
                         q.review_status === "accepted" ? "border-emerald-300/80 bg-emerald-50/15" :
                         q.review_status === "rejected" ? "border-red-200 bg-red-50/15 opacity-60" :
+                        q.possible_answer_conflict ? "border-amber-400 bg-amber-50/20" :
                         q.needs_review ? "border-amber-300 bg-amber-50/20" :
                         q.is_duplicate ? "border-purple-300 bg-purple-50/15" :
                         "border-border"
@@ -1816,7 +2754,7 @@ function McqGeneratorPro() {
                               />
                             )}
                             <span className="text-xs font-mono font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
-                              P{q.page_number}{q.question_number ? ` · Q${q.question_number}` : ""}
+                              PDF Page {q.page_number}{q.question_number ? ` · Q${q.question_number}` : ""}
                             </span>
                             {q.question_type === "multiple_answer" && (
                               <span className="text-xs font-bold text-teal-700 bg-teal-100 px-2 py-0.5 rounded-md">
@@ -1828,9 +2766,14 @@ function McqGeneratorPro() {
                                 Duplicate
                               </span>
                             )}
-                            {q.needs_manual_options && (
-                              <span className="text-xs font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-md">
-                                Needs Options
+                            {q.verification_status === "passed" && (
+                              <span className="text-xs font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
+                                <ShieldCheck size={12} /> Verified Clean
+                              </span>
+                            )}
+                            {(q.verification_status === "flagged" || q.verification_status === "error") && (
+                              <span className="text-xs font-bold text-red-800 bg-red-100 border border-red-300 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
+                                <ShieldX size={12} /> Audit Flagged ({q.verification_report?.length || 1})
                               </span>
                             )}
                           </div>
@@ -1879,7 +2822,7 @@ function McqGeneratorPro() {
                                 </span>
                               ) : (
                                 <span className="text-xs text-muted-foreground font-medium px-2 py-0.5 bg-muted rounded">
-                                  Not yet answered (Phase 2)
+                                  Unanswered (Phase 2)
                                 </span>
                               )}
 
@@ -1904,12 +2847,23 @@ function McqGeneratorPro() {
                             </button>
                           </div>
 
+                          {/* Conflict Warning */}
+                          {q.possible_answer_conflict && (
+                            <div className="rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-start gap-2">
+                              <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                              <div>
+                                <p className="font-bold">Potential Answer Conflict Detected by Explanation AI</p>
+                                <p className="text-[11px] text-amber-800">{q.answer_conflict_note || "The model suggests this answer may require review."}</p>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Needs Review Warning Banner */}
                           {q.needs_review && (
                             <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-start gap-2">
                               <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
                               <div>
-                                <p className="font-bold">Needs Review</p>
+                                <p className="font-bold">Needs Review (Phase 2)</p>
                                 <p className="text-[11px] text-amber-800">{q.review_reason || "Uncertain or unverified answer."}</p>
                               </div>
                             </div>
@@ -2058,6 +3012,71 @@ function McqGeneratorPro() {
                             </div>
                           </div>
                         )}
+
+                        {/* Phase 3 Formatted Explanation Section */}
+                        {q.explanation && (
+                          <div className="rounded-xl border border-blue-200 bg-blue-50/20 p-4 mt-3 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-black text-blue-900 flex items-center gap-1.5">
+                                <Sparkles size={14} className="text-primary" />
+                                Medical Explanation (Phase 3)
+                              </span>
+                              {q.concept && (
+                                <span className="text-[11px] font-bold text-muted-foreground bg-white/70 px-2 py-0.5 rounded border border-blue-100">
+                                  Concept: {q.concept}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Markdown text */}
+                            <div className="text-xs text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                              {q.explanation.split(/(\*\*Answer from the Book\*\*[\s\S]*)/)[0]?.trim()}
+                            </div>
+
+                            {/* Summary Table */}
+                            {q.explanation_summary_table && (
+                              <SummaryTableRenderer markdown={q.explanation_summary_table} />
+                            )}
+
+                            {/* Book Answer Box */}
+                            {q.explanation.includes("**Answer from the Book**") && (
+                              <div className="rounded-lg border border-purple-200 bg-purple-50/60 p-3 text-xs text-purple-950 space-y-1">
+                                <p className="font-bold flex items-center gap-1.5">
+                                  <BookOpen size={13} className="text-purple-600" /> Answer from the Book:
+                                </p>
+                                <p className="text-[11px] text-purple-900 leading-relaxed">
+                                  {q.explanation.split("**Answer from the Book**")[1]?.trim()}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Phase 4 Verification Findings */}
+                        {q.verification_report && q.verification_report.length > 0 && (
+                          <div className="rounded-xl border border-purple-200 bg-purple-50/20 p-3 mt-2 space-y-1.5">
+                            <p className="text-[11px] font-black text-purple-900 flex items-center gap-1">
+                              <ShieldAlert size={13} className="text-purple-600" /> Phase 4 Audit Observations ({q.verification_report.length}):
+                            </p>
+                            {q.verification_report.map((iss, ii) => (
+                              <div key={ii} className="text-[11px] text-muted-foreground bg-card p-2 rounded border border-border flex items-start gap-2">
+                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase shrink-0 ${
+                                  iss.severity === "critical" || iss.severity === "high" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"
+                                }`}>
+                                  {iss.severity}
+                                </span>
+                                <div>
+                                  <span className="font-bold text-foreground">[{iss.problem_type}]: </span>
+                                  <span>{iss.description}</span>
+                                  {iss.suggested_action && (
+                                    <p className="text-primary mt-0.5">Suggestion: {iss.suggested_action}</p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                       </div>
                     </div>
                   );
@@ -2077,18 +3096,22 @@ function McqGeneratorPro() {
                 <Import size={18} className="text-primary" /> Import Accepted MCQs to Course
               </h2>
 
-              <div className="grid grid-cols-3 gap-3 mb-4 text-center">
+              <div className="grid grid-cols-4 gap-3 mb-4 text-center">
                 <div className="rounded-xl border border-emerald-300 bg-emerald-50/50 p-3">
                   <p className="text-xl font-black text-emerald-700">{stats.accepted}</p>
-                  <p className="text-xs text-emerald-900">Accepted (will be imported)</p>
+                  <p className="text-xs text-emerald-900">Accepted</p>
                 </div>
                 <div className="rounded-xl border border-border bg-muted/30 p-3">
                   <p className="text-xl font-black text-foreground">{stats.answered}</p>
                   <p className="text-xs text-muted-foreground">With Correct Answers</p>
                 </div>
-                <div className="rounded-xl border border-amber-300 bg-amber-50/50 p-3">
-                  <p className="text-xl font-black text-amber-700">{stats.needsReview}</p>
-                  <p className="text-xs text-amber-900">Flagged Needs Review</p>
+                <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3">
+                  <p className="text-xl font-black text-blue-700">{stats.explained}</p>
+                  <p className="text-xs text-blue-900">With Explanations</p>
+                </div>
+                <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-3">
+                  <p className="text-xl font-black text-purple-700">{stats.verifiedClean}</p>
+                  <p className="text-xs text-purple-900">Verified Clean</p>
                 </div>
               </div>
 
@@ -2196,8 +3219,4 @@ function McqGeneratorPro() {
       </main>
     </div>
   );
-}
-
-function BrainIcon(props: any) {
-  return <Cpu {...props} />;
 }

@@ -744,7 +744,7 @@ export const importSessionQuestions = createServerFn({ method: "POST" })
     // Build query for questions to import
     let qQuery = supabase
       .from(QUESTIONS_TABLE)
-      .select("id, stem, options, question_type, selected_answer, answer_text, source_reference")
+      .select("id, stem, options, question_type, selected_answer, answer_text, source_reference, explanation")
       .eq("session_id", data.sessionId)
       .eq("review_status", "accepted")
       .order("sort_order", { ascending: true });
@@ -787,7 +787,7 @@ export const importSessionQuestions = createServerFn({ method: "POST" })
             {
               subject_id: data.subjectId,
               stem,
-              explanation: null,
+              explanation: q.explanation || null,
               sort_order: nextOrder,
             },
             { onConflict: "subject_id,stem_hash", ignoreDuplicates: true },
@@ -1610,4 +1610,663 @@ export const completeAnsweringSession = createServerFn({ method: "POST" })
 
     return { ok: true };
   });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PHASE 3 — AI EXPLANATION GENERATION (AQUAVISIONX-ENHANCED)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** Keyword-based chunk retrieval to extract relevant pages/paragraphs from study material without blowing token limits */
+export function retrieveRelevantSourceContext(
+  sourceText: string,
+  stem: string,
+  options: Array<{ letter: string; body: string }>
+): { context: string; approximateLocation?: string } {
+  const cleanSource = String(sourceText || "").trim();
+  if (!cleanSource) return { context: "" };
+  if (cleanSource.length <= 6000) {
+    return { context: cleanSource };
+  }
+
+  // Split into chunks by page/section breaks or paragraphs
+  const rawChunks = cleanSource.split(/\n\s*---\s*\n|\n\s*===+\s*\n|\n\n\n+/);
+  const chunks: Array<{ text: string; location: string }> = [];
+
+  for (let i = 0; i < rawChunks.length; i++) {
+    const chunk = rawChunks[i].trim();
+    if (chunk.length < 40) continue;
+    const pageMatch = chunk.match(/(?:Page|p\.|Chapter|Section)\s*(\d+[A-Za-z0-9.-]*)/i);
+    const location = pageMatch ? pageMatch[0] : `Section ${i + 1}`;
+    chunks.push({ text: chunk, location });
+  }
+
+  if (chunks.length <= 2) {
+    return { context: cleanSource.slice(0, 8000) };
+  }
+
+  // Extract keywords from stem + options
+  const combinedQuery = `${stem} ${options.map((o) => o.body).join(" ")}`.toLowerCase();
+  const words = combinedQuery
+    .replace(/[^\w\s]/g, " ")
+    .split(/\s+/)
+    .filter(
+      (w) =>
+        w.length >= 4 &&
+        !["which", "where", "these", "those", "about", "following", "patient", "presents", "history"].includes(w)
+    );
+
+  const uniqueKeywords = [...new Set(words)];
+
+  // Score each chunk
+  const scored = chunks.map((c) => {
+    let score = 0;
+    const lowerText = c.text.toLowerCase();
+    for (const kw of uniqueKeywords) {
+      if (lowerText.includes(kw)) {
+        score += 1;
+        if (kw.length >= 6) score += 1;
+      }
+    }
+    return { ...c, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  const topChunks = scored.slice(0, 3).filter((c) => c.score > 0);
+
+  if (topChunks.length === 0) {
+    return { context: cleanSource.slice(0, 6000), approximateLocation: "Opening sections" };
+  }
+
+  const mergedContext = topChunks
+    .map((c) => `[Source Location: ${c.location}]\n${c.text}`)
+    .join("\n\n---\n\n")
+    .slice(0, 8000);
+
+  return {
+    context: mergedContext,
+    approximateLocation: topChunks.map((c) => c.location).join(", "),
+  };
+}
+
+const PHASE3_EXPLANATION_SYSTEM = `You are an expert medical educator and examination tutor.
+Your task is to write a high-yield, structured medical explanation for the given question and its DETERMINED CORRECT ANSWER.
+
+CRITICAL ARCHITECTURAL RULES:
+1. EXPLAIN THE DETERMINED ANSWER (ANSWER INVARIANCE):
+   - The correct answer has ALREADY been decided in Phase 2 and is given to you.
+   - You MUST explain why this determined answer is right.
+   - Do NOT silently change the answer.
+   - If you medically believe the determined answer might be incorrect or controversial, set "possible_answer_conflict": true and explain your concern in "answer_conflict_note", but STILL write your explanation for the determined answer.
+2. MEDICAL ACCURACY & HIGH YIELD:
+   - Provide accurate pathophysiology, anatomy, physiology, pharmacology, or clinical guidelines.
+   - Be educational, logical, and clear.
+3. STRUCTURE OF "explanation":
+   Write GitHub-flavored Markdown with the following mandatory sections:
+
+   **Concept**
+   2-3 sentences explaining the core medical mechanism, classification, or foundational principle tested by this question.
+
+   **Why the correct answer is right**
+   2-4 concise bullets detailing why the correct option is the accurate answer to the clinical scenario or question stem.
+
+   **Why the other options are wrong**
+   List ONLY the incorrect options. Each bullet MUST start with the option's OWN TEXT in **bold** (no letter prefix like A. or B.), followed by a dash, then one clear, specific medical sentence explaining why it is wrong.
+   Example:
+   - **Histiocytes** — are involved in chronic granulomas, but are not the primary acute mediators in this scenario.
+
+4. "summary_table":
+   A GitHub-flavored Markdown table summarizing all options:
+   | Option | Result | Summary |
+   |---|---|---|
+   | [Option text] | ✓ Correct | [Short 1-line reason why it is correct] |
+   | [Option text] | ✗ Incorrect | [Short 1-line reason why it is wrong] |
+
+   CRITICAL: The Summary column MUST contain a short explanatory reason (e.g. "Primarily causes alpha-1 vasoconstriction"), NOT just the words "Wrong" or "Correct".
+
+5. "book_answer":
+   If study material is provided:
+   - State what the provided study source says regarding this question and cite the page/chapter/section.
+   - If the source does not contain enough info, write: "Answer from the Book: Not found in the provided source."
+   - Set "book_answer_found": true if found, false otherwise.
+   If no study material was provided, set "book_answer": null and "book_answer_found": false.
+
+Return STRICT JSON only:
+{
+  "concept": "<=12 words naming core concept",
+  "explanation": "Markdown text with Concept, Why the correct answer is right, and Why the other options are wrong",
+  "summary_table": "Markdown table per specification",
+  "book_answer": "Citation and finding from book, or 'Answer from the Book: Not found in the provided source.'",
+  "book_answer_found": true,
+  "possible_answer_conflict": false,
+  "answer_conflict_note": null
+}`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 21. initiateExplanationSession
+// ─────────────────────────────────────────────────────────────────────────────
+
+const InitiateExplanationInput = z.object({
+  sessionId: z.string().uuid(),
+  model: ModelIdSchema,
+  instructions: z.string().max(4000).optional(),
+  showBookAnswer: z.boolean().default(true),
+});
+
+export const initiateExplanationSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => InitiateExplanationInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const modelDef = MODELS[data.model];
+
+    const { error } = await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        phase3_model: data.model,
+        phase3_provider: modelDef.provider,
+        phase3_instructions: data.instructions ?? null,
+        phase3_show_book_answer: data.showBookAnswer,
+        phase3_status: "running",
+      })
+      .eq("id", data.sessionId);
+
+    if (error) throw error;
+    return { ok: true };
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 22. generateSingleExplanation
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GenerateExplanationInput = z.object({
+  sessionId: z.string().uuid(),
+  questionId: z.string().uuid(),
+  model: ModelIdSchema,
+  instructions: z.string().max(4000).optional(),
+  showBookAnswer: z.boolean().default(true),
+});
+
+export const generateSingleExplanation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => GenerateExplanationInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+
+    // Fetch session study material
+    const { data: sess, error: sErr } = await supabase
+      .from(SESSIONS_TABLE)
+      .select("study_material_text, study_material_name")
+      .eq("id", data.sessionId)
+      .single();
+    if (sErr || !sess) throw new Error("Session not found");
+
+    // Fetch question
+    const { data: q, error: qErr } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id, stem, options, question_type, selected_answer, answer_text, page_number, question_number")
+      .eq("id", data.questionId)
+      .single();
+    if (qErr || !q) throw new Error("Question not found");
+
+    const optionsList: Array<{ letter: string; body: string }> = Array.isArray(q.options)
+      ? q.options
+      : [];
+
+    const formattedOptions = optionsList
+      .map((o) => `  ${o.letter}) ${o.body}`)
+      .join("\n");
+
+    const determinedAnswerStr = Array.isArray(q.selected_answer)
+      ? q.selected_answer.join(", ")
+      : String(q.selected_answer ?? "Unspecified");
+
+    // Retrieve relevant context from study material if present
+    let retrievedContext = "";
+    if (sess.study_material_text?.trim()) {
+      const retrieved = retrieveRelevantSourceContext(
+        sess.study_material_text,
+        q.stem,
+        optionsList
+      );
+      if (retrieved.context) {
+        retrievedContext = `RELEVANT STUDY MATERIAL EXCERPT (${sess.study_material_name || "Provided Source"}):\n"""\n${retrieved.context}\n"""\n\n`;
+      }
+    }
+
+    let userPrompt = `${retrievedContext}QUESTION:
+${q.stem}
+
+OPTIONS:
+${formattedOptions}
+
+QUESTION TYPE:
+${q.question_type || "single_choice"}
+
+DETERMINED CORRECT ANSWER (FROM PHASE 2):
+Option ${determinedAnswerStr}${q.answer_text ? ` (${JSON.stringify(q.answer_text)})` : ""}
+`;
+
+    if (data.instructions?.trim()) {
+      userPrompt += `\nADDITIONAL USER INSTRUCTIONS FOR EXPLANATION:\n${data.instructions.trim()}\n`;
+    }
+
+    userPrompt += `\nGenerate the structured explanation and summary table according to system instructions.`;
+
+    const modelDef = MODELS[data.model];
+    let rawOutput = "";
+
+    try {
+      if (modelDef.provider === "gemini") {
+        const apiKey = await getGeminiKey(supabase);
+        rawOutput = await callGeminiText(
+          apiKey,
+          modelDef.apiModel,
+          PHASE3_EXPLANATION_SYSTEM,
+          userPrompt
+        );
+      } else {
+        const apiKey = await getOpenAIKey(supabase);
+        rawOutput = await callOpenAIText(
+          apiKey,
+          modelDef.apiModel,
+          PHASE3_EXPLANATION_SYSTEM,
+          userPrompt
+        );
+      }
+    } catch (apiErr: any) {
+      await supabase
+        .from(QUESTIONS_TABLE)
+        .update({
+          explanation_status: "failed",
+        })
+        .eq("id", data.questionId);
+      throw apiErr;
+    }
+
+    const parsed = extractJson(rawOutput) || {};
+    let fullExplanation = String(parsed.explanation || "").trim();
+
+    // If summary table not embedded, append it
+    if (parsed.summary_table && !fullExplanation.includes(parsed.summary_table)) {
+      fullExplanation += `\n\n${parsed.summary_table}`;
+    }
+
+    // If showBookAnswer is enabled and book_answer exists, append it
+    if (data.showBookAnswer && sess.study_material_text && parsed.book_answer) {
+      fullExplanation += `\n\n**Answer from the Book**\n${parsed.book_answer}`;
+    }
+
+    const hasConflict = Boolean(parsed.possible_answer_conflict);
+    const conflictNote = parsed.answer_conflict_note ? String(parsed.answer_conflict_note).trim() : null;
+
+    const updatePayload = {
+      concept: parsed.concept ? String(parsed.concept).trim().slice(0, 300) : null,
+      explanation: fullExplanation,
+      explanation_summary_table: parsed.summary_table ? String(parsed.summary_table).trim() : null,
+      book_answer: parsed.book_answer ? String(parsed.book_answer).trim() : null,
+      book_answer_found: Boolean(parsed.book_answer_found),
+      possible_answer_conflict: hasConflict,
+      answer_conflict_note: conflictNote,
+      explanation_model: data.model,
+      explanation_status: "explained",
+      explained_at: new Date().toISOString(),
+    };
+
+    const { error: updErr } = await supabase
+      .from(QUESTIONS_TABLE)
+      .update(updatePayload)
+      .eq("id", data.questionId);
+
+    if (updErr) throw updErr;
+
+    // Recalculate session explanation counters
+    const { count: expCount } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId)
+      .eq("explanation_status", "explained");
+
+    const { count: conflictCount } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId)
+      .eq("possible_answer_conflict", true);
+
+    await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        total_explanations: expCount ?? 0,
+        total_conflicts: conflictCount ?? 0,
+      })
+      .eq("id", data.sessionId);
+
+    return {
+      questionId: data.questionId,
+      hasConflict,
+      conflictNote,
+      bookAnswerFound: Boolean(parsed.book_answer_found),
+    };
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 23. completeExplanationSession
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const completeExplanationSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => CompleteAnsweringInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+
+    const { count: expCount } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId)
+      .eq("explanation_status", "explained");
+
+    const { count: conflictCount } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId)
+      .eq("possible_answer_conflict", true);
+
+    await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        phase3_status: "completed",
+        total_explanations: expCount ?? 0,
+        total_conflicts: conflictCount ?? 0,
+      })
+      .eq("id", data.sessionId);
+
+    return { ok: true };
+  });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PHASE 4 — INDEPENDENT QUALITY CONTROL & VERIFICATION (OPTIONAL)
+// ═════════════════════════════════════════════════════════════════════════════
+
+export type VerificationProblemType =
+  | "extraction_error"
+  | "missing_text"
+  | "wrong_option"
+  | "answer_error"
+  | "combination_mapping_error"
+  | "multiple_answer_error"
+  | "source_mismatch"
+  | "book_answer_error"
+  | "explanation_error"
+  | "medical_accuracy_issue"
+  | "citation_error"
+  | "other";
+
+export type VerificationIssue = {
+  problem_type: VerificationProblemType;
+  description: string;
+  severity: "low" | "medium" | "high" | "critical";
+  affected_component: "question" | "options" | "answer" | "explanation" | "source" | "book_answer";
+  pdf_page_number: number;
+  suggested_action: string;
+};
+
+const PHASE4_VERIFICATION_SYSTEM = `You are an independent Senior Medical Quality Control Auditor.
+Your job is to audit an exam question across 6 dimensions and identify ANY errors, discrepancies, or defects.
+
+AUDITING DIMENSIONS:
+1. Question Extraction: Is the stem complete? Missing words? Truncated clinical vignette?
+2. Options Integrity: Are all choices present? Labels preserved? Original combination statements preserved?
+3. Correct Answer: Is the indicated correct answer medically sound and corresponding to an existing option?
+4. Study Source: If study material was provided, does it genuinely support the selected answer?
+5. Explanation Quality: Is the explanation medically accurate, logically consistent, and correctly explains both the right answer and each distractor?
+6. Book Answer: Is the book citation accurate and verified in the source?
+
+CRITICAL NON-DESTRUCTIVE RULE:
+You do NOT modify the question or fix the answer yourself. You only AUDIT and REPORT any detected issues.
+
+If everything is sound and no defects are detected, return status "passed" and an empty issues list.
+If you detect any issues, return status "flagged" or "error", and list each issue in the "issues" array.
+
+Return STRICT JSON only:
+{
+  "status": "passed" | "flagged" | "error",
+  "issues": [
+    {
+      "problem_type": "extraction_error" | "missing_text" | "wrong_option" | "answer_error" | "combination_mapping_error" | "multiple_answer_error" | "source_mismatch" | "book_answer_error" | "explanation_error" | "medical_accuracy_issue" | "citation_error" | "other",
+      "description": "Clear explanation of what is wrong",
+      "severity": "low" | "medium" | "high" | "critical",
+      "affected_component": "question" | "options" | "answer" | "explanation" | "source" | "book_answer",
+      "suggested_action": "Suggested resolution or fix"
+    }
+  ]
+}`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 24. initiateVerificationSession
+// ─────────────────────────────────────────────────────────────────────────────
+
+const InitiateVerificationInput = z.object({
+  sessionId: z.string().uuid(),
+  model: ModelIdSchema,
+});
+
+export const initiateVerificationSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => InitiateVerificationInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const modelDef = MODELS[data.model];
+
+    const { error } = await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        phase4_model: data.model,
+        phase4_provider: modelDef.provider,
+        phase4_status: "running",
+      })
+      .eq("id", data.sessionId);
+
+    if (error) throw error;
+    return { ok: true };
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 25. verifySingleQuestion
+// ─────────────────────────────────────────────────────────────────────────────
+
+const VerifyQuestionInput = z.object({
+  sessionId: z.string().uuid(),
+  questionId: z.string().uuid(),
+  model: ModelIdSchema,
+});
+
+export const verifySingleQuestion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => VerifyQuestionInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+
+    // Fetch session
+    const { data: sess } = await supabase
+      .from(SESSIONS_TABLE)
+      .select("study_material_text, study_material_name")
+      .eq("id", data.sessionId)
+      .single();
+
+    // Fetch question
+    const { data: q, error: qErr } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select(
+        "id, page_number, question_number, stem, options, question_type, selected_answer, answer_text, source_reference, concept, explanation, book_answer"
+      )
+      .eq("id", data.questionId)
+      .single();
+
+    if (qErr || !q) throw new Error("Question not found");
+
+    const optionsList: Array<{ letter: string; body: string }> = Array.isArray(q.options)
+      ? q.options
+      : [];
+
+    const formattedOptions = optionsList
+      .map((o) => `  ${o.letter}) ${o.body}`)
+      .join("\n");
+
+    const determinedAnswerStr = Array.isArray(q.selected_answer)
+      ? q.selected_answer.join(", ")
+      : String(q.selected_answer ?? "None");
+
+    let sourceContext = "";
+    if (sess?.study_material_text?.trim()) {
+      const ret = retrieveRelevantSourceContext(sess.study_material_text, q.stem, optionsList);
+      sourceContext = `AVAILABLE STUDY MATERIAL EXCERPT:\n"""\n${ret.context}\n"""\n\n`;
+    }
+
+    const auditPrompt = `${sourceContext}QUESTION UNDER AUDIT (PDF Page ${q.page_number}${q.question_number ? `, Question #${q.question_number}` : ""}):
+Stem:
+${q.stem}
+
+Options:
+${formattedOptions}
+
+Question Type:
+${q.question_type || "single_choice"}
+
+Phase 2 Selected Correct Answer:
+Option ${determinedAnswerStr}${q.answer_text ? ` (${JSON.stringify(q.answer_text)})` : ""}
+
+Source Reference Citation:
+${q.source_reference || "None"}
+
+Phase 3 Explanation:
+${q.explanation || "No explanation generated yet"}
+
+Book Answer Cited:
+${q.book_answer || "None"}
+
+Audit all 6 dimensions strictly according to the system instructions. Attach accurate problem_type and severity to any detected issues.`;
+
+    const modelDef = MODELS[data.model];
+    let rawOutput = "";
+
+    try {
+      if (modelDef.provider === "gemini") {
+        const apiKey = await getGeminiKey(supabase);
+        rawOutput = await callGeminiText(
+          apiKey,
+          modelDef.apiModel,
+          PHASE4_VERIFICATION_SYSTEM,
+          auditPrompt
+        );
+      } else {
+        const apiKey = await getOpenAIKey(supabase);
+        rawOutput = await callOpenAIText(
+          apiKey,
+          modelDef.apiModel,
+          PHASE4_VERIFICATION_SYSTEM,
+          auditPrompt
+        );
+      }
+    } catch (apiErr: any) {
+      await supabase
+        .from(QUESTIONS_TABLE)
+        .update({
+          verification_status: "error",
+        })
+        .eq("id", data.questionId);
+      throw apiErr;
+    }
+
+    const parsed = extractJson(rawOutput) || {};
+    const rawIssues = Array.isArray(parsed.issues) ? parsed.issues : [];
+
+    // Ensure every reported issue explicitly preserves pdf_page_number
+    const verifiedIssues: VerificationIssue[] = rawIssues.map((iss: any) => ({
+      problem_type: iss.problem_type || "other",
+      description: String(iss.description || "Unspecified issue"),
+      severity: ["low", "medium", "high", "critical"].includes(iss.severity) ? iss.severity : "medium",
+      affected_component: iss.affected_component || "question",
+      pdf_page_number: q.page_number,
+      suggested_action: String(iss.suggested_action || "Review manually"),
+    }));
+
+    const status: "passed" | "flagged" | "error" =
+      verifiedIssues.length === 0
+        ? "passed"
+        : verifiedIssues.some((i) => i.severity === "critical" || i.severity === "high")
+        ? "error"
+        : "flagged";
+
+    const { error: updErr } = await supabase
+      .from(QUESTIONS_TABLE)
+      .update({
+        verification_status: status,
+        verification_report: verifiedIssues,
+        verified_at: new Date().toISOString(),
+      })
+      .eq("id", data.questionId);
+
+    if (updErr) throw updErr;
+
+    // Recalculate session verification counters
+    const { count: totalChecked } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId)
+      .in("verification_status", ["passed", "flagged", "error"]);
+
+    const { count: issuesCount } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId)
+      .in("verification_status", ["flagged", "error"]);
+
+    await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        phase4_total_checked: totalChecked ?? 0,
+        phase4_issues_count: issuesCount ?? 0,
+      })
+      .eq("id", data.sessionId);
+
+    return {
+      questionId: data.questionId,
+      status,
+      issuesCount: verifiedIssues.length,
+      issues: verifiedIssues,
+    };
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 26. completeVerificationSession
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const completeVerificationSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => CompleteAnsweringInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+
+    const { count: totalChecked } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId)
+      .in("verification_status", ["passed", "flagged", "error"]);
+
+    const { count: issuesCount } = await supabase
+      .from(QUESTIONS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId)
+      .in("verification_status", ["flagged", "error"]);
+
+    await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        phase4_status: "completed",
+        phase4_total_checked: totalChecked ?? 0,
+        phase4_issues_count: issuesCount ?? 0,
+      })
+      .eq("id", data.sessionId);
+
+    return { ok: true };
+  });
+
 
