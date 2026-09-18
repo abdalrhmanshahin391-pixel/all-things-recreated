@@ -101,7 +101,7 @@ export const submitQuestionReport = createServerFn({ method: "POST" })
         .filter(Boolean)
         .join("\n\n");
 
-      const { data: ticket, error: ticketErr } = await (sb.from as any)("support_requests")
+      const { error: ticketErr } = await (sb.from as any)("support_requests")
         .insert({
           user_id: context.userId,
           name: userEmail ? userEmail.split("@")[0] : "Student",
@@ -109,17 +109,16 @@ export const submitQuestionReport = createServerFn({ method: "POST" })
           category: "question_report",
           subject: `Question Report: ${data.reportType} (Q# ${data.questionId.slice(0, 18)})`,
           message: messageBody,
-          status: "pending",
-        })
-        .select("id")
-        .single();
+          status: "new",
+          admin_notes: "",
+        });
 
       if (ticketErr) {
         console.error("Support requests fallback error:", ticketErr);
         throw new Error(ticketErr.message || "Failed to submit report");
       }
 
-      return { ok: true, reportId: ticket?.id };
+      return { ok: true };
     } catch (err: any) {
       console.error("Failed to submit question report:", err);
       throw new Error(err?.message || "Failed to submit question report");
@@ -177,7 +176,9 @@ export const listQuestionReports = createServerFn({ method: "POST" })
         .limit(data?.limit ?? 200);
 
       if (data?.status && data.status !== "all") {
-        q2 = q2.eq("status", data.status);
+        const mappedStatus =
+          data.status === "reviewed" ? "resolved" : data.status === "dismissed" ? "closed" : "new";
+        q2 = q2.eq("status", mappedStatus);
       }
       if (data?.search?.trim()) {
         const s = `%${data.search.trim()}%`;
@@ -280,7 +281,7 @@ export const updateQuestionReport = createServerFn({ method: "POST" })
     // Fallback to support_requests
     try {
       const ticketStatus =
-        data.status === "reviewed" ? "resolved" : data.status === "dismissed" ? "closed" : "open";
+        data.status === "reviewed" ? "resolved" : data.status === "dismissed" ? "closed" : "new";
       await (sb.from as any)("support_requests")
         .update({
           status: ticketStatus,
