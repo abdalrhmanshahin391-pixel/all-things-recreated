@@ -347,8 +347,14 @@ export function normalizeExtractedQuestion(q: any, pageNumber: number, idx: numb
     }
   }
 
-  // Detect combination options: every option text is purely numeric codes (e.g. "1,2,3", "2,4")
-  const isComboOptions = options.length > 0 && options.every((o: { letter: string; text: string }) => /^[\d\s.,;+]+$/.test(o.text.trim()));
+  // Detect combination options: at least 2 option texts are purely numeric codes (e.g. "1,2,3", "2,4").
+  // We use >= 2 (not "every") so that if one option is "All of the above" and the rest are numeric
+  // codes, we still correctly classify the question as a combination type.
+  const numericComboCount = options.filter((o: { letter: string; text: string }) =>
+    /^[\d\s.,;+]+$/.test(o.text.trim())
+  ).length;
+  const isComboOptions = options.length >= 2 && numericComboCount >= 2;
+
 
   // ── NEW FIX ────────────────────────────────────────────────────────────────
   // Detect when the model extracted NUMBERED STATEMENTS as if they were lettered options.
@@ -477,24 +483,33 @@ async function discoverPageQuestionsInternal(opts: {
   model: string;
   openaiApiKey?: string;
   geminiApiKey?: string;
-}): Promise<string[]> {
+}): Promise<{ questionNumbers: string[]; pageStartsWithOrphan: boolean; orphanType: string | null }> {
   const { pageNumber, imageJpegBase64, model, openaiApiKey, geminiApiKey } = opts;
   const systemPrompt = `You are an expert medical examination layout analyzer.
-Your mission is to examine this high-resolution page of a medical exam paper and discover EVERY question number printed on it.
+Your mission is to examine this high-resolution page of a medical exam paper and:
+  (a) discover EVERY real question number printed on it, and
+  (b) detect if the page BEGINS with an orphan fragment (the tail of a question that started on the previous page).
 
 INSTRUCTIONS:
 1. Scan the ENTIRE page from top to bottom.
 2. If the page has 2 columns, read Column 1 top-to-bottom first, then Column 2 top-to-bottom.
 3. Check margins, corners, and headers carefully.
-4. List the question numbers in natural reading order (e.g. ["1", "2", "3", "4"]).
-5. If an orphaned fragment starts at the top (e.g. continuing from previous page), do not list statement numbers (like "4.") as question numbers.
+4. List only REAL question numbers in natural reading order (e.g. ["5", "6", "7"]).
+
+ORPHAN DETECTION (critical):
+- Look at the very FIRST element visible on the page.
+- If the page begins with a NUMBERED STATEMENT (e.g. "4. positive reaction to treatment") followed immediately by combination answer codes (e.g. "a) 1,3  b) 2,3,4") → this is the TAIL of a split combination question from the previous page. Set "page_starts_with_orphan_fragment": true, "orphan_type": "combination_tail".
+- If the page begins with a clear standalone question that has its own stem → set "page_starts_with_orphan_fragment": false.
+- Do NOT list orphan statement numbers (like "4.") as question numbers.
 
 Return STRICT JSON:
 {
-  "question_numbers": ["1", "2", "3", "4"]
+  "question_numbers": ["5", "6", "7"],
+  "page_starts_with_orphan_fragment": false,
+  "orphan_type": null
 }`;
 
-  const userPrompt = `List every visible question number on Page ${pageNumber} of this exam paper.`;
+  const userPrompt = `Examine Page ${pageNumber} of this exam paper. List every real question number and detect if the page starts with an orphan fragment.`;
 
   try {
     const rawOutput = await callUnifiedAi({
@@ -511,10 +526,12 @@ Return STRICT JSON:
     const nums = Array.isArray(parsed?.question_numbers)
       ? parsed.question_numbers.map((n: any) => String(n).replace(/[^\d\w]/g, "").trim()).filter(Boolean)
       : [];
-    return nums;
+    const pageStartsWithOrphan = Boolean(parsed?.page_starts_with_orphan_fragment);
+    const orphanType = parsed?.orphan_type ? String(parsed.orphan_type) : null;
+    return { questionNumbers: nums, pageStartsWithOrphan, orphanType };
   } catch (err) {
-    console.warn(`[Pass 1 Discovery] failed for page ${pageNumber}:`, err);
-    return [];
+    console.warn(`[Discovery] failed for page ${pageNumber}:`, err);
+    return { questionNumbers: [], pageStartsWithOrphan: false, orphanType: null };
   }
 }
 
@@ -522,6 +539,7 @@ async function extractSingleQuestionFocused(opts: {
   pageNumber: number;
   imageJpegBase64: string;
   questionNumber: string;
+  nextQuestionNumber?: string | null;
   combinationMode: "mode1_keep_original" | "mode2_convert_multiple";
   model: string;
   openaiApiKey?: string;
@@ -529,49 +547,70 @@ async function extractSingleQuestionFocused(opts: {
   customInstructions?: string;
   idx?: number;
 }): Promise<ExtractedQuestion | null> {
-  const { pageNumber, imageJpegBase64, questionNumber, combinationMode, model, openaiApiKey, geminiApiKey, customInstructions, idx = 0 } = opts;
+  const { pageNumber, imageJpegBase64, questionNumber, nextQuestionNumber, combinationMode, model, openaiApiKey, geminiApiKey, customInstructions, idx = 0 } = opts;
+
+  const boundaryRule = nextQuestionNumber
+    ? `QUESTION BOUNDARY (CRITICAL):
+   - Question #${questionNumber} starts at its own number marker on the page.
+   - Question #${questionNumber} ENDS immediately before the Q#${nextQuestionNumber} marker begins.
+   - Everything between Q#${questionNumber} and Q#${nextQuestionNumber} belongs EXCLUSIVELY to Q#${questionNumber}.
+   - Use this boundary to capture all statements (1, 2, 3, 4) and all answer choices.`
+    : `QUESTION BOUNDARY (CRITICAL):
+   - Question #${questionNumber} is the LAST question on this page.
+   - Capture everything after the Q#${questionNumber} marker to the bottom of the page — all statements and choices belong to this question.`;
 
   const systemPrompt = `You are an expert medical examination transcription engine reading high-resolution scans of exam papers.
-YOUR MISSION: Transcribe ONLY Question #${questionNumber} from this page VERBATIM with 100% fidelity and zero omission.
+YOUR MISSION: Transcribe ONLY Question #${questionNumber} from this page with 100% verbatim fidelity and ZERO errors.
 
-ZERO OMISSION DIRECTIVES FOR QUESTION #${questionNumber}:
-1. LOCATE: Find Question #${questionNumber} on this page. If the page has 2 or more columns, inspect BOTH columns thoroughly.
-2. COMBINATION STATEMENTS (MANDATORY CRITICAL RULE):
-   - A question is a Combination Question if choices are combination numbers (e.g. "a) 1.2", "b) 1.3.4", "c) 1.2.3.4", "d) 2.3.4") or reference numbered items.
-   - For ANY combination question, the question ALWAYS has numbered statements (1. ..., 2. ..., 3. ..., 4. ...).
-   - They may appear directly below the stem, or printed in the adjacent column to the right!
-   - You MUST transcribe EVERY numbered statement into the "statements" array:
-     "statements": [
-       "1. First numbered statement verbatim",
-       "2. Second numbered statement verbatim",
-       "3. Third numbered statement verbatim",
-       "4. Fourth numbered statement verbatim"
-     ]
-   - NEVER omit or skip the numbered statements! Missing statements makes the question completely broken.
-${
-  combinationMode === "mode1_keep_original"
-    ? `   - MODE 1 — KEEP ORIGINAL COMBINATION FORMAT:
-     * Put the combination choices directly into the "options" array:
-       [{"letter": "A", "text": "1.2"}, {"letter": "B", "text": "1.3.4"}, {"letter": "C", "text": "1.2.3.4"}, {"letter": "D", "text": "2.3.4"}].
-     * Set "question_type": "combination".
-     * Also record choices in "printed_combinations".`
-    : `   - MODE 2 — CONVERT TO MULTIPLE ANSWERS:
-     * The numbered statements become the "options" (A: statement 1, B: statement 2...).
-     * Set "question_type": "multiple_answer".
-     * Record original choices in "printed_combinations".`
+${boundaryRule}
+
+QUESTION TYPE CLASSIFICATION — follow this exact decision tree in order:
+
+STEP 1 — Examine the answer choices (items labeled a), b), c), d) or A, B, C, D):
+   • If ANY choice contains ONLY numbers/commas/dots (e.g. "1,2" or "1.3.4" or "2,3,4") → COMBINATION TYPE
+   • If ANY choice says "All of the above" or "All above" AND other choices also have numeric codes → COMBINATION TYPE
+   • If ALL choices are plain medical text (drug names, diseases, symptoms, clinical findings) → ORDINARY TYPE
+
+STEP 2 — If COMBINATION TYPE: locate the numbered statements (1. ... 2. ... 3. ... 4. ...):
+   • They appear directly under the stem, in the adjacent column, or between the stem and the choices.
+   • Extract ALL numbered statements into the "statements" array verbatim.
+   • If you cannot find ANY statements: set needs_review: true and review_reason: "Combination question — numbered statements (1,2,3,4) are missing; they may be on the previous page or adjacent column."
+
+STEP 3 — STEM boundary:
+   • The stem = ONLY the question prompt sentence — what the question is asking.
+   • The stem ENDS at the first numbered statement marker (1.) or first option marker (A), a)).
+   • Do NOT include any statement text or option text in the stem.
+   • Do NOT include the question number prefix (e.g. "5.") as part of the stem text.
+
+${combinationMode === "mode1_keep_original"
+  ? `COMBINATION FORMAT (MODE 1 — KEEP ORIGINAL):
+   - Put combination answer codes directly into "options":
+     [{"letter":"A","text":"1,2"},{"letter":"B","text":"1.3.4"},{"letter":"C","text":"1.2.3.4"},{"letter":"D","text":"2.3.4"}]
+   - Set question_type: "combination"
+   - Also copy them into "printed_combinations"`
+  : `COMBINATION FORMAT (MODE 2 — CONVERT TO MULTIPLE ANSWERS):
+   - The numbered statements become the "options" (A: statement 1, B: statement 2...)
+   - Set question_type: "multiple_answer"
+   - Preserve original codes in "printed_combinations"`
 }
-3. ORDINARY MCQs:
-   - Extract choices a), b), c), d) into "options" with letters "A", "B", "C", "D".
-   - Set "question_type": "ordinary".
-4. SELF-CHECK: Before producing JSON, verify that the stem, all statements (1..4), and all choices (a..d) are present.
-${customInstructions ? `Special User Instructions:\n${customInstructions}\n` : ""}
+
+ANTI-ERROR CHECKLIST — verify EVERY item before producing JSON:
+❌ NEVER put option text (A), B), C), D)) inside the "stem" field
+❌ NEVER copy the same sentence into more than one option slot — ALL 4 option texts MUST be DIFFERENT
+❌ NEVER use numbered statement labels (1. 2. 3. 4.) as option letters
+❌ NEVER invent or hallucinate options that are not visible in the image
+❌ NEVER include the question number prefix (e.g. "5.") inside the stem text
+✅ For combination type: "statements" array MUST have all 4 numbered items (1, 2, 3, 4)
+✅ For ordinary type: "options" array MUST contain the full verbatim text of each choice
+✅ If you are unsure about ANYTHING: set needs_review: true and explain in review_reason
+${customInstructions ? `\nSpecial User Instructions:\n${customInstructions}\n` : ""}
 
 Return STRICT JSON:
 {
   "question": {
     "number": "${questionNumber}",
     "question_type": "ordinary|combination|multiple_answer",
-    "stem": "full question prompt verbatim without numbered statements",
+    "stem": "full question prompt verbatim — ends before first statement or option marker",
     "statements": [
       "1. First statement verbatim",
       "2. Second statement verbatim",
@@ -579,13 +618,13 @@ Return STRICT JSON:
       "4. Fourth statement verbatim"
     ],
     "options": [
-      { "letter": "A", "text": "choice A text" },
-      { "letter": "B", "text": "choice B text" },
-      { "letter": "C", "text": "choice C text" },
-      { "letter": "D", "text": "choice D text" }
+      { "letter": "A", "text": "choice A text or 1,2" },
+      { "letter": "B", "text": "choice B text or 1.3.4" },
+      { "letter": "C", "text": "choice C text or 1.2.3.4" },
+      { "letter": "D", "text": "choice D text or 2.3.4" }
     ],
     "printed_combinations": [
-      { "letter": "A", "text": "1.2" }
+      { "letter": "A", "text": "1,2" }
     ],
     "detected_answer": null,
     "needs_review": false,
@@ -614,13 +653,14 @@ Return STRICT JSON:
 
     let normalized = normalizeExtractedQuestion(qObj, pageNumber, idx);
 
-    // ── Auto-Retry if incomplete or missing combination statements ─────────
+    // ── Auto-Retry if incomplete or flagged ──────────────────────────────────
     if (normalized.needsReview || (normalized.options.length < 4 && !normalized.isApproved)) {
       try {
-        const retryPrompt = `FOCUSED REPAIR CALL FOR QUESTION #${questionNumber}:
-The previous transcription was missing numbered statements (1, 2, 3, 4...) or choices.
+        const retryPrompt = `FOCUSED REPAIR FOR QUESTION #${questionNumber}:
+The previous transcription was incomplete — it was missing numbered statements (1, 2, 3, 4) or answer choices (A, B, C, D).
 Locate Question #${questionNumber} on Page ${pageNumber}. Inspect BOTH columns thoroughly.
-Transcribe Question #${questionNumber} with ALL statements (1, 2, 3, 4) and ALL choices (A, B, C, D).`;
+Transcribe Question #${questionNumber} with ALL statements (if combination type) and ALL choices.
+${boundaryRule}`;
 
         const retryOutput = await callUnifiedAi({
           model,
@@ -653,7 +693,8 @@ Transcribe Question #${questionNumber} with ALL statements (1, 2, 3, 4) and ALL 
   }
 }
 
-// ── 1. Page Vision Extraction (2-Pass Strategy with Fallback) ────────────────
+// ── 1. Page Vision Extraction (Per-Question Focus Strategy with Fallback) ─────
+
 const ExtractPageInput = z.object({
   pageNumber: z.number().int().min(1),
   imageJpegBase64: z.string().min(10),
@@ -672,55 +713,97 @@ export const extractPageQuestions124 = createServerFn({ method: "POST" })
 
     const { pageNumber, imageJpegBase64, combinationMode, model, openaiApiKey, geminiApiKey, customInstructions } = data;
 
-    // ── PASS 1: High-Resolution Whole-Page Transcription with ZERO OMISSION Directives ──
-    const systemPrompt = buildExtractionSystemPrompt(combinationMode, customInstructions);
-    const userPrompt = `Transcribe all medical MCQs visible on Page ${pageNumber} of this exam paper verbatim with zero omissions across all columns.`;
-
-    const rawOutput = await callUnifiedAi({
+    // ── STEP 1: Discover all question numbers on this page ──────────────────
+    const { questionNumbers, pageStartsWithOrphan, orphanType } = await discoverPageQuestionsInternal({
+      pageNumber,
+      imageJpegBase64,
       model,
-      systemPrompt,
-      userPrompt,
-      imageBase64: imageJpegBase64,
       openaiApiKey,
       geminiApiKey,
-      jsonMode: true,
-      temperature: 0,
     });
 
-    const parsed = parseJsonObject(rawOutput);
-    const rawQuestions = Array.isArray(parsed?.questions) ? parsed.questions : [];
+    let questions: ExtractedQuestion[] = [];
 
-    let questions: ExtractedQuestion[] = rawQuestions.map((q: any, idx: number) =>
-      normalizeExtractedQuestion(q, pageNumber, idx)
-    );
+    if (questionNumbers.length > 0) {
+      // ── STEP 2: Per-question focused extraction (primary strategy) ─────────
+      // Process each question individually with next-Q boundary so the AI knows
+      // exactly where each question starts and ends on the page.
+      for (let i = 0; i < questionNumbers.length; i++) {
+        const qNum = questionNumbers[i];
+        const nextQNum = questionNumbers[i + 1] || null;
 
-    // ── PASS 2 (Self-Healing): Focused repair call for any incomplete question ──
-    for (let idx = 0; idx < questions.length; idx++) {
-      const q = questions[idx];
-      const isBrokenCombo = q.questionType === "combination" && (!q.options.length || !/1[\.\s].+2[\.\s]/s.test(q.stem));
-      if (q.needsReview || isBrokenCombo) {
         try {
-          const repaired = await extractSingleQuestionFocused({
+          const extracted = await extractSingleQuestionFocused({
             pageNumber,
             imageJpegBase64,
-            questionNumber: q.number,
+            questionNumber: qNum,
+            nextQuestionNumber: nextQNum,
             combinationMode,
             model,
             openaiApiKey,
             geminiApiKey,
             customInstructions,
-            idx,
+            idx: i,
           });
-          if (repaired && (!repaired.needsReview || repaired.options.length > q.options.length)) {
-            questions[idx] = repaired;
-          }
-        } catch (repairErr) {
-          console.warn(`[Pass 2 Focused Repair] Q#${q.number} failed on page ${pageNumber}:`, repairErr);
+          if (extracted) questions.push(extracted);
+        } catch (qErr) {
+          console.warn(`[Extract Q#${qNum}] error on page ${pageNumber}:`, qErr);
         }
+      }
+    } else {
+      // ── STEP 3: Fallback — whole-page extraction dump ──────────────────────
+      // Used only when Step 1 discovered 0 question numbers (e.g. a table/diagram page).
+      console.warn(`[Page ${pageNumber}] 0 question numbers discovered. Falling back to whole-page dump.`);
+      try {
+        const systemPrompt = buildExtractionSystemPrompt(combinationMode, customInstructions);
+        const userPrompt = `Transcribe all medical MCQs visible on Page ${pageNumber} of this exam paper verbatim with zero omissions across all columns.`;
+
+        const rawOutput = await callUnifiedAi({
+          model,
+          systemPrompt,
+          userPrompt,
+          imageBase64: imageJpegBase64,
+          openaiApiKey,
+          geminiApiKey,
+          jsonMode: true,
+          temperature: 0,
+        });
+
+        const parsed = parseJsonObject(rawOutput);
+        const rawQs = Array.isArray(parsed?.questions) ? parsed.questions : [];
+        questions = rawQs.map((q: any, idx: number) => normalizeExtractedQuestion(q, pageNumber, idx));
+      } catch (fallbackErr) {
+        console.warn(`[Page ${pageNumber}] Whole-page fallback also failed:`, fallbackErr);
       }
     }
 
-    return { pageNumber, questions };
+    // ── Handle orphan fragment detected at page start ──────────────────────
+    if (pageStartsWithOrphan) {
+      const orphanPlaceholder: ExtractedQuestion = {
+        id: `q-p${pageNumber}-orphan-${Date.now().toString(36)}`,
+        pageNumber,
+        number: `~orphan`,
+        questionType: "combination",
+        stem: "[Orphan fragment — tail of a split question from the previous page]",
+        options: [],
+        hasMissingOptions: true,
+        missingOptionsCount: 4,
+        detectedAnswer: null,
+        comboSets: [],
+        originalCombinations: [],
+        needsReview: true,
+        reviewReason: `This page starts with the tail of a split combination question (${orphanType ?? "fragment"}) from the previous page. The statements and/or options at the top of this page belong to the last question of the previous page. Please review and merge manually.`,
+        isApproved: false,
+      };
+      questions = [orphanPlaceholder, ...questions];
+    }
+
+    // ── Determine page quality ─────────────────────────────────────────────
+    const nonOrphanQs = questions.filter((q) => !String(q.number).startsWith("~"));
+    const pageQuality: "ok" | "unclear" | "empty" =
+      nonOrphanQs.length > 0 ? "ok" : questions.length === 0 ? "unclear" : "empty";
+
+    return { pageNumber, questions, pageQuality };
   });
 
 // ── 1B. Re-Extract Single Question (Alternate Model Selector) ────────────────

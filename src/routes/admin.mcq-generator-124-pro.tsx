@@ -156,7 +156,15 @@ export function McqGenerator124ProPage() {
   });
   const [isBulkFillingOptions, setIsBulkFillingOptions] = useState<boolean>(false);
 
-  // Stop flag ref for emergency halt
+  // Per-page extraction result summary (populated live during extraction)
+  const [pageExtractionResults, setPageExtractionResults] = useState<Record<number, {
+    questionCount: number;
+    flaggedCount: number;
+    pageQuality: "ok" | "unclear" | "empty";
+    questionNumbers: string[];
+  }>>({});
+
+
   const stopRequestedRef = useRef<boolean>(false);
   const [isStopRequested, setIsStopRequested] = useState<boolean>(false);
 
@@ -480,6 +488,7 @@ export function McqGenerator124ProPage() {
     setIsStopRequested(false);
     setIsExtracting(true);
     setStage1Done(false);
+    setPageExtractionResults({});  // reset per-page results for new run
 
     // Standard Mode: Process ALL pages from 1 to totalPages
     if (processingMode === "standard") {
@@ -516,9 +525,31 @@ export function McqGenerator124ProPage() {
             }));
             collected.push(...pageQs);
             setExtractedQuestions([...collected]);
+
+            // Update per-page results live
+            const pq = (res.pageQuality as "ok" | "unclear" | "empty") || "ok";
+            const qNums = pageQs.map((q) => q.number).filter((n) => !String(n).startsWith("~"));
+            const flagged = pageQs.filter((q) => q.needsReview).length;
+            setPageExtractionResults((prev) => ({
+              ...prev,
+              [p]: {
+                questionCount: qNums.length,
+                flaggedCount: flagged,
+                pageQuality: pq,
+                questionNumbers: qNums,
+              },
+            }));
+
+            if (pq === "unclear") {
+              toast.warning(`Page ${p} — AI could not read this page clearly. Manual review recommended.`);
+            }
           } catch (pageErr: any) {
             console.error(`Error on Page ${p}:`, pageErr);
             toast.warning(`Page ${p} encountered an issue: ${pageErr?.message || pageErr}. Continuing to next page...`);
+            setPageExtractionResults((prev) => ({
+              ...prev,
+              [p]: { questionCount: 0, flaggedCount: 0, pageQuality: "unclear", questionNumbers: [] },
+            }));
           }
         }
 
@@ -536,6 +567,7 @@ export function McqGenerator124ProPage() {
       } finally {
         setIsExtracting(false);
       }
+
     } else {
       // ── BATCH API MODE (50% Price Discount) ─────────────────────────────────
       try {
@@ -1817,8 +1849,73 @@ export function McqGenerator124ProPage() {
               </div>
             </div>
 
+            {/* ── Per-Page Live Extraction Results ───────────────────────────── */}
+            {Object.keys(pageExtractionResults).length > 0 && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                <h3 className="text-xs font-bold text-slate-300 mb-3 flex items-center gap-2 uppercase tracking-wider">
+                  <Radio size={13} className="text-amber-400" />
+                  Page-by-Page Extraction Log
+                  <span className="ml-auto text-[10px] font-mono text-slate-500 normal-case tracking-normal">
+                    {Object.keys(pageExtractionResults).length} / {totalPages} pages processed
+                  </span>
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+                    const pr = pageExtractionResults[p];
+                    const isProcessing = isExtracting && !pr && extractProgress.current === p;
+                    if (!pr && !isProcessing) {
+                      return (
+                        <div key={p} className="rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-center opacity-40">
+                          <div className="text-[10px] font-mono text-slate-600">p.{p}</div>
+                          <div className="text-[9px] text-slate-700 mt-0.5">—</div>
+                        </div>
+                      );
+                    }
+                    if (isProcessing) {
+                      return (
+                        <div key={p} className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-2.5 text-center animate-pulse">
+                          <div className="text-[10px] font-mono text-amber-400">p.{p}</div>
+                          <div className="text-[9px] text-amber-500 mt-0.5">scanning…</div>
+                        </div>
+                      );
+                    }
+                    const isUnclear = pr.pageQuality === "unclear" || pr.pageQuality === "empty";
+                    const hasFlagged = pr.flaggedCount > 0;
+                    const borderColor = isUnclear ? "border-red-500/50" : hasFlagged ? "border-amber-500/50" : "border-emerald-500/40";
+                    const bgColor = isUnclear ? "bg-red-500/5" : hasFlagged ? "bg-amber-500/5" : "bg-emerald-500/5";
+                    const statusText = isUnclear ? "⚠ unclear" : hasFlagged ? `⚠ ${pr.flaggedCount} flagged` : `✓ clean`;
+                    const statusColor = isUnclear ? "text-red-400" : hasFlagged ? "text-amber-400" : "text-emerald-400";
+                    return (
+                      <div
+                        key={p}
+                        className={`rounded-lg border ${borderColor} ${bgColor} p-2.5 text-center`}
+                        title={isUnclear ? `Page ${p}: unclear image — manual review needed` : `Page ${p}: Q#${pr.questionNumbers.join(", Q#")}`}
+                      >
+                        <div className="text-[10px] font-mono text-slate-300">p.{p}</div>
+                        <div className={`text-[10px] font-bold mt-0.5 ${statusColor}`}>
+                          {isUnclear ? "unclear" : `${pr.questionCount}Q`}
+                        </div>
+                        <div className={`text-[9px] mt-0.5 ${statusColor}`}>{statusText}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Unclear pages warning banner */}
+                {Object.values(pageExtractionResults).some((r) => r.pageQuality !== "ok") && (
+                  <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 flex items-start gap-2">
+                    <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-400" />
+                    <span>
+                      Some pages could not be read clearly (shown in red/amber above).
+                      Check those pages in the PDF and use the per-question re-extract button to fix any issues.
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Batch Job Monitor (When in Batch Mode) */}
             {batchJob && (
+
               <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
