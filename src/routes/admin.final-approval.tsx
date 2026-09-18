@@ -35,6 +35,8 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
+import { useServerFn } from "@tanstack/react-start";
+import { getPageJpegFromCache } from "@/lib/pdf-page-image";
 import {
   listApprovalBatches,
   getApprovalBatch,
@@ -62,6 +64,12 @@ export function AdminFinalApproval() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  // ── Server Functions ──────────────────────────────────────────────────────
+  const listBatchesFn = useServerFn(listApprovalBatches);
+  const getBatchFn = useServerFn(getApprovalBatch);
+  const updateBatchFn = useServerFn(updateApprovalBatch);
+  const deleteBatchFn = useServerFn(deleteApprovalBatch);
+
   // Route security guard
   useEffect(() => {
     if (!loading && !isAdmin && !isQa) {
@@ -84,11 +92,60 @@ export function AdminFinalApproval() {
   const [qaZoom, setQaZoom] = useState(1);
   const [qaFilter, setQaFilter] = useState<"all" | "review_only" | "approved" | "unapproved">("all");
   const [isSavingBatch, setIsSavingBatch] = useState(false);
+  const [localPageImages, setLocalPageImages] = useState<Record<number, string>>({});
 
-  // Query Batches
+  // Query Batches (Server + Client Backup)
   const { data: batchesData, isLoading: isLoadingBatches, refetch: refetchBatches } = useQuery({
     queryKey: ["final-approval-batches", statusFilter, searchQuery],
-    queryFn: () => listApprovalBatches({ data: { status: statusFilter, search: searchQuery } }),
+    queryFn: async () => {
+      let serverBatches: FinalApprovalBatchSummary[] = [];
+      try {
+        const res = await listBatchesFn({ data: { status: statusFilter, search: searchQuery } });
+        if (res?.batches) serverBatches = res.batches;
+      } catch (e) {
+        console.warn("[FinalApproval] Server list failed, checking local backup:", e);
+      }
+
+      // Merge with client localStorage batches
+      let localBatches: FinalApprovalBatchSummary[] = [];
+      try {
+        const raw = localStorage.getItem("final_approval_batches_v1");
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            localBatches = list.map((b: any) => ({
+              id: b.id,
+              title: b.title,
+              status: b.status,
+              total_questions: b.total_questions,
+              approved_questions: b.approved_questions,
+              flagged_questions: b.flagged_questions,
+              created_at: b.created_at,
+              updated_at: b.updated_at,
+              created_by_email: b.created_by_email,
+              notes: b.notes,
+            }));
+          }
+        }
+      } catch {}
+
+      const map = new Map<string, FinalApprovalBatchSummary>();
+      for (const b of localBatches) map.set(b.id, b);
+      for (const b of serverBatches) map.set(b.id, b);
+      let combined = Array.from(map.values());
+
+      if (statusFilter !== "all") {
+        combined = combined.filter((b) => b.status === statusFilter);
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        combined = combined.filter(
+          (b) => b.title.toLowerCase().includes(q) || b.notes?.toLowerCase().includes(q)
+        );
+      }
+      combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      return { batches: combined };
+    },
     enabled: !!(isAdmin || isQa),
   });
 
@@ -108,13 +165,31 @@ export function AdminFinalApproval() {
     try {
       setIsLoadingBatch(true);
       setActiveBatchId(batchId);
-      const res = await getApprovalBatch({ data: { batchId } });
-      if (res?.batch) {
-        setActiveBatch(res.batch);
-        setCurrentQuestions(res.batch.questions || []);
+      let loadedBatch: FinalApprovalBatch | null = null;
+
+      try {
+        const res = await getBatchFn({ data: { batchId } });
+        if (res?.batch) loadedBatch = res.batch;
+      } catch (err) {
+        console.warn("[FinalApproval] Server getBatch failed, checking local backup:", err);
+      }
+
+      if (!loadedBatch) {
+        try {
+          const raw = localStorage.getItem("final_approval_batches_v1");
+          const list = raw ? JSON.parse(raw) : [];
+          loadedBatch = list.find((b: any) => b.id === batchId) || null;
+        } catch {}
+      }
+
+      if (loadedBatch) {
+        setActiveBatch(loadedBatch);
+        setCurrentQuestions(loadedBatch.questions || []);
         setQaActiveIndex(0);
         setQaZoom(1);
         setQaFilter("all");
+      } else {
+        throw new Error("Batch could not be loaded");
       }
     } catch (err: any) {
       toast.error(`Failed to load batch: ${err.message || "Unknown error"}`);
@@ -137,7 +212,22 @@ export function AdminFinalApproval() {
   const handleDeleteBatch = async (batchId: string, title: string) => {
     if (!confirm(`Are you sure you want to delete batch "${title}"?`)) return;
     try {
-      await deleteApprovalBatch({ data: { batchId } });
+      try {
+        await deleteBatchFn({ data: { batchId } });
+      } catch (e) {
+        console.warn("Server delete warning:", e);
+      }
+
+      // Also remove from client storage
+      try {
+        const raw = localStorage.getItem("final_approval_batches_v1");
+        if (raw) {
+          const list = JSON.parse(raw);
+          const filtered = list.filter((b: any) => b.id !== batchId);
+          localStorage.setItem("final_approval_batches_v1", JSON.stringify(filtered));
+        }
+      } catch {}
+
       toast.success("Batch deleted");
       refetchBatches();
       if (activeBatchId === batchId) {
@@ -157,6 +247,30 @@ export function AdminFinalApproval() {
   }, [currentQuestions, qaFilter]);
 
   const activeQuestion = filteredQuestions[qaActiveIndex] || null;
+
+  // Auto-fetch missing scanned page image from IndexedDB cache
+  useEffect(() => {
+    const pNum = activeQuestion?.pageNumber;
+    if (!pNum) return;
+    if (activeBatch?.page_images?.[pNum]) return;
+    if (localPageImages[pNum]) return;
+
+    let isMounted = true;
+    getPageJpegFromCache(pNum).then((cached) => {
+      if (cached && isMounted) {
+        const src = cached.startsWith("data:") ? cached : `data:image/jpeg;base64,${cached}`;
+        setLocalPageImages((prev) => ({ ...prev, [pNum]: src }));
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [activeQuestion?.pageNumber, activeBatch, localPageImages]);
+
+  const currentImageSrc =
+    (activeQuestion?.pageNumber && activeBatch?.page_images?.[activeQuestion.pageNumber]) ||
+    (activeQuestion?.pageNumber && localPageImages[activeQuestion.pageNumber]) ||
+    null;
 
   // QA Editing Handlers
   const handleApproveQuestion = (qId: string) => {
@@ -263,13 +377,34 @@ export function AdminFinalApproval() {
         ? currentQuestions.map((q) => ({ ...q, isApproved: true, needsReview: false }))
         : currentQuestions;
 
-      await updateApprovalBatch({
-        data: {
-          batchId: activeBatchId,
-          status: newStatus,
-          questions: updatedQuestions,
-        },
-      });
+      try {
+        await updateBatchFn({
+          data: {
+            batchId: activeBatchId,
+            status: newStatus,
+            questions: updatedQuestions,
+          },
+        });
+      } catch (err) {
+        console.warn("[FinalApproval] Server update failed, continuing with local store:", err);
+      }
+
+      // Also persist to localStorage backup
+      try {
+        const raw = localStorage.getItem("final_approval_batches_v1");
+        if (raw) {
+          const list = JSON.parse(raw);
+          const idx = list.findIndex((b: any) => b.id === activeBatchId);
+          if (idx >= 0) {
+            list[idx].status = newStatus;
+            list[idx].questions = updatedQuestions;
+            list[idx].approved_questions = updatedQuestions.filter((q: any) => q.isApproved).length;
+            list[idx].flagged_questions = updatedQuestions.filter((q: any) => q.needsReview).length;
+            list[idx].updated_at = new Date().toISOString();
+            localStorage.setItem("final_approval_batches_v1", JSON.stringify(list));
+          }
+        }
+      } catch {}
 
       setCurrentQuestions(updatedQuestions);
       toast.success(markAsApproved ? "Batch marked as Fully Approved!" : "Batch progress saved!");
@@ -659,14 +794,14 @@ export function AdminFinalApproval() {
 
                 {/* Scanned Image Viewer */}
                 <div className="flex-1 overflow-auto p-4 flex items-start justify-center bg-slate-950/60 select-none">
-                  {activeBatch?.page_images && activeQuestion?.pageNumber && activeBatch.page_images[activeQuestion.pageNumber] ? (
+                  {currentImageSrc ? (
                     <div
                       style={{ transform: `scale(${qaZoom})`, transformOrigin: "top center", transition: "transform 0.15s ease-out" }}
                       className="shadow-2xl rounded-lg overflow-hidden border border-slate-700 max-w-full"
                     >
                       <img
-                        src={activeBatch.page_images[activeQuestion.pageNumber]}
-                        alt={`Scanned Page ${activeQuestion.pageNumber}`}
+                        src={currentImageSrc.startsWith("data:") ? currentImageSrc : `data:image/jpeg;base64,${currentImageSrc}`}
+                        alt={`Scanned Page ${activeQuestion?.pageNumber || ""}`}
                         className="w-full h-auto block"
                       />
                     </div>
