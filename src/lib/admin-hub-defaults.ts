@@ -36,13 +36,14 @@ export type HubGroup = {
   tiles: HubTile[];
 };
 
-export type HubLayout = { groups: HubGroup[] };
+export type HubLayout = { groups: HubGroup[]; favorites?: string[] };
 
 function t(to: string, label: string, icon: string, labelAr?: string): HubTile {
   return { id: to, to, label, icon, labelAr };
 }
 
 export const DEFAULT_LAYOUT: HubLayout = {
+  favorites: [],
   groups: [
     {
       id: "appearance",
@@ -92,6 +93,7 @@ export const DEFAULT_LAYOUT: HubLayout = {
         t("/admin/users", "Users & Roles", "Users"),
         t("/admin/groups", "Groups", "UsersRound"),
         t("/admin/support", "Support Center", "LifeBuoy"),
+        t("/admin/question-reports", "Question Reports", "Flag", "تقارير الأسئلة"),
         t("/admin/devices", "Device Security", "Smartphone"),
         t("/admin/content-protection", "Content Protection", "ShieldAlert"),
         t("/admin/coupons", "Coupons", "Ticket"),
@@ -153,5 +155,8 @@ export function mergeLayout(stored: unknown): HubLayout {
     else groups.push({ ...dg, tiles: missing.map((m) => ({ ...m })) });
   }
 
-  return { groups };
+  return {
+    groups,
+    favorites: Array.isArray(s.favorites) ? s.favorites.filter((x): x is string => typeof x === "string") : [],
+  };
 }

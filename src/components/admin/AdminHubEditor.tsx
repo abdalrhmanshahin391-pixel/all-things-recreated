@@ -82,7 +82,7 @@ export function AdminHubEditor({
         <div className="ms-auto flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setLayout(structuredClone(DEFAULT_LAYOUT))}
+            onClick={() => setLayout({ ...structuredClone(DEFAULT_LAYOUT), favorites: initial.favorites ?? [] })}
             className="inline-flex items-center gap-1.5 rounded-xl border-2 border-border px-3 py-1.5 text-xs font-bold hover:bg-muted"
           >
             <RotateCcw size={14} /> Reset to default
@@ -97,7 +97,7 @@ export function AdminHubEditor({
           <button
             type="button"
             disabled={saving}
-            onClick={() => onSave(layout)}
+            onClick={() => onSave({ ...layout, favorites: layout.favorites ?? initial.favorites ?? [] })}
             className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black text-primary-foreground disabled:opacity-60"
             style={{ background: "var(--primary)" }}
           >

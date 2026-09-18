@@ -69,6 +69,7 @@ import { Route as AdminPdfSlicerRouteImport } from './routes/admin.pdf-slicer'
 import { Route as AdminPeopleRouteImport } from './routes/admin.people'
 import { Route as AdminQuestionBankRouteImport } from './routes/admin.question-bank'
 import { Route as AdminQuestionGeneratorRouteImport } from './routes/admin.question-generator'
+import { Route as AdminQuestionReportsRouteImport } from './routes/admin.question-reports'
 import { Route as AdminQuestionsRouteImport } from './routes/admin.questions'
 import { Route as AdminRolesRouteImport } from './routes/admin.roles'
 import { Route as AdminServersRouteImport } from './routes/admin.servers'
@@ -445,6 +446,11 @@ const AdminQuestionBankRoute = AdminQuestionBankRouteImport.update({
 const AdminQuestionGeneratorRoute = AdminQuestionGeneratorRouteImport.update({
   id: '/admin/question-generator',
   path: '/admin/question-generator',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminQuestionReportsRoute = AdminQuestionReportsRouteImport.update({
+  id: '/admin/question-reports',
+  path: '/admin/question-reports',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminQuestionsRoute = AdminQuestionsRouteImport.update({
@@ -884,6 +890,7 @@ export interface FileRoutesByFullPath {
   '/admin/people': typeof AdminPeopleRoute
   '/admin/question-bank': typeof AdminQuestionBankRoute
   '/admin/question-generator': typeof AdminQuestionGeneratorRoute
+  '/admin/question-reports': typeof AdminQuestionReportsRoute
   '/admin/questions': typeof AdminQuestionsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/servers': typeof AdminServersRoute
@@ -1015,6 +1022,7 @@ export interface FileRoutesByTo {
   '/admin/people': typeof AdminPeopleRoute
   '/admin/question-bank': typeof AdminQuestionBankRoute
   '/admin/question-generator': typeof AdminQuestionGeneratorRoute
+  '/admin/question-reports': typeof AdminQuestionReportsRoute
   '/admin/questions': typeof AdminQuestionsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/servers': typeof AdminServersRoute
@@ -1148,6 +1156,7 @@ export interface FileRoutesById {
   '/admin/people': typeof AdminPeopleRoute
   '/admin/question-bank': typeof AdminQuestionBankRoute
   '/admin/question-generator': typeof AdminQuestionGeneratorRoute
+  '/admin/question-reports': typeof AdminQuestionReportsRoute
   '/admin/questions': typeof AdminQuestionsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/servers': typeof AdminServersRoute
@@ -1286,6 +1295,7 @@ export interface FileRouteTypes {
     | '/admin/people'
     | '/admin/question-bank'
     | '/admin/question-generator'
+    | '/admin/question-reports'
     | '/admin/questions'
     | '/admin/roles'
     | '/admin/servers'
@@ -1417,6 +1427,7 @@ export interface FileRouteTypes {
     | '/admin/people'
     | '/admin/question-bank'
     | '/admin/question-generator'
+    | '/admin/question-reports'
     | '/admin/questions'
     | '/admin/roles'
     | '/admin/servers'
@@ -1549,6 +1560,7 @@ export interface FileRouteTypes {
     | '/admin/people'
     | '/admin/question-bank'
     | '/admin/question-generator'
+    | '/admin/question-reports'
     | '/admin/questions'
     | '/admin/roles'
     | '/admin/servers'
@@ -1686,6 +1698,7 @@ export interface RootRouteChildren {
   AdminPeopleRoute: typeof AdminPeopleRoute
   AdminQuestionBankRoute: typeof AdminQuestionBankRoute
   AdminQuestionGeneratorRoute: typeof AdminQuestionGeneratorRoute
+  AdminQuestionReportsRoute: typeof AdminQuestionReportsRoute
   AdminQuestionsRoute: typeof AdminQuestionsRoute
   AdminRolesRoute: typeof AdminRolesRoute
   AdminServersRoute: typeof AdminServersRoute
@@ -2158,6 +2171,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/question-generator'
       fullPath: '/admin/question-generator'
       preLoaderRoute: typeof AdminQuestionGeneratorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/question-reports': {
+      id: '/admin/question-reports'
+      path: '/admin/question-reports'
+      fullPath: '/admin/question-reports'
+      preLoaderRoute: typeof AdminQuestionReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/questions': {
@@ -2888,6 +2908,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminPeopleRoute: AdminPeopleRoute,
   AdminQuestionBankRoute: AdminQuestionBankRoute,
   AdminQuestionGeneratorRoute: AdminQuestionGeneratorRoute,
+  AdminQuestionReportsRoute: AdminQuestionReportsRoute,
   AdminQuestionsRoute: AdminQuestionsRoute,
   AdminRolesRoute: AdminRolesRoute,
   AdminServersRoute: AdminServersRoute,

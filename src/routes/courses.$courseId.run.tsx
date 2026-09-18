@@ -13,6 +13,7 @@ import { ArabicToggle } from "@/components/quiz/ArabicToggle";
 import { useQuestionTranslation } from "@/hooks/useQuestionTranslation";
 import { MoveQuestionControl, type CourseSectionGroup } from "@/components/course/MoveQuestionControl";
 import { moveSingleCourseQuestion } from "@/lib/course-sorter.functions";
+import { ReportQuestionModal } from "@/components/ReportQuestionModal";
 import {
   Flag,
   CheckCircle2,
@@ -928,6 +929,12 @@ function QuestionCard({
               {show ? "سؤال يستغرق وقتاً؟ اضغط 🚩 لتعليمه" : "Taking long? Flag 🚩 to revisit"}
             </span>
           )}
+          <ReportQuestionModal
+            questionId={q.id}
+            questionStem={q.stem}
+            source="course"
+            sourceContext={courseId}
+          />
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <ArabicToggle on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
@@ -1088,6 +1095,15 @@ function ExamCard({
           <Flag className={`w-3.5 h-3.5 ${isFlagged ? "fill-amber-400" : ""}`} />
           {isFlagged ? "Flagged" : "Flag question"}
         </button>
+        <div className="mt-2">
+          <ReportQuestionModal
+            questionId={q.id}
+            questionStem={q.stem}
+            source="course"
+            sourceContext={courseId}
+            className="w-full justify-center"
+          />
+        </div>
         <ArabicToggle className="mt-3" on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
         {isAdmin && courseId && courseSections && onMoveQuestion && (
           <div className="mt-3">
@@ -1165,10 +1181,18 @@ function ReviewCard({
   return (
     <div className="medical-card overflow-hidden">
       <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-2">
-          <Pencil className="w-4 h-4 text-rose-500" />
-          <span className="text-xs uppercase tracking-widest font-bold text-rose-600">Wrong answer</span>
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-2">
+            <Pencil className="w-4 h-4 text-rose-500" />
+            <span className="text-xs uppercase tracking-widest font-bold text-rose-600">Wrong answer</span>
+          </span>
+          <ReportQuestionModal
+            questionId={q.id}
+            questionStem={q.stem}
+            source="course"
+            sourceContext={courseId}
+          />
+        </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {isAdmin && courseId && courseSections && onMoveQuestion && (
             <MoveQuestionControl
