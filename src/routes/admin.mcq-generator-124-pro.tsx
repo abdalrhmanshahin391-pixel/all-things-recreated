@@ -88,6 +88,14 @@ export interface SolvedQuestionState extends ExtractedQuestion {
   solveStatus: "unsolved" | "solving" | "solved" | "error";
   solveError?: string;
   isIgnored?: boolean;
+  isImported?: boolean;
+  lifecycleStatus?:
+    | "pending_approval_extraction"
+    | "ready_to_solve"
+    | "solved"
+    | "pending_approval_solved"
+    | "ready_to_import"
+    | "imported";
 }
 
 export interface SavedEngineSession {
@@ -406,6 +414,8 @@ export function McqGenerator124ProPage() {
       const batchLifecycleStatus = isFromSolve ? "pending_approval_solved" : "pending_approval_extraction";
       const taggedQuestions: SolvedQuestionState[] = extractedQuestions.map((q) => ({
         ...q,
+        isApproved: false,
+        needsReview: true,
         lifecycleStatus: batchLifecycleStatus,
       }));
 
@@ -975,8 +985,8 @@ export function McqGenerator124ProPage() {
       // Non-fatal cache failure, continue to live render
     }
     if (!pdfDoc) throw new Error(`PDF Document not loaded. Please select or re-upload the PDF to process page ${pageNum}.`);
-    const canvas = await renderPageToCanvas(pdfDoc, pageNum, 1600);
-    const jpeg = canvasToJpegBase64(canvas, 0.85);
+    const canvas = await renderPageToCanvas(pdfDoc, pageNum, 2048);
+    const jpeg = canvasToJpegBase64(canvas, 0.90);
     setPageThumbnails((prev) => ({ ...prev, [pageNum]: jpeg }));
     try {
       await savePageJpegToCache(pageNum, jpeg);
@@ -1578,12 +1588,14 @@ export function McqGenerator124ProPage() {
 
     const unapproved = extractedQuestions.filter((q) => q.isApproved === false && !q.isIgnored && !q.isDuplicate);
     if (unapproved.length > 0) {
-      toast.info(`Skipping ${unapproved.length} unapproved/fragmented question(s). You can review/approve them in Phase 1.`);
+      toast.info(`Proceeding with Ready questions only. (${unapproved.length} question(s) left in Pending approval).`);
     }
 
-    const active = extractedQuestions.filter((q) => !q.isIgnored && !q.isDuplicate && q.isApproved !== false);
+    const active = extractedQuestions.filter(
+      (q) => !q.isIgnored && !q.isDuplicate && q.isApproved !== false && q.solveStatus !== "solved"
+    );
     if (active.length === 0) {
-      toast.error("No approved active questions to solve. Please approve or complete any pending questions.");
+      toast.error("No un-solved 'Ready' questions to solve. Please approve pending questions or mark them Ready.");
       return;
     }
 
@@ -1598,7 +1610,7 @@ export function McqGenerator124ProPage() {
 
     for (let i = 0; i < updated.length; i++) {
       const q = updated[i];
-      if (q.isIgnored || q.isDuplicate || q.isApproved === false) continue;
+      if (q.isIgnored || q.isDuplicate || q.isApproved === false || q.solveStatus === "solved") continue;
 
       if (stopRequestedRef.current) {
         toast.info(`Solving stopped on question #${q.number}. Retained all solved questions.`);
@@ -1643,6 +1655,9 @@ export function McqGenerator124ProPage() {
         q.explanation = res.explanation;
         q.summaryTable = res.summaryTable;
         q.solveStatus = "solved";
+        q.lifecycleStatus = "pending_approval_solved";
+        q.isApproved = false;
+        q.needsReview = true;
         setExtractedQuestions([...updated]);
       } catch (err: any) {
         q.solveStatus = "error";
@@ -1780,6 +1795,9 @@ export function McqGenerator124ProPage() {
             explanation: solved.explanation,
             summaryTable: solved.summaryTable,
             solveStatus: "solved",
+            lifecycleStatus: "pending_approval_solved",
+            isApproved: false,
+            needsReview: true,
           };
         })
       );
@@ -1798,12 +1816,19 @@ export function McqGenerator124ProPage() {
       return;
     }
 
+    const unapproved = extractedQuestions.filter(
+      (q) => !q.isIgnored && !q.isDuplicate && q.solveStatus === "solved" && q.isApproved === false && !q.isImported
+    );
+    if (unapproved.length > 0) {
+      toast.info(`Proceeding with Ready questions only. (${unapproved.length} question(s) left in Pending approval).`);
+    }
+
     const readyQuestions = extractedQuestions.filter(
-      (q) => !q.isIgnored && !q.isDuplicate && q.solveStatus === "solved"
+      (q) => !q.isIgnored && !q.isDuplicate && q.solveStatus === "solved" && q.isApproved !== false && !q.isImported
     );
 
     if (readyQuestions.length === 0) {
-      toast.error("No solved questions ready for import.");
+      toast.error("No approved 'Ready' questions to import. Please approve them from Final Approval or click 'Approve All for Import'.");
       return;
     }
 
@@ -1825,8 +1850,15 @@ export function McqGenerator124ProPage() {
         },
       });
 
+      const importedIds = new Set(readyQuestions.map((q) => q.id));
+      setExtractedQuestions((prev) =>
+        prev.map((q) =>
+          importedIds.has(q.id) ? { ...q, isImported: true, lifecycleStatus: "imported" } : q
+        )
+      );
+
       setImportResult(res);
-      toast.success(`Imported ${res.inserted} questions successfully into course subject!`);
+      toast.success(`Imported ${res.inserted} Ready questions successfully into course subject!`);
     } catch (err: any) {
       toast.error(`Import failed: ${err?.message || err}`);
     } finally {
@@ -3097,49 +3129,115 @@ export function McqGenerator124ProPage() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between pt-4 border-t border-slate-800">
-                <div className="text-xs text-slate-400">
-                  Target: {extractedQuestions.filter((q) => !q.isIgnored && !q.isDuplicate).length} questions
-                </div>
+              {(() => {
+                const stage2Active = extractedQuestions.filter((q) => !q.isIgnored && !q.isDuplicate);
+                const readyCount = stage2Active.filter((q) => q.isApproved !== false && q.solveStatus !== "solved").length;
+                const pendingCount = stage2Active.filter((q) => q.isApproved === false && q.solveStatus !== "solved").length;
+                const completedCount = stage2Active.filter((q) => q.solveStatus === "solved").length;
 
-                <div className="flex items-center gap-2">
-                  <button
-                    disabled={isSolving || isCreatingBatchSolve || extractedQuestions.length === 0}
-                    onClick={startSolving}
-                    className="py-3 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-md disabled:opacity-50 flex items-center gap-2 transition-all"
-                  >
-                    {isCreatingBatchSolve ? (
-                      <>
-                        <RefreshCw size={14} className="animate-spin" />
-                        Submitting Batch Solving Job (50% Off)...
-                      </>
-                    ) : solveProcessingMode === "batch" ? (
-                      <>
-                        <Flame size={14} /> Launch Batch Solving (50% Cost Savings)
-                      </>
-                    ) : isSolving ? (
-                      <>
-                        <RefreshCw size={14} className="animate-spin" />
-                        Solving Question {solveProgress.current} / {solveProgress.total}...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={14} /> Run Process 2 (Solve & Generate Explanations)
-                      </>
+                return (
+                  <div className="pt-4 border-t border-slate-800 space-y-4">
+                    {/* Pipeline Status Summary Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-bold text-slate-300">Stage 2 Status ({stage2Active.length}):</span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          ⚡ {readyCount} Ready to Solve
+                        </span>
+                        {pendingCount > 0 && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            ⏳ {pendingCount} Pending Approval
+                          </span>
+                        )}
+                        {completedCount > 0 && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                            ✓ {completedCount} Completed
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {pendingCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExtractedQuestions((prev) =>
+                                prev.map((q) => (!q.isIgnored && !q.isDuplicate ? { ...q, isApproved: true, needsReview: false } : q))
+                              );
+                              toast.success(`Approved all ${pendingCount} pending questions. They are now Ready!`);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold text-[11px] transition-colors cursor-pointer"
+                          >
+                            ✓ Approve All for Solve
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSendBatchTitle(`Batch Extraction - ${new Date().toLocaleDateString()}`);
+                            setIsSendBatchModalOpen(true);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-bold text-[11px] transition-colors cursor-pointer"
+                        >
+                          <Send size={11} className="inline mr-1" /> Send Batch to Final Approval
+                        </button>
+                      </div>
+                    </div>
+
+                    {pendingCount > 0 && readyCount > 0 && (
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-between gap-2">
+                        <span>
+                          💡 You can proceed to solve the <strong>{readyCount} Ready</strong> question(s) right now without waiting for the {pendingCount} pending approval!
+                        </span>
+                      </div>
                     )}
-                  </button>
 
-                  {isSolving && solveProcessingMode === "standard" && (
-                    <button
-                      onClick={handleEmergencyStop}
-                      className="px-4 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-all"
-                      title="Stop after current question"
-                    >
-                      <Square size={14} /> Stop
-                    </button>
-                  )}
-                </div>
-              </div>
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="text-xs text-slate-400">
+                        Ready target: <strong className="text-emerald-400">{readyCount}</strong> questions ready to solve
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          disabled={isSolving || isCreatingBatchSolve || readyCount === 0}
+                          onClick={startSolving}
+                          className="py-3 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-md disabled:opacity-50 flex items-center gap-2 transition-all cursor-pointer"
+                        >
+                          {isCreatingBatchSolve ? (
+                            <>
+                              <RefreshCw size={14} className="animate-spin" />
+                              Submitting Batch Solving Job (50% Off)...
+                            </>
+                          ) : solveProcessingMode === "batch" ? (
+                            <>
+                              <Flame size={14} /> Launch Batch Solving ({readyCount} Ready - 50% Off)
+                            </>
+                          ) : isSolving ? (
+                            <>
+                              <RefreshCw size={14} className="animate-spin" />
+                              Solving Question {solveProgress.current} / {solveProgress.total}...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={14} /> Run Process 2 (Solve {readyCount} Ready Question{readyCount === 1 ? "" : "s"})
+                            </>
+                          )}
+                        </button>
+
+                        {isSolving && solveProcessingMode === "standard" && (
+                          <button
+                            onClick={handleEmergencyStop}
+                            className="px-4 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+                            title="Stop after current question"
+                          >
+                            <Square size={14} /> Stop
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Batch Solving Job Monitor (When a batch solve job is active) */}
@@ -3232,22 +3330,20 @@ export function McqGenerator124ProPage() {
               </div>
             )}
 
-            {/* Solved Questions List with AquavisionX Explanations */}
-            {extractedQuestions.some((q) => q.solveStatus === "solved") && (
+            {/* Questions List with Status Badges & AquavisionX Explanations */}
+            {extractedQuestions.filter((q) => !q.isIgnored && !q.isDuplicate).length > 0 && (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-emerald-400" /> Solved Questions & Explanations
+                    <CheckCircle2 size={16} className="text-emerald-400" /> Stage 2 Questions ({extractedQuestions.filter(q => q.solveStatus === "solved").length} of {extractedQuestions.filter(q => !q.isIgnored && !q.isDuplicate).length} Solved)
                   </h3>
 
-                  {stage2Done && (
-                    <button
-                      onClick={() => setCurrentStage("import")}
-                      className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-md transition-all flex items-center gap-1.5"
-                    >
-                      Stage 2 Done: Proceed to Import <ArrowRight size={14} />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setCurrentStage("import")}
+                    className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    Proceed to Import <ArrowRight size={14} />
+                  </button>
                 </div>
 
                 <div className="space-y-6 max-h-[700px] overflow-y-auto pr-2">
@@ -3260,6 +3356,20 @@ export function McqGenerator124ProPage() {
                             <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-mono font-bold text-slate-300">
                               #{q.number || idx + 1}
                             </span>
+                            {/* Status badge */}
+                            {q.solveStatus === "solved" ? (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                ✓ Completed (Solved)
+                              </span>
+                            ) : q.isApproved !== false ? (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                ⚡ Ready
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                ⏳ Pending approval
+                              </span>
+                            )}
                             {q.concept && (
                               <span className="px-2 py-0.5 rounded bg-amber-500/20 text-[10px] font-bold text-amber-300">
                                 {q.concept}
@@ -3271,9 +3381,28 @@ export function McqGenerator124ProPage() {
                               </span>
                             )}
                           </div>
-                          <span className="text-xs font-bold text-emerald-400">
-                            Answer: {q.selectedAnswer || "Solved"}
-                          </span>
+                          
+                          <div className="flex items-center gap-2">
+                            {q.solveStatus !== "solved" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  q.isApproved = !q.isApproved;
+                                  setExtractedQuestions([...extractedQuestions]);
+                                }}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                                  q.isApproved !== false
+                                    ? "bg-slate-800 text-slate-400 hover:text-white"
+                                    : "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                                }`}
+                              >
+                                {q.isApproved !== false ? "Make Pending" : "Mark Ready"}
+                              </button>
+                            )}
+                            <span className="text-xs font-bold text-emerald-400">
+                              {q.solveStatus === "solved" ? `Answer: ${q.selectedAnswer || "Solved"}` : "Unsolved"}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="text-xs font-semibold text-slate-200 mb-3 whitespace-pre-line leading-relaxed">
@@ -3547,31 +3676,93 @@ export function McqGenerator124ProPage() {
                   )}
                 </div>
 
-                <div className="flex items-center justify-between pt-4 border-t border-slate-800">
-                  <div className="text-xs text-slate-400">
-                    Ready to save:{" "}
-                    <strong className="text-emerald-400">
-                      {extractedQuestions.filter((q) => !q.isIgnored && !q.isDuplicate && q.solveStatus === "solved").length}
-                    </strong>{" "}
-                    questions with AquavisionX explanations
-                  </div>
+                {(() => {
+                  const stage3Solved = extractedQuestions.filter((q) => !q.isIgnored && !q.isDuplicate && q.solveStatus === "solved");
+                  const readyImportCount = stage3Solved.filter((q) => q.isApproved !== false && !q.isImported).length;
+                  const pendingImportCount = stage3Solved.filter((q) => q.isApproved === false && !q.isImported).length;
+                  const completedImportCount = stage3Solved.filter((q) => q.isImported).length;
 
-                  <button
-                    disabled={isImporting || !selectedSubjectId}
-                    onClick={handleImport}
-                    className="py-3 px-6 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black text-xs shadow-lg shadow-emerald-950/40 disabled:opacity-50 flex items-center gap-2 transition-all"
-                  >
-                    {isImporting ? (
-                      <>
-                        <RefreshCw size={14} className="animate-spin" /> Importing...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 size={14} /> Import to Course Subject Now
-                      </>
-                    )}
-                  </button>
-                </div>
+                  return (
+                    <div className="pt-4 border-t border-slate-800 space-y-4">
+                      {/* Pipeline Status Summary Bar for Stage 3 */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="font-bold text-slate-300">Stage 3 Status ({stage3Solved.length}):</span>
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            ⚡ {readyImportCount} Ready to Import
+                          </span>
+                          {pendingImportCount > 0 && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              ⏳ {pendingImportCount} Pending Approval
+                            </span>
+                          )}
+                          {completedImportCount > 0 && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                              ✓ {completedImportCount} Completed (Imported)
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {pendingImportCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExtractedQuestions((prev) =>
+                                  prev.map((q) => (!q.isIgnored && !q.isDuplicate && q.solveStatus === "solved" ? { ...q, isApproved: true, needsReview: false } : q))
+                                );
+                                toast.success(`Approved all ${pendingImportCount} pending solved questions. They are now Ready to import!`);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold text-[11px] transition-colors cursor-pointer"
+                            >
+                              ✓ Approve All for Import
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSendBatchTitle(`Solved Exam Batch - ${new Date().toLocaleDateString()}`);
+                              setIsSendBatchModalOpen(true);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-bold text-[11px] transition-colors cursor-pointer"
+                          >
+                            <Send size={11} className="inline mr-1" /> Send Batch to Final Approval
+                          </button>
+                        </div>
+                      </div>
+
+                      {pendingImportCount > 0 && readyImportCount > 0 && (
+                        <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-between gap-2">
+                          <span>
+                            💡 You can proceed to import the <strong>{readyImportCount} Ready</strong> question(s) right now without waiting for the {pendingImportCount} pending approval!
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between pt-2">
+                        <div className="text-xs text-slate-400">
+                          Ready target: <strong className="text-emerald-400">{readyImportCount}</strong> questions ready to import
+                        </div>
+
+                        <button
+                          disabled={isImporting || !selectedSubjectId || readyImportCount === 0}
+                          onClick={handleImport}
+                          className="py-3 px-6 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black text-xs shadow-lg shadow-emerald-950/40 disabled:opacity-50 flex items-center gap-2 transition-all cursor-pointer"
+                        >
+                          {isImporting ? (
+                            <>
+                              <RefreshCw size={14} className="animate-spin" /> Importing...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 size={14} /> Import {readyImportCount} Ready Question{readyImportCount === 1 ? "" : "s"} Now
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {importResult && (
                   <div className="mt-4 p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-xs text-emerald-200">
@@ -3635,6 +3826,89 @@ export function McqGenerator124ProPage() {
                 )}
               </div>
             </div>
+
+            {/* Stage 3 Questions List with Status Badges */}
+            {extractedQuestions.filter((q) => !q.isIgnored && !q.isDuplicate && q.solveStatus === "solved").length > 0 && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Database size={16} className="text-emerald-400" /> Solved Questions for Import ({extractedQuestions.filter(q => q.solveStatus === "solved").length})
+                  </h3>
+                  <div className="text-xs text-slate-400">
+                    {extractedQuestions.filter(q => q.solveStatus === "solved" && q.isApproved !== false && !q.isImported).length} Ready · {extractedQuestions.filter(q => q.solveStatus === "solved" && q.isApproved === false && !q.isImported).length} Pending · {extractedQuestions.filter(q => q.isImported).length} Completed
+                  </div>
+                </div>
+
+                <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                  {extractedQuestions
+                    .filter((q) => !q.isIgnored && !q.isDuplicate && q.solveStatus === "solved")
+                    .map((q, idx) => (
+                      <div
+                        key={q.id}
+                        className={`p-4 rounded-xl border transition-all ${
+                          q.isImported
+                            ? "bg-teal-950/20 border-teal-500/30"
+                            : q.isApproved !== false
+                              ? "bg-slate-950 border-emerald-500/40"
+                              : "bg-slate-950 border-amber-500/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-mono font-bold text-slate-300">
+                              #{q.number || idx + 1}
+                            </span>
+                            {/* Status badge */}
+                            {q.isImported ? (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                                ✓ Completed (Imported)
+                              </span>
+                            ) : q.isApproved !== false ? (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                ⚡ Ready to Import
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                ⏳ Pending approval
+                              </span>
+                            )}
+                            <span className="text-xs font-bold text-emerald-400">
+                              Answer: {q.selectedAnswer || "Solved"}
+                            </span>
+                          </div>
+
+                          {!q.isImported && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                q.isApproved = !q.isApproved;
+                                setExtractedQuestions([...extractedQuestions]);
+                              }}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                                q.isApproved !== false
+                                  ? "bg-slate-800 text-slate-400 hover:text-white"
+                                  : "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                              }`}
+                            >
+                              {q.isApproved !== false ? "Make Pending" : "Mark Ready"}
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="text-xs font-semibold text-slate-200 mb-2 whitespace-pre-line leading-relaxed">
+                          {q.stem}
+                        </div>
+
+                        {q.explanation && (
+                          <div className="text-[11px] text-slate-400 italic line-clamp-2">
+                            Explanation: {q.explanation}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

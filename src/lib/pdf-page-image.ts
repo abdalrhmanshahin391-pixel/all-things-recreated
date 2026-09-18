@@ -15,13 +15,13 @@ export type CutRegion = {
 export async function renderPageToCanvas(
   doc: any,
   pageNumber: number,
-  targetWidth = 1600,
+  targetWidth = 2048,
   timeoutMs = 15_000,
 ): Promise<HTMLCanvasElement> {
   const page = await doc.getPage(pageNumber);
   const base = page.getViewport({ scale: 1 });
-  // Scale between 1.2 and 2.5: at 1600px width, standard 612pt PDF scale is ~2.6x, producing crisp text with light memory footprint
-  const scale = Math.min(2.5, Math.max(1.2, targetWidth / (base.width || 612)));
+  // Scale up to 3.0x: at 2048px width, standard 612pt PDF scale is ~2.8x-3.0x, giving crisp text for blurry phone photos
+  const scale = Math.min(3.0, Math.max(1.5, targetWidth / (base.width || 612)));
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement("canvas");
   canvas.width = Math.ceil(viewport.width);
@@ -48,7 +48,7 @@ export async function renderPageToCanvas(
   return canvas;
 }
 
-export function canvasToJpegBase64(canvas: HTMLCanvasElement, quality = 0.85): string {
+export function canvasToJpegBase64(canvas: HTMLCanvasElement, quality = 0.90): string {
   const url = canvas.toDataURL("image/jpeg", quality);
   const i = url.indexOf(",");
   return i >= 0 ? url.slice(i + 1) : url;

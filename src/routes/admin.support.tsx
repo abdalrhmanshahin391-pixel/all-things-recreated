@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useState } from "react";
 import {
-  ArrowLeft, ArrowUp, ArrowDown, Plus, Trash2, Loader2, Save, Inbox, Settings2, BellRing, Search,
+  ArrowLeft, ArrowUp, ArrowDown, Plus, Trash2, Loader2, Save, Inbox, Settings2, BellRing, Search, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -177,6 +177,15 @@ function InboxTab() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   <a href={`mailto:${r.email}?subject=${encodeURIComponent(`Re: ${r.subject} (#${r.ticket_no})`)}`}
                      className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-black">Reply by email</a>
+                  {(r.category === "question_report" || r.message?.includes("__META__")) && (
+                    <Link
+                      to="/admin/question-reports"
+                      search={{ search: r.message?.match(/"questionId":"([^"]+)"/)?.[1] || undefined }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black"
+                    >
+                      <ExternalLink size={13} /> Go to Question
+                    </Link>
+                  )}
                   {r.user_id && (
                     <Link to="/admin/users" className="px-4 py-2 rounded-lg border-2 border-border text-xs font-black">
                       Open users &amp; roles

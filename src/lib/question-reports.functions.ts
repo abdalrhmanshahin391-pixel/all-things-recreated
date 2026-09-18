@@ -321,3 +321,191 @@ export const deleteQuestionReport = createServerFn({ method: "POST" })
 
     return { ok: true };
   });
+
+export interface QuestionOptionItem {
+  id: string;
+  label: string;
+  text: string;
+  is_correct: boolean;
+  sort_order: number;
+}
+
+export interface QuestionDetails {
+  id: string;
+  stem: string;
+  explanation: string | null;
+  answer_mode: "single" | "multiple";
+  subject_id: string | null;
+  subject_name?: string | null;
+  course_id?: string | null;
+  course_title?: string | null;
+  options: QuestionOptionItem[];
+}
+
+/**
+ * Fetch live question from database for admin inspection and editing.
+ */
+export const getQuestionDetails = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { questionId: string }) => {
+    if (!d?.questionId?.trim()) throw new Error("Question ID is required");
+    return d;
+  })
+  .handler(async ({ data, context }): Promise<{ question: QuestionDetails | null; notFound?: boolean }> => {
+    await assertAdminRole(context);
+    const sb = context.supabase;
+
+    try {
+      const { data: qRow, error: qErr } = await (sb.from as any)("questions")
+        .select("id, stem, explanation, answer_mode, subject_id, sort_order")
+        .eq("id", data.questionId)
+        .maybeSingle();
+
+      if (qErr || !qRow) {
+        return { question: null, notFound: true };
+      }
+
+      const { data: optRows } = await (sb.from as any)("question_options")
+        .select("id, label, text, is_correct, sort_order")
+        .eq("question_id", data.questionId)
+        .order("sort_order", { ascending: true });
+
+      let subject_name: string | null = null;
+      let course_id: string | null = null;
+      let course_title: string | null = null;
+
+      if (qRow.subject_id) {
+        try {
+          const { data: sRow } = await (sb.from as any)("course_subjects")
+            .select("id, name, group_id")
+            .eq("id", qRow.subject_id)
+            .maybeSingle();
+          if (sRow) {
+            subject_name = sRow.name;
+            if (sRow.group_id) {
+              const { data: gRow } = await (sb.from as any)("course_subject_groups")
+                .select("id, name, course_id")
+                .eq("id", sRow.group_id)
+                .maybeSingle();
+              if (gRow?.course_id) {
+                course_id = gRow.course_id;
+                const { data: cRow } = await (sb.from as any)("courses")
+                  .select("id, title")
+                  .eq("id", gRow.course_id)
+                  .maybeSingle();
+                if (cRow) {
+                  course_title = cRow.title;
+                }
+              }
+            }
+          }
+        } catch {}
+      }
+
+      return {
+        question: {
+          id: qRow.id,
+          stem: qRow.stem,
+          explanation: qRow.explanation,
+          answer_mode: qRow.answer_mode || "single",
+          subject_id: qRow.subject_id,
+          subject_name,
+          course_id,
+          course_title,
+          options: (optRows || []).map((o: any) => ({
+            id: o.id,
+            label: o.label,
+            text: o.text,
+            is_correct: !!o.is_correct,
+            sort_order: o.sort_order ?? 0,
+          })),
+        },
+      };
+    } catch (err: any) {
+      console.error("Error fetching question details:", err);
+      return { question: null, notFound: true };
+    }
+  });
+
+/**
+ * Update question stem, options, and explanation in database with optional 1-click report resolution.
+ */
+export const updateQuestionDetails = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    questionId: string;
+    stem: string;
+    explanation?: string | null;
+    options: Array<{
+      id: string;
+      label: string;
+      text: string;
+      is_correct: boolean;
+      sort_order?: number;
+    }>;
+    reportIdToResolve?: string;
+  }) => {
+    if (!d?.questionId?.trim()) throw new Error("Question ID is required");
+    if (!d?.stem?.trim()) throw new Error("Question stem cannot be empty");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    await assertAdminRole(context);
+    const sb = context.supabase;
+
+    // 1. Update stem & explanation in questions table
+    const { error: updateErr } = await (sb.from as any)("questions")
+      .update({
+        stem: data.stem.trim(),
+        explanation: data.explanation !== undefined ? data.explanation?.trim() || null : undefined,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.questionId);
+
+    if (updateErr) {
+      throw new Error(`Failed to update question: ${updateErr.message}`);
+    }
+
+    // 2. Update options in question_options table
+    if (Array.isArray(data.options)) {
+      for (const opt of data.options) {
+        if (opt.id) {
+          await (sb.from as any)("question_options")
+            .update({
+              label: opt.label,
+              text: opt.text,
+              is_correct: opt.is_correct,
+              sort_order: opt.sort_order,
+            })
+            .eq("id", opt.id);
+        }
+      }
+    }
+
+    // 3. If reportIdToResolve is passed, mark report as reviewed
+    if (data.reportIdToResolve) {
+      const now = new Date().toISOString();
+      const adminNote = "Question content & options reviewed and updated directly via Go to Question inspector.";
+      try {
+        await (sb.from as any)("question_reports")
+          .update({
+            status: "reviewed",
+            admin_notes: adminNote,
+            updated_at: now,
+          })
+          .eq("id", data.reportIdToResolve);
+      } catch {}
+
+      try {
+        await (sb.from as any)("support_requests")
+          .update({
+            status: "resolved",
+            admin_notes: adminNote,
+            updated_at: now,
+          })
+          .eq("id", data.reportIdToResolve);
+      } catch {}
+    }
+
+    return { ok: true };
+  });

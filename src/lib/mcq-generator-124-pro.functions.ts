@@ -245,120 +245,137 @@ export interface SolvedQuestionState extends ExtractedQuestion {
 }
 
 function buildExtractionSystemPrompt(combinationMode: "mode1_keep_original" | "mode2_convert_multiple", customInstructions?: string): string {
-  return `You are an expert medical examination layout analyzer reading a high-resolution image of an exam paper.
-Your task is to transcribe EVERY SINGLE question from this page VERBATIM with 100% accuracy, zero omission, and zero cross-contamination.
+  return `You are an expert medical examination layout analyzer reading a high-resolution visual image of an exam paper.
+Your task is to transcribe EVERY SINGLE question from this page VERBATIM with 100% accuracy, zero omission, zero cross-contamination, and zero paraphrasing.
 
-CRITICAL READING RULES — READ CAREFULLY:
+CRITICAL EXTRACTION DIRECTIVES — READ CAREFULLY:
 
-1. STRICT SEQUENTIAL QUESTION ORDER & HEADER IMMUNITY (NEVER SKIP TOP QUESTIONS):
-   - Exam pages frequently contain top headers such as:
-     "Department of Infectious Diseases", "General Medicine V-a", "2025", "Test 8", "Quiz 2", "Midterm".
-   - CRITICAL: "Test 8" is the TEST TITLE/METADATA, NOT A QUESTION NUMBER!
-   - The questions start IMMEDIATELY below the header text at Question #1: e.g. "1. Clinical stages of Rabies are:".
-   - ALWAYS start extracting from Question #1!
-   - You MUST extract EVERY SINGLE numbered question in sequence: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14...
-   - Skipping questions (e.g. skipping 1, 2, 3, 4, 5, 6, 7 because of "Test 8") is a FATAL ERROR.
-   - If the very top of the page has orphan fragment lines continuing from the previous page, preserve them as an orphan entry.
+1. CORE DISTINCTION: QUESTION STATEMENTS VS ANSWER CHOICES (CRITICAL):
+   - NUMBERS (1, 2, 3, 4...) = Numbered statements that belong EXCLUSIVELY to the QUESTION STEM.
+   - LETTERS (a, b, c, d...) = The ANSWER CHOICES.
 
-2. STRICT QUESTION BOUNDARIES (ZERO OPTION BLEEDING):
-   - Question #N begins at its bold question number marker (e.g. "1.", "2.", "3.", "4.").
-   - Question #N ENDS immediately before the next question number marker begins.
+   If a question contains numbered statements:
+     1. Prevalence of exudative and necrotic inflammatory reactions
+     2. Slight hyperplasia of mediastinal nodes
+     3. Enlarged peripheral lymph nodes (micro-polyadenia)
+     4. Ability to transform into fibrous-cavitary TB
+   followed by lettered choices:
+     a) 1.2.3.4
+     b) 2.3
+     c) 1.2.4
+     d) 1.4
+   (or: a) 1,2,3  b) 1,3  c) 2,4  d) all mentioned)
+
+   THE NUMBERED STATEMENTS 1, 2, 3, and 4 ARE PART OF THE QUESTION, NEVER THE ANSWER OPTIONS.
+   The letters a), b), c), d) identify the actual answer choices.
+
+   CORRECT EXTRACTION:
+   - Question Stem:
+     [Introductory prompt verbatim]
+     1. Prevalence of exudative and necrotic inflammatory reactions
+     2. Slight hyperplasia of mediastinal nodes
+     3. Enlarged peripheral lymph nodes (micro-polyadenia)
+     4. Ability to transform into fibrous-cavitary TB
+   - Options:
+     A: 1.2.3.4
+     B: 2.3
+     C: 1.2.4
+     D: 1.4
+
+   • Keep all numbered statements (1, 2, 3, 4, etc.) as part of the question stem.
+   • Treat lettered choices (a, b, c, d, etc.) as the answer options.
+   • Do NOT mistake numbers inside the answer options for separate question statements.
+   • If an answer option contains a combination of numbers, such as "a) 1.2.3.4", preserve it exactly as ONE answer choice. Never treat "1.2.3.4" as four separate items.
+   • NEVER convert statements into options A, B, C, D!
+   • NEVER drop or omit lettered choices (a, b, c, d)!
+
+2. THREE OPTION LAYOUT FORMATS (CRITICAL LAYOUT AWARENESS):
+   Answer options (a, b, c, d) appear in one of three spatial formats across medical exam papers:
+   (1) Single Column (Vertical List):
+       Options stacked vertically below the stem:
+       a) First choice
+       b) Second choice
+       c) Third choice
+       d) Fourth choice
+   (2) Horizontal Line (Single Row):
+       All 4 options printed side-by-side on one horizontal line:
+       "4. In Toxoplasmosis, the eye affection can be seen in:
+        a)uveitis   b)all mentioned   c)chorioretinitis   d)progressive shortsightedness"
+       Read strictly from LEFT TO RIGHT across the entire line:
+       Choice A = "uveitis"
+       Choice B = "all mentioned"
+       Choice C = "chorioretinitis"
+       Choice D = "progressive shortsightedness"
+       NEVER skip choices A and B on the left half of the page!
+   (3) Two Columns (2x2 Grid):
+       Options split across two parallel columns:
+       Left Column: a) ... / b) ... (or c) ...)
+       Right Column: c) ... / d) ... (or b) ...)
+       Scan both columns and follow the letter markers (a, b, c, d) to capture all 4 options.
+
+3. TWO-COLUMN STATEMENT GRIDS:
+   - Numbered statements (1, 2, 3, 4) often sit in 2 columns:
+     Row 1: 1. difficulty of swallowing              2. unilateral tonsillitis
+     Row 2: 3. the affected tonsil is edematous...   4. purulent discharge from the eye
+   - Transcribe strictly in numerical order: 1, 2, 3, 4. Never read column 2 before column 1 (do NOT produce: 2, 4, 1, 3).
+
+4. VERBATIM FIDELITY (ZERO MEDICAL PARAPHRASING / ZERO GUESSING):
+   - Transcribe text exactly as printed on the page.
+   - NEVER replace plain terms with medical synonyms or jargon:
+     • If the paper says "difficulty of swallowing", WRITE "difficulty of swallowing" — NEVER write "dysphagia".
+     • If the paper says "the eye affection", WRITE "the eye affection" — NEVER write "efflorescence".
+     • If the paper says "purulent discharge from the eye", WRITE "purulent discharge from the eye".
+   - Preserve all punctuation, abbreviations, numbers, and symbols (%, ±, µg, /).
+
+5. HEADER IMMUNITY & STRICT SEQUENTIAL EXTRACTION:
+   - Top headers often show metadata: "Department of Infectious Diseases", "Test 8", "Midterm 2025".
+   - "Test 8" is the TEST TITLE, NOT A QUESTION NUMBER!
+   - Questions start immediately below the header at Question #1.
+   - ALWAYS start extracting from Question #1 and proceed in sequence: 1, 2, 3, 4, 5, 6, 7, 8...
+   - Skipping questions (e.g. skipping 1, 2, 3, 4, 5, 6, 7 because of "Test 8") is strictly forbidden.
+
+6. STRICT QUESTION BOUNDARIES & ZERO CROSS-CONTAMINATION:
+   - Question #N begins at its bold question number marker ("1.", "2.", "3.", "4.").
+   - Question #N ENDS immediately before Question #(N+1) begins.
    - Everything between Question #N and Question #(N+1) belongs EXCLUSIVELY to Question #N.
-   - NEVER attach, copy, or bleed options or statements from Question #N into Question #(N+1)!
+   - NEVER bleed or copy words, statements, or options from Question #N into Question #(N+1).
 
-3. HORIZONTAL 2x2 GRID READING (THIS IS A SINGLE-COLUMN PAGE WITH 2x2 GRIDS):
-   - This exam paper is a SINGLE vertical column of questions. Do NOT split the page into two vertical page-wide columns!
-   - Inside an individual question, items are often printed side-by-side to save vertical space:
-     • STATEMENTS 2x2 GRID:
-       Row 1: "1. Vidal reaction"            "3. urine culture"
-       Row 2: "2. blood culture"             "4. stool culture"
-       -> Transcribe all 4 in numerical order: ["1. Vidal reaction", "2. blood culture", "3. urine culture", "4. stool culture"]
-     • CHOICES 2x2 GRID:
-       Row 1: "a) sonnei"                    "c) flexneri"
-       Row 2: "b) dysenteriae"               "d) boydii"
-       -> Transcribe all 4 choices: A: sonnei, B: dysenteriae, C: flexneri, D: boydii.
-
-4. COMBINATION QUESTION PROTECTION (CRITICAL — DO NOT DROP COMBINATION CHOICES):
-   - In questions like:
-     "12. Complications of Influenza are:
-      1. bacterial pneumonia     3. sinusitis, otitis
-      2. necrotic tracheobronchitis   4. meningitis
-      a) 1,2,3    b) 1,3    c) 2,4    d) all mentioned"
-     • The numbered items (1, 2, 3, 4) MUST go into the "statements" array:
-       ["1. bacterial pneumonia", "2. necrotic tracheobronchitis", "3. sinusitis, otitis", "4. meningitis"]
-     • The lettered choices (a, b, c, d) MUST go into the "options" array:
-       [{"letter": "A", "text": "1,2,3"}, {"letter": "B", "text": "1,3"}, {"letter": "C", "text": "2,4"}, {"letter": "D", "text": "all mentioned"}]
-     • NEVER convert statements (bacterial pneumonia, etc.) into options A, B, C, D!
-     • NEVER drop or omit the lettered choices (a, b, c, d)!
-     • Set question_type: "combination".
-
-5. ORDINARY MCQ vs COMBINATION MCQ (STRICT DEFINITION):
-   - ORDINARY MCQ:
-     If choices A, B, C, D contain clinical terms, diseases, symptoms, or sentences (e.g. "a) all the above", "b) hypovolemic", "c) none of the above", "d) infectious-toxic"):
-     -> THIS IS AN ORDINARY MCQ.
-     -> NEVER turn clinical options into numbered statements!
-     -> Stem is the question prompt. Choices are A, B, C, D. Set question_type: "ordinary".
-
-6. BOTTOM MARGIN TRUNCATION GUARDRAIL:
-   - If a question at the very bottom of the page is cut off by the photo edge (e.g. "14. Choose the right statement for Plague:" with no choices visible below it):
+7. BOTTOM MARGIN CUT-OFF GUARDRAIL:
+   - If a question at the very bottom of the page is cut off by the photo edge (e.g. stem visible, but choices below the edge):
      • Extract the stem text.
-     • Leave "options": [] and "statements": [].
+     • Set "options": [].
      • Set "needs_review": true and "review_reason": "Question cut off at bottom margin of image".
-     • NEVER invent or hallucinate choices!
+     • NEVER invent or hallucinate choices for cut-off questions!
 
-7. PRESERVE VERBATIM ACCURACY:
-   - Transcribe exact spelling, medical terms, numbers, symbols (%, ±, µg, /), and units.
-   - Do NOT merge option letters into text (e.g. "c)all mentioned" must have text "all mentioned", NOT "call mentioned").
-
-${combinationMode === "mode1_keep_original"
-  ? `COMBINATION FORMAT (MODE 1 — KEEP ORIGINAL):
-   - Put combination codes directly into "options": [{"letter":"A","text":"1,2,3"},{"letter":"B","text":"1,3"}...]
-   - Set question_type: "combination"
-   - Also record in "printed_combinations"`
-  : `COMBINATION FORMAT (MODE 2 — CONVERT TO MULTIPLE ANSWERS):
-   - The numbered statements become the "options" (A: statement 1, B: statement 2...)
-   - Set question_type: "multiple_answer"
-   - Preserve original codes in "printed_combinations"`
-}
-
-VISUAL ANTI-ERROR CHECKLIST:
-❌ NEVER skip questions at the top of the page (check for 1, 2, 3, 4, 5, 6, 7, 8...).
-❌ NEVER confuse header titles (e.g. "Test 8") with question numbers.
-❌ NEVER convert combination numbered statements (1, 2, 3, 4) into options A, B, C, D.
-❌ NEVER drop combination choices like "a) 1,2,3  b) 1,3  c) 2,4  d) all mentioned".
-❌ NEVER bleed options from one question into another.
-❌ NEVER invent choices for questions cut off at the bottom margin.
-✅ Every question with a number MUST have its own entry in the output array in sequential order.
-✅ Combination: "statements" contains 1..4, "options" contains A..D combination codes.
-✅ Ordinary: "statements" is empty [], "options" contains A..D text choices verbatim.
 ${customInstructions ? `\nSpecial User Instructions:\n${customInstructions}\n` : ""}
 
 Return STRICT JSON:
 {
   "questions": [
     {
-      "number": "1",
-      "question_type": "ordinary|combination|multiple_answer",
-      "stem": "question prompt text verbatim without options or statement list",
+      "number": "3",
+      "question_type": "combination",
+      "stem": "Typical symptoms of anginous-bubonic(oropharyngeal) form of Tularemia:\n1. difficulty of swallowing\n2. unilateral tonsillitis\n3. the affected tonsil is edematous and enlarged\n4. purulent discharge from the eye",
       "statements": [
-        "1. First numbered statement verbatim",
-        "2. Second numbered statement verbatim",
-        "3. Third numbered statement verbatim",
-        "4. Fourth numbered statement verbatim"
+        "1. difficulty of swallowing",
+        "2. unilateral tonsillitis",
+        "3. the affected tonsil is edematous and enlarged",
+        "4. purulent discharge from the eye"
       ],
       "options": [
-        { "letter": "A", "text": "choice A text verbatim" },
-        { "letter": "B", "text": "choice B text verbatim" },
-        { "letter": "C", "text": "choice C text verbatim" },
-        { "letter": "D", "text": "choice D text verbatim" }
+        { "letter": "A", "text": "1,2,3" },
+        { "letter": "B", "text": "1,3" },
+        { "letter": "C", "text": "2,4" },
+        { "letter": "D", "text": "all mentioned" }
       ],
       "printed_combinations": [
-        { "letter": "A", "text": "1,2" }
+        { "letter": "A", "text": "1,2,3" },
+        { "letter": "B", "text": "1,3" },
+        { "letter": "C", "text": "2,4" },
+        { "letter": "D", "text": "all mentioned" }
       ],
-      "detected_answer": null,
-      "needs_review": false,
-      "review_reason": null,
-      "is_approved": true
+      "needs_review": true,
+      "review_reason": null
     }
   ]
 }`;
@@ -476,9 +493,9 @@ export function normalizeExtractedQuestion(q: any, pageNumber: number, idx: numb
   // A combination question has REAL statements only if statements exist and are not just number codes.
   const hasRealStatements = rawStatements.length > 0 && !statementsAreJustNumberCodes;
 
-  let needsReview = Boolean(q.needs_review);
+  let needsReview = true;
   let reviewReason = q.review_reason ? String(q.review_reason) : null;
-  let isApproved = q.is_approved !== false && !needsReview;
+  let isApproved = false; // Always unapproved initially until human QA reviewer approves in Final Approval
 
   // Apply the numbered-statements-as-options fix AFTER needsReview is declared
   if (optionsHaveNumericLetters || optionsHaveNumericTextPrefix) {
@@ -643,43 +660,41 @@ YOUR MISSION: Read and extract Question #${questionNumber} from this visual docu
 ${boundaryRule}
 
 CORE VISUAL EXTRACTION DIRECTIVES:
-1. TREAT AS A VISUAL DOCUMENT:
-   - Read the question and answer options based on their visual layout and position.
-   - Do NOT rely on OCR text order or linear text streams.
-2. KEEP QUESTION STEM COMPLETELY SEPARATE FROM ANSWER OPTIONS:
-   - The "stem" field MUST contain ONLY the question prompt / scenario.
-   - NEVER move or merge an answer option into the question text.
-   - NEVER put the question stem into option fields.
-   - Keep each question stem completely separate from its answer options.
-   - Options are visually indented, lettered blocks (A, B, C, D or a, b, c, d) located below or beside the stem.
-3. PRESERVE EXACT ORIGINAL WORDING & FORMATTING:
-   - Preserve the exact wording, numbering, symbols, medical terms, numbers, and units verbatim.
-   - Preserve symbols (%, ±, µg, /, :, -, >, <) exactly as printed.
-   - Do NOT rephrase, correct spelling, modernize, or interpret medical terminology.
-4. UNIFORM COMBINATION QUESTION HANDLING:
-   - Examine answer options visually:
-     • If options contain numeric combinations (e.g. "1,2" or "1.3.4" or "2,3,4") or "All of the above" alongside numbers → COMBINATION QUESTION.
-     • For combination questions, the numbered statements (1. ..., 2. ..., 3. ..., 4. ...) appear as a visual list between the stem and the options, or in an adjacent column.
-     • You MUST extract every numbered statement into the "statements" array verbatim.
-     • Do NOT merge numbered statements into options, and do NOT omit them.
-${combinationMode === "mode1_keep_original"
-  ? `   • MODE 1 (KEEP ORIGINAL): Put combination choices directly into "options" [{"letter":"A","text":"1,2"},{"letter":"B","text":"1.3.4"}...] and set question_type: "combination".`
-  : `   • MODE 2 (CONVERT): Numbered statements become "options" (A: statement 1, B: statement 2...) and set question_type: "multiple_answer". Original combination codes go to "printed_combinations".`
-}
-5. NO GUESSING / UNCLEAR TEXT:
-   - If any text, term, number, option, or statement is obscured, blurry, cut off at a margin, or visually ambiguous: DO NOT GUESS.
-   - Mark "needs_review": true and explain the exact unclear visual element in "review_reason".
 
-VISUAL ANTI-ERROR CHECKLIST:
-❌ NEVER move an answer option into the question text.
-❌ NEVER put the question stem into the options array.
-❌ NEVER duplicate one option's text into other options — all 4 options must be distinct.
-❌ NEVER use numbered statement digits (1, 2, 3, 4) as option letters.
-❌ NEVER omit the numbered statements of a combination question.
-❌ NEVER invent or hallucinate options that are not visually present.
-✅ Keep stem, statements, and options in their strictly separate visual fields.
-✅ Preserve exact symbols, numbers, units, and medical terms verbatim.
-✅ If any part is unclear: do NOT guess; mark needs_review: true.
+1. CORE DISTINCTION: QUESTION STATEMENTS VS ANSWER CHOICES (CRITICAL):
+   - NUMBERS (1, 2, 3, 4...) = Numbered statements that belong EXCLUSIVELY to the QUESTION STEM.
+   - LETTERS (a, b, c, d...) = The ANSWER CHOICES.
+
+   If Question #${questionNumber} contains numbered statements (1. ..., 2. ..., 3. ..., 4. ...) followed by lettered choices:
+     a) 1.2.3.4 (or 1,2,3)
+     b) 2.3 (or 1,3)
+     c) 1.2.4 (or 2,4)
+     d) 1.4 (or all mentioned)
+   THE NUMBERED STATEMENTS 1, 2, 3, and 4 ARE PART OF THE QUESTION, NEVER THE ANSWER OPTIONS.
+   The letters a), b), c), d) identify the actual answer choices.
+   • Put introductory prompt + all numbered statements (1..4) into "stem" and "statements".
+   • Put lettered choices (a, b, c, d) with their exact combination text into "options".
+   • NEVER convert statements into options A, B, C, D!
+   • NEVER drop combination choices!
+
+2. THREE OPTION LAYOUT FORMATS:
+   (1) Single Column: options stacked vertically below stem (a, then b, then c, then d).
+   (2) Horizontal Line: all 4 options printed side-by-side on one line:
+       "a) ...   b) ...   c) ...   d) ..."
+       Read from LEFT TO RIGHT across the entire line. NEVER skip choices a and b on the left!
+   (3) Two Columns (2x2 Grid): options split across two parallel columns. Read both columns and follow letter markers (a, b, c, d).
+
+3. TWO-COLUMN STATEMENT GRIDS:
+   Statements 1, 2, 3, 4 printed across 2 columns must be ordered strictly 1, 2, 3, 4.
+
+4. VERBATIM FIDELITY (ZERO MEDICAL PARAPHRASING):
+   - Transcribe text exactly as printed. Never rewrite plain terms into medical jargon (e.g. if the paper says "difficulty of swallowing", WRITE "difficulty of swallowing" — NEVER write "dysphagia"; if the paper says "the eye affection", WRITE "the eye affection" — NEVER write "efflorescence").
+   - Preserve symbols, numbers, and units verbatim.
+
+5. ZERO CROSS-CONTAMINATION:
+   - Everything between Question #${questionNumber} and its boundary belongs EXCLUSIVELY to Question #${questionNumber}.
+   - Never bleed words or options from previous or next questions.
+
 ${customInstructions ? `\nSpecial User Instructions:\n${customInstructions}\n` : ""}
 
 Return STRICT JSON:
@@ -687,7 +702,7 @@ Return STRICT JSON:
   "question": {
     "number": "${questionNumber}",
     "question_type": "ordinary|combination|multiple_answer",
-    "stem": "question prompt verbatim — separate from options and statements",
+    "stem": "question prompt verbatim + numbered statements",
     "statements": [
       "1. First statement verbatim",
       "2. Second statement verbatim",
@@ -704,9 +719,9 @@ Return STRICT JSON:
       { "letter": "A", "text": "1,2" }
     ],
     "detected_answer": null,
-    "needs_review": false,
+    "needs_review": true,
     "review_reason": null,
-    "is_approved": true
+    "is_approved": false
   }
 }`;
 

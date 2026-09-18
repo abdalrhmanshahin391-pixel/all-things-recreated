@@ -5,9 +5,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   ArrowLeft,
+  BookOpen,
+  Check,
   CheckCircle2,
   Clock,
   ExternalLink,
+  HelpCircle,
   Inbox,
   Languages,
   Loader2,
@@ -15,8 +18,11 @@ import {
   MessageSquare,
   Pencil,
   RefreshCw,
+  Save,
   Search,
+  Sparkles,
   Trash2,
+  X,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,9 +32,13 @@ import {
   listQuestionReports,
   updateQuestionReport,
   deleteQuestionReport,
+  getQuestionDetails,
+  updateQuestionDetails,
   type QuestionReport,
   type QuestionReportStatus,
   type QuestionReportType,
+  type QuestionDetails,
+  type QuestionOptionItem,
 } from "@/lib/question-reports.functions";
 
 export const Route = createFileRoute("/admin/question-reports")({
@@ -87,6 +97,96 @@ function AdminQuestionReports() {
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // Go to Question Inspector state
+  const [inspectingReport, setInspectingReport] = useState<QuestionReport | null>(null);
+  const [inspectingQuestion, setInspectingQuestion] = useState<QuestionDetails | null>(null);
+  const [isLoadingQuestion, setIsLoadingQuestion] = useState<boolean>(false);
+  const [isSavingQuestion, setIsSavingQuestion] = useState<boolean>(false);
+  const [notFoundWarning, setNotFoundWarning] = useState<boolean>(false);
+
+  // Form edit fields
+  const [editStem, setEditStem] = useState<string>("");
+  const [editExplanation, setEditExplanation] = useState<string>("");
+  const [editOptions, setEditOptions] = useState<QuestionOptionItem[]>([]);
+
+  async function handleOpenInspect(report: QuestionReport) {
+    setInspectingReport(report);
+    setIsLoadingQuestion(true);
+    setNotFoundWarning(false);
+    setInspectingQuestion(null);
+    try {
+      const res = await getQuestionDetails({ data: { questionId: report.question_id } });
+      if (res.question) {
+        setInspectingQuestion(res.question);
+        setEditStem(res.question.stem);
+        setEditExplanation(res.question.explanation || "");
+        setEditOptions(res.question.options || []);
+      } else {
+        setNotFoundWarning(true);
+      }
+    } catch (err: any) {
+      console.error("Failed to load question details:", err);
+      setNotFoundWarning(true);
+    } finally {
+      setIsLoadingQuestion(false);
+    }
+  }
+
+  function handleOptionTextChange(idx: number, newText: string) {
+    setEditOptions((prev) =>
+      prev.map((opt, i) => (i === idx ? { ...opt, text: newText } : opt))
+    );
+  }
+
+  function handleOptionCorrectToggle(idx: number) {
+    if (!inspectingQuestion) return;
+    const isSingle = inspectingQuestion.answer_mode === "single";
+    setEditOptions((prev) =>
+      prev.map((opt, i) => {
+        if (isSingle) {
+          return { ...opt, is_correct: i === idx };
+        } else {
+          return i === idx ? { ...opt, is_correct: !opt.is_correct } : opt;
+        }
+      })
+    );
+  }
+
+  async function handleSaveQuestionChanges(markReviewed: boolean) {
+    if (!inspectingQuestion || !inspectingReport) return;
+    if (!editStem.trim()) {
+      toast.error(isArabic ? "لا يمكن ترك نص السؤال فارغاً" : "Question stem cannot be empty");
+      return;
+    }
+    setIsSavingQuestion(true);
+    try {
+      await updateQuestionDetails({
+        data: {
+          questionId: inspectingQuestion.id,
+          stem: editStem,
+          explanation: editExplanation,
+          options: editOptions,
+          reportIdToResolve: markReviewed ? inspectingReport.id : undefined,
+        },
+      });
+      toast.success(
+        markReviewed
+          ? (isArabic ? "تم حفظ التعديلات وحل التقرير بنجاح!" : "Question updated & report resolved!")
+          : (isArabic ? "تم حفظ تعديلات السؤال في قاعدة البيانات بنجاح!" : "Question updated in database!")
+      );
+      void queryClient.invalidateQueries({ queryKey: ["question-reports"] });
+      if (markReviewed) {
+        setInspectingReport(null);
+        setInspectingQuestion(null);
+      }
+    } catch (err: any) {
+      console.error("Failed to save question:", err);
+      toast.error(err?.message || "Failed to update question");
+    } finally {
+      setIsSavingQuestion(false);
+    }
+  }
 
   function toggleLanguage() {
     setIsArabic((prev) => {
@@ -524,13 +624,23 @@ function AdminQuestionReports() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenInspect(report)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-sm hover:opacity-90 transition-all cursor-pointer"
+                        title={isArabic ? "فحص وتعديل السؤال مباشرة" : "Inspect and edit live question in DB"}
+                      >
+                        <ExternalLink size={12} />
+                        {isArabic ? "الانتقال إلى السؤال" : "Go to Question"}
+                      </button>
+
                       {report.question_source === "course" && report.source_context && (
                         <Link
                           to="/admin/courses"
                           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-semibold px-2 py-1 rounded-lg hover:bg-muted"
                         >
-                          <ExternalLink size={12} />
-                          {isArabic ? "فتح الكورسات" : "Go to Courses"}
+                          <BookOpen size={12} />
+                          {isArabic ? "فتح الكورسات" : "Courses"}
                         </Link>
                       )}
 
@@ -548,6 +658,236 @@ function AdminQuestionReports() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* ── GO TO QUESTION / LIVE DB INSPECTOR & EDITOR MODAL ──────────────── */}
+        {inspectingReport && (
+          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div className="relative w-full max-w-3xl my-8 bg-card border-2 border-border rounded-2xl shadow-2xl p-6 overflow-hidden flex flex-col max-h-[90vh]">
+              {/* Modal Top Bar */}
+              <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                    <Sparkles size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                      {isArabic ? "فاحص ومحرر السؤال المباشر" : "Question Inspector & Live DB Editor"}
+                    </h3>
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-2">
+                      <span>ID: <code className="font-mono text-xs text-primary">{inspectingReport.question_id}</code></span>
+                      {inspectingQuestion?.course_title && (
+                        <span>· {inspectingQuestion.course_title} / {inspectingQuestion.subject_name}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInspectingReport(null);
+                    setInspectingQuestion(null);
+                  }}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Modal Body - Scrollable */}
+              <div className="overflow-y-auto space-y-4 pr-1 flex-1">
+                {/* Student Report Details Context Banner */}
+                <div className="p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/5 text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5 text-xs">
+                      <AlertCircle size={14} />
+                      {isArabic ? "تقرير الطالب عن المشكلة:" : "Reported Issue Context:"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {inspectingReport.user_email || "Anonymous"} · {new Date(inspectingReport.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {inspectingReport.comment && (
+                    <p className="text-foreground italic bg-background/50 p-2.5 rounded-lg border border-border/50">
+                      "{inspectingReport.comment}"
+                    </p>
+                  )}
+                  {inspectingReport.source_context && (
+                    <div className="text-[10px] text-muted-foreground">
+                      {isArabic ? "السياق / الكورس: " : "Context: "}
+                      <span className="font-semibold text-foreground">{inspectingReport.source_context}</span>
+                    </div>
+                  )}
+                </div>
+
+                {isLoadingQuestion ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-muted-foreground gap-2">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                    <span className="text-xs font-bold">{isArabic ? "جاري جلب السؤال من قاعدة البيانات…" : "Fetching question from database…"}</span>
+                  </div>
+                ) : notFoundWarning ? (
+                  <div className="p-5 rounded-xl border border-amber-500/40 bg-amber-500/10 text-center space-y-3">
+                    <AlertCircle size={28} className="mx-auto text-amber-500" />
+                    <div className="text-sm font-bold text-foreground">
+                      {isArabic ? "لم يتم العثور على السؤال في قاعدة البيانات" : "Question Record Not Found in DB"}
+                    </div>
+                    <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                      {isArabic
+                        ? `لم يُعثر على سجل للسؤال برمز (${inspectingReport.question_id}) في جدول الأسئلة. قد يكون السؤال من دفعة تجريبية غير مثبتة أو تم حذفه مسبقاً.`
+                        : `Question ID (${inspectingReport.question_id}) was not found in the live 'questions' table. It may have originated from an uncommitted batch session or was previously deleted.`}
+                    </p>
+                    {inspectingReport.question_stem && (
+                      <div className="text-left text-xs bg-card p-3 rounded-lg border border-border text-foreground">
+                        <div className="font-bold text-muted-foreground text-[10px] mb-1">STEM FROM REPORT:</div>
+                        {inspectingReport.question_stem}
+                      </div>
+                    )}
+                    <div className="pt-2 flex justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleStatusChange(inspectingReport, "reviewed")}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer"
+                      >
+                        <CheckCircle2 size={13} className="inline mr-1" />
+                        {isArabic ? "تعليم التقرير كمُراجع" : "Mark Report Reviewed"}
+                      </button>
+                    </div>
+                  </div>
+                ) : inspectingQuestion ? (
+                  <div className="space-y-4">
+                    {/* Stem Editor */}
+                    <div>
+                      <label className="block text-xs font-bold text-foreground mb-1">
+                        {isArabic ? "نص السؤال (Stem):" : "Question Stem:"}
+                      </label>
+                      <textarea
+                        rows={4}
+                        value={editStem}
+                        onChange={(e) => setEditStem(e.target.value)}
+                        className="w-full text-xs rounded-xl border-2 border-border bg-background p-3 focus:outline-none focus:border-primary text-foreground leading-relaxed"
+                        placeholder="Question text..."
+                      />
+                    </div>
+
+                    {/* Options Editor */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-bold text-foreground">
+                          {isArabic ? "خيارات الإجابة (حدد الإجابة الصحيحة):" : "Answer Choices (Mark Correct Option):"}
+                        </label>
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          Mode: {inspectingQuestion.answer_mode}
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {editOptions.map((opt, idx) => (
+                          <div
+                            key={opt.id || idx}
+                            className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all ${
+                              opt.is_correct
+                                ? "border-emerald-500 bg-emerald-500/10 dark:bg-emerald-950/30"
+                                : "border-border bg-background"
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleOptionCorrectToggle(idx)}
+                              className={`w-7 h-7 rounded-lg flex items-center justify-center font-mono font-black text-xs shrink-0 transition-colors cursor-pointer ${
+                                opt.is_correct
+                                  ? "bg-emerald-500 text-slate-950 shadow-sm"
+                                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+                              }`}
+                              title={opt.is_correct ? "Correct Answer" : "Click to mark as correct"}
+                            >
+                              {opt.label || String.fromCharCode(65 + idx)}
+                            </button>
+
+                            <input
+                              type="text"
+                              value={opt.text}
+                              onChange={(e) => handleOptionTextChange(idx, e.target.value)}
+                              className="flex-1 bg-transparent text-xs text-foreground focus:outline-none px-1"
+                              placeholder={`Option ${opt.label}...`}
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => handleOptionCorrectToggle(idx)}
+                              className={`px-2 py-1 rounded-md text-[10px] font-bold shrink-0 cursor-pointer ${
+                                opt.is_correct
+                                  ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              {opt.is_correct ? "✓ Correct" : "Mark"}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Explanation Editor */}
+                    <div>
+                      <label className="block text-xs font-bold text-foreground mb-1">
+                        {isArabic ? "التفسير والشرح السريري:" : "Clinical Explanation / Justification:"}
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={editExplanation}
+                        onChange={(e) => setEditExplanation(e.target.value)}
+                        className="w-full text-xs rounded-xl border-2 border-border bg-background p-3 focus:outline-none focus:border-primary text-foreground leading-relaxed"
+                        placeholder="Explanation..."
+                      />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="pt-4 mt-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInspectingReport(null);
+                    setInspectingQuestion(null);
+                  }}
+                  className="px-4 py-2 rounded-xl border border-border text-xs font-bold hover:bg-muted text-muted-foreground transition-colors cursor-pointer"
+                >
+                  {isArabic ? "إغلاق" : "Close"}
+                </button>
+
+                {inspectingQuestion && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isSavingQuestion}
+                      onClick={() => handleSaveQuestionChanges(false)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 border-primary text-primary hover:bg-primary/10 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      <Save size={13} />
+                      {isSavingQuestion
+                        ? (isArabic ? "جاري الحفظ…" : "Saving…")
+                        : (isArabic ? "حفظ التعديلات فقط" : "Save Changes to DB")}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSavingQuestion}
+                      onClick={() => handleSaveQuestionChanges(true)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-md transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      <CheckCircle2 size={14} />
+                      {isSavingQuestion
+                        ? (isArabic ? "جاري الحفظ…" : "Saving…")
+                        : (isArabic ? "حفظ وحل التقرير" : "Save & Mark Resolved")}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </main>
