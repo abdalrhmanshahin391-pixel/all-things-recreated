@@ -1520,3 +1520,172 @@ export const importQuestions124 = createServerFn({ method: "POST" })
 
     return { inserted, skipped, errors: errors.slice(0, 5) };
   });
+
+// ── Pre-Import AI Quality Review ──────────────────────────────────────────────
+
+export interface QuestionReviewResult {
+  questionId: string;
+  questionNumber: string | number;
+  pageNumber: number;
+  stem: string;
+  issues: string[];
+  severity: "ok" | "warning" | "error";
+  suggestion?: string;
+}
+
+export interface PreImportReviewReport {
+  totalReviewed: number;
+  okCount: number;
+  warningCount: number;
+  errorCount: number;
+  results: QuestionReviewResult[];
+  reviewedAt: string;
+  model: string;
+}
+
+const ReviewQuestionsInput = z.object({
+  questions: z.array(
+    z.object({
+      id: z.string(),
+      number: z.union([z.string(), z.number()]),
+      pageNumber: z.number(),
+      stem: z.string(),
+      questionType: z.string(),
+      options: z.array(z.object({ letter: z.string(), text: z.string() })),
+      explanation: z.string().optional().nullable(),
+    })
+  ).max(200),
+  modelId: z.string().default("gemini-2.5-flash"),
+  openaiApiKey: z.string().optional(),
+  geminiApiKey: z.string().optional(),
+});
+
+export const reviewQuestionsBeforeImport124 = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => ReviewQuestionsInput.parse(d))
+  .handler(async ({ data, context }): Promise<PreImportReviewReport> => {
+    await ensureAdmin(context);
+    const { questions, modelId, openaiApiKey, geminiApiKey } = data;
+
+    if (questions.length === 0) {
+      return {
+        totalReviewed: 0,
+        okCount: 0,
+        warningCount: 0,
+        errorCount: 0,
+        results: [],
+        reviewedAt: new Date().toISOString(),
+        model: modelId,
+      };
+    }
+
+    const BATCH_SIZE = 10;
+    const allResults: QuestionReviewResult[] = [];
+
+    for (let i = 0; i < questions.length; i += BATCH_SIZE) {
+      const batch = questions.slice(i, i + BATCH_SIZE);
+
+      const questionsJson = batch.map((q, idx) => ({
+        index: i + idx + 1,
+        id: q.id,
+        number: q.number,
+        page: q.pageNumber,
+        type: q.questionType,
+        stem: q.stem.slice(0, 500),
+        options: q.options.map((o) => `${o.letter}) ${o.text.slice(0, 200)}`),
+      }));
+
+      const systemPrompt = `You are a medical MCQ quality reviewer. You review multiple choice questions for:
+1. Clarity, medical validity, and grammatical correctness of the question stem
+2. Completeness (does it have enough options? At least 4 for ordinary MCQs)
+3. Whether the question makes sense medically or contains nonsensical / garbled fragments
+4. Obvious typos, missing statements, repeated choices, or contradictory options
+5. Extraction artifacts (e.g. truncated stem, missing combination statements, orphaned options)
+
+For each question, return a JSON array where each object has:
+- "id": string (the question id, copy exactly)
+- "issues": string[] (list of specific problems found, or empty array [] if question is good)
+- "severity": "ok" | "warning" | "error"
+  * "ok" = question is medically and structurally valid
+  * "warning" = minor typo or wording issue, but usable
+  * "error" = question is broken, nonsensical, missing options, or contains medical contradictions
+- "suggestion": string (short actionable suggestion for fixing if severity is warning or error)
+
+Output ONLY a valid JSON array of objects. No markdown fences.`;
+
+      const userPrompt = `Review these ${batch.length} MCQ questions:\n\n${JSON.stringify(questionsJson, null, 2)}`;
+
+      try {
+        const rawResponse = await callUnifiedAi({
+          model: modelId,
+          systemPrompt,
+          userPrompt,
+          openaiApiKey,
+          geminiApiKey,
+          jsonMode: true,
+          temperature: 0,
+        });
+
+        const parsed = (() => {
+          const s = stripFences(rawResponse);
+          try { return JSON.parse(s); } catch {}
+          const lb = s.indexOf("["), rb = s.lastIndexOf("]");
+          if (lb !== -1 && rb > lb) {
+            try { return JSON.parse(s.slice(lb, rb + 1)); } catch {}
+          }
+          return null;
+        })();
+
+        if (Array.isArray(parsed)) {
+          for (const q of batch) {
+            const found = parsed.find((r: any) => String(r.id) === String(q.id));
+            allResults.push({
+              questionId: q.id,
+              questionNumber: q.number,
+              pageNumber: q.pageNumber,
+              stem: q.stem.slice(0, 300),
+              issues: Array.isArray(found?.issues) ? found.issues.map(String) : [],
+              severity: ["ok", "warning", "error"].includes(found?.severity) ? found.severity : "ok",
+              suggestion: found?.suggestion ? String(found.suggestion).slice(0, 400) : undefined,
+            });
+          }
+        } else {
+          for (const q of batch) {
+            allResults.push({
+              questionId: q.id,
+              questionNumber: q.number,
+              pageNumber: q.pageNumber,
+              stem: q.stem.slice(0, 300),
+              issues: ["AI review response parsing failed for this batch"],
+              severity: "warning",
+            });
+          }
+        }
+      } catch (err: any) {
+        for (const q of batch) {
+          allResults.push({
+            questionId: q.id,
+            questionNumber: q.number,
+            pageNumber: q.pageNumber,
+            stem: q.stem.slice(0, 300),
+            issues: [`Review call failed: ${err?.message || "unknown"}`],
+            severity: "warning",
+          });
+        }
+      }
+    }
+
+    const okCount = allResults.filter((r) => r.severity === "ok").length;
+    const warningCount = allResults.filter((r) => r.severity === "warning").length;
+    const errorCount = allResults.filter((r) => r.severity === "error").length;
+
+    return {
+      totalReviewed: allResults.length,
+      okCount,
+      warningCount,
+      errorCount,
+      results: allResults,
+      reviewedAt: new Date().toISOString(),
+      model: modelId,
+    };
+  });

@@ -29,6 +29,9 @@ import {
   retrieveOpenAiBatchExtractionResults124,
   createOpenAiBatchSolving124,
   retrieveOpenAiBatchSolvingResults124,
+  reviewQuestionsBeforeImport124,
+  type PreImportReviewReport,
+  type QuestionReviewResult,
 } from "@/lib/mcq-generator-124-pro.functions";
 import {
   renderPageToCanvas,
@@ -235,6 +238,19 @@ export function McqGenerator124ProPage() {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [importResult, setImportResult] = useState<{ inserted: number; skipped: number; errors: string[] } | null>(null);
+  const [isReviewingBeforeImport, setIsReviewingBeforeImport] = useState<boolean>(false);
+  const [preImportReviewReport, setPreImportReviewReport] = useState<PreImportReviewReport | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("mcq_124_pro_pre_import_review");
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+  const [reviewModelChoice, setReviewModelChoice] = useState<string>("gemini-2.5-flash");
 
   // ── Saved Sessions Archive ────────────────────────────────────────────────
   const [savedSessions, setSavedSessions] = useState<SavedEngineSession[]>(() => {
@@ -260,6 +276,7 @@ export function McqGenerator124ProPage() {
   const fillAllMissingFn = useServerFn(fillAllMissingOptions124);
   const solveQuestionFn = useServerFn(solveAndExplain124);
   const importFn = useServerFn(importQuestions124);
+  const reviewQuestionsBeforeImportFn = useServerFn(reviewQuestionsBeforeImport124);
   const createBatchExtractFn = useServerFn(createOpenAiBatchExtraction124);
   const checkBatchStatusFn = useServerFn(checkOpenAiBatchStatus124);
   const retrieveBatchResultsFn = useServerFn(retrieveOpenAiBatchExtractionResults124);
@@ -1263,6 +1280,68 @@ export function McqGenerator124ProPage() {
     } finally {
       setIsImporting(false);
     }
+  }
+
+  // ── Pre-Import AI Quality Review Handler ──────────────────────────────────
+  async function handleRunPreImportReview() {
+    const readyQuestions = extractedQuestions.filter(
+      (q) => !q.isIgnored && !q.isDuplicate && q.solveStatus === "solved"
+    );
+
+    if (readyQuestions.length === 0) {
+      toast.error("No solved questions available to review.");
+      return;
+    }
+
+    setIsReviewingBeforeImport(true);
+    try {
+      const res = await reviewQuestionsBeforeImportFn({
+        data: {
+          questions: readyQuestions.map((q) => ({
+            id: q.id,
+            number: q.number,
+            pageNumber: q.pageNumber,
+            stem: q.stem,
+            questionType: q.questionType,
+            options: q.options.map((o) => ({ letter: o.letter, text: o.text })),
+            explanation: q.explanation || null,
+          })),
+          modelId: reviewModelChoice,
+          geminiApiKey: geminiKey || undefined,
+          openaiApiKey: openaiKey || undefined,
+        },
+      });
+
+      setPreImportReviewReport(res);
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("mcq_124_pro_pre_import_review", JSON.stringify(res));
+        } catch {}
+      }
+
+      if (res.errorCount > 0) {
+        toast.warning(`Quality Audit: ${res.errorCount} question(s) flagged with potential issues.`);
+      } else if (res.warningCount > 0) {
+        toast.info(`Quality Audit: ${res.warningCount} question(s) have minor warnings.`);
+      } else {
+        toast.success("Quality Audit: All questions look medically sound and well-formed!");
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Quality Audit failed: ${err?.message || err}`);
+    } finally {
+      setIsReviewingBeforeImport(false);
+    }
+  }
+
+  function handleClearPreImportReview() {
+    setPreImportReviewReport(null);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("mcq_124_pro_pre_import_review");
+      } catch {}
+    }
+    toast.info("Pre-import review cleared.");
   }
 
   // ── Session Archive Management (Point 6) ──────────────────────────────────
@@ -2545,6 +2624,164 @@ export function McqGenerator124ProPage() {
                       ))}
                     </select>
                   </div>
+                </div>
+
+                {/* ── Optional Pre-Import AI Review ────────────────────────── */}
+                <div className="mb-6 p-4 rounded-xl border border-indigo-500/30 bg-indigo-950/20">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={16} className="text-indigo-400" />
+                      <span className="text-xs font-bold text-white">
+                        Optional Pre-Import AI Quality Audit
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
+                        Optional
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={reviewModelChoice}
+                        onChange={(e) => setReviewModelChoice(e.target.value)}
+                        disabled={isReviewingBeforeImport}
+                        className="px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="gemini-2.5-flash">Gemini Flash 2.5 (Fast)</option>
+                        <option value="gemini-2.5-pro">Gemini Pro 2.5 (Deep Reasoning)</option>
+                        <option value="gpt-4o-mini">GPT-4.1 mini</option>
+                        <option value="gpt-4o">GPT-4.1</option>
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={handleRunPreImportReview}
+                        disabled={isReviewingBeforeImport}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors disabled:opacity-50 shadow-sm"
+                      >
+                        {isReviewingBeforeImport ? (
+                          <>
+                            <RefreshCw size={12} className="animate-spin" /> Auditing Questions…
+                          </>
+                        ) : (
+                          <>
+                            <Search size={12} /> Request AI Review
+                          </>
+                        )}
+                      </button>
+
+                      {preImportReviewReport && (
+                        <button
+                          type="button"
+                          onClick={handleClearPreImportReview}
+                          className="px-2.5 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-white text-xs"
+                          title="Clear review results"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 mb-3">
+                    Let AI audit all solved questions before import to catch medical inaccuracies, broken stems, missing choices, or questions that don't make sense.
+                  </p>
+
+                  {/* Review Results Display */}
+                  {preImportReviewReport && (
+                    <div className="space-y-3 pt-3 border-t border-indigo-500/20">
+                      {/* Summary Badges */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] font-bold text-slate-300">
+                          Reviewed: {preImportReviewReport.totalReviewed}
+                        </span>
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          ✓ {preImportReviewReport.okCount} Clean
+                        </span>
+                        {preImportReviewReport.warningCount > 0 && (
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            ⚠ {preImportReviewReport.warningCount} Warnings
+                          </span>
+                        )}
+                        {preImportReviewReport.errorCount > 0 && (
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                            ✕ {preImportReviewReport.errorCount} Needs Attention
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Error or Warning Question Cards */}
+                      {preImportReviewReport.results.filter((r) => r.severity !== "ok").length === 0 ? (
+                        <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                          <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                          <span>All questions passed audit! No nonsensical or broken questions detected.</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {preImportReviewReport.results
+                            .filter((r) => r.severity !== "ok")
+                            .map((r) => {
+                              const targetQ = extractedQuestions.find((q) => q.id === r.questionId);
+                              return (
+                                <div
+                                  key={r.questionId}
+                                  className={`p-3 rounded-lg border text-xs ${
+                                    r.severity === "error"
+                                      ? "bg-rose-950/30 border-rose-500/40 text-rose-200"
+                                      : "bg-amber-950/30 border-amber-500/40 text-amber-200"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-2 mb-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono font-black text-[11px]">
+                                        Q#{r.questionNumber} (Page {r.pageNumber})
+                                      </span>
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                          r.severity === "error"
+                                            ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                                            : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                                        }`}
+                                      >
+                                        {r.severity}
+                                      </span>
+                                    </div>
+
+                                    {targetQ && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setInspectingQuestion(targetQ)}
+                                        className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-white"
+                                      >
+                                        <Eye size={11} /> Inspect / Fix
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="text-slate-300 text-[11px] line-clamp-1 italic mb-1.5">
+                                    "{r.stem}"
+                                  </div>
+
+                                  {r.issues.length > 0 && (
+                                    <ul className="list-disc list-inside space-y-0.5 text-[11px]">
+                                      {r.issues.map((iss, iIdx) => (
+                                        <li key={iIdx}>{iss}</li>
+                                      ))}
+                                    </ul>
+                                  )}
+
+                                  {r.suggestion && (
+                                    <div className="mt-1.5 text-[11px] text-slate-300 bg-black/30 p-1.5 rounded border border-white/5">
+                                      <strong className="text-amber-300">💡 Suggestion: </strong>
+                                      {r.suggestion}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between pt-4 border-t border-slate-800">
