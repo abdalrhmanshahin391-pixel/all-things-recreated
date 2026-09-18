@@ -15,12 +15,13 @@ export type CutRegion = {
 export async function renderPageToCanvas(
   doc: any,
   pageNumber: number,
-  targetWidth = 2800,
-  timeoutMs = 55_000,
+  targetWidth = 1600,
+  timeoutMs = 15_000,
 ): Promise<HTMLCanvasElement> {
   const page = await doc.getPage(pageNumber);
   const base = page.getViewport({ scale: 1 });
-  const scale = Math.min(4, Math.max(1.5, targetWidth / base.width));
+  // Scale between 1.2 and 2.5: at 1600px width, standard 612pt PDF scale is ~2.6x, producing crisp text with light memory footprint
+  const scale = Math.min(2.5, Math.max(1.2, targetWidth / (base.width || 612)));
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement("canvas");
   canvas.width = Math.ceil(viewport.width);
@@ -31,7 +32,7 @@ export async function renderPageToCanvas(
   ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  const task = page.render({ canvasContext: ctx, viewport, canvas });
+  const task = page.render({ canvasContext: ctx, viewport });
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await new Promise<void>((resolve, reject) => {
@@ -47,7 +48,7 @@ export async function renderPageToCanvas(
   return canvas;
 }
 
-export function canvasToJpegBase64(canvas: HTMLCanvasElement, quality = 0.95): string {
+export function canvasToJpegBase64(canvas: HTMLCanvasElement, quality = 0.85): string {
   const url = canvas.toDataURL("image/jpeg", quality);
   const i = url.indexOf(",");
   return i >= 0 ? url.slice(i + 1) : url;
@@ -63,7 +64,14 @@ let cachedDb: IDBDatabase | null = null;
 
 function openPageImageDb(): Promise<IDBDatabase | null> {
   if (typeof window === "undefined" || !window.indexedDB) return Promise.resolve(null);
-  if (cachedDb && cachedDb.version >= IDB_VERSION) return Promise.resolve(cachedDb);
+  if (cachedDb && cachedDb.version >= IDB_VERSION) {
+    try {
+      cachedDb.transaction(IDB_STORE, "readonly");
+      return Promise.resolve(cachedDb);
+    } catch {
+      cachedDb = null;
+    }
+  }
   if (cachedDb) {
     try {
       cachedDb.close();
@@ -71,37 +79,75 @@ function openPageImageDb(): Promise<IDBDatabase | null> {
     cachedDb = null;
   }
   return new Promise((resolve) => {
+    let resolved = false;
+    const finish = (result: IDBDatabase | null) => {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timer);
+        resolve(result);
+      }
+    };
+    const timer = setTimeout(() => finish(null), 1200);
+
     try {
       const req = window.indexedDB.open(IDB_NAME, IDB_VERSION);
+      req.onblocked = () => finish(null);
       req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains(IDB_STORE)) {
-          db.createObjectStore(IDB_STORE, { keyPath: "pageNum" });
-        }
-        if (!db.objectStoreNames.contains(IDB_SESSION_STORE)) {
-          db.createObjectStore(IDB_SESSION_STORE, { keyPath: "sessionId" });
+        try {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(IDB_STORE)) {
+            db.createObjectStore(IDB_STORE, { keyPath: "pageNum" });
+          }
+          if (!db.objectStoreNames.contains(IDB_SESSION_STORE)) {
+            db.createObjectStore(IDB_SESSION_STORE, { keyPath: "sessionId" });
+          }
+        } catch {
+          // ignore
         }
       };
       req.onsuccess = () => {
-        cachedDb = req.result;
-        resolve(req.result);
+        try {
+          cachedDb = req.result;
+          cachedDb.onversionchange = () => {
+            try { cachedDb?.close(); } catch {}
+            cachedDb = null;
+          };
+          finish(req.result);
+        } catch {
+          finish(null);
+        }
       };
-      req.onerror = () => resolve(null);
+      req.onerror = () => finish(null);
     } catch {
-      resolve(null);
+      finish(null);
     }
   });
 }
 
 export async function savePageJpegToCache(pageNum: number, jpegBase64: string): Promise<void> {
   try {
-    const db = await openPageImageDb();
+    const db = await Promise.race([
+      openPageImageDb(),
+      new Promise<null>((r) => setTimeout(() => r(null), 1200)),
+    ]);
     if (!db) return;
-    const tx = db.transaction(IDB_STORE, "readwrite");
-    tx.objectStore(IDB_STORE).put({ pageNum, jpegBase64 });
     return new Promise((resolve) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
+      const timer = setTimeout(() => resolve(), 1200);
+      try {
+        const tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).put({ pageNum, jpegBase64 });
+        tx.oncomplete = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+        tx.onerror = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      } catch {
+        clearTimeout(timer);
+        resolve();
+      }
     });
   } catch {
     // Non-fatal cache failure
@@ -110,13 +156,28 @@ export async function savePageJpegToCache(pageNum: number, jpegBase64: string): 
 
 export async function getPageJpegFromCache(pageNum: number): Promise<string | null> {
   try {
-    const db = await openPageImageDb();
+    const db = await Promise.race([
+      openPageImageDb(),
+      new Promise<null>((r) => setTimeout(() => r(null), 1200)),
+    ]);
     if (!db) return null;
-    const tx = db.transaction(IDB_STORE, "readonly");
-    const req = tx.objectStore(IDB_STORE).get(pageNum);
     return new Promise((resolve) => {
-      req.onsuccess = () => resolve(req.result?.jpegBase64 || null);
-      req.onerror = () => resolve(null);
+      const timer = setTimeout(() => resolve(null), 1200);
+      try {
+        const tx = db.transaction(IDB_STORE, "readonly");
+        const req = tx.objectStore(IDB_STORE).get(pageNum);
+        req.onsuccess = () => {
+          clearTimeout(timer);
+          resolve(req.result?.jpegBase64 || null);
+        };
+        req.onerror = () => {
+          clearTimeout(timer);
+          resolve(null);
+        };
+      } catch {
+        clearTimeout(timer);
+        resolve(null);
+      }
     });
   } catch {
     return null;
@@ -125,21 +186,34 @@ export async function getPageJpegFromCache(pageNum: number): Promise<string | nu
 
 export async function getAllCachedPageJpegs(): Promise<Record<number, string>> {
   try {
-    const db = await openPageImageDb();
+    const db = await Promise.race([
+      openPageImageDb(),
+      new Promise<null>((r) => setTimeout(() => r(null), 1200)),
+    ]);
     if (!db) return {};
-    const tx = db.transaction(IDB_STORE, "readonly");
-    const req = tx.objectStore(IDB_STORE).getAll();
     return new Promise((resolve) => {
-      req.onsuccess = () => {
-        const result: Record<number, string> = {};
-        for (const item of req.result || []) {
-          if (item?.pageNum && item?.jpegBase64) {
-            result[item.pageNum] = item.jpegBase64;
+      const timer = setTimeout(() => resolve({}), 1200);
+      try {
+        const tx = db.transaction(IDB_STORE, "readonly");
+        const req = tx.objectStore(IDB_STORE).getAll();
+        req.onsuccess = () => {
+          clearTimeout(timer);
+          const result: Record<number, string> = {};
+          for (const item of req.result || []) {
+            if (item?.pageNum && item?.jpegBase64) {
+              result[item.pageNum] = item.jpegBase64;
+            }
           }
-        }
-        resolve(result);
-      };
-      req.onerror = () => resolve({});
+          resolve(result);
+        };
+        req.onerror = () => {
+          clearTimeout(timer);
+          resolve({});
+        };
+      } catch {
+        clearTimeout(timer);
+        resolve({});
+      }
     });
   } catch {
     return {};
@@ -153,18 +227,33 @@ export async function saveSessionPageImages(
 ): Promise<void> {
   if (!sessionId || !images || Object.keys(images).length === 0) return;
   try {
-    const db = await openPageImageDb();
+    const db = await Promise.race([
+      openPageImageDb(),
+      new Promise<null>((r) => setTimeout(() => r(null), 1200)),
+    ]);
     if (!db) return;
-    const tx = db.transaction(IDB_SESSION_STORE, "readwrite");
-    tx.objectStore(IDB_SESSION_STORE).put({
-      sessionId,
-      images,
-      pageCount: Object.keys(images).length,
-      updatedAt: Date.now(),
-    });
     return new Promise((resolve) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
+      const timer = setTimeout(() => resolve(), 1200);
+      try {
+        const tx = db.transaction(IDB_SESSION_STORE, "readwrite");
+        tx.objectStore(IDB_SESSION_STORE).put({
+          sessionId,
+          images,
+          pageCount: Object.keys(images).length,
+          updatedAt: Date.now(),
+        });
+        tx.oncomplete = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+        tx.onerror = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      } catch {
+        clearTimeout(timer);
+        resolve();
+      }
     });
   } catch (e) {
     console.warn("Failed to save session page images to IndexedDB:", e);
@@ -174,13 +263,28 @@ export async function saveSessionPageImages(
 export async function getSessionPageImages(sessionId: string): Promise<Record<number, string>> {
   if (!sessionId) return {};
   try {
-    const db = await openPageImageDb();
+    const db = await Promise.race([
+      openPageImageDb(),
+      new Promise<null>((r) => setTimeout(() => r(null), 1200)),
+    ]);
     if (!db) return {};
-    const tx = db.transaction(IDB_SESSION_STORE, "readonly");
-    const req = tx.objectStore(IDB_SESSION_STORE).get(sessionId);
     return new Promise((resolve) => {
-      req.onsuccess = () => resolve(req.result?.images || {});
-      req.onerror = () => resolve({});
+      const timer = setTimeout(() => resolve({}), 1200);
+      try {
+        const tx = db.transaction(IDB_SESSION_STORE, "readonly");
+        const req = tx.objectStore(IDB_SESSION_STORE).get(sessionId);
+        req.onsuccess = () => {
+          clearTimeout(timer);
+          resolve(req.result?.images || {});
+        };
+        req.onerror = () => {
+          clearTimeout(timer);
+          resolve({});
+        };
+      } catch {
+        clearTimeout(timer);
+        resolve({});
+      }
     });
   } catch {
     return {};
@@ -190,13 +294,28 @@ export async function getSessionPageImages(sessionId: string): Promise<Record<nu
 export async function deleteSessionPageImages(sessionId: string): Promise<void> {
   if (!sessionId) return;
   try {
-    const db = await openPageImageDb();
+    const db = await Promise.race([
+      openPageImageDb(),
+      new Promise<null>((r) => setTimeout(() => r(null), 1200)),
+    ]);
     if (!db) return;
-    const tx = db.transaction(IDB_SESSION_STORE, "readwrite");
-    tx.objectStore(IDB_SESSION_STORE).delete(sessionId);
     return new Promise((resolve) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
+      const timer = setTimeout(() => resolve(), 1200);
+      try {
+        const tx = db.transaction(IDB_SESSION_STORE, "readwrite");
+        tx.objectStore(IDB_SESSION_STORE).delete(sessionId);
+        tx.oncomplete = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+        tx.onerror = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      } catch {
+        clearTimeout(timer);
+        resolve();
+      }
     });
   } catch {}
 }
@@ -208,21 +327,35 @@ export const deleteBatchPageImages = deleteSessionPageImages;
 
 export async function clearPageJpegCache(): Promise<void> {
   try {
-    const db = await openPageImageDb();
+    const db = await Promise.race([
+      openPageImageDb(),
+      new Promise<null>((r) => setTimeout(() => r(null), 1200)),
+    ]);
     if (!db) return;
-    const storeNames = [IDB_STORE];
-    if (db.objectStoreNames.contains(IDB_SESSION_STORE)) {
-      storeNames.push(IDB_SESSION_STORE);
-    }
-    const tx = db.transaction(storeNames, "readwrite");
-    tx.objectStore(IDB_STORE).clear();
-    // Clear active workspace images, preserving saved session archives
-    if (db.objectStoreNames.contains(IDB_SESSION_STORE)) {
-      tx.objectStore(IDB_SESSION_STORE).delete("current_active_workspace");
-    }
     return new Promise((resolve) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
+      const timer = setTimeout(() => resolve(), 1200);
+      try {
+        const storeNames = [IDB_STORE];
+        if (db.objectStoreNames.contains(IDB_SESSION_STORE)) {
+          storeNames.push(IDB_SESSION_STORE);
+        }
+        const tx = db.transaction(storeNames, "readwrite");
+        tx.objectStore(IDB_STORE).clear();
+        if (db.objectStoreNames.contains(IDB_SESSION_STORE)) {
+          tx.objectStore(IDB_SESSION_STORE).delete("current_active_workspace");
+        }
+        tx.oncomplete = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+        tx.onerror = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      } catch {
+        clearTimeout(timer);
+        resolve();
+      }
     });
   } catch {
     // Ignore cleanup errors

@@ -931,6 +931,7 @@ export function AdminFinalApproval() {
             </button>
             <Link
               to="/admin/mcq-generator-124-pro"
+              search={{}}
               className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-black shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-1.5"
             >
               Open MCQ Generator <ExternalLink size={13} />
@@ -1016,6 +1017,7 @@ export function AdminFinalApproval() {
               </p>
               <Link
                 to="/admin/mcq-generator-124-pro"
+                search={{}}
                 className="mt-4 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-all"
               >
                 Go to MCQ Generator

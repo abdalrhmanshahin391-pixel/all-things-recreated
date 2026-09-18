@@ -54,8 +54,13 @@ import {
 
 type Stage = "extract" | "solve" | "import" | "archive";
 
+export type McqGeneratorSearch = {
+  batchId?: string;
+  stage?: Stage;
+};
+
 export const Route = createFileRoute("/admin/mcq-generator-124-pro")({
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): McqGeneratorSearch => ({
     batchId: typeof s.batchId === "string" ? s.batchId : undefined,
     stage: typeof s.stage === "string" ? (s.stage as Stage) : undefined,
   }),
@@ -960,16 +965,22 @@ export function McqGenerator124ProPage() {
   // ── Render Page Thumbnail ─────────────────────────────────────────────────
   async function getPageJpeg(pageNum: number): Promise<string> {
     if (pageThumbnails[pageNum]) return pageThumbnails[pageNum];
-    const fromCache = await getPageJpegFromCache(pageNum);
-    if (fromCache) {
-      setPageThumbnails((prev) => ({ ...prev, [pageNum]: fromCache }));
-      return fromCache;
+    try {
+      const fromCache = await getPageJpegFromCache(pageNum);
+      if (fromCache) {
+        setPageThumbnails((prev) => ({ ...prev, [pageNum]: fromCache }));
+        return fromCache;
+      }
+    } catch {
+      // Non-fatal cache failure, continue to live render
     }
     if (!pdfDoc) throw new Error(`PDF Document not loaded. Please select or re-upload the PDF to process page ${pageNum}.`);
-    const canvas = await renderPageToCanvas(pdfDoc, pageNum, 2600);
-    const jpeg = canvasToJpegBase64(canvas, 0.92);
+    const canvas = await renderPageToCanvas(pdfDoc, pageNum, 1600);
+    const jpeg = canvasToJpegBase64(canvas, 0.85);
     setPageThumbnails((prev) => ({ ...prev, [pageNum]: jpeg }));
-    await savePageJpegToCache(pageNum, jpeg);
+    try {
+      await savePageJpegToCache(pageNum, jpeg);
+    } catch {}
     return jpeg;
   }
 
@@ -1009,7 +1020,7 @@ export function McqGenerator124ProPage() {
           try {
             const jpegBase64 = await getPageJpeg(p);
 
-            const res: any = await extractPageFn({
+            const extractPromise = extractPageFn({
               data: {
                 pageNumber: p,
                 imageJpegBase64: jpegBase64,
@@ -1020,6 +1031,12 @@ export function McqGenerator124ProPage() {
                 customInstructions,
               },
             });
+
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error(`Page ${p} extraction request timed out after 60s`)), 60_000)
+            );
+
+            const res: any = await Promise.race([extractPromise, timeoutPromise]);
 
             const pageQs: SolvedQuestionState[] = (res.questions || []).map((q: ExtractedQuestion) => ({
               ...q,
