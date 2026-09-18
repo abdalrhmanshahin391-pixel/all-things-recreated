@@ -10,7 +10,74 @@ import type { SolvedQuestionState } from "./mcq-generator-124-pro.functions";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-export type BatchStatus = "pending" | "in_review" | "approved" | "rejected";
+export type LifecyclePhase =
+  | "pending_approval_extraction" // Display: "Pending final approval" (Extracted from PDF)
+  | "ready_to_solve"              // Display: "Ready questions" (Questions QA approved, ready for solver)
+  | "solved"                      // Display: "Solved" (Solved with explanations)
+  | "pending_approval_solved"     // Display: "Pending final approval" (Answers & explanations review)
+  | "ready_to_import"             // Display: "Ready to import" (All QA approved, ready to commit to QBank)
+  | "imported";                   // Display: "Imported" (Imported into live system)
+
+export type BatchStatus =
+  | LifecyclePhase
+  | "pending"
+  | "in_review"
+  | "approved"
+  | "rejected";
+
+export function getLifecycleBadgeInfo(status?: string): {
+  label: string;
+  badgeClass: string;
+  description: string;
+} {
+  switch (status) {
+    case "pending_approval_extraction":
+    case "pending":
+      return {
+        label: "Pending final approval",
+        badgeClass: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+        description: "Extracted from scan. Awaiting QA verification before solving.",
+      };
+    case "ready_to_solve":
+      return {
+        label: "Ready questions",
+        badgeClass: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+        description: "Verified by QA. Ready to be solved in the Solving Engine.",
+      };
+    case "solved":
+      return {
+        label: "Solved",
+        badgeClass: "bg-purple-500/15 text-purple-400 border-purple-500/30",
+        description: "Solved with explanations. Ready to submit for Solution QA.",
+      };
+    case "pending_approval_solved":
+    case "in_review":
+      return {
+        label: "Pending final approval",
+        badgeClass: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+        description: "Solutions completed. Awaiting QA verification of answers & explanations.",
+      };
+    case "ready_to_import":
+    case "approved":
+      return {
+        label: "Ready to import",
+        badgeClass: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+        description: "Fully QA approved. Ready to import into question bank.",
+      };
+    case "imported":
+      return {
+        label: "Imported",
+        badgeClass: "bg-teal-500/15 text-teal-300 border-teal-500/30",
+        description: "Imported into courses and live in QBank.",
+      };
+    default:
+      return {
+        label: "Pending final approval",
+        badgeClass: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+        description: "In QA approval pipeline.",
+      };
+  }
+}
 
 export interface FinalApprovalBatchSummary {
   id: string;
@@ -30,6 +97,7 @@ export interface FinalApprovalBatchSummary {
 export interface FinalApprovalBatch extends FinalApprovalBatchSummary {
   questions: SolvedQuestionState[];
   page_images?: Record<number, string>;
+  highlights?: Record<number, Array<{ id?: string; color: string; points: Array<{ x: number; y: number }> }>>;
 }
 
 async function assertAdminOrQa(context: any) {
@@ -89,9 +157,12 @@ export const createApprovalBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
     (d: {
+      batchId?: string;
       title: string;
+      status?: BatchStatus;
       questions: SolvedQuestionState[];
       pageImages?: Record<number, string>;
+      highlights?: Record<number, Array<{ id?: string; color: string; points: Array<{ x: number; y: number }> }>>;
       notes?: string;
     }) => {
       if (!d.title?.trim()) throw new Error("Batch title is required");
@@ -105,17 +176,20 @@ export const createApprovalBatch = createServerFn({ method: "POST" })
     await assertAdminOrQa(context);
     const userEmail = (context.claims as any)?.email || "admin";
 
-    const batchId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const batchId = data.batchId?.trim() || `batch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const now = new Date().toISOString();
 
     const total = data.questions.length;
     const approved = data.questions.filter((q) => q.isApproved).length;
     const flagged = data.questions.filter((q) => q.needsReview).length;
 
+    const defaultStatus: BatchStatus =
+      data.status || (approved === total ? "ready_to_solve" : "pending_approval_extraction");
+
     const newBatch: FinalApprovalBatch = {
       id: batchId,
       title: data.title.trim(),
-      status: approved === total ? "approved" : "pending",
+      status: defaultStatus,
       total_questions: total,
       approved_questions: approved,
       flagged_questions: flagged,
@@ -125,6 +199,7 @@ export const createApprovalBatch = createServerFn({ method: "POST" })
       notes: data.notes || "",
       questions: data.questions,
       page_images: data.pageImages || {},
+      highlights: data.highlights || {},
     };
 
     // 1. Try Supabase dedicated table
@@ -271,6 +346,7 @@ export const updateApprovalBatch = createServerFn({ method: "POST" })
       title?: string;
       status?: BatchStatus;
       questions?: SolvedQuestionState[];
+      highlights?: Record<number, Array<{ id?: string; color: string; points: Array<{ x: number; y: number }> }>>;
       notes?: string;
     }) => {
       if (!d?.batchId) throw new Error("Batch ID is required");
@@ -308,7 +384,11 @@ export const updateApprovalBatch = createServerFn({ method: "POST" })
     if (data.status) {
       computedStatus = data.status;
     } else if (approved === total && total > 0) {
-      computedStatus = "approved";
+      if (existing.status === "pending_approval_solved") {
+        computedStatus = "ready_to_import";
+      } else {
+        computedStatus = "ready_to_solve";
+      }
     } else if (approved > 0) {
       computedStatus = "in_review";
     }
@@ -325,6 +405,7 @@ export const updateApprovalBatch = createServerFn({ method: "POST" })
       reviewed_at: now,
       notes: data.notes !== undefined ? data.notes : existing.notes,
       questions: updatedQuestions,
+      highlights: data.highlights !== undefined ? data.highlights : existing.highlights,
     };
 
     // 1. Try Supabase

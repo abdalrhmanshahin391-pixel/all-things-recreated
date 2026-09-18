@@ -201,6 +201,11 @@ export async function deleteSessionPageImages(sessionId: string): Promise<void> 
   } catch {}
 }
 
+/** Convenience aliases for Final Approval batches */
+export const saveBatchPageImages = saveSessionPageImages;
+export const getBatchPageImages = getSessionPageImages;
+export const deleteBatchPageImages = deleteSessionPageImages;
+
 export async function clearPageJpegCache(): Promise<void> {
   try {
     const db = await openPageImageDb();

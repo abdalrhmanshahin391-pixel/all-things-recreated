@@ -29,6 +29,7 @@ import {
   adminSetUserPhone,
   adminSetEmailVerified,
   adminResendConfirmation,
+  adminToggleUserRole,
   type AdminUserRow,
 } from "@/lib/admin-users.functions";
 import { toast } from "sonner";
@@ -82,6 +83,7 @@ function AdminUsersPage() {
   const [busyVerify, setBusyVerify] = useState<string | null>(null);
   const verifyFn = useServerFn(adminSetEmailVerified);
   const resendFn = useServerFn(adminResendConfirmation);
+  const toggleRoleFn = useServerFn(adminToggleUserRole);
   const [recent, setRecent] = useState<
     { userId: string; name: string; role: RoleKey; granted: boolean }[]
   >([]);
@@ -141,7 +143,7 @@ function AdminUsersPage() {
     }
     const key = `${u.id}:${role}`;
     setBusyRole(key);
-    // optimistic
+    // optimistic update
     setUsers((prev) =>
       prev.map((x) =>
         x.id === u.id
@@ -150,31 +152,17 @@ function AdminUsersPage() {
       ),
     );
 
-    let rpcError: any = null;
-    const rpcRes = has
-      ? await supabase.rpc("admin_revoke_role", { _user_id: u.id, _role: role as any })
-      : await supabase.rpc("admin_grant_role", { _user_id: u.id, _role: role as any });
-
-    if (rpcRes.error) {
-      // Fallback: direct table operation on user_roles in case RPC or enum restriction occurs
-      if (has) {
-        const { error: dbErr } = await supabase
-          .from("user_roles")
-          .delete()
-          .eq("user_id", u.id)
-          .eq("role", role as any);
-        rpcError = dbErr;
-      } else {
-        const { error: dbErr } = await supabase
-          .from("user_roles")
-          .upsert({ user_id: u.id, role: role as any }, { onConflict: "user_id,role" });
-        rpcError = dbErr;
-      }
-    }
-
-    setBusyRole(null);
-    if (rpcError) {
-      // rollback
+    try {
+      await toggleRoleFn({ data: { userId: u.id, role, grant: !has } });
+      const name = u.full_name || u.username || u.email || "User";
+      setRecent((prev) =>
+        [{ userId: u.id, name, role, granted: !has }, ...prev.filter((r) => !(r.userId === u.id && r.role === role))].slice(0, 5),
+      );
+      toast.success(
+        has ? `Removed ${ROLE_LABEL[role]} from ${name}` : `${name} is now ${ROLE_LABEL[role]}`,
+      );
+    } catch (err: any) {
+      // rollback optimistic update on error
       setUsers((prev) =>
         prev.map((x) =>
           x.id === u.id
@@ -182,16 +170,10 @@ function AdminUsersPage() {
             : x,
         ),
       );
-      toast.error(rpcError.message || "Failed to update role");
-      return;
+      toast.error(err?.message || "Failed to update role");
+    } finally {
+      setBusyRole(null);
     }
-    const name = u.full_name || u.username || u.email || "User";
-    setRecent((prev) =>
-      [{ userId: u.id, name, role, granted: !has }, ...prev.filter((r) => !(r.userId === u.id && r.role === role))].slice(0, 5),
-    );
-    toast.success(
-      has ? `Removed ${ROLE_LABEL[role]} from ${name}` : `${name} is now ${ROLE_LABEL[role]}`,
-    );
   }
 
   async function verifyUser(u: AdminUserRow) {

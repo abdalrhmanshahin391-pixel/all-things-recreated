@@ -52,7 +52,13 @@ import {
   deleteSessionPageImages,
 } from "@/lib/pdf-page-image";
 
+type Stage = "extract" | "solve" | "import" | "archive";
+
 export const Route = createFileRoute("/admin/mcq-generator-124-pro")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    batchId: typeof s.batchId === "string" ? s.batchId : undefined,
+    stage: typeof s.stage === "string" ? (s.stage as Stage) : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "MCQ Generator 1.24 Pro [RESTRICTED] — AquaQBank" },
@@ -64,7 +70,6 @@ export const Route = createFileRoute("/admin/mcq-generator-124-pro")({
 
 const DEFAULT_OPENAI_KEY = "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";
 
-type Stage = "extract" | "solve" | "import" | "archive";
 type ProcessingMode = "standard" | "batch";
 type ComboMode = "mode1_keep_original" | "mode2_convert_multiple";
 type SolveSource = "ai" | "source_material" | "answer_key";
@@ -98,6 +103,7 @@ export interface SavedEngineSession {
 export function McqGenerator124ProPage() {
   const { user, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
+  const search = Route.useSearch();
 
   // ── Clearance Gate State ──────────────────────────────────────────────────
   const [clearanceUnlocked, setClearanceUnlocked] = useState(false);
@@ -318,6 +324,50 @@ export function McqGenerator124ProPage() {
   const [isLoadingBatchesForImport, setIsLoadingBatchesForImport] = useState<boolean>(false);
   const [selectedBatchIdToImport, setSelectedBatchIdToImport] = useState<string>("");
 
+  // Auto-load batch when navigated from Final Approval with ?batchId=...&stage=...
+  useEffect(() => {
+    if (!search?.batchId) return;
+    let isMounted = true;
+    (async () => {
+      try {
+        let loadedBatch: any = null;
+        try {
+          const res = await getApprovalBatchFn({ data: { batchId: search.batchId! } });
+          if (res?.batch) loadedBatch = res.batch;
+        } catch {}
+        if (!loadedBatch) {
+          const raw = localStorage.getItem("final_approval_batches_v1");
+          const list = raw ? JSON.parse(raw) : [];
+          loadedBatch = list.find((b: any) => b.id === search.batchId) || null;
+        }
+        if (loadedBatch && isMounted) {
+          if (Array.isArray(loadedBatch.questions) && loadedBatch.questions.length > 0) {
+            setExtractedQuestions(loadedBatch.questions);
+          }
+          if (loadedBatch.page_images) {
+            setPageThumbnails((prev) => ({ ...prev, ...loadedBatch.page_images }));
+          }
+          setSelectedBatchIdToImport(search.batchId!);
+          setStage1Done(true);
+          if (search.stage) {
+            setCurrentStage(search.stage);
+          } else if (loadedBatch.status === "ready_to_solve") {
+            setCurrentStage("solve");
+          } else if (loadedBatch.status === "ready_to_import") {
+            setCurrentStage("import");
+          }
+          toast.success(`Loaded approval batch: "${loadedBatch.title}" (${loadedBatch.questions?.length || 0} questions)`);
+        }
+      } catch (err: any) {
+        console.warn("[MCQ Generator] Auto-load batch from URL warning:", err);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [search?.batchId, search?.stage]);
+
   async function handleSendToFinalApproval() {
     if (!sendBatchTitle.trim()) {
       toast.error("Please enter a batch title");
@@ -346,58 +396,59 @@ export function McqGenerator124ProPage() {
         } catch {}
       }
 
-      // Save batch images in IndexedDB under batchId so Final Approval can ALWAYS retrieve them
+      // Tag questions with lifecycle status
+      const isFromSolve = currentStage === "solve";
+      const batchLifecycleStatus = isFromSolve ? "pending_approval_solved" : "pending_approval_extraction";
+      const taggedQuestions: SolvedQuestionState[] = extractedQuestions.map((q) => ({
+        ...q,
+        lifecycleStatus: batchLifecycleStatus,
+      }));
+
+      // Save full page images in IndexedDB under batchId (unlimited capacity)
       if (Object.keys(imagesToSend).length > 0) {
         await saveSessionPageImages(batchId, imagesToSend);
       }
 
-      // 1. Save to Client LocalStorage Backup (Instant & 100% resilient)
-      const localBatch = {
+      // 1. Save lightweight summary to LocalStorage (no huge base64 images to prevent QuotaExceededError)
+      const localBatchSummary = {
         id: batchId,
         title: sendBatchTitle.trim(),
-        status: extractedQuestions.every((q) => q.isApproved) ? "approved" : "pending",
-        total_questions: extractedQuestions.length,
-        approved_questions: extractedQuestions.filter((q) => q.isApproved).length,
-        flagged_questions: extractedQuestions.filter((q) => q.needsReview).length,
+        status: batchLifecycleStatus,
+        total_questions: taggedQuestions.length,
+        approved_questions: taggedQuestions.filter((q) => q.isApproved).length,
+        flagged_questions: taggedQuestions.filter((q) => q.needsReview).length,
         created_at: now,
         updated_at: now,
         created_by_email: "admin",
         notes: sendBatchNotes.trim(),
-        questions: extractedQuestions,
-        page_images: imagesToSend,
       };
 
       try {
         const raw = localStorage.getItem("final_approval_batches_v1");
         const existing = raw ? JSON.parse(raw) : [];
-        existing.unshift(localBatch);
+        existing.unshift(localBatchSummary);
         localStorage.setItem("final_approval_batches_v1", JSON.stringify(existing.slice(0, 50)));
       } catch (e) {
         console.warn("Could not save to client batch backup:", e);
       }
 
-      // 2. Submit to Server
+      // 2. Submit to Server (reliable payload without giant image payloads)
       try {
         await createApprovalBatchFn({
           data: {
+            batchId,
             title: sendBatchTitle.trim(),
-            questions: extractedQuestions,
-            pageImages: imagesToSend,
+            status: batchLifecycleStatus,
+            questions: taggedQuestions,
             notes: sendBatchNotes.trim(),
           },
         });
       } catch (serverErr: any) {
-        console.warn("[SendToApproval] Server function warning with images, retrying without large images payload:", serverErr);
-        try {
-          await createApprovalBatchFn({
-            data: {
-              title: sendBatchTitle.trim(),
-              questions: extractedQuestions,
-              notes: sendBatchNotes.trim(),
-            },
-          });
-        } catch {}
+        console.warn("[SendToApproval] Server function warning:", serverErr);
       }
+
+      // Update local state with tagged questions
+      setExtractedQuestions(taggedQuestions);
 
       toast.success(`Batch "${sendBatchTitle}" submitted to Final Approval!`, {
         duration: 5000,
@@ -915,8 +966,8 @@ export function McqGenerator124ProPage() {
       return fromCache;
     }
     if (!pdfDoc) throw new Error(`PDF Document not loaded. Please select or re-upload the PDF to process page ${pageNum}.`);
-    const canvas = await renderPageToCanvas(pdfDoc, pageNum, 1800);
-    const jpeg = canvasToJpegBase64(canvas, 0.90);
+    const canvas = await renderPageToCanvas(pdfDoc, pageNum, 2600);
+    const jpeg = canvasToJpegBase64(canvas, 0.92);
     setPageThumbnails((prev) => ({ ...prev, [pageNum]: jpeg }));
     await savePageJpegToCache(pageNum, jpeg);
     return jpeg;
@@ -973,6 +1024,7 @@ export function McqGenerator124ProPage() {
             const pageQs: SolvedQuestionState[] = (res.questions || []).map((q: ExtractedQuestion) => ({
               ...q,
               solveStatus: "unsolved",
+              lifecycleStatus: "pending_approval_extraction",
             }));
             collected.push(...pageQs);
             setExtractedQuestions([...collected]);

@@ -57,18 +57,28 @@ function emit(next: Partial<AuthSnapshot>) {
 async function loadExtras(uid: string) {
   if (extrasFor === uid) return;
   extrasFor = uid;
-  const [{ data: prof }, { data: roles }] = await Promise.all([
+  const [{ data: prof }, { data: roles }, { data: qaContent }] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", uid),
+    (supabase.from as any)("site_content").select("value_en").eq("key", "qa_user_ids").maybeSingle(),
   ]);
   // A newer auth event may have landed while we were fetching.
   if (snapshot.user?.id !== uid) return;
   extrasLoaded.add(uid);
   const list = (roles ?? []) as { role: string }[];
+
+  let persistentQa = false;
+  if (qaContent?.value_en) {
+    try {
+      const ids = JSON.parse(qaContent.value_en);
+      if (Array.isArray(ids) && ids.includes(uid)) persistentQa = true;
+    } catch {}
+  }
+
   emit({
     profile: (prof as Profile | null) ?? null,
     isRealAdmin: list.some((r) => r.role === "admin"),
-    isQa: list.some((r) => r.role === "qa" || r.role === "admin"),
+    isQa: list.some((r) => r.role === "qa" || r.role === "admin") || persistentQa,
     // A head is a committee member with extra powers.
     isCommittee: list.some((r) => r.role === "committee" || r.role === "committee_head"),
     isCommitteeHead: list.some((r) => r.role === "committee_head"),
