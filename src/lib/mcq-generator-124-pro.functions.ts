@@ -22,8 +22,10 @@ export type SupportedModelId = (typeof SUPPORTED_MODELS)[number]["id"];
 async function ensureAdmin(context: any) {
   const { supabase, userId } = context;
   const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
-  if (!isAdmin) throw new Error("Restricted Access: Administrator clearance required for MCQ Generator 1.24 Pro.");
-  return { supabase, userId } as { supabase: any; userId: string };
+  if (isAdmin) return { supabase, userId, role: "admin" };
+  const { data: isQa } = await supabase.rpc("has_role", { _user_id: userId, _role: "qa" });
+  if (isQa) return { supabase, userId, role: "qa" };
+  throw new Error("Restricted Access: Administrator or QA clearance required for MCQ Generator 1.24 Pro.");
 }
 
 // ── JSON Helpers ─────────────────────────────────────────────────────────────
@@ -195,10 +197,30 @@ export interface ExtractedQuestion {
   detectedAnswer: string | null;
   comboSets: string[][];
   originalCombinations: Array<{ letter: string; text: string }>;
-  isDuplicate?: boolean;
   needsReview?: boolean;
   reviewReason?: string | null;
   isApproved?: boolean;
+  isDuplicate?: boolean;
+}
+
+export interface BatchExtractionJob {
+  batchId: string;
+  status: "validating" | "in_progress" | "completed" | "failed" | "expired" | "cancelling" | "cancelled";
+  totalPages: number;
+  createdAt: string;
+  requestCounts: { total: number; completed: number; failed: number };
+  outputFileId?: string | null;
+  errorFileId?: string | null;
+}
+
+export interface SolvedQuestionState extends ExtractedQuestion {
+  solveStatus: "unsolved" | "solving" | "solved" | "error";
+  modelAnswer?: string | null;
+  clinicalExplanation?: string | null;
+  confidenceScore?: number;
+  citations?: string[];
+  aquavisionBadge?: string;
+  verifiedKeyMatch?: boolean;
 }
 
 function buildExtractionSystemPrompt(combinationMode: "mode1_keep_original" | "mode2_convert_multiple", customInstructions?: string): string {
@@ -207,24 +229,24 @@ Your task is to transcribe EVERY SINGLE question from this page VERBATIM with 10
 
 CRITICAL READING RULES — READ CAREFULLY:
 
-1. STRICT SEQUENTIAL QUESTION ORDER (NEVER SKIP A QUESTION):
-   - Scan the page from the VERY FIRST element at the top to the VERY LAST element at the bottom.
-   - Questions are numbered sequentially: 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., etc.
-   - You MUST extract EVERY SINGLE question that has a question number.
-   - NEVER skip questions! For example, if a page has Question 2, 3, 4, 5, 6, 7, 8, 9, 10, 11:
-     Your output MUST contain Question 2, Question 3, Question 4, Question 5, Question 6, Question 7, Question 8, Question 9, Question 10, Question 11.
-     Skipping questions 2, 3, or 4 is a FATAL ERROR.
-   - If the very top of the page has orphan fragment lines (e.g. "b) roseola, c) long lasting fever, d) relative bradycardia") continuing from the previous page, do not confuse them with new questions.
+1. STRICT SEQUENTIAL QUESTION ORDER & HEADER IMMUNITY (NEVER SKIP TOP QUESTIONS):
+   - Exam pages frequently contain top headers such as:
+     "Department of Infectious Diseases", "General Medicine V-a", "2025", "Test 8", "Quiz 2", "Midterm".
+   - CRITICAL: "Test 8" is the TEST TITLE/METADATA, NOT A QUESTION NUMBER!
+   - The questions start IMMEDIATELY below the header text at Question #1: e.g. "1. Clinical stages of Rabies are:".
+   - ALWAYS start extracting from Question #1!
+   - You MUST extract EVERY SINGLE numbered question in sequence: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14...
+   - Skipping questions (e.g. skipping 1, 2, 3, 4, 5, 6, 7 because of "Test 8") is a FATAL ERROR.
+   - If the very top of the page has orphan fragment lines continuing from the previous page, preserve them as an orphan entry.
 
 2. STRICT QUESTION BOUNDARIES (ZERO OPTION BLEEDING):
-   - Question #N begins at its bold question number marker (e.g. "2.", "3.", "4.").
+   - Question #N begins at its bold question number marker (e.g. "1.", "2.", "3.", "4.").
    - Question #N ENDS immediately before the next question number marker begins.
    - Everything between Question #N and Question #(N+1) belongs EXCLUSIVELY to Question #N.
    - NEVER attach, copy, or bleed options or statements from Question #N into Question #(N+1)!
-   - Question #4's options belong ONLY to Question #4. They must NEVER appear in Question #5!
 
 3. HORIZONTAL 2x2 GRID READING (THIS IS A SINGLE-COLUMN PAGE WITH 2x2 GRIDS):
-   - This exam paper is a SINGLE vertical column of questions. Do NOT split the page into two vertical columns!
+   - This exam paper is a SINGLE vertical column of questions. Do NOT split the page into two vertical page-wide columns!
    - Inside an individual question, items are often printed side-by-side to save vertical space:
      • STATEMENTS 2x2 GRID:
        Row 1: "1. Vidal reaction"            "3. urine culture"
@@ -234,32 +256,42 @@ CRITICAL READING RULES — READ CAREFULLY:
        Row 1: "a) sonnei"                    "c) flexneri"
        Row 2: "b) dysenteriae"               "d) boydii"
        -> Transcribe all 4 choices: A: sonnei, B: dysenteriae, C: flexneri, D: boydii.
-     • DO NOT mix Row 1 and Row 2 across different questions!
 
-4. ORDINARY MCQ vs COMBINATION MCQ (STRICT DEFINITION):
+4. COMBINATION QUESTION PROTECTION (CRITICAL — DO NOT DROP COMBINATION CHOICES):
+   - In questions like:
+     "12. Complications of Influenza are:
+      1. bacterial pneumonia     3. sinusitis, otitis
+      2. necrotic tracheobronchitis   4. meningitis
+      a) 1,2,3    b) 1,3    c) 2,4    d) all mentioned"
+     • The numbered items (1, 2, 3, 4) MUST go into the "statements" array:
+       ["1. bacterial pneumonia", "2. necrotic tracheobronchitis", "3. sinusitis, otitis", "4. meningitis"]
+     • The lettered choices (a, b, c, d) MUST go into the "options" array:
+       [{"letter": "A", "text": "1,2,3"}, {"letter": "B", "text": "1,3"}, {"letter": "C", "text": "2,4"}, {"letter": "D", "text": "all mentioned"}]
+     • NEVER convert statements (bacterial pneumonia, etc.) into options A, B, C, D!
+     • NEVER drop or omit the lettered choices (a, b, c, d)!
+     • Set question_type: "combination".
+
+5. ORDINARY MCQ vs COMBINATION MCQ (STRICT DEFINITION):
    - ORDINARY MCQ:
-     If the choices A, B, C, D contain clinical terms, drug names, sentences, or phrases:
-     (e.g. "a) all the above", "b) hypovolemic", "c) none of the above", "d) infectious-toxic")
+     If choices A, B, C, D contain clinical terms, diseases, symptoms, or sentences (e.g. "a) all the above", "b) hypovolemic", "c) none of the above", "d) infectious-toxic"):
      -> THIS IS AN ORDINARY MCQ.
-     -> NEVER turn clinical options (like hypovolemic, infectious-toxic) into numbered statements!
-     -> The stem is ONLY the introductory question. The choices are A, B, C, D.
-     -> Set question_type: "ordinary".
-   - COMBINATION MCQ:
-     A question is a Combination Question ONLY IF:
-     (a) It explicitly prints numbered items: "1. ...", "2. ...", "3. ...", "4. ...", AND
-     (b) The choices are combination codes referencing those numbers: e.g. "a) 1,2", "b) 1.3", "c) 2.4", "d) all of the above".
-     -> Put numbered items 1..4 in "statements".
-     -> Put combination codes in "options".
-     -> Set question_type: "combination".
+     -> NEVER turn clinical options into numbered statements!
+     -> Stem is the question prompt. Choices are A, B, C, D. Set question_type: "ordinary".
 
-5. PRESERVE VERBATIM ACCURACY:
+6. BOTTOM MARGIN TRUNCATION GUARDRAIL:
+   - If a question at the very bottom of the page is cut off by the photo edge (e.g. "14. Choose the right statement for Plague:" with no choices visible below it):
+     • Extract the stem text.
+     • Leave "options": [] and "statements": [].
+     • Set "needs_review": true and "review_reason": "Question cut off at bottom margin of image".
+     • NEVER invent or hallucinate choices!
+
+7. PRESERVE VERBATIM ACCURACY:
    - Transcribe exact spelling, medical terms, numbers, symbols (%, ±, µg, /), and units.
-   - For example: "mesogastric" (with an i, not a j), "EIEC", "ETEC", "Staphylococcus aureus".
-   - Do NOT guess or hallucinate text that is not visually present.
+   - Do NOT merge option letters into text (e.g. "c)all mentioned" must have text "all mentioned", NOT "call mentioned").
 
 ${combinationMode === "mode1_keep_original"
   ? `COMBINATION FORMAT (MODE 1 — KEEP ORIGINAL):
-   - Put combination codes directly into "options": [{"letter":"A","text":"1,2"},{"letter":"B","text":"1.3"}...]
+   - Put combination codes directly into "options": [{"letter":"A","text":"1,2,3"},{"letter":"B","text":"1,3"}...]
    - Set question_type: "combination"
    - Also record in "printed_combinations"`
   : `COMBINATION FORMAT (MODE 2 — CONVERT TO MULTIPLE ANSWERS):
@@ -269,11 +301,13 @@ ${combinationMode === "mode1_keep_original"
 }
 
 VISUAL ANTI-ERROR CHECKLIST:
-❌ NEVER skip questions at the top or anywhere on the page (check for 2, 3, 4, 5, 6, 7, 8, 9, 10, 11...).
-❌ NEVER bleed options from one question into the next question.
-❌ NEVER convert ordinary MCQ choices (e.g. "hypovolemic", "infectious-toxic") into numbered statements.
-❌ NEVER treat the page as 2 vertical page-wide columns — read question by question from top to bottom.
-✅ Every question with a number MUST have its own entry in the output array.
+❌ NEVER skip questions at the top of the page (check for 1, 2, 3, 4, 5, 6, 7, 8...).
+❌ NEVER confuse header titles (e.g. "Test 8") with question numbers.
+❌ NEVER convert combination numbered statements (1, 2, 3, 4) into options A, B, C, D.
+❌ NEVER drop combination choices like "a) 1,2,3  b) 1,3  c) 2,4  d) all mentioned".
+❌ NEVER bleed options from one question into another.
+❌ NEVER invent choices for questions cut off at the bottom margin.
+✅ Every question with a number MUST have its own entry in the output array in sequential order.
 ✅ Combination: "statements" contains 1..4, "options" contains A..D combination codes.
 ✅ Ordinary: "statements" is empty [], "options" contains A..D text choices verbatim.
 ${customInstructions ? `\nSpecial User Instructions:\n${customInstructions}\n` : ""}
@@ -282,7 +316,7 @@ Return STRICT JSON:
 {
   "questions": [
     {
-      "number": "2",
+      "number": "1",
       "question_type": "ordinary|combination|multiple_answer",
       "stem": "question prompt text verbatim without options or statement list",
       "statements": [
@@ -331,10 +365,19 @@ export function normalizeExtractedQuestion(q: any, pageNumber: number, idx: numb
   }
 
   let options = rawOptions
-    .map((o: any, oIdx: number) => ({
-      letter: String(o.letter || String.fromCharCode(65 + oIdx)).toUpperCase(),
-      text: String(o.text || o.body || "").trim(),
-    }))
+    .map((o: any, oIdx: number) => {
+      let letter = String(o.letter || String.fromCharCode(65 + oIdx)).toUpperCase();
+      let text = String(o.text || o.body || "").trim();
+      // Auto-clean common vision/OCR letter merge typos (e.g. "call mentioned" -> "all mentioned")
+      text = text
+        .replace(/^[a-d]\s*all\s+mentioned\b/i, "all mentioned")
+        .replace(/^[a-d]all\s+mentioned\b/i, "all mentioned")
+        .replace(/^[a-d]\s*all\s+(?:the\s+)?above\b/i, "all of the above")
+        .replace(/^[a-d]all\s+(?:the\s+)?above\b/i, "all of the above")
+        .replace(/^[a-d]\s*none\s+of\s+the\s+above\b/i, "none of the above")
+        .replace(/^[a-d]none\s+of\s+the\s+above\b/i, "none of the above");
+      return { letter, text };
+    })
     .filter((o: any) => o.text);
 
   // Merge statements into stem if not already present

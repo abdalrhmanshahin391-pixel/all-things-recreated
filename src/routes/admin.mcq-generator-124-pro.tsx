@@ -7,7 +7,8 @@ import {
   AlertTriangle, ArrowRight, RefreshCw, Upload, Eye, Trash2, Check, X, Layers,
   BookOpen, ListFilter, Copy, HelpCircle, Terminal, Flame, Database, ChevronRight,
   ExternalLink, ChevronDown, ChevronUp, Search, PlusCircle, Wrench, Square,
-  Clock, Bookmark, Download, FolderArchive, Play, Radio, Edit3
+  Clock, Bookmark, Download, FolderArchive, Play, Radio, Edit3,
+  CheckSquare, ZoomIn, ZoomOut, ChevronLeft
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
@@ -290,6 +291,195 @@ export function McqGenerator124ProPage() {
   const retrieveBatchResultsFn = useServerFn(retrieveOpenAiBatchExtractionResults124);
   const createBatchSolveFn = useServerFn(createOpenAiBatchSolving124);
   const retrieveBatchSolveResultsFn = useServerFn(retrieveOpenAiBatchSolvingResults124);
+
+  // ── Final Approval (QA Review) State & Handlers ───────────────────────────
+  const [isFinalApprovalOpen, setIsFinalApprovalOpen] = useState<boolean>(false);
+  const [qaActiveIndex, setQaActiveIndex] = useState<number>(0);
+  const [qaZoom, setQaZoom] = useState<number>(1);
+  const [qaFilter, setQaFilter] = useState<"all" | "unapproved" | "approved">("all");
+
+  const filteredQaQuestions = useMemo(() => {
+    if (qaFilter === "unapproved") return extractedQuestions.filter((q) => !q.isApproved || q.needsReview);
+    if (qaFilter === "approved") return extractedQuestions.filter((q) => q.isApproved);
+    return extractedQuestions;
+  }, [extractedQuestions, qaFilter]);
+
+  const activeQaQuestion = filteredQaQuestions[qaActiveIndex] || filteredQaQuestions[0] || null;
+
+  // Auto-fetch PDF page if not cached when viewing activeQaQuestion in QA review
+  useEffect(() => {
+    if (isFinalApprovalOpen && activeQaQuestion && !pageThumbnails[activeQaQuestion.pageNumber] && pdfDoc) {
+      getPageJpeg(activeQaQuestion.pageNumber).catch(() => {});
+    }
+  }, [isFinalApprovalOpen, activeQaQuestion?.pageNumber, pageThumbnails, pdfDoc]);
+
+  function handleQaApprove(qId: string) {
+    setExtractedQuestions((prev) =>
+      prev.map((q) => (q.id === qId ? { ...q, isApproved: true, needsReview: false, reviewReason: null } : q))
+    );
+    toast.success(`Question Approved ✓`, { duration: 1000 });
+    setQaActiveIndex((prev) => Math.min(filteredQaQuestions.length - 1, prev + 1));
+  }
+
+  function handleQaToggleType(qId: string) {
+    setExtractedQuestions((prev) =>
+      prev.map((q) => {
+        if (q.id !== qId) return q;
+        const newType = q.questionType === "combination" ? "ordinary" : "combination";
+        toast.info(`Switched to ${newType} type`, { duration: 1200 });
+        return { ...q, questionType: newType };
+      })
+    );
+  }
+
+  function handleQaFixStatementsAsOptions(qId: string) {
+    setExtractedQuestions((prev) =>
+      prev.map((q) => {
+        if (q.id !== qId) return q;
+        const newStatements = q.options.map((o, idx) => `${idx + 1}. ${o.text.replace(/^[1-4][\.\)]\s*/, "")}`);
+        const newStem = !/1[\.\s].+2[\.\s]/s.test(q.stem)
+          ? `${q.stem}\n${newStatements.join("\n")}`.trim()
+          : q.stem;
+        toast.success(`Statements moved out of options into statements list!`, { duration: 2500 });
+        return {
+          ...q,
+          questionType: "combination",
+          stem: newStem,
+          options: [
+            { letter: "A", text: "" },
+            { letter: "B", text: "" },
+            { letter: "C", text: "" },
+            { letter: "D", text: "" },
+          ],
+          hasMissingOptions: true,
+          missingOptionsCount: 4,
+          needsReview: true,
+          reviewReason: "Statements moved to list. Please enter the combination choices A, B, C, D.",
+        };
+      })
+    );
+  }
+
+  function handleQaCleanTypos(qId: string) {
+    setExtractedQuestions((prev) =>
+      prev.map((q) => {
+        if (q.id !== qId) return q;
+        const cleanedOptions = q.options.map((o) => {
+          let text = o.text
+            .replace(/^[a-d]\s*all\s+mentioned\b/i, "all mentioned")
+            .replace(/^[a-d]all\s+mentioned\b/i, "all mentioned")
+            .replace(/^[a-d]\s*all\s+(?:the\s+)?above\b/i, "all of the above")
+            .replace(/^[a-d]all\s+(?:the\s+)?above\b/i, "all of the above")
+            .replace(/^[a-d]\s*none\s+of\s+the\s+above\b/i, "none of the above")
+            .replace(/^[a-d]none\s+of\s+the\s+above\b/i, "none of the above");
+          return { ...o, text };
+        });
+        toast.success(`Cleaned merged letter typos!`, { duration: 1500 });
+        return { ...q, options: cleanedOptions };
+      })
+    );
+  }
+
+  function handleQaUpdateStem(qId: string, newStem: string) {
+    setExtractedQuestions((prev) =>
+      prev.map((q) => (q.id === qId ? { ...q, stem: newStem } : q))
+    );
+  }
+
+  function handleQaUpdateOption(qId: string, oIdx: number, newText: string) {
+    setExtractedQuestions((prev) =>
+      prev.map((q) => {
+        if (q.id !== qId) return q;
+        const newOpts = [...q.options];
+        if (newOpts[oIdx]) {
+          newOpts[oIdx] = { ...newOpts[oIdx], text: newText };
+        }
+        return { ...q, options: newOpts };
+      })
+    );
+  }
+
+  function handleQaDelete(qId: string) {
+    setExtractedQuestions((prev) => prev.filter((q) => q.id !== qId));
+    setQaActiveIndex((prev) => Math.max(0, prev - 1));
+    toast.success(`Question deleted.`);
+  }
+
+  async function handleQaReextract(q: ExtractedQuestion) {
+    const activeKey = selectedModel.startsWith("gemini") ? geminiKey : openaiKey;
+    if (!activeKey?.trim()) {
+      toast.error(`Please provide an API key for ${selectedModel}.`);
+      return;
+    }
+    const toastId = toast.loading(`Re-extracting Question #${q.number} with Vision AI...`);
+    try {
+      const jpeg = await getPageJpeg(q.pageNumber);
+      const res: any = await reextractSingleFn({
+        data: {
+          pageNumber: q.pageNumber,
+          imageJpegBase64: jpeg,
+          questionNumber: q.number,
+          combinationMode: comboMode,
+          model: selectedModel,
+          openaiApiKey: openaiKey,
+          geminiApiKey: geminiKey,
+          customInstructions,
+        },
+      });
+      if (res?.question) {
+        setExtractedQuestions((prev) =>
+          prev.map((item) => (item.id === q.id ? { ...res.question, id: q.id, solveStatus: "unsolved" } : item))
+        );
+        toast.success(`Question #${q.number} re-extracted!`, { id: toastId });
+      } else {
+        toast.error(`Could not re-extract Question #${q.number}.`, { id: toastId });
+      }
+    } catch (err: any) {
+      toast.error(`Re-extraction failed: ${err?.message || err}`, { id: toastId });
+    }
+  }
+
+  useEffect(() => {
+    if (!isFinalApprovalOpen) return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+
+      if (e.key === "Escape") {
+        setIsFinalApprovalOpen(false);
+        return;
+      }
+
+      if (isInput) return;
+
+      if (e.code === "Space" || e.key === "Enter") {
+        e.preventDefault();
+        if (activeQaQuestion) {
+          handleQaApprove(activeQaQuestion.id);
+        }
+      } else if (e.key === "ArrowRight" || e.key === "k" || e.key === "K") {
+        e.preventDefault();
+        setQaActiveIndex((prev) => Math.min(filteredQaQuestions.length - 1, prev + 1));
+      } else if (e.key === "ArrowLeft" || e.key === "j" || e.key === "J") {
+        e.preventDefault();
+        setQaActiveIndex((prev) => Math.max(0, prev - 1));
+      } else if (e.key === "c" || e.key === "C") {
+        e.preventDefault();
+        if (activeQaQuestion) {
+          handleQaToggleType(activeQaQuestion.id);
+        }
+      } else if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        if (activeQaQuestion) {
+          handleQaFixStatementsAsOptions(activeQaQuestion.id);
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFinalApprovalOpen, activeQaQuestion, filteredQaQuestions.length]);
 
   // ── IndexedDB Page Image Cache Hydration ──────────────────────────────────
   useEffect(() => {
@@ -2028,6 +2218,21 @@ export function McqGenerator124ProPage() {
                       </button>
                     )}
 
+                    {/* Final Approval QA Review Button */}
+                    <button
+                      onClick={() => {
+                        setQaActiveIndex(0);
+                        setIsFinalApprovalOpen(true);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 flex items-center gap-2 transition-all cursor-pointer"
+                    >
+                      <CheckSquare size={14} />
+                      Final Approval (QA Review)
+                      <span className="px-1.5 py-0.5 rounded bg-slate-950/40 text-emerald-300 font-mono text-[10px]">
+                        {extractedQuestions.filter((q) => q.isApproved).length}/{extractedQuestions.length} Approved
+                      </span>
+                    </button>
+
                     {stage1Done && (
                       <button
                         onClick={() => setCurrentStage("solve")}
@@ -3325,6 +3530,316 @@ export function McqGenerator124ProPage() {
           </div>
         </div>
       )}
+      {/* ── Final Approval (QA Review) Split-Screen Workspace ──────────── */}
+      {isFinalApprovalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col animate-fadeIn">
+          {/* Top Bar */}
+          <div className="h-14 px-5 border-b border-slate-800 bg-slate-900 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                <CheckSquare size={18} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-black text-white tracking-wide uppercase">
+                    Final Approval — QA Review Workspace
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30">
+                    Role: QA / Admin
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Verify questions side-by-side against the original PDF scan before solving.
+                </p>
+              </div>
+            </div>
+
+            {/* Filter Tabs & Done Button */}
+            <div className="flex items-center gap-2">
+              <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-bold">
+                <button
+                  onClick={() => { setQaFilter("all"); setQaActiveIndex(0); }}
+                  className={`px-3 py-1 rounded-lg transition-all ${qaFilter === "all" ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}
+                >
+                  All ({extractedQuestions.length})
+                </button>
+                <button
+                  onClick={() => { setQaFilter("unapproved"); setQaActiveIndex(0); }}
+                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${qaFilter === "unapproved" ? "bg-amber-500 text-slate-950 font-black shadow-sm" : "text-amber-400 hover:text-amber-300"}`}
+                >
+                  <AlertTriangle size={12} />
+                  Pending ({extractedQuestions.filter((q) => !q.isApproved || q.needsReview).length})
+                </button>
+                <button
+                  onClick={() => { setQaFilter("approved"); setQaActiveIndex(0); }}
+                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${qaFilter === "approved" ? "bg-emerald-500 text-slate-950 font-black shadow-sm" : "text-emerald-400 hover:text-emerald-300"}`}
+                >
+                  <CheckCircle2 size={12} />
+                  Approved ({extractedQuestions.filter((q) => q.isApproved).length})
+                </button>
+              </div>
+
+              {/* Complete & Return Button */}
+              <button
+                onClick={() => {
+                  setIsFinalApprovalOpen(false);
+                  if (extractedQuestions.every((q) => q.isApproved)) {
+                    setStage1Done(true);
+                  }
+                  toast.success("Returned to generator workspace.");
+                }}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Check size={14} /> Done & Return to Generator
+              </button>
+
+              <button
+                onClick={() => setIsFinalApprovalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
+                title="Close (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Keyboard Hints & Live Progress Bar */}
+          <div className="h-8 px-5 bg-slate-950 border-b border-slate-800 flex items-center justify-between text-[11px] text-slate-400 shrink-0">
+            <div className="flex items-center gap-4">
+              <span><kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">Space</kbd> or <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">Enter</kbd> Approve & Next</span>
+              <span><kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">J</kbd> / <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">K</kbd> Prev / Next</span>
+              <span><kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">C</kbd> Toggle Type</span>
+              <span><kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">F</kbd> Fix Statements as Options</span>
+            </div>
+            <div className="font-mono text-emerald-400 font-bold flex items-center gap-2">
+              <span>
+                {extractedQuestions.filter((q) => q.isApproved).length} of {extractedQuestions.length} Approved ({Math.round(((extractedQuestions.filter((q) => q.isApproved).length) / (extractedQuestions.length || 1)) * 100)}%)
+              </span>
+            </div>
+          </div>
+
+          {/* Split Body */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* LEFT PANE (50%) — PDF Visual Document */}
+            <div className="w-1/2 border-r border-slate-800 flex flex-col bg-slate-950">
+              {/* PDF Header Controls */}
+              <div className="h-10 px-4 border-b border-slate-800 bg-slate-900/60 flex items-center justify-between shrink-0">
+                <span className="text-xs font-mono text-slate-300 flex items-center gap-2">
+                  <FileText size={14} className="text-amber-400" />
+                  Original PDF Scan · Page {activeQaQuestion?.pageNumber || 1}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setQaZoom((z) => Math.max(0.6, z - 0.2))}
+                    className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
+                    title="Zoom Out"
+                  >
+                    <ZoomOut size={14} />
+                  </button>
+                  <span className="text-[10px] font-mono text-slate-400 px-1">{Math.round(qaZoom * 100)}%</span>
+                  <button
+                    onClick={() => setQaZoom((z) => Math.min(2.5, z + 0.2))}
+                    className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
+                    title="Zoom In"
+                  >
+                    <ZoomIn size={14} />
+                  </button>
+                  <button
+                    onClick={() => setQaZoom(1)}
+                    className="px-2 py-0.5 rounded text-[10px] hover:bg-slate-800 text-slate-400 hover:text-white"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+
+              {/* PDF Image View Area */}
+              <div className="flex-1 overflow-auto p-4 flex items-start justify-center">
+                {activeQaQuestion && pageThumbnails[activeQaQuestion.pageNumber] ? (
+                  <img
+                    src={`data:image/jpeg;base64,${pageThumbnails[activeQaQuestion.pageNumber]}`}
+                    alt={`Page ${activeQaQuestion.pageNumber}`}
+                    className="rounded shadow-2xl border border-slate-800 transition-transform origin-top"
+                    style={{
+                      transform: `scale(${qaZoom})`,
+                      maxWidth: qaZoom === 1 ? "100%" : "none",
+                    }}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-500 text-xs">
+                    <RefreshCw size={24} className="animate-spin mb-2 text-amber-400" />
+                    Loading page image...
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* RIGHT PANE (50%) — Fast Question Editor & Approval Card */}
+            <div className="w-1/2 flex flex-col bg-slate-900 overflow-y-auto p-6">
+              {activeQaQuestion ? (
+                <div className="space-y-4 max-w-2xl mx-auto w-full">
+                  {/* Card Header */}
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 rounded-lg bg-slate-800 font-mono text-sm font-bold text-white">
+                        Question #{activeQaQuestion.number}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono text-slate-400 bg-slate-950 border border-slate-800">
+                        Page {activeQaQuestion.pageNumber}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          activeQaQuestion.isApproved
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                            : "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                        }`}
+                      >
+                        {activeQaQuestion.isApproved ? "✓ Approved" : "⚠ Pending Approval"}
+                      </span>
+                    </div>
+
+                    {/* Question Type Toggle */}
+                    <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                      <button
+                        onClick={() => handleQaToggleType(activeQaQuestion.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                          activeQaQuestion.questionType === "ordinary"
+                            ? "bg-slate-800 text-cyan-300 border border-cyan-500/30"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        Ordinary MCQ
+                      </button>
+                      <button
+                        onClick={() => handleQaToggleType(activeQaQuestion.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                          activeQaQuestion.questionType === "combination"
+                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        Combination MCQ
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Smart Quick Fix Actions */}
+                  <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-slate-950/80 border border-slate-800">
+                    <span className="text-[11px] font-bold text-slate-400">Smart Fixes:</span>
+                    <button
+                      onClick={() => handleQaFixStatementsAsOptions(activeQaQuestion.id)}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                      title="Move options 1..4 out of options into the statements list"
+                    >
+                      <Sparkles size={12} /> Fix: Statements as Options
+                    </button>
+                    <button
+                      onClick={() => handleQaCleanTypos(activeQaQuestion.id)}
+                      className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                      title="Auto-clean merged typos like 'call mentioned' -> 'all mentioned'"
+                    >
+                      <Wrench size={12} /> Clean Typos
+                    </button>
+                    <button
+                      onClick={() => handleQaReextract(activeQaQuestion)}
+                      className="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs font-bold transition-all flex items-center gap-1 ml-auto cursor-pointer"
+                      title="Re-extract this question from the PDF image using Vision AI"
+                    >
+                      <RefreshCw size={12} /> Re-Extract
+                    </button>
+                    <button
+                      onClick={() => handleQaDelete(activeQaQuestion.id)}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                      title="Delete Question"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+
+                  {/* Review Banner if flagged */}
+                  {activeQaQuestion.needsReview && (
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 flex items-start gap-2">
+                      <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-400" />
+                      <span>{activeQaQuestion.reviewReason || "Flagged for manual review."}</span>
+                    </div>
+                  )}
+
+                  {/* Stem Input */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                      Question Prompt / Stem
+                    </label>
+                    <textarea
+                      value={activeQaQuestion.stem}
+                      onChange={(e) => handleQaUpdateStem(activeQaQuestion.id, e.target.value)}
+                      rows={4}
+                      className="w-full bg-slate-950 border border-slate-700 focus:border-cyan-400 rounded-xl p-3 text-sm text-white focus:outline-none transition-colors leading-relaxed"
+                    />
+                  </div>
+
+                  {/* Options Input */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                      Answer Choices
+                    </label>
+                    <div className="grid grid-cols-1 gap-2">
+                      {activeQaQuestion.options.map((opt, oIdx) => (
+                        <div key={opt.letter || oIdx} className="flex items-center gap-2">
+                          <span className="w-8 h-8 rounded-lg bg-slate-800 text-slate-200 font-mono font-bold text-xs flex items-center justify-center shrink-0 border border-slate-700">
+                            {opt.letter}
+                          </span>
+                          <input
+                            type="text"
+                            value={opt.text}
+                            onChange={(e) => handleQaUpdateOption(activeQaQuestion.id, oIdx, e.target.value)}
+                            className="flex-1 bg-slate-950 border border-slate-700 focus:border-cyan-400 rounded-xl px-3 py-2 text-sm text-white focus:outline-none transition-colors"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Action Bar */}
+                  <div className="pt-4 border-t border-slate-800 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setQaActiveIndex((prev) => Math.max(0, prev - 1))}
+                        disabled={qaActiveIndex === 0}
+                        className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold disabled:opacity-40 transition-all flex items-center gap-1 cursor-pointer"
+                      >
+                        <ChevronLeft size={14} /> Previous (J)
+                      </button>
+                      <span className="text-xs font-mono text-slate-400">
+                        {qaActiveIndex + 1} / {filteredQaQuestions.length}
+                      </span>
+                      <button
+                        onClick={() => setQaActiveIndex((prev) => Math.min(filteredQaQuestions.length - 1, prev + 1))}
+                        disabled={qaActiveIndex >= filteredQaQuestions.length - 1}
+                        className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold disabled:opacity-40 transition-all flex items-center gap-1 cursor-pointer"
+                      >
+                        Next (K) <ChevronRight size={14} />
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => handleQaApprove(activeQaQuestion.id)}
+                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-sm shadow-lg shadow-emerald-500/20 flex items-center gap-2 transition-all cursor-pointer"
+                    >
+                      <Check size={16} /> Approve & Next (Space)
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-slate-500 text-sm">
+                  <CheckCircle2 size={36} className="text-emerald-400 mb-2" />
+                  All questions in this view are approved!
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Reset Confirmation Modal ────────────────────────────────────────── */}
       {showResetConfirmModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
