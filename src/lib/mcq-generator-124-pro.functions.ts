@@ -347,21 +347,33 @@ export function normalizeExtractedQuestion(q: any, pageNumber: number, idx: numb
     }
   }
 
-  // If options are labeled 1. ... 2. ... 3. ... 4. ... without combination numbers, normalize to clean text
+  // Detect combination options: every option text is purely numeric codes (e.g. "1,2,3", "2,4")
   const isComboOptions = options.length > 0 && options.every((o: { letter: string; text: string }) => /^[\d\s.,;+]+$/.test(o.text.trim()));
-  if (!isComboOptions && options.length >= 2 && options.every((o: { letter: string; text: string }) => /^[1-4]\.\s*/.test(o.text))) {
-    options = options.map((o: { letter: string; text: string }, oIdx: number) => ({
-      letter: String.fromCharCode(65 + oIdx),
-      text: o.text.replace(/^[1-4]\.\s*/, "").trim(),
-    }));
-    q.question_type = "ordinary";
-  }
+
+  // ── NEW FIX ────────────────────────────────────────────────────────────────
+  // Detect when the model extracted NUMBERED STATEMENTS as if they were lettered options.
+  // Rule (user-specified):
+  //   • If option LETTERS are numeric ("1","2","3","4") → these are statements, not options
+  //   • If option TEXT starts with "1." / "2." / "3." / "4." → also statements, not options
+  // In both cases: move them into the stem, clear options, set combination type, flag for review.
+  const optionsHaveNumericLetters =
+    !isComboOptions &&
+    options.length >= 2 &&
+    options.every((o: { letter: string; text: string }) => /^\d+$/.test(o.letter.trim()));
+
+  const optionsHaveNumericTextPrefix =
+    !isComboOptions &&
+    !optionsHaveNumericLetters &&
+    options.length >= 2 &&
+    options.every((o: { letter: string; text: string }) => /^[1-4][\.\)]\s*/.test(o.text.trim()));
 
   // Bug Fix 2: Detect MIXED (partially combo) options — some look like number codes (e.g. "2,3", "1.4"),
   // some are plain text. This is a malformed question that should be flagged for review.
   const comboOptionPattern = /^[\d\s.,;+]+$/;
   const hasPartialComboOptions =
     !isComboOptions &&
+    !optionsHaveNumericLetters &&
+    !optionsHaveNumericTextPrefix &&
     options.length >= 2 &&
     options.some((o: { letter: string; text: string }) => comboOptionPattern.test(o.text.trim())) &&
     options.some((o: { letter: string; text: string }) => !comboOptionPattern.test(o.text.trim()));
@@ -382,6 +394,27 @@ export function normalizeExtractedQuestion(q: any, pageNumber: number, idx: numb
   let needsReview = Boolean(q.needs_review);
   let reviewReason = q.review_reason ? String(q.review_reason) : null;
   let isApproved = q.is_approved !== false && !needsReview;
+
+  // Apply the numbered-statements-as-options fix AFTER needsReview is declared
+  if (optionsHaveNumericLetters || optionsHaveNumericTextPrefix) {
+    // Move these pseudo-options into the stem as numbered statements so they are visible
+    const movedStatements = options.map((o: { letter: string; text: string }, idx: number) => {
+      const num = optionsHaveNumericLetters ? o.letter : String(idx + 1);
+      const text = o.text.replace(/^[1-4][\.\)]\s*/, "").trim();
+      return `${num}. ${text}`;
+    });
+    if (!/1[\.\s].+2[\.\s]/s.test(stem)) {
+      stem = `${stem}\n${movedStatements.join("\n")}`.trim();
+    }
+    options = []; // The real combination options (e.g. "All the above", "1,2,3") were not captured
+    q.question_type = "combination";
+    needsReview = true;
+    isApproved = false;
+    reviewReason =
+      "Numbered statements (1, 2, 3, 4) were incorrectly extracted as lettered options. " +
+      "This is a combination question but the actual options (e.g. 'All the above', '1,2,3') were not captured. " +
+      "Manual review and re-extraction required.";
+  }
 
   // Flag as orphaned fragment when options are all combo codes but there are no real text statements.
   // Covers three scenarios:
