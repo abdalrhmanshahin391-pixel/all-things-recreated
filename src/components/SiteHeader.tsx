@@ -17,6 +17,7 @@ import {
   Bell,
   GraduationCap,
   Package as PackageIcon,
+  CheckSquare,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +28,7 @@ import { EventEntryButtons } from "@/components/events/EventButtons";
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
 import { AdminBadge, StudentBadge } from "@/components/RoleBadge";
+import { QaBadge } from "@/components/QaBadge";
 import { useLang } from "@/components/LanguageProvider";
 import { RaziWordmark } from "@/components/brand/RaziWordmark";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -52,7 +54,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
   const [open, setOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useTranslation();
-  const { user, profile, isAdmin, isRealAdmin, isGolden, isCommittee, isCommitteeHead, adminMode, setAdminMode, loading: authLoading } = useAuth();
+  const { user, profile, isAdmin, isRealAdmin, isGolden, isCommittee, isCommitteeHead, isQa, adminMode, setAdminMode, loading: authLoading } = useAuth();
   const { lang, toggle: toggleLang } = useLang();
   const settings = useSiteSettings();
   const skin = resolveHeaderSkin(settings.header_style);
@@ -182,6 +184,8 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
             <GoldenBadge />
           ) : isCommittee ? (
             <CommitteeBadge head={isCommitteeHead} />
+          ) : isQa ? (
+            <QaBadge />
           ) : (
             <StudentBadge />
           )}
@@ -200,6 +204,8 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                   <GoldenBadge />
                 ) : isCommittee ? (
                   <CommitteeBadge head={isCommitteeHead} />
+                ) : isQa ? (
+                  <QaBadge />
                 ) : (
                   <StudentBadge />
                 )}
@@ -213,7 +219,9 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                       ? "رئيس لجنة الطب والجراحة"
                       : isCommittee
                         ? "لجنة الطب والجراحة"
-                        : t("cms.header.roleUser")}
+                        : isQa
+                          ? "QA Reviewer"
+                          : t("cms.header.roleUser")}
               </p>
             </div>
             <div className="py-1 overflow-y-auto overscroll-contain flex-1 min-h-0">
@@ -274,13 +282,19 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                   </MenuLink>
                 </>
               )}
-              {(isAdmin || isCommitteeHead) && (
-
+              {(isAdmin || isCommitteeHead || isQa) && (
                 <>
                   <div className="my-1 mx-3 border-t border-border" />
-                  <MenuLink to="/admin" icon={<LayoutGrid size={16} />} onClick={() => setOpen(false)}>
-                    Admin
-                  </MenuLink>
+                  {isAdmin && (
+                    <MenuLink to="/admin" icon={<LayoutGrid size={16} />} onClick={() => setOpen(false)}>
+                      Admin
+                    </MenuLink>
+                  )}
+                  {isQa && (
+                    <MenuLink to="/admin/final-approval" icon={<CheckSquare size={16} />} onClick={() => setOpen(false)}>
+                      Final Approval (QA)
+                    </MenuLink>
+                  )}
                   {isCommitteeHead && (
                     <>
                       <MenuLink to="/committee/manage-team" icon={<Users size={16} />} onClick={() => setOpen(false)}>

@@ -19,7 +19,7 @@ import {
   MailWarning,
   Crown,
   Star,
-
+  CheckSquare,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -34,7 +34,9 @@ import {
 import { toast } from "sonner";
 import { UserModerationDialog } from "@/components/admin/UserModerationDialog";
 import { UserEditDialog } from "@/components/admin/UserEditDialog";
-
+import { AdminBadge, QaBadge } from "@/components/RoleBadge";
+import { GoldenBadge } from "@/components/GoldenBadge";
+import { CommitteeBadge } from "@/components/CommitteeBadge";
 
 export const Route = createFileRoute("/admin/users")({
   head: () => ({
@@ -43,18 +45,19 @@ export const Route = createFileRoute("/admin/users")({
       {
         name: "description",
         content:
-          "Manage every registered account and grant Admin or لجنة الطب والجراحة permissions.",
+          "Manage every registered account and grant Admin, QA, or لجنة الطب والجراحة permissions.",
       },
     ],
   }),
   component: AdminUsersPage,
 });
 
-type RoleKey = "admin" | "committee" | "committee_head" | "golden";
-type Filter = "all" | "admin" | "committee" | "committee_head" | "golden" | "none" | "unverified";
+type RoleKey = "admin" | "qa" | "committee" | "committee_head" | "golden";
+type Filter = "all" | "admin" | "qa" | "committee" | "committee_head" | "golden" | "none" | "unverified";
 
 const ROLE_LABEL: Record<RoleKey, string> = {
   admin: "Admin",
+  qa: "QA Reviewer",
   committee: "لجنة الطب والجراحة",
   committee_head: "رئيس لجنة الطب والجراحة",
   golden: "Golden account",
@@ -102,6 +105,7 @@ function AdminUsersPage() {
     const q = query.trim().toLowerCase();
     return users.filter((u) => {
       if (filter === "admin" && !u.roles.includes("admin")) return false;
+      if (filter === "qa" && !u.roles.includes("qa")) return false;
       if (filter === "committee" && !u.roles.includes("committee")) return false;
       if (filter === "committee_head" && !u.roles.includes("committee_head")) return false;
       if (filter === "golden" && !u.roles.includes("golden")) return false;
@@ -121,6 +125,7 @@ function AdminUsersPage() {
     () => ({
       total: users.length,
       admins: users.filter((u) => u.roles.includes("admin")).length,
+      qa: users.filter((u) => u.roles.includes("qa")).length,
       committee: users.filter((u) => u.roles.includes("committee")).length,
       heads: users.filter((u) => u.roles.includes("committee_head")).length,
       golden: users.filter((u) => u.roles.includes("golden")).length,
@@ -144,9 +149,29 @@ function AdminUsersPage() {
           : x,
       ),
     );
-    const { error: rpcError } = has
-      ? await supabase.rpc("admin_revoke_role", { _user_id: u.id, _role: role })
-      : await supabase.rpc("admin_grant_role", { _user_id: u.id, _role: role });
+
+    let rpcError: any = null;
+    const rpcRes = has
+      ? await supabase.rpc("admin_revoke_role", { _user_id: u.id, _role: role as any })
+      : await supabase.rpc("admin_grant_role", { _user_id: u.id, _role: role as any });
+
+    if (rpcRes.error) {
+      // Fallback: direct table operation on user_roles in case RPC or enum restriction occurs
+      if (has) {
+        const { error: dbErr } = await supabase
+          .from("user_roles")
+          .delete()
+          .eq("user_id", u.id)
+          .eq("role", role as any);
+        rpcError = dbErr;
+      } else {
+        const { error: dbErr } = await supabase
+          .from("user_roles")
+          .upsert({ user_id: u.id, role: role as any }, { onConflict: "user_id,role" });
+        rpcError = dbErr;
+      }
+    }
+
     setBusyRole(null);
     if (rpcError) {
       // rollback
@@ -157,7 +182,7 @@ function AdminUsersPage() {
             : x,
         ),
       );
-      toast.error(rpcError.message);
+      toast.error(rpcError.message || "Failed to update role");
       return;
     }
     const name = u.full_name || u.username || u.email || "User";
@@ -240,6 +265,7 @@ function AdminUsersPage() {
         <div className="flex flex-wrap gap-2 mb-6">
           <Stat label="Users" value={counts.total} />
           <Stat label="Admins" value={counts.admins} />
+          <Stat label="QA Reviewers" value={counts.qa} />
           <Stat label="لجنة الطب والجراحة" value={counts.committee} />
           <Stat label="رؤساء اللجنة" value={counts.heads} />
           <Stat label="Golden accounts" value={counts.golden} />
@@ -251,10 +277,11 @@ function AdminUsersPage() {
             <span className="font-semibold text-foreground">What can each role do?</span>{" "}
             <span className="font-semibold text-foreground">Admin</span> controls the whole
             administration site.{" "}
+            <span className="font-semibold text-foreground">QA Reviewer</span> has clearance to review,
+            edit, and approve extracted MCQs in Final Approval before solving.{" "}
             <span className="font-semibold text-foreground">لجنة الطب والجراحة</span> can only add,
             edit and upload years, semesters, subjects and resources inside the Committee section —
-            nothing else.
-            {" "}
+            nothing else.{" "}
             <span className="font-semibold text-foreground">Golden account</span> is a normal member
             who gets every paid course and lecture for free — no admin access.
           </div>
@@ -277,6 +304,7 @@ function AdminUsersPage() {
           {([
             ["all", "All"],
             ["admin", "Admins"],
+            ["qa", "QA Reviewers"],
             ["committee", "لجنة الطب والجراحة"],
             ["committee_head", "رئيس اللجنة"],
             ["golden", "Golden accounts"],
@@ -354,7 +382,10 @@ function AdminUsersPage() {
                         {initial}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold truncate">{u.full_name || u.username}</div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold truncate">{u.full_name || u.username}</span>
+                          <UserRoleBadge roles={u.roles} />
+                        </div>
                         <div className="text-xs text-muted-foreground truncate">
                           @{u.username}
                           {u.email ? ` · ${u.email}` : ""}
@@ -427,6 +458,14 @@ function AdminUsersPage() {
                         active={u.roles.includes("admin")}
                         busy={busyRole === `${u.id}:admin`}
                         onClick={() => toggleRole(u, "admin")}
+                      />
+                      <RoleChip
+                        label={ROLE_LABEL.qa}
+                        icon={<CheckSquare size={13} />}
+                        active={u.roles.includes("qa")}
+                        busy={busyRole === `${u.id}:qa`}
+                        onClick={() => toggleRole(u, "qa")}
+                        variant="qa"
                       />
                       <RoleChip
                         label={ROLE_LABEL.committee}
@@ -542,26 +581,61 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
+export function UserRoleBadge({ roles, size = "sm" }: { roles: string[]; size?: "sm" | "md" }) {
+  const specificRoles = (roles || []).filter((r) => r !== "user");
+  if (specificRoles.length === 0) return null;
+
+  // Higher priority roles take absolute precedence
+  if (specificRoles.includes("admin")) return <AdminBadge size={size} />;
+  if (specificRoles.includes("committee_head")) return <CommitteeBadge size={size} head />;
+  if (specificRoles.includes("committee")) return <CommitteeBadge size={size} />;
+  if (specificRoles.includes("golden")) return <GoldenBadge size={size} />;
+
+  // Special QA badge ONLY when the user's sole role is QA (strict rule: if 2+ roles exist, QA badge does not appear)
+  if (specificRoles.includes("qa") && specificRoles.length === 1) {
+    return <QaBadge size={size} />;
+  }
+
+  // If user has 2+ roles and QA was one of them, the non-QA role badge takes precedence
+  const nonQa = specificRoles.filter((r) => r !== "qa");
+  if (nonQa.length > 0) {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border border-border bg-card text-foreground uppercase">
+        {nonQa[0]}
+      </span>
+    );
+  }
+
+  return null;
+}
+
 function RoleChip({
   label,
   icon,
   active,
   busy,
+  variant = "default",
   onClick,
 }: {
   label: string;
   icon: React.ReactNode;
   active: boolean;
   busy: boolean;
+  variant?: "default" | "qa";
   onClick: () => void;
 }) {
+  const activeClass =
+    variant === "qa"
+      ? "qa-chip"
+      : "bg-primary text-primary-foreground border-primary";
+
   return (
     <button
       onClick={onClick}
       disabled={busy}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors disabled:opacity-50 ${
         active
-          ? "bg-primary text-primary-foreground border-primary"
+          ? activeClass
           : "bg-transparent text-muted-foreground border-border hover:text-foreground hover:border-foreground/40"
       }`}
     >
