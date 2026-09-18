@@ -464,8 +464,8 @@ export function McqGenerator124ProPage() {
       return fromCache;
     }
     if (!pdfDoc) throw new Error(`PDF Document not loaded. Please select or re-upload the PDF to process page ${pageNum}.`);
-    const canvas = await renderPageToCanvas(pdfDoc, pageNum, 2800);
-    const jpeg = canvasToJpegBase64(canvas, 0.95);
+    const canvas = await renderPageToCanvas(pdfDoc, pageNum, 1800);
+    const jpeg = canvasToJpegBase64(canvas, 0.90);
     setPageThumbnails((prev) => ({ ...prev, [pageNum]: jpeg }));
     await savePageJpegToCache(pageNum, jpeg);
     return jpeg;
@@ -1850,15 +1850,39 @@ export function McqGenerator124ProPage() {
             </div>
 
             {/* ── Per-Page Live Extraction Results ───────────────────────────── */}
-            {Object.keys(pageExtractionResults).length > 0 && (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                <h3 className="text-xs font-bold text-slate-300 mb-3 flex items-center gap-2 uppercase tracking-wider">
-                  <Radio size={13} className="text-amber-400" />
-                  Page-by-Page Extraction Log
-                  <span className="ml-auto text-[10px] font-mono text-slate-500 normal-case tracking-normal">
-                    {Object.keys(pageExtractionResults).length} / {totalPages} pages processed
-                  </span>
-                </h3>
+            {(isExtracting || Object.keys(pageExtractionResults).length > 0) && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <h3 className="text-xs font-bold text-slate-300 flex items-center gap-2 uppercase tracking-wider">
+                    <Radio size={13} className={isExtracting ? "text-amber-400 animate-pulse" : "text-emerald-400"} />
+                    Page-by-Page Extraction Log
+                    {isExtracting && (
+                      <span className="text-[11px] font-normal text-amber-400 normal-case">
+                        — scanning page {extractProgress.current || 1} of {totalPages} (~5-8s/page)...
+                      </span>
+                    )}
+                  </h3>
+                  <div className="text-[10px] font-mono text-slate-400">
+                    {Object.keys(pageExtractionResults).length} / {totalPages} pages completed
+                    {extractedQuestions.length > 0 && (
+                      <span className="ml-2 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
+                        {extractedQuestions.length} questions captured
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                {isExtracting && (
+                  <div className="w-full bg-slate-950 border border-slate-800 rounded-full h-2 mb-4 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-amber-500 to-emerald-500 h-full transition-all duration-500"
+                      style={{
+                        width: `${Math.max(5, Math.min(100, Math.round(((extractProgress.current || 1) / (totalPages || 1)) * 100)))}%`,
+                      }}
+                    />
+                  </div>
+                )}
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
                     const pr = pageExtractionResults[p];

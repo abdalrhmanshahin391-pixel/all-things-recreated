@@ -698,89 +698,56 @@ export const extractPageQuestions124 = createServerFn({ method: "POST" })
 
     const { pageNumber, imageJpegBase64, combinationMode, model, openaiApiKey, geminiApiKey, customInstructions } = data;
 
-    // ── STEP 1: Discover all question numbers on this page ──────────────────
-    const { questionNumbers, pageStartsWithOrphan, orphanType } = await discoverPageQuestionsInternal({
-      pageNumber,
-      imageJpegBase64,
-      model,
-      openaiApiKey,
-      geminiApiKey,
-    });
+    // ── STEP 1: Direct Visual Page Extraction (Fast 1-Shot Vision AI Call) ────
+    // Sends the page image directly to the vision model with visual document layout instructions.
+    // Transcribes all questions, stems, statements, and options in a single visual pass (5-8 seconds).
+    const systemPrompt = buildExtractionSystemPrompt(combinationMode, customInstructions);
+    const userPrompt = `Visually examine Page ${pageNumber} of this exam document. Read each question and its answer options based on their visual layout, spatial indentation, and position across all columns. Keep question stems completely separate from answer options. Preserve exact wording, numbers, units, and symbols verbatim. If any part is unclear, mark needs_review: true.`;
 
     let questions: ExtractedQuestion[] = [];
+    try {
+      const rawOutput = await callUnifiedAi({
+        model,
+        systemPrompt,
+        userPrompt,
+        imageBase64: imageJpegBase64,
+        openaiApiKey,
+        geminiApiKey,
+        jsonMode: true,
+        temperature: 0,
+      });
 
-    if (questionNumbers.length > 0) {
-      // ── STEP 2: Per-question focused extraction (primary strategy) ─────────
-      // Process each question individually with next-Q boundary so the AI knows
-      // exactly where each question starts and ends on the page.
-      for (let i = 0; i < questionNumbers.length; i++) {
-        const qNum = questionNumbers[i];
-        const nextQNum = questionNumbers[i + 1] || null;
+      const parsed = parseJsonObject(rawOutput);
+      const rawQs = Array.isArray(parsed?.questions) ? parsed.questions : [];
+      questions = rawQs.map((q: any, idx: number) => normalizeExtractedQuestion(q, pageNumber, idx));
+    } catch (err) {
+      console.error(`[Page ${pageNumber}] Visual extraction call failed:`, err);
+    }
 
+    // ── STEP 2 (Targeted Self-Healing): Only for broken combination/option questions ──
+    for (let idx = 0; idx < questions.length; idx++) {
+      const q = questions[idx];
+      const isBrokenCombo = q.questionType === "combination" && (!q.options.length || !/1[\.\s].+2[\.\s]/s.test(q.stem));
+      if (q.needsReview && (isBrokenCombo || q.options.length < 2)) {
         try {
-          const extracted = await extractSingleQuestionFocused({
+          const repaired = await extractSingleQuestionFocused({
             pageNumber,
             imageJpegBase64,
-            questionNumber: qNum,
-            nextQuestionNumber: nextQNum,
+            questionNumber: q.number,
             combinationMode,
             model,
             openaiApiKey,
             geminiApiKey,
             customInstructions,
-            idx: i,
+            idx,
           });
-          if (extracted) questions.push(extracted);
-        } catch (qErr) {
-          console.warn(`[Extract Q#${qNum}] error on page ${pageNumber}:`, qErr);
+          if (repaired && (!repaired.needsReview || repaired.options.length > q.options.length)) {
+            questions[idx] = repaired;
+          }
+        } catch (repairErr) {
+          console.warn(`[Targeted Repair Q#${q.number}] skipped:`, repairErr);
         }
       }
-    } else {
-      // ── STEP 3: Fallback — whole-page extraction dump ──────────────────────
-      // Used only when Step 1 discovered 0 question numbers (e.g. a table/diagram page).
-      console.warn(`[Page ${pageNumber}] 0 question numbers discovered. Falling back to whole-page dump.`);
-      try {
-        const systemPrompt = buildExtractionSystemPrompt(combinationMode, customInstructions);
-        const userPrompt = `Visually examine Page ${pageNumber} of this exam document. Read each question and its answer options based on their visual layout and position across all columns. Keep question stems completely separate from answer options. Preserve exact wording, numbers, units, and symbols verbatim. If any part is unclear, mark needs_review: true.`;
-
-        const rawOutput = await callUnifiedAi({
-          model,
-          systemPrompt,
-          userPrompt,
-          imageBase64: imageJpegBase64,
-          openaiApiKey,
-          geminiApiKey,
-          jsonMode: true,
-          temperature: 0,
-        });
-
-        const parsed = parseJsonObject(rawOutput);
-        const rawQs = Array.isArray(parsed?.questions) ? parsed.questions : [];
-        questions = rawQs.map((q: any, idx: number) => normalizeExtractedQuestion(q, pageNumber, idx));
-      } catch (fallbackErr) {
-        console.warn(`[Page ${pageNumber}] Whole-page fallback also failed:`, fallbackErr);
-      }
-    }
-
-    // ── Handle orphan fragment detected at page start ──────────────────────
-    if (pageStartsWithOrphan) {
-      const orphanPlaceholder: ExtractedQuestion = {
-        id: `q-p${pageNumber}-orphan-${Date.now().toString(36)}`,
-        pageNumber,
-        number: `~orphan`,
-        questionType: "combination",
-        stem: "[Orphan fragment — tail of a split question from the previous page]",
-        options: [],
-        hasMissingOptions: true,
-        missingOptionsCount: 4,
-        detectedAnswer: null,
-        comboSets: [],
-        originalCombinations: [],
-        needsReview: true,
-        reviewReason: `This page starts with the tail of a split combination question (${orphanType ?? "fragment"}) from the previous page. The statements and/or options at the top of this page belong to the last question of the previous page. Please review and merge manually.`,
-        isApproved: false,
-      };
-      questions = [orphanPlaceholder, ...questions];
     }
 
     // ── Determine page quality ─────────────────────────────────────────────
