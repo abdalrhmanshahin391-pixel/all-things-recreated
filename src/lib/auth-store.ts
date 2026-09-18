@@ -14,6 +14,7 @@ export type AuthSnapshot = {
   user: User | null;
   profile: Profile | null;
   isRealAdmin: boolean;
+  isQa: boolean;
   isCommittee: boolean;
   isCommitteeHead: boolean;
   isGolden: boolean;
@@ -26,6 +27,7 @@ const EMPTY: AuthSnapshot = {
   user: null,
   profile: null,
   isRealAdmin: false,
+  isQa: false,
   isCommittee: false,
   isCommitteeHead: false,
   isGolden: false,
@@ -66,6 +68,7 @@ async function loadExtras(uid: string) {
   emit({
     profile: (prof as Profile | null) ?? null,
     isRealAdmin: list.some((r) => r.role === "admin"),
+    isQa: list.some((r) => r.role === "qa" || r.role === "admin"),
     // A head is a committee member with extra powers.
     isCommittee: list.some((r) => r.role === "committee" || r.role === "committee_head"),
     isCommitteeHead: list.some((r) => r.role === "committee_head"),
@@ -89,7 +92,7 @@ function start() {
     if (!uid) {
       extrasFor = null;
       extrasLoaded.clear();
-      emit({ session: null, user: null, profile: null, isRealAdmin: false, isCommittee: false, isCommitteeHead: false, isGolden: false, loading: false });
+      emit({ session: null, user: null, profile: null, isRealAdmin: false, isQa: false, isCommittee: false, isCommitteeHead: false, isGolden: false, loading: false });
       return;
     }
     emit({ session: s, user: s?.user ?? null, loading: !extrasLoaded.has(uid) });

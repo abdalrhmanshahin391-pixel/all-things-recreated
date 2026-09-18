@@ -49,6 +49,7 @@ import { Route as AdminCoursesRouteImport } from './routes/admin.courses'
 import { Route as AdminCoursesHubRouteImport } from './routes/admin.courses-hub'
 import { Route as AdminDatabaseRouteImport } from './routes/admin.database'
 import { Route as AdminDevicesRouteImport } from './routes/admin.devices'
+import { Route as AdminFinalApprovalRouteImport } from './routes/admin.final-approval'
 import { Route as AdminGeminiKeysRouteImport } from './routes/admin.gemini-keys'
 import { Route as AdminGermanRouteImport } from './routes/admin.german'
 import { Route as AdminGroupsRouteImport } from './routes/admin.groups'
@@ -345,6 +346,11 @@ const AdminDatabaseRoute = AdminDatabaseRouteImport.update({
 const AdminDevicesRoute = AdminDevicesRouteImport.update({
   id: '/admin/devices',
   path: '/admin/devices',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminFinalApprovalRoute = AdminFinalApprovalRouteImport.update({
+  id: '/admin/final-approval',
+  path: '/admin/final-approval',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminGeminiKeysRoute = AdminGeminiKeysRouteImport.update({
@@ -870,6 +876,7 @@ export interface FileRoutesByFullPath {
   '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
+  '/admin/final-approval': typeof AdminFinalApprovalRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
   '/admin/german': typeof AdminGermanRouteWithChildren
   '/admin/groups': typeof AdminGroupsRoute
@@ -1003,6 +1010,7 @@ export interface FileRoutesByTo {
   '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
+  '/admin/final-approval': typeof AdminFinalApprovalRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
   '/admin/groups': typeof AdminGroupsRoute
   '/admin/jarvis-batch': typeof AdminJarvisBatchRoute
@@ -1136,6 +1144,7 @@ export interface FileRoutesById {
   '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
+  '/admin/final-approval': typeof AdminFinalApprovalRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
   '/admin/german': typeof AdminGermanRouteWithChildren
   '/admin/groups': typeof AdminGroupsRoute
@@ -1275,6 +1284,7 @@ export interface FileRouteTypes {
     | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
+    | '/admin/final-approval'
     | '/admin/gemini-keys'
     | '/admin/german'
     | '/admin/groups'
@@ -1408,6 +1418,7 @@ export interface FileRouteTypes {
     | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
+    | '/admin/final-approval'
     | '/admin/gemini-keys'
     | '/admin/groups'
     | '/admin/jarvis-batch'
@@ -1540,6 +1551,7 @@ export interface FileRouteTypes {
     | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
+    | '/admin/final-approval'
     | '/admin/gemini-keys'
     | '/admin/german'
     | '/admin/groups'
@@ -1678,6 +1690,7 @@ export interface RootRouteChildren {
   AdminCoursesHubRoute: typeof AdminCoursesHubRoute
   AdminDatabaseRoute: typeof AdminDatabaseRoute
   AdminDevicesRoute: typeof AdminDevicesRoute
+  AdminFinalApprovalRoute: typeof AdminFinalApprovalRoute
   AdminGeminiKeysRoute: typeof AdminGeminiKeysRoute
   AdminGermanRoute: typeof AdminGermanRouteWithChildren
   AdminGroupsRoute: typeof AdminGroupsRoute
@@ -2031,6 +2044,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/devices'
       fullPath: '/admin/devices'
       preLoaderRoute: typeof AdminDevicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/final-approval': {
+      id: '/admin/final-approval'
+      path: '/admin/final-approval'
+      fullPath: '/admin/final-approval'
+      preLoaderRoute: typeof AdminFinalApprovalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/gemini-keys': {
@@ -2888,6 +2908,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminCoursesHubRoute: AdminCoursesHubRoute,
   AdminDatabaseRoute: AdminDatabaseRoute,
   AdminDevicesRoute: AdminDevicesRoute,
+  AdminFinalApprovalRoute: AdminFinalApprovalRoute,
   AdminGeminiKeysRoute: AdminGeminiKeysRoute,
   AdminGermanRoute: AdminGermanRouteWithChildren,
   AdminGroupsRoute: AdminGroupsRoute,
@@ -2963,13 +2984,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -8,11 +8,17 @@ import {
   BookOpen, ListFilter, Copy, HelpCircle, Terminal, Flame, Database, ChevronRight,
   ExternalLink, ChevronDown, ChevronUp, Search, PlusCircle, Wrench, Square,
   Clock, Bookmark, Download, FolderArchive, Play, Radio, Edit3,
-  CheckSquare, ZoomIn, ZoomOut, ChevronLeft
+  CheckSquare, ZoomIn, ZoomOut, ChevronLeft, Send
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  createApprovalBatch,
+  listApprovalBatches,
+  getApprovalBatch,
+  type FinalApprovalBatchSummary,
+} from "@/lib/final-approval.functions";
 import {
   ENGINE_NAME,
   SUPPORTED_MODELS,
@@ -291,6 +297,108 @@ export function McqGenerator124ProPage() {
   const retrieveBatchResultsFn = useServerFn(retrieveOpenAiBatchExtractionResults124);
   const createBatchSolveFn = useServerFn(createOpenAiBatchSolving124);
   const retrieveBatchSolveResultsFn = useServerFn(retrieveOpenAiBatchSolvingResults124);
+
+  // ── Final Approval Batch Integration ──────────────────────────────────────
+  const [isSendBatchModalOpen, setIsSendBatchModalOpen] = useState<boolean>(false);
+  const [sendBatchTitle, setSendBatchTitle] = useState<string>("");
+  const [sendBatchNotes, setSendBatchNotes] = useState<string>("");
+  const [isSendingBatch, setIsSendingBatch] = useState<boolean>(false);
+
+  const [isImportBatchModalOpen, setIsImportBatchModalOpen] = useState<boolean>(false);
+  const [availableApprovalBatches, setAvailableApprovalBatches] = useState<FinalApprovalBatchSummary[]>([]);
+  const [isLoadingBatchesForImport, setIsLoadingBatchesForImport] = useState<boolean>(false);
+  const [selectedBatchIdToImport, setSelectedBatchIdToImport] = useState<string>("");
+
+  async function handleSendToFinalApproval() {
+    if (!sendBatchTitle.trim()) {
+      toast.error("Please enter a batch title");
+      return;
+    }
+    if (extractedQuestions.length === 0) {
+      toast.error("No questions to send");
+      return;
+    }
+
+    try {
+      setIsSendingBatch(true);
+      const res = await createApprovalBatch({
+        data: {
+          title: sendBatchTitle.trim(),
+          questions: extractedQuestions,
+          pageImages: pageThumbnails,
+          notes: sendBatchNotes.trim(),
+        },
+      });
+
+      if (res.success) {
+        toast.success(`Batch "${sendBatchTitle}" submitted to Final Approval!`, {
+          duration: 4000,
+          action: {
+            label: "Open Tool",
+            onClick: () => navigate({ to: "/admin/final-approval" }),
+          },
+        });
+        setIsSendBatchModalOpen(false);
+        setSendBatchTitle("");
+        setSendBatchNotes("");
+      }
+    } catch (err: any) {
+      toast.error(`Failed to submit batch: ${err.message || "Unknown error"}`);
+    } finally {
+      setIsSendingBatch(false);
+    }
+  }
+
+  async function handleOpenImportApprovedModal() {
+    setIsImportBatchModalOpen(true);
+    setIsLoadingBatchesForImport(true);
+    try {
+      const res = await listApprovalBatches({ data: { status: "all" } });
+      setAvailableApprovalBatches(res.batches || []);
+      if (res.batches && res.batches.length > 0) {
+        setSelectedBatchIdToImport(res.batches[0].id);
+      }
+    } catch (err: any) {
+      toast.error(`Failed to load approval batches: ${err.message}`);
+    } finally {
+      setIsLoadingBatchesForImport(false);
+    }
+  }
+
+  async function handleImportApprovedBatch(onlyApproved = false) {
+    if (!selectedBatchIdToImport) {
+      toast.error("Please select a batch to import");
+      return;
+    }
+
+    try {
+      setIsLoadingBatchesForImport(true);
+      const res = await getApprovalBatch({ data: { batchId: selectedBatchIdToImport } });
+      if (!res.batch) throw new Error("Batch could not be loaded");
+
+      let qsToImport = res.batch.questions || [];
+      if (onlyApproved) {
+        qsToImport = qsToImport.filter((q) => q.isApproved);
+        if (qsToImport.length === 0) {
+          toast.warning("No approved questions found in this batch. Importing all questions instead.");
+          qsToImport = res.batch.questions || [];
+        }
+      }
+
+      setExtractedQuestions(qsToImport);
+      if (res.batch.page_images) {
+        setPageThumbnails((prev) => ({ ...prev, ...res.batch.page_images }));
+      }
+      setStage1Done(true);
+      setCurrentStage("solve");
+      setIsImportBatchModalOpen(false);
+      toast.success(`Successfully loaded ${qsToImport.length} questions into Solver Engine!`, { duration: 3000 });
+    } catch (err: any) {
+      toast.error(`Failed to load batch: ${err.message}`);
+    } finally {
+      setIsLoadingBatchesForImport(false);
+    }
+  }
 
   // ── Final Approval (QA Review) State & Handlers ───────────────────────────
   const [isFinalApprovalOpen, setIsFinalApprovalOpen] = useState<boolean>(false);
@@ -2218,18 +2326,45 @@ export function McqGenerator124ProPage() {
                       </button>
                     )}
 
-                    {/* Final Approval QA Review Button */}
+                    {/* Send to Final Approval Tool Button */}
+                    <button
+                      onClick={() => {
+                        const defTitle = selectedPdfName
+                          ? `${selectedPdfName.replace(/\.pdf$/i, "")} (${extractedQuestions.length} Qs)`
+                          : `Exam Batch (${extractedQuestions.length} Qs)`;
+                        setSendBatchTitle(defTitle);
+                        setIsSendBatchModalOpen(true);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs shadow-lg shadow-indigo-500/20 flex items-center gap-2 transition-all cursor-pointer"
+                      title="Send extracted questions and page scans to the separate Final Approval tool for QA review"
+                    >
+                      <Send size={14} />
+                      Send to Final Approval
+                    </button>
+
+                    {/* Plot / Import from Final Approval Tool Button */}
+                    <button
+                      onClick={handleOpenImportApprovedModal}
+                      className="px-3.5 py-2 rounded-xl bg-slate-900 border border-emerald-500/40 hover:bg-emerald-500/10 text-emerald-300 font-bold text-xs shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                      title="Import verified & approved questions from Final Approval tool"
+                    >
+                      <Sparkles size={13} className="text-emerald-400" />
+                      Plot Approved Batch
+                    </button>
+
+                    {/* Final Approval QA Review Quick Modal Button */}
                     <button
                       onClick={() => {
                         setQaActiveIndex(0);
                         setIsFinalApprovalOpen(true);
                       }}
-                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 flex items-center gap-2 transition-all cursor-pointer"
+                      className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer"
+                      title="Open quick split-screen QA review"
                     >
-                      <CheckSquare size={14} />
-                      Final Approval (QA Review)
-                      <span className="px-1.5 py-0.5 rounded bg-slate-950/40 text-emerald-300 font-mono text-[10px]">
-                        {extractedQuestions.filter((q) => q.isApproved).length}/{extractedQuestions.length} Approved
+                      <CheckSquare size={14} className="text-emerald-400" />
+                      Quick QA Review
+                      <span className="px-1.5 py-0.5 rounded bg-slate-950/60 text-emerald-300 font-mono text-[10px]">
+                        {extractedQuestions.filter((q) => q.isApproved).length}/{extractedQuestions.length}
                       </span>
                     </button>
 
@@ -2515,9 +2650,27 @@ export function McqGenerator124ProPage() {
           <div className="mt-6 space-y-6">
             {/* Solver Configuration */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-              <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                <Cpu size={16} className="text-amber-400" /> Process 2: Answering & AquavisionX Explanation Engine
-              </h3>
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Cpu size={16} className="text-amber-400" /> Process 2: Answering & AquavisionX Explanation Engine
+                </h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleOpenImportApprovedModal}
+                    className="px-3 py-1.5 rounded-xl bg-slate-950 border border-emerald-500/40 hover:bg-emerald-500/10 text-emerald-300 font-bold text-xs shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                    title="Import verified & approved questions from Final Approval tool"
+                  >
+                    <Sparkles size={13} className="text-emerald-400" />
+                    Plot Approved Batch
+                  </button>
+                  <Link
+                    to="/admin/final-approval"
+                    className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 hover:bg-slate-800 text-slate-300 font-bold text-xs flex items-center gap-1.5 transition-all"
+                  >
+                    <CheckSquare size={13} className="text-emerald-400" /> Final Approval Tool
+                  </Link>
+                </div>
+              </div>
 
               {/* Execution Mode Selector (Standard vs Batch API 50% Off) */}
               <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-3 rounded-xl bg-slate-950 border border-slate-800">
@@ -3879,6 +4032,187 @@ export function McqGenerator124ProPage() {
               >
                 <Trash2 size={13} /> Yes, Clear Everything
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Send Batch to Final Approval Modal ────────────────────────────── */}
+      {isSendBatchModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2.5 text-indigo-400">
+                <Send size={20} />
+                <h3 className="text-base font-bold text-white">Send Batch to Final Approval</h3>
+              </div>
+              <button
+                onClick={() => setIsSendBatchModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300">
+              Package all <strong className="text-white">{extractedQuestions.length}</strong> extracted questions and high-res page scans into a named batch for QA reviewers to verify side-by-side with original PDF scans.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Batch Title / Examination Name
+                </label>
+                <input
+                  type="text"
+                  value={sendBatchTitle}
+                  onChange={(e) => setSendBatchTitle(e.target.value)}
+                  placeholder="e.g. Pathology Test 8 - Spring 2024"
+                  className="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Notes for Reviewers (Optional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={sendBatchNotes}
+                  onChange={(e) => setSendBatchNotes(e.target.value)}
+                  placeholder="e.g. Pay special attention to Question 12 combination statements..."
+                  className="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 rounded-xl p-3 text-xs text-white focus:outline-none transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                onClick={() => setIsSendBatchModalOpen(false)}
+                disabled={isSendingBatch}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendToFinalApproval}
+                disabled={isSendingBatch}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isSendingBatch ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />}
+                Submit to Final Approval Queue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Plot / Import Approved Batch from Final Approval Modal ─────────── */}
+      {isImportBatchModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-2.5 text-emerald-400">
+                <Sparkles size={20} />
+                <h3 className="text-base font-bold text-white">Plot Approved Batch into Solver Engine</h3>
+              </div>
+              <button
+                onClick={() => setIsImportBatchModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 shrink-0">
+              Select a batch verified by QA in <strong>Final Approval</strong>. Approved questions will be loaded directly into Stage 2 (Solve & Explain).
+            </p>
+
+            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+              {isLoadingBatchesForImport ? (
+                <div className="flex flex-col items-center justify-center p-8 text-slate-500">
+                  <RefreshCw size={24} className="animate-spin mb-2 text-cyan-400" />
+                  <span className="text-xs">Loading approval batches...</span>
+                </div>
+              ) : availableApprovalBatches.length === 0 ? (
+                <div className="p-8 text-center bg-slate-950 rounded-xl border border-slate-800">
+                  <p className="text-sm font-bold text-slate-400">No Batches Available in Final Approval</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Send extracted questions to Final Approval first or visit the Final Approval tool.
+                  </p>
+                </div>
+              ) : (
+                availableApprovalBatches.map((batch) => (
+                  <div
+                    key={batch.id}
+                    onClick={() => setSelectedBatchIdToImport(batch.id)}
+                    className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between gap-3 ${
+                      selectedBatchIdToImport === batch.id
+                        ? "bg-emerald-500/10 border-emerald-500 shadow-sm"
+                        : "bg-slate-950 border-slate-800 hover:border-slate-700"
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-xs truncate">{batch.title}</span>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                            batch.status === "approved"
+                              ? "bg-emerald-500/20 text-emerald-300"
+                              : "bg-amber-500/20 text-amber-300"
+                          }`}
+                        >
+                          {batch.status}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-3">
+                        <span>{new Date(batch.created_at).toLocaleDateString()}</span>
+                        <span>•</span>
+                        <span className="text-emerald-400 font-bold">
+                          {batch.approved_questions} / {batch.total_questions} Approved
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0">
+                      <div
+                        className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                          selectedBatchIdToImport === batch.id
+                            ? "border-emerald-400 bg-emerald-400 text-slate-950"
+                            : "border-slate-600"
+                        }`}
+                      >
+                        {selectedBatchIdToImport === batch.id && <Check size={12} strokeWidth={3} />}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-800 shrink-0">
+              <Link
+                to="/admin/final-approval"
+                className="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-semibold"
+              >
+                <CheckSquare size={13} className="text-emerald-400" /> Go to Final Approval Tool
+              </Link>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsImportBatchModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleImportApprovedBatch(true)}
+                  disabled={!selectedBatchIdToImport || isLoadingBatchesForImport}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-black transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Sparkles size={13} /> Load Approved Questions & Solve
+                </button>
+              </div>
             </div>
           </div>
         </div>

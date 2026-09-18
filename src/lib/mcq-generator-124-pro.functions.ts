@@ -201,6 +201,7 @@ export interface ExtractedQuestion {
   reviewReason?: string | null;
   isApproved?: boolean;
   isDuplicate?: boolean;
+  statements?: Array<{ number?: number; text: string }>;
 }
 
 export interface BatchExtractionJob {
