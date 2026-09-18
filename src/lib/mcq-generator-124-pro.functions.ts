@@ -202,74 +202,60 @@ export interface ExtractedQuestion {
 }
 
 function buildExtractionSystemPrompt(combinationMode: "mode1_keep_original" | "mode2_convert_multiple", customInstructions?: string): string {
-  return `You are an expert medical examination transcription engine reading high-resolution photographs/scans of medical exam papers.
-Your mission is to transcribe EVERY question from this page VERBATIM with 100% fidelity and zero hallucination.
+  return `You are a medical examination expert reading a high-resolution image of an exam paper.
+Your task is to READ THIS IMAGE VISUALLY — understand the spatial layout, groupings, and visual structure of every question on this page.
 
-QUESTION TAXONOMY & EXTRACTION RULES:
+VISUAL READING RULES (follow these before producing any output):
+1. You are a READER, not an OCR engine. Use visual understanding of the page layout, not just text order.
+2. Scan the image visually from top-left to bottom-right. If the page has 2 columns, read column 1 fully, then column 2.
+3. Identify each question by its number marker (e.g. "5.", "6.") — this anchors where each question begins.
+4. The question STEM is the text that VISUALLY appears at or near the question number, BEFORE any labeled answer choices. It is what the question is asking.
+5. Answer choices (A, B, C, D) are VISUALLY DISTINCT blocks — they are indented, labeled, and appear BELOW or BESIDE the stem. They are NEVER part of the stem.
+6. For combination questions, the numbered statements (1. 2. 3. 4.) appear as a VISUAL LIST between the stem and the answer choices. They are NOT options.
+7. Keep each element in its visual zone: stem text stays in "stem", numbered statements stay in "statements", labeled choices stay in "options".
+8. If any text is unclear, partially obscured, or ambiguous — do NOT guess. Set needs_review: true.
+9. Preserve exact wording, medical terms, numbers, units, symbols, and abbreviations exactly as they appear visually.
 
-1. ORDINARY / STANDARD MCQs (The vast majority of questions):
-   - Consists of a question stem (e.g. "All the following are interstitial lung diseases, except:" or "Drugs of first line are all listed below except:") followed by choices labeled a), b), c), d) or A), B), C), D).
-   - In ordinary MCQs, choices contain names of drugs, clinical findings, diseases, or standard answer sentences.
-   - CRITICAL RULE: ALWAYS extract choices labeled a), b), c), d) into the "options" array with letters "A", "B", "C", "D".
-   - STRICT: NEVER convert choices a), b), c), d) into numbers (1, 2, 3, 4).
-   - STRICT: NEVER merge choices into the question stem.
-   - STRICT: NEVER return an empty options array for ordinary MCQs.
-   - Set "question_type": "ordinary".
+QUESTION TYPE — identify by looking at the ANSWER CHOICES visually:
+• If choices A/B/C/D contain ONLY numbers/commas/dots (e.g. "1,2" "1.3.4") → COMBINATION TYPE
+• If any choice says "All of the above" or "All above" AND other choices have numeric codes → COMBINATION TYPE
+• If choices A/B/C/D contain plain text (disease names, drug names, symptoms) → ORDINARY TYPE
 
-2. COMBINATION QUESTIONS (CRITICAL MANDATORY RULE):
-   - A question is a Combination Question ONLY IF the printed paper contains:
-     (a) An introductory question prompt (e.g. "Amphoric breath sound can be heard in case of:"),
-     (b) Numbered statements (1. Pleural effusion, 2. Pneumothorax, 3. Lung cyst, 4. Tuberculous cavity...), AND
-     (c) Choices referencing those numbers (e.g. "a) 1.2", "b) 1.3.4", "c) 1.2.3.4", "d) 2.3.4").
-   - MANDATORY: You MUST extract every single numbered statement into the "statements" array verbatim:
-     "statements": [
-       "1. First numbered statement verbatim",
-       "2. Second numbered statement verbatim",
-       "3. Third numbered statement verbatim",
-       "4. Fourth numbered statement verbatim"
-     ]
-   - NEVER drop, skip, or omit the numbered statements! A combination question without statements 1, 2, 3, 4 is completely broken and unsolvable.
-${
-  combinationMode === "mode1_keep_original"
-    ? `   - MODE 1 — KEEP ORIGINAL COMBINATION FORMAT:
-     * The combination choices MUST be extracted directly into the "options" array:
-       [{"letter": "A", "text": "1.2"}, {"letter": "B", "text": "1.3.4"}, {"letter": "C", "text": "1.2.3.4"}, {"letter": "D", "text": "2.3.4"}].
-     * DO NOT leave "options" empty!
-     * Set "question_type": "combination".
-     * Also record choices in "printed_combinations".`
-    : `   - MODE 2 — CONVERT TO MULTIPLE ANSWERS:
-     * The numbered statements become the "options" (A: statement 1, B: statement 2...).
-     * Set "question_type": "multiple_answer".
-     * The original printed combination choices are preserved in "printed_combinations": [{"letter":"A","text":"1.2"}, {"letter":"B","text":"1.3.4"}].`
+FOR COMBINATION TYPE — locate the numbered statements visually:
+• They appear as a visual list (1. ... 2. ... 3. ... 4. ...) between the stem and the choices, or in the adjacent column.
+• Record every statement in "statements" exactly as it appears.
+• If you cannot find the numbered statements: set needs_review: true, review_reason: "Combination question — numbered statements missing from this page."
+
+${combinationMode === "mode1_keep_original"
+  ? `COMBINATION FORMAT (MODE 1):
+   - Put answer codes directly into "options": [{"letter":"A","text":"1,2"},{"letter":"B","text":"1.3.4"},...]
+   - Set question_type: "combination"
+   - Also record them in "printed_combinations"`
+  : `COMBINATION FORMAT (MODE 2):
+   - The numbered statements become "options" (A: statement 1, B: statement 2...)
+   - Set question_type: "multiple_answer"
+   - Preserve original codes in "printed_combinations"`
 }
 
-3. ORPHANED / TRUNCATED FRAGMENTS (CRITICAL GUARDRAIL):
-   - Look out for fragments cut off from the previous page or column! For example, text starting with "4. positive reaction to treatment" followed by choices a) 1.3.4, b) 2.3.4:
-   - Notice that "4." is NOT a question number! It is statement #4 of a multi-statement question whose stem and statements 1, 2, 3 were cut off or printed on the preceding page.
-   - In such cases:
-     * Extract what is visible so the instructor can review, edit, or delete it.
-     * Set "needs_review": true
-     * Set "review_reason": "Incomplete combination fragment: choices reference numbered statements (1, 2, 3...) that are missing from this page."
-     * Set "is_approved": false
+VISUAL INTEGRITY RULES — check these before producing JSON:
+❌ NEVER include visually-labeled option text (A), B), C), D)) inside "stem"
+❌ NEVER duplicate option text — every option must be visually distinct text from the image
+❌ NEVER invent or hallucinate content that is not visually present on the image
+❌ NEVER include the question number prefix in the stem (e.g. "5." is NOT part of the stem)
+❌ NEVER guess unclear or blurry text — flag it with needs_review: true
+✅ Stem = only the question prompt text, visually before any choices or statements
+✅ All 4 option texts must be DIFFERENT from each other (as they appear in the image)
+✅ Combination: "statements" MUST have all visible numbered items (1, 2, 3, 4)
+✅ If ANY part is uncertain: needs_review: true and explain in review_reason
 
-General Rules & ZERO OMISSION DIRECTIVES:
-1. ZERO OMISSION POLICY: Scrutinize every line, column, and margin from top to bottom. Do NOT skip ANY question, statement, or option.
-2. MULTI-COLUMN LAYOUTS: If the page has 2 or more columns, read Column 1 top-to-bottom first, then Column 2 top-to-bottom. Numbered statements (1. 2. 3. 4.) often appear in the adjacent column or directly beneath the stem.
-3. COMBINATION STATEMENTS: You MUST transcribe EVERY numbered statement (1, 2, 3, 4...) into the "statements" array. Missing even one statement makes the question unsolvable.
-4. If choices are labeled "a)", "A.", "1-", normalize to standard letters A, B, C, D...
-5. If an ordinary question is missing some options (e.g. only 3 choices visible due to cropping), transcribe only the visible options. Do not invent options here.
-6. If an answer is visibly circled, highlighted, underlined, or explicitly printed (e.g. "Ans: C"), extract it in "detected_answer". If none, return null.
-7. SELF-CHECK: Before producing JSON, verify: does each question have its full stem? Are all statements present? Are all choices present?
-8. If the page has no questions (cover, blank, or header only), return {"questions": []}.
-${customInstructions ? `Special User Instructions:\n${customInstructions}\n` : ""}
-
+${customInstructions ? `Special Instructions:\n${customInstructions}\n` : ""}
 Return STRICT JSON:
 {
   "questions": [
     {
       "number": "5",
       "question_type": "ordinary|combination|multiple_answer",
-      "stem": "question prompt verbatim without numbered statements",
+      "stem": "question prompt — visually before any choices or numbered statements",
       "statements": [
         "1. First numbered statement verbatim",
         "2. Second numbered statement verbatim",
@@ -277,7 +263,7 @@ Return STRICT JSON:
         "4. Fourth numbered statement verbatim"
       ],
       "options": [
-        { "letter": "A", "text": "option text or 1.2" },
+        { "letter": "A", "text": "option text or 1,2" },
         { "letter": "B", "text": "option text or 1.3.4" },
         { "letter": "C", "text": "option text or 1.2.3.4" },
         { "letter": "D", "text": "option text or 2.3.4" }
@@ -285,7 +271,7 @@ Return STRICT JSON:
       "printed_combinations": [
         { "letter": "A", "text": "1.2" }
       ],
-      "detected_answer": "C or null",
+      "detected_answer": null,
       "needs_review": false,
       "review_reason": null,
       "is_approved": true
@@ -485,22 +471,22 @@ async function discoverPageQuestionsInternal(opts: {
   geminiApiKey?: string;
 }): Promise<{ questionNumbers: string[]; pageStartsWithOrphan: boolean; orphanType: string | null }> {
   const { pageNumber, imageJpegBase64, model, openaiApiKey, geminiApiKey } = opts;
-  const systemPrompt = `You are an expert medical examination layout analyzer.
-Your mission is to examine this high-resolution page of a medical exam paper and:
-  (a) discover EVERY real question number printed on it, and
-  (b) detect if the page BEGINS with an orphan fragment (the tail of a question that started on the previous page).
+  const systemPrompt = `You are an expert visual document layout analyzer examining high-resolution images of medical examination papers.
+Your task is to analyze this page AS A VISUAL DOCUMENT:
+  (a) Discover EVERY real question number printed on it based on its visual layout, spatial position, bold headers, and numbering hierarchy across all columns.
+  (b) Detect if the page BEGINS with an orphan fragment (the tail of a split question from the previous page).
 
-INSTRUCTIONS:
-1. Scan the ENTIRE page from top to bottom.
-2. If the page has 2 columns, read Column 1 top-to-bottom first, then Column 2 top-to-bottom.
-3. Check margins, corners, and headers carefully.
-4. List only REAL question numbers in natural reading order (e.g. ["5", "6", "7"]).
+VISUAL ANALYSIS RULES:
+1. Treat the page as a VISUAL DOCUMENT. Do NOT rely on linear OCR text stream order.
+2. Read based on visual layout and spacing. If multi-column, inspect column 1 top-to-bottom first, then column 2 top-to-bottom.
+3. Identify question number headings (e.g. ["1", "2", "3"]) based on visual numbering, bold headings, and spatial structure.
+4. Do NOT confuse numbered combination statements ("1.", "2.", "3.", "4." belonging to a question) with standalone question numbers.
+5. Check margins, headers, and column tops carefully.
 
 ORPHAN DETECTION (critical):
-- Look at the very FIRST element visible on the page.
-- If the page begins with a NUMBERED STATEMENT (e.g. "4. positive reaction to treatment") followed immediately by combination answer codes (e.g. "a) 1,3  b) 2,3,4") → this is the TAIL of a split combination question from the previous page. Set "page_starts_with_orphan_fragment": true, "orphan_type": "combination_tail".
-- If the page begins with a clear standalone question that has its own stem → set "page_starts_with_orphan_fragment": false.
-- Do NOT list orphan statement numbers (like "4.") as question numbers.
+- Inspect the very top of the page visually.
+- If the page begins with a numbered statement (e.g. "4. positive reaction to treatment") or combination choices (e.g. "a) 1,3  b) 2,3,4") without an introductory question stem → this is the tail of a split question from the preceding page. Set "page_starts_with_orphan_fragment": true, "orphan_type": "combination_tail".
+- If the page begins with a proper question stem with its own question number → set "page_starts_with_orphan_fragment": false.
 
 Return STRICT JSON:
 {
@@ -509,7 +495,7 @@ Return STRICT JSON:
   "orphan_type": null
 }`;
 
-  const userPrompt = `Examine Page ${pageNumber} of this exam paper. List every real question number and detect if the page starts with an orphan fragment.`;
+  const userPrompt = `Visually analyze Page ${pageNumber} of this exam document. Identify all question numbers based on visual layout, spacing, and headings across columns. Detect if the page starts with an orphan fragment.`;
 
   try {
     const rawOutput = await callUnifiedAi({
@@ -550,59 +536,57 @@ async function extractSingleQuestionFocused(opts: {
   const { pageNumber, imageJpegBase64, questionNumber, nextQuestionNumber, combinationMode, model, openaiApiKey, geminiApiKey, customInstructions, idx = 0 } = opts;
 
   const boundaryRule = nextQuestionNumber
-    ? `QUESTION BOUNDARY (CRITICAL):
-   - Question #${questionNumber} starts at its own number marker on the page.
-   - Question #${questionNumber} ENDS immediately before the Q#${nextQuestionNumber} marker begins.
-   - Everything between Q#${questionNumber} and Q#${nextQuestionNumber} belongs EXCLUSIVELY to Q#${questionNumber}.
-   - Use this boundary to capture all statements (1, 2, 3, 4) and all answer choices.`
-    : `QUESTION BOUNDARY (CRITICAL):
-   - Question #${questionNumber} is the LAST question on this page.
-   - Capture everything after the Q#${questionNumber} marker to the bottom of the page — all statements and choices belong to this question.`;
+    ? `VISUAL QUESTION BOUNDARY:
+   - Question #${questionNumber} starts at its visible question number header.
+   - Question #${questionNumber} ENDS immediately before the Question #${nextQuestionNumber} visual header begins.
+   - Everything between Question #${questionNumber} and Question #${nextQuestionNumber} belongs EXCLUSIVELY to Question #${questionNumber}.`
+    : `VISUAL QUESTION BOUNDARY:
+   - Question #${questionNumber} is the LAST question on this page/column.
+   - Everything from Question #${questionNumber}'s header to the end of the section belongs EXCLUSIVELY to Question #${questionNumber}.`;
 
-  const systemPrompt = `You are an expert medical examination transcription engine reading high-resolution scans of exam papers.
-YOUR MISSION: Transcribe ONLY Question #${questionNumber} from this page with 100% verbatim fidelity and ZERO errors.
+  const systemPrompt = `You are an expert visual document reader analyzing a high-resolution image of a medical examination paper.
+YOUR MISSION: Read and extract Question #${questionNumber} from this visual document based strictly on its visual layout, spacing, indentation, and position.
 
 ${boundaryRule}
 
-QUESTION TYPE CLASSIFICATION — follow this exact decision tree in order:
-
-STEP 1 — Examine the answer choices (items labeled a), b), c), d) or A, B, C, D):
-   • If ANY choice contains ONLY numbers/commas/dots (e.g. "1,2" or "1.3.4" or "2,3,4") → COMBINATION TYPE
-   • If ANY choice says "All of the above" or "All above" AND other choices also have numeric codes → COMBINATION TYPE
-   • If ALL choices are plain medical text (drug names, diseases, symptoms, clinical findings) → ORDINARY TYPE
-
-STEP 2 — If COMBINATION TYPE: locate the numbered statements (1. ... 2. ... 3. ... 4. ...):
-   • They appear directly under the stem, in the adjacent column, or between the stem and the choices.
-   • Extract ALL numbered statements into the "statements" array verbatim.
-   • If you cannot find ANY statements: set needs_review: true and review_reason: "Combination question — numbered statements (1,2,3,4) are missing; they may be on the previous page or adjacent column."
-
-STEP 3 — STEM boundary:
-   • The stem = ONLY the question prompt sentence — what the question is asking.
-   • The stem ENDS at the first numbered statement marker (1.) or first option marker (A), a)).
-   • Do NOT include any statement text or option text in the stem.
-   • Do NOT include the question number prefix (e.g. "5.") as part of the stem text.
-
+CORE VISUAL EXTRACTION DIRECTIVES:
+1. TREAT AS A VISUAL DOCUMENT:
+   - Read the question and answer options based on their visual layout and position.
+   - Do NOT rely on OCR text order or linear text streams.
+2. KEEP QUESTION STEM COMPLETELY SEPARATE FROM ANSWER OPTIONS:
+   - The "stem" field MUST contain ONLY the question prompt / scenario.
+   - NEVER move or merge an answer option into the question text.
+   - NEVER put the question stem into option fields.
+   - Keep each question stem completely separate from its answer options.
+   - Options are visually indented, lettered blocks (A, B, C, D or a, b, c, d) located below or beside the stem.
+3. PRESERVE EXACT ORIGINAL WORDING & FORMATTING:
+   - Preserve the exact wording, numbering, symbols, medical terms, numbers, and units verbatim.
+   - Preserve symbols (%, ±, µg, /, :, -, >, <) exactly as printed.
+   - Do NOT rephrase, correct spelling, modernize, or interpret medical terminology.
+4. UNIFORM COMBINATION QUESTION HANDLING:
+   - Examine answer options visually:
+     • If options contain numeric combinations (e.g. "1,2" or "1.3.4" or "2,3,4") or "All of the above" alongside numbers → COMBINATION QUESTION.
+     • For combination questions, the numbered statements (1. ..., 2. ..., 3. ..., 4. ...) appear as a visual list between the stem and the options, or in an adjacent column.
+     • You MUST extract every numbered statement into the "statements" array verbatim.
+     • Do NOT merge numbered statements into options, and do NOT omit them.
 ${combinationMode === "mode1_keep_original"
-  ? `COMBINATION FORMAT (MODE 1 — KEEP ORIGINAL):
-   - Put combination answer codes directly into "options":
-     [{"letter":"A","text":"1,2"},{"letter":"B","text":"1.3.4"},{"letter":"C","text":"1.2.3.4"},{"letter":"D","text":"2.3.4"}]
-   - Set question_type: "combination"
-   - Also copy them into "printed_combinations"`
-  : `COMBINATION FORMAT (MODE 2 — CONVERT TO MULTIPLE ANSWERS):
-   - The numbered statements become the "options" (A: statement 1, B: statement 2...)
-   - Set question_type: "multiple_answer"
-   - Preserve original codes in "printed_combinations"`
+  ? `   • MODE 1 (KEEP ORIGINAL): Put combination choices directly into "options" [{"letter":"A","text":"1,2"},{"letter":"B","text":"1.3.4"}...] and set question_type: "combination".`
+  : `   • MODE 2 (CONVERT): Numbered statements become "options" (A: statement 1, B: statement 2...) and set question_type: "multiple_answer". Original combination codes go to "printed_combinations".`
 }
+5. NO GUESSING / UNCLEAR TEXT:
+   - If any text, term, number, option, or statement is obscured, blurry, cut off at a margin, or visually ambiguous: DO NOT GUESS.
+   - Mark "needs_review": true and explain the exact unclear visual element in "review_reason".
 
-ANTI-ERROR CHECKLIST — verify EVERY item before producing JSON:
-❌ NEVER put option text (A), B), C), D)) inside the "stem" field
-❌ NEVER copy the same sentence into more than one option slot — ALL 4 option texts MUST be DIFFERENT
-❌ NEVER use numbered statement labels (1. 2. 3. 4.) as option letters
-❌ NEVER invent or hallucinate options that are not visible in the image
-❌ NEVER include the question number prefix (e.g. "5.") inside the stem text
-✅ For combination type: "statements" array MUST have all 4 numbered items (1, 2, 3, 4)
-✅ For ordinary type: "options" array MUST contain the full verbatim text of each choice
-✅ If you are unsure about ANYTHING: set needs_review: true and explain in review_reason
+VISUAL ANTI-ERROR CHECKLIST:
+❌ NEVER move an answer option into the question text.
+❌ NEVER put the question stem into the options array.
+❌ NEVER duplicate one option's text into other options — all 4 options must be distinct.
+❌ NEVER use numbered statement digits (1, 2, 3, 4) as option letters.
+❌ NEVER omit the numbered statements of a combination question.
+❌ NEVER invent or hallucinate options that are not visually present.
+✅ Keep stem, statements, and options in their strictly separate visual fields.
+✅ Preserve exact symbols, numbers, units, and medical terms verbatim.
+✅ If any part is unclear: do NOT guess; mark needs_review: true.
 ${customInstructions ? `\nSpecial User Instructions:\n${customInstructions}\n` : ""}
 
 Return STRICT JSON:
@@ -610,7 +594,7 @@ Return STRICT JSON:
   "question": {
     "number": "${questionNumber}",
     "question_type": "ordinary|combination|multiple_answer",
-    "stem": "full question prompt verbatim — ends before first statement or option marker",
+    "stem": "question prompt verbatim — separate from options and statements",
     "statements": [
       "1. First statement verbatim",
       "2. Second statement verbatim",
@@ -618,10 +602,10 @@ Return STRICT JSON:
       "4. Fourth statement verbatim"
     ],
     "options": [
-      { "letter": "A", "text": "choice A text or 1,2" },
-      { "letter": "B", "text": "choice B text or 1.3.4" },
-      { "letter": "C", "text": "choice C text or 1.2.3.4" },
-      { "letter": "D", "text": "choice D text or 2.3.4" }
+      { "letter": "A", "text": "choice A text verbatim" },
+      { "letter": "B", "text": "choice B text verbatim" },
+      { "letter": "C", "text": "choice C text verbatim" },
+      { "letter": "D", "text": "choice D text verbatim" }
     ],
     "printed_combinations": [
       { "letter": "A", "text": "1,2" }
@@ -633,7 +617,7 @@ Return STRICT JSON:
   }
 }`;
 
-  const userPrompt = `Transcribe Question #${questionNumber} from Page ${pageNumber} of this exam paper.`;
+  const userPrompt = `Visually inspect Page ${pageNumber} of this exam document. Locate Question #${questionNumber} by its visual layout and position. Extract its stem, statements, and options as separate visual blocks verbatim. Do NOT move any options into the question stem. Preserve exact medical terms, numbers, units, and symbols. If any part is unclear, mark needs_review: true.`;
 
   try {
     const rawOutput = await callUnifiedAi({
@@ -656,10 +640,11 @@ Return STRICT JSON:
     // ── Auto-Retry if incomplete or flagged ──────────────────────────────────
     if (normalized.needsReview || (normalized.options.length < 4 && !normalized.isApproved)) {
       try {
-        const retryPrompt = `FOCUSED REPAIR FOR QUESTION #${questionNumber}:
-The previous transcription was incomplete — it was missing numbered statements (1, 2, 3, 4) or answer choices (A, B, C, D).
-Locate Question #${questionNumber} on Page ${pageNumber}. Inspect BOTH columns thoroughly.
-Transcribe Question #${questionNumber} with ALL statements (if combination type) and ALL choices.
+        const retryPrompt = `FOCUSED VISUAL INSPECTION FOR QUESTION #${questionNumber}:
+Locate Question #${questionNumber} on Page ${pageNumber} using its visual layout, spacing, and position across all columns.
+Ensure the question stem is completely separate from answer options.
+Preserve exact wording, numbering, symbols, and units. If combination question, capture all numbered statements (1, 2, 3, 4).
+Do NOT guess unclear text — mark needs_review: true if ambiguous.
 ${boundaryRule}`;
 
         const retryOutput = await callUnifiedAi({
@@ -756,7 +741,7 @@ export const extractPageQuestions124 = createServerFn({ method: "POST" })
       console.warn(`[Page ${pageNumber}] 0 question numbers discovered. Falling back to whole-page dump.`);
       try {
         const systemPrompt = buildExtractionSystemPrompt(combinationMode, customInstructions);
-        const userPrompt = `Transcribe all medical MCQs visible on Page ${pageNumber} of this exam paper verbatim with zero omissions across all columns.`;
+        const userPrompt = `Visually examine Page ${pageNumber} of this exam document. Read each question and its answer options based on their visual layout and position across all columns. Keep question stems completely separate from answer options. Preserve exact wording, numbers, units, and symbols verbatim. If any part is unclear, mark needs_review: true.`;
 
         const rawOutput = await callUnifiedAi({
           model,
@@ -1239,7 +1224,10 @@ export const createOpenAiBatchExtraction124 = createServerFn({ method: "POST" })
             {
               role: "user",
               content: [
-                { type: "text", text: `Transcribe all medical MCQs visible on Page ${p.pageNumber} of this exam paper.` },
+                {
+                  type: "text",
+                  text: `Visually analyze Page ${p.pageNumber} of this exam document. Identify all questions and options based on their visual layout, spacing, and position. Keep question stems strictly separate from answer options. Preserve exact wording, numbers, units, and medical terms verbatim. If any part is unclear, mark needs_review: true.`,
+                },
                 {
                   type: "image_url",
                   image_url: { url: `data:image/jpeg;base64,${p.imageJpegBase64}`, detail: "high" },
