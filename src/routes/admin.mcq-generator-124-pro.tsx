@@ -47,6 +47,9 @@ import {
   getPageJpegFromCache,
   getAllCachedPageJpegs,
   clearPageJpegCache,
+  saveSessionPageImages,
+  getSessionPageImages,
+  deleteSessionPageImages,
 } from "@/lib/pdf-page-image";
 
 export const Route = createFileRoute("/admin/mcq-generator-124-pro")({
@@ -88,6 +91,8 @@ export interface SavedEngineSession {
   questions: SolvedQuestionState[];
   isSolved: boolean;
   isImported?: boolean;
+  pageCount?: number;
+  hasImages?: boolean;
 }
 
 export function McqGenerator124ProPage() {
@@ -328,6 +333,24 @@ export function McqGenerator124ProPage() {
       const batchId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const now = new Date().toISOString();
 
+      // Collect all available page images (from state, active workspace IDB, or individual page cache)
+      let imagesToSend: Record<number, string> = { ...pageThumbnails };
+      if (Object.keys(imagesToSend).length === 0) {
+        try {
+          const wsImgs = await getSessionPageImages("current_active_workspace");
+          if (wsImgs && Object.keys(wsImgs).length > 0) {
+            imagesToSend = wsImgs;
+          } else {
+            imagesToSend = await getAllCachedPageJpegs();
+          }
+        } catch {}
+      }
+
+      // Save batch images in IndexedDB under batchId so Final Approval can ALWAYS retrieve them
+      if (Object.keys(imagesToSend).length > 0) {
+        await saveSessionPageImages(batchId, imagesToSend);
+      }
+
       // 1. Save to Client LocalStorage Backup (Instant & 100% resilient)
       const localBatch = {
         id: batchId,
@@ -341,7 +364,7 @@ export function McqGenerator124ProPage() {
         created_by_email: "admin",
         notes: sendBatchNotes.trim(),
         questions: extractedQuestions,
-        page_images: pageThumbnails,
+        page_images: imagesToSend,
       };
 
       try {
@@ -359,11 +382,21 @@ export function McqGenerator124ProPage() {
           data: {
             title: sendBatchTitle.trim(),
             questions: extractedQuestions,
+            pageImages: imagesToSend,
             notes: sendBatchNotes.trim(),
           },
         });
       } catch (serverErr: any) {
-        console.warn("[SendToApproval] Server function warning (client backup active):", serverErr);
+        console.warn("[SendToApproval] Server function warning with images, retrying without large images payload:", serverErr);
+        try {
+          await createApprovalBatchFn({
+            data: {
+              title: sendBatchTitle.trim(),
+              questions: extractedQuestions,
+              notes: sendBatchNotes.trim(),
+            },
+          });
+        } catch {}
       }
 
       toast.success(`Batch "${sendBatchTitle}" submitted to Final Approval!`, {
@@ -504,10 +537,31 @@ export function McqGenerator124ProPage() {
 
   // Auto-fetch PDF page if not cached when viewing activeQaQuestion in QA review
   useEffect(() => {
-    if (isFinalApprovalOpen && activeQaQuestion && !pageThumbnails[activeQaQuestion.pageNumber] && pdfDoc) {
-      getPageJpeg(activeQaQuestion.pageNumber).catch(() => {});
+    if (isFinalApprovalOpen && activeQaQuestion && !pageThumbnails[activeQaQuestion.pageNumber]) {
+      const pNum = activeQaQuestion.pageNumber;
+      getPageJpegFromCache(pNum).then((cached) => {
+        if (cached) {
+          setPageThumbnails((prev) => ({ ...prev, [pNum]: cached }));
+        } else if (pdfDoc) {
+          getPageJpeg(pNum).catch(() => {});
+        }
+      });
     }
   }, [isFinalApprovalOpen, activeQaQuestion?.pageNumber, pageThumbnails, pdfDoc]);
+
+  // Auto-fetch PDF page when inspecting a single question
+  useEffect(() => {
+    if (inspectingQuestion && inspectingQuestion.pageNumber && !pageThumbnails[inspectingQuestion.pageNumber]) {
+      const pNum = inspectingQuestion.pageNumber;
+      getPageJpegFromCache(pNum).then((cached) => {
+        if (cached) {
+          setPageThumbnails((prev) => ({ ...prev, [pNum]: cached }));
+        } else if (pdfDoc) {
+          getPageJpeg(pNum).catch(() => {});
+        }
+      });
+    }
+  }, [inspectingQuestion?.pageNumber, pageThumbnails, pdfDoc]);
 
   function handleQaApprove(qId: string) {
     setExtractedQuestions((prev) =>
@@ -681,6 +735,10 @@ export function McqGenerator124ProPage() {
   useEffect(() => {
     (async () => {
       try {
+        const workspaceImages = await getSessionPageImages("current_active_workspace");
+        if (workspaceImages && Object.keys(workspaceImages).length > 0) {
+          setPageThumbnails((prev) => ({ ...workspaceImages, ...prev }));
+        }
         const cached = await getAllCachedPageJpegs();
         if (cached && Object.keys(cached).length > 0) {
           setPageThumbnails((prev) => ({ ...cached, ...prev }));
@@ -690,6 +748,13 @@ export function McqGenerator124ProPage() {
       }
     })();
   }, []);
+
+  // Mirror active workspace page thumbnails into IndexedDB so refresh never loses them
+  useEffect(() => {
+    if (pageThumbnails && Object.keys(pageThumbnails).length > 0) {
+      saveSessionPageImages("current_active_workspace", pageThumbnails);
+    }
+  }, [pageThumbnails]);
 
   // ── Workspace State Persistence ───────────────────────────────────────────
   useEffect(() => {
@@ -1763,48 +1828,110 @@ export function McqGenerator124ProPage() {
   }
 
   // ── Session Archive Management (Point 6) ──────────────────────────────────
-  function saveCurrentSession() {
+  async function saveCurrentSession() {
     if (extractedQuestions.length === 0) {
       toast.error("No questions in current session to save.");
       return;
     }
 
     const title = sessionSaveName.trim() || `Session-${new Date().toLocaleDateString()} (${extractedQuestions.length} Qs)`;
+    const sessionId = `session-${Date.now()}`;
+
+    // Collect all available page images (from state, active workspace IDB, or individual page cache)
+    let imagesToSave: Record<number, string> = { ...pageThumbnails };
+    if (Object.keys(imagesToSave).length === 0) {
+      try {
+        const wsImgs = await getSessionPageImages("current_active_workspace");
+        if (wsImgs && Object.keys(wsImgs).length > 0) {
+          imagesToSave = wsImgs;
+        } else {
+          imagesToSave = await getAllCachedPageJpegs();
+        }
+      } catch {}
+    }
+
+    const pageCount = Object.keys(imagesToSave).length || totalPages || 1;
+    const hasImages = Object.keys(imagesToSave).length > 0;
+
     const newSession: SavedEngineSession = {
-      id: `session-${Date.now()}`,
+      id: sessionId,
       name: title,
       createdAt: new Date().toISOString(),
-      pdfName: pdfFile?.name || "Exam-Document.pdf",
-      totalPages: totalPages || 1,
+      pdfName: pdfFile?.name || selectedPdfName || "Exam-Document.pdf",
+      totalPages: totalPages || pageCount,
       model: selectedModel,
       comboMode,
       questions: extractedQuestions,
       isSolved: extractedQuestions.some((q) => q.solveStatus === "solved"),
       isImported: !!importResult,
+      pageCount,
+      hasImages,
     };
 
+    // Store images in IndexedDB under this session's ID
+    if (hasImages) {
+      await saveSessionPageImages(sessionId, imagesToSave);
+    }
+
     setSavedSessions((prev) => [newSession, ...prev]);
-    toast.success(`Session "${title}" saved to archive!`);
+    toast.success(
+      hasImages
+        ? `Session "${title}" saved to archive with ${pageCount} page scan image(s)!`
+        : `Session "${title}" saved to archive!`,
+      { duration: 4000 }
+    );
   }
 
-  function loadSavedSession(s: SavedEngineSession) {
+  async function loadSavedSession(s: SavedEngineSession) {
     setExtractedQuestions(s.questions);
     setTotalPages(s.totalPages);
     setComboMode(s.comboMode);
     setSelectedModel(s.model as SupportedModelId);
+    setSelectedPdfName(s.pdfName || "");
     setStage1Done(true);
     setStage2Done(s.isSolved);
     setCurrentStage(s.isSolved ? "solve" : "extract");
+
+    // Restore page images from IndexedDB
+    try {
+      let images = await getSessionPageImages(s.id);
+      if (!images || Object.keys(images).length === 0) {
+        images = await getAllCachedPageJpegs();
+      }
+      if (images && Object.keys(images).length > 0) {
+        setPageThumbnails(images);
+        await saveSessionPageImages("current_active_workspace", images);
+        for (const [pStr, b64] of Object.entries(images)) {
+          savePageJpegToCache(Number(pStr), b64);
+        }
+        toast.success(
+          `Loaded session "${s.name}" with ${s.questions.length} questions & ${Object.keys(images).length} page scans! Zero AI tokens consumed.`
+        );
+        return;
+      }
+    } catch (e) {
+      console.warn("Failed restoring session images from IndexedDB:", e);
+    }
+
     toast.success(`Loaded session "${s.name}" with ${s.questions.length} questions! Zero AI tokens consumed.`);
   }
 
-  function deleteSavedSession(id: string) {
+  async function deleteSavedSession(id: string) {
+    await deleteSessionPageImages(id);
     setSavedSessions((prev) => prev.filter((s) => s.id !== id));
-    toast.info("Session removed from archive.");
+    toast.info("Session and its scan images removed from archive.");
   }
 
-  function exportSessionJson(s: SavedEngineSession) {
-    const jsonStr = JSON.stringify(s, null, 2);
+  async function exportSessionJson(s: SavedEngineSession) {
+    let images = await getSessionPageImages(s.id);
+    if (!images || Object.keys(images).length === 0) {
+      images = await getAllCachedPageJpegs();
+    }
+    const sessionWithImages = {
+      ...s,
+      pageImages: images || {},
+    };
+    const jsonStr = JSON.stringify(sessionWithImages, null, 2);
     const blob = new Blob([jsonStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -3503,6 +3630,11 @@ export function McqGenerator124ProPage() {
                               Imported
                             </span>
                           )}
+                          {s.hasImages && (
+                            <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-[10px] font-bold text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
+                              <FileText size={10} /> {s.pageCount || s.totalPages} Page Scans Preserved
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-slate-400 flex items-center gap-3">
                           <span>File: <strong className="text-slate-300">{s.pdfName}</strong> ({s.totalPages} pages)</span>
@@ -3765,7 +3897,10 @@ export function McqGenerator124ProPage() {
                   className="max-h-[70vh] rounded shadow-lg object-contain"
                 />
               ) : (
-                <div className="text-xs text-slate-500">Page image not yet cached in session.</div>
+                <div className="flex flex-col items-center justify-center p-8 text-slate-500 text-xs gap-2">
+                  <RefreshCw size={22} className="animate-spin text-amber-400" />
+                  <span>Loading page {inspectingQuestion.pageNumber} scan image...</span>
+                </div>
               )}
             </div>
           </div>

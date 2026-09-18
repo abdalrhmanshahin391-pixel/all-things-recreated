@@ -56,13 +56,20 @@ export function canvasToJpegBase64(canvas: HTMLCanvasElement, quality = 0.95): s
 // ── IndexedDB Page Image Cache ──────────────────────────────────────────────
 const IDB_NAME = "mcq_124_pro_cache";
 const IDB_STORE = "page_images";
-const IDB_VERSION = 1;
+const IDB_SESSION_STORE = "session_images";
+const IDB_VERSION = 2;
 
 let cachedDb: IDBDatabase | null = null;
 
 function openPageImageDb(): Promise<IDBDatabase | null> {
   if (typeof window === "undefined" || !window.indexedDB) return Promise.resolve(null);
-  if (cachedDb) return Promise.resolve(cachedDb);
+  if (cachedDb && cachedDb.version >= IDB_VERSION) return Promise.resolve(cachedDb);
+  if (cachedDb) {
+    try {
+      cachedDb.close();
+    } catch {}
+    cachedDb = null;
+  }
   return new Promise((resolve) => {
     try {
       const req = window.indexedDB.open(IDB_NAME, IDB_VERSION);
@@ -70,6 +77,9 @@ function openPageImageDb(): Promise<IDBDatabase | null> {
         const db = req.result;
         if (!db.objectStoreNames.contains(IDB_STORE)) {
           db.createObjectStore(IDB_STORE, { keyPath: "pageNum" });
+        }
+        if (!db.objectStoreNames.contains(IDB_SESSION_STORE)) {
+          db.createObjectStore(IDB_SESSION_STORE, { keyPath: "sessionId" });
         }
       };
       req.onsuccess = () => {
@@ -136,12 +146,75 @@ export async function getAllCachedPageJpegs(): Promise<Record<number, string>> {
   }
 }
 
+// ── Per-Session Image Store in IndexedDB ─────────────────────────────────────
+export async function saveSessionPageImages(
+  sessionId: string,
+  images: Record<number, string>,
+): Promise<void> {
+  if (!sessionId || !images || Object.keys(images).length === 0) return;
+  try {
+    const db = await openPageImageDb();
+    if (!db) return;
+    const tx = db.transaction(IDB_SESSION_STORE, "readwrite");
+    tx.objectStore(IDB_SESSION_STORE).put({
+      sessionId,
+      images,
+      pageCount: Object.keys(images).length,
+      updatedAt: Date.now(),
+    });
+    return new Promise((resolve) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch (e) {
+    console.warn("Failed to save session page images to IndexedDB:", e);
+  }
+}
+
+export async function getSessionPageImages(sessionId: string): Promise<Record<number, string>> {
+  if (!sessionId) return {};
+  try {
+    const db = await openPageImageDb();
+    if (!db) return {};
+    const tx = db.transaction(IDB_SESSION_STORE, "readonly");
+    const req = tx.objectStore(IDB_SESSION_STORE).get(sessionId);
+    return new Promise((resolve) => {
+      req.onsuccess = () => resolve(req.result?.images || {});
+      req.onerror = () => resolve({});
+    });
+  } catch {
+    return {};
+  }
+}
+
+export async function deleteSessionPageImages(sessionId: string): Promise<void> {
+  if (!sessionId) return;
+  try {
+    const db = await openPageImageDb();
+    if (!db) return;
+    const tx = db.transaction(IDB_SESSION_STORE, "readwrite");
+    tx.objectStore(IDB_SESSION_STORE).delete(sessionId);
+    return new Promise((resolve) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch {}
+}
+
 export async function clearPageJpegCache(): Promise<void> {
   try {
     const db = await openPageImageDb();
     if (!db) return;
-    const tx = db.transaction(IDB_STORE, "readwrite");
+    const storeNames = [IDB_STORE];
+    if (db.objectStoreNames.contains(IDB_SESSION_STORE)) {
+      storeNames.push(IDB_SESSION_STORE);
+    }
+    const tx = db.transaction(storeNames, "readwrite");
     tx.objectStore(IDB_STORE).clear();
+    // Clear active workspace images, preserving saved session archives
+    if (db.objectStoreNames.contains(IDB_SESSION_STORE)) {
+      tx.objectStore(IDB_SESSION_STORE).delete("current_active_workspace");
+    }
     return new Promise((resolve) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();

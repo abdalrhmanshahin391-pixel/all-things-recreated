@@ -36,7 +36,11 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useServerFn } from "@tanstack/react-start";
-import { getPageJpegFromCache } from "@/lib/pdf-page-image";
+import {
+  getPageJpegFromCache,
+  getSessionPageImages,
+  getAllCachedPageJpegs,
+} from "@/lib/pdf-page-image";
 import {
   listApprovalBatches,
   getApprovalBatch,
@@ -183,6 +187,24 @@ export function AdminFinalApproval() {
       }
 
       if (loadedBatch) {
+        if (!loadedBatch.page_images || Object.keys(loadedBatch.page_images).length === 0) {
+          try {
+            const batchImgs = await getSessionPageImages(batchId);
+            if (batchImgs && Object.keys(batchImgs).length > 0) {
+              loadedBatch.page_images = batchImgs;
+            } else {
+              const wsImgs = await getSessionPageImages("current_active_workspace");
+              if (wsImgs && Object.keys(wsImgs).length > 0) {
+                loadedBatch.page_images = wsImgs;
+              } else {
+                const cachedPages = await getAllCachedPageJpegs();
+                if (cachedPages && Object.keys(cachedPages).length > 0) {
+                  loadedBatch.page_images = cachedPages;
+                }
+              }
+            }
+          } catch {}
+        }
         setActiveBatch(loadedBatch);
         setCurrentQuestions(loadedBatch.questions || []);
         setQaActiveIndex(0);
@@ -256,16 +278,35 @@ export function AdminFinalApproval() {
     if (localPageImages[pNum]) return;
 
     let isMounted = true;
-    getPageJpegFromCache(pNum).then((cached) => {
+    (async () => {
+      // 1. Check batch images in IndexedDB
+      if (activeBatchId) {
+        const batchImgs = await getSessionPageImages(activeBatchId);
+        if (batchImgs?.[pNum] && isMounted) {
+          const src = batchImgs[pNum].startsWith("data:") ? batchImgs[pNum] : `data:image/jpeg;base64,${batchImgs[pNum]}`;
+          setLocalPageImages((prev) => ({ ...prev, [pNum]: src }));
+          return;
+        }
+      }
+      // 2. Check active workspace images in IndexedDB
+      const wsImgs = await getSessionPageImages("current_active_workspace");
+      if (wsImgs?.[pNum] && isMounted) {
+        const src = wsImgs[pNum].startsWith("data:") ? wsImgs[pNum] : `data:image/jpeg;base64,${wsImgs[pNum]}`;
+        setLocalPageImages((prev) => ({ ...prev, [pNum]: src }));
+        return;
+      }
+      // 3. Check individual page cache
+      const cached = await getPageJpegFromCache(pNum);
       if (cached && isMounted) {
         const src = cached.startsWith("data:") ? cached : `data:image/jpeg;base64,${cached}`;
         setLocalPageImages((prev) => ({ ...prev, [pNum]: src }));
       }
-    });
+    })();
+
     return () => {
       isMounted = false;
     };
-  }, [activeQuestion?.pageNumber, activeBatch, localPageImages]);
+  }, [activeQuestion?.pageNumber, activeBatch, activeBatchId, localPageImages]);
 
   const currentImageSrc =
     (activeQuestion?.pageNumber && activeBatch?.page_images?.[activeQuestion.pageNumber]) ||
