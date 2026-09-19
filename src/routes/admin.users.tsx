@@ -59,8 +59,8 @@ type Filter = "all" | "admin" | "qa" | "committee" | "committee_head" | "golden"
 const ROLE_LABEL: Record<RoleKey, string> = {
   admin: "Admin",
   qa: "QA Reviewer",
-  committee: "لجنة الطب والجراحة",
-  committee_head: "رئيس لجنة الطب والجراحة",
+  committee: "Committee",
+  committee_head: "Committee Head",
   golden: "Golden account",
 };
 
@@ -248,8 +248,8 @@ function AdminUsersPage() {
           <Stat label="Users" value={counts.total} />
           <Stat label="Admins" value={counts.admins} />
           <Stat label="QA Reviewers" value={counts.qa} />
-          <Stat label="لجنة الطب والجراحة" value={counts.committee} />
-          <Stat label="رؤساء اللجنة" value={counts.heads} />
+          <Stat label="Committee" value={counts.committee} />
+          <Stat label="Committee Heads" value={counts.heads} />
           <Stat label="Golden accounts" value={counts.golden} />
         </div>
 
@@ -261,9 +261,9 @@ function AdminUsersPage() {
             administration site.{" "}
             <span className="font-semibold text-foreground">QA Reviewer</span> has clearance to review,
             edit, and approve extracted MCQs in Final Approval before solving.{" "}
-            <span className="font-semibold text-foreground">لجنة الطب والجراحة</span> can only add,
-            edit and upload years, semesters, subjects and resources inside the Committee section —
-            nothing else.{" "}
+            <span className="font-semibold text-foreground">Committee (لجنة الطب والجراحة)</span> can
+            only add, edit and upload years, semesters, subjects and resources inside the Committee
+            section — nothing else.{" "}
             <span className="font-semibold text-foreground">Golden account</span> is a normal member
             who gets every paid course and lecture for free — no admin access.
           </div>
@@ -287,8 +287,8 @@ function AdminUsersPage() {
             ["all", "All"],
             ["admin", "Admins"],
             ["qa", "QA Reviewers"],
-            ["committee", "لجنة الطب والجراحة"],
-            ["committee_head", "رئيس اللجنة"],
+            ["committee", "Committee"],
+            ["committee_head", "Committee Heads"],
             ["golden", "Golden accounts"],
             ["none", "No role"],
             ["unverified", "Not verified"],
@@ -455,6 +455,7 @@ function AdminUsersPage() {
                         active={u.roles.includes("committee")}
                         busy={busyRole === `${u.id}:committee`}
                         onClick={() => toggleRole(u, "committee")}
+                        variant="committee"
                       />
                       <RoleChip
                         label={ROLE_LABEL.committee_head}
@@ -462,6 +463,7 @@ function AdminUsersPage() {
                         active={u.roles.includes("committee_head")}
                         busy={busyRole === `${u.id}:committee_head`}
                         onClick={() => toggleRole(u, "committee_head")}
+                        variant="committee"
                       />
                       <RoleChip
                         label={ROLE_LABEL.golden}
@@ -603,12 +605,14 @@ function RoleChip({
   icon: React.ReactNode;
   active: boolean;
   busy: boolean;
-  variant?: "default" | "qa";
+  variant?: "default" | "qa" | "committee";
   onClick: () => void;
 }) {
   const activeClass =
     variant === "qa"
       ? "qa-chip"
+      : variant === "committee"
+      ? "committee-chip font-bold shadow-sm"
       : "bg-primary text-primary-foreground border-primary";
 
   return (

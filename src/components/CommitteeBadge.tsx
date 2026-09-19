@@ -1,7 +1,7 @@
 import { ShieldCheck, Star } from "lucide-react";
 
-const LABEL = "لجنة الطب والجراحة";
-const HEAD_LABEL = "رئيس لجنة الطب والجراحة";
+const LABEL = "Committee";
+const HEAD_LABEL = "Committee Head";
 
 /**
  * Red committee badge shown next to a committee member's name/avatar.
@@ -32,14 +32,14 @@ export function CommitteeBadge({
       </span>
     );
   }
-  const pad = size === "md" ? "px-2.5 py-1 text-[12px]" : "px-2 py-0.5 text-[11px]";
+  const pad = size === "md" ? "px-2.5 py-1 text-[11px]" : "px-2 py-0.5 text-[10px]";
   return (
     <span
       title={label}
       className={`inline-flex shrink-0 items-center gap-1 rounded-full font-bold committee-chip ${pad} ${className}`}
     >
       <Icon size={size === "md" ? 13 : 11} />
-      <span dir="rtl">{label}</span>
+      <span>{label}</span>
     </span>
   );
 }

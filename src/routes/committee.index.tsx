@@ -120,7 +120,10 @@ function CommitteePage() {
           >
             لجنة الطب والجراحة
           </h1>
-          <p className="mt-4 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
+          <p className="mt-2 text-lg sm:text-xl md:text-2xl font-bold tracking-wide text-foreground/90 font-sans">
+            Medical and Surgical Committee
+          </p>
+          <p className="mt-3 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
             Pick your year to explore subjects, books and resources curated by senior students.
           </p>
           {canManageYears && (

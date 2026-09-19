@@ -71,6 +71,8 @@ export const COUNTRIES: { code: string; en: string; ar: string }[] = [
   { code: "DE", en: "Germany", ar: "ألمانيا" },
   { code: "US", en: "United States", ar: "الولايات المتحدة" },
   { code: "GB", en: "United Kingdom", ar: "المملكة المتحدة" },
+  { code: "IN", en: "India", ar: "الهند" },
+  { code: "LK", en: "Sri Lanka", ar: "سريلانكا" },
 ];
 
 export function countryName(code: string, fallback: string, ar: boolean): string {
