@@ -509,3 +509,76 @@ export const updateQuestionDetails = createServerFn({ method: "POST" })
 
     return { ok: true };
   });
+
+/**
+ * Permanently delete a question from the database (options + question record)
+ * and resolve/dismiss its associated report.
+ */
+export const deleteQuestionFromReport = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (d: { questionId: string; reportId?: string }) => {
+      if (!d?.questionId?.trim()) throw new Error("Question ID is required");
+      return d;
+    },
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdminRole(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // 1. Delete associated options
+    try {
+      await supabaseAdmin.from("question_options").delete().eq("question_id", data.questionId);
+    } catch (optErr) {
+      console.warn("Warning deleting question options:", optErr);
+    }
+
+    // 2. Clean up foreign key references if any
+    try {
+      await (supabaseAdmin.from as any)("user_answers").delete().eq("question_id", data.questionId);
+    } catch {}
+    try {
+      await (supabaseAdmin.from as any)("bookmarks").delete().eq("question_id", data.questionId);
+    } catch {}
+    try {
+      await (supabaseAdmin.from as any)("exam_questions").delete().eq("question_id", data.questionId);
+    } catch {}
+
+    // 3. Delete question record using admin client (bypasses RLS)
+    const { error: delErr } = await supabaseAdmin
+      .from("questions")
+      .delete()
+      .eq("id", data.questionId);
+
+    if (delErr) {
+      throw new Error(`Failed to delete question: ${delErr.message}`);
+    }
+
+    // 4. If reportId is passed, mark report as reviewed/resolved
+    if (data.reportId) {
+      const now = new Date().toISOString();
+      const adminNote = "Question permanently deleted from database by administrator.";
+      try {
+        await (supabaseAdmin.from as any)("question_reports")
+          .update({
+            status: "reviewed",
+            admin_notes: adminNote,
+            updated_at: now,
+          })
+          .eq("id", data.reportId);
+      } catch {}
+
+      try {
+        await (supabaseAdmin.from as any)("support_requests")
+          .update({
+            status: "resolved",
+            admin_notes: adminNote,
+            updated_at: now,
+          })
+          .eq("id", data.reportId);
+      } catch {}
+    }
+
+    return { ok: true, deletedQuestionId: data.questionId };
+  });
+

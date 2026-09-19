@@ -34,6 +34,7 @@ import {
   deleteQuestionReport,
   getQuestionDetails,
   updateQuestionDetails,
+  deleteQuestionFromReport,
   type QuestionReport,
   type QuestionReportStatus,
   type QuestionReportType,
@@ -103,6 +104,7 @@ function AdminQuestionReports() {
   const [inspectingQuestion, setInspectingQuestion] = useState<QuestionDetails | null>(null);
   const [isLoadingQuestion, setIsLoadingQuestion] = useState<boolean>(false);
   const [isSavingQuestion, setIsSavingQuestion] = useState<boolean>(false);
+  const [isDeletingQuestion, setIsDeletingQuestion] = useState<boolean>(false);
   const [notFoundWarning, setNotFoundWarning] = useState<boolean>(false);
 
   // Form edit fields
@@ -185,6 +187,38 @@ function AdminQuestionReports() {
       toast.error(err?.message || "Failed to update question");
     } finally {
       setIsSavingQuestion(false);
+    }
+  }
+
+  async function handleDeleteQuestionFromReport() {
+    if (!inspectingQuestion || !inspectingReport) return;
+    const confirmMsg = isArabic
+      ? "هل أنت متأكد من رغبتك في حذف هذا السؤال نهائياً من قاعدة البيانات؟\nسيتم حذف السؤال وخياراته بالكامل وحل تقرير المشكلة. هذا الإجراء لا يمكن التراجع عنه."
+      : "Are you sure you want to permanently delete this question from the database?\nThis will completely delete the question and its options, and resolve this report. This action cannot be undone.";
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsDeletingQuestion(true);
+    try {
+      await deleteQuestionFromReport({
+        data: {
+          questionId: inspectingQuestion.id,
+          reportId: inspectingReport.id,
+        },
+      });
+      toast.success(
+        isArabic
+          ? "تم حذف السؤال من قاعدة البيانات وحل التقرير بنجاح!"
+          : "Question permanently deleted from database & report resolved!"
+      );
+      void queryClient.invalidateQueries({ queryKey: ["question-reports"] });
+      setInspectingReport(null);
+      setInspectingQuestion(null);
+    } catch (err: any) {
+      console.error("Failed to delete question:", err);
+      toast.error(err?.message || "Failed to delete question");
+    } finally {
+      setIsDeletingQuestion(false);
     }
   }
 
@@ -684,16 +718,33 @@ function AdminQuestionReports() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setInspectingReport(null);
-                    setInspectingQuestion(null);
-                  }}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
+                <div className="flex items-center gap-2">
+                  {inspectingQuestion && (
+                    <button
+                      type="button"
+                      disabled={isDeletingQuestion || isSavingQuestion}
+                      onClick={handleDeleteQuestionFromReport}
+                      className="px-2.5 py-1.5 rounded-lg border border-rose-500/30 text-rose-500 hover:bg-rose-600 hover:text-white transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      title={isArabic ? "حذف هذا السؤال نهائياً من قاعدة البيانات" : "Permanently delete this question from DB"}
+                    >
+                      <Trash2 size={14} />
+                      <span className="hidden sm:inline">
+                        {isArabic ? "حذف السؤال" : "Delete Question"}
+                      </span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInspectingReport(null);
+                      setInspectingQuestion(null);
+                    }}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
               </div>
 
               {/* Modal Body - Scrollable */}
@@ -848,22 +899,43 @@ function AdminQuestionReports() {
 
               {/* Modal Footer Actions */}
               <div className="pt-4 mt-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setInspectingReport(null);
-                    setInspectingQuestion(null);
-                  }}
-                  className="px-4 py-2 rounded-xl border border-border text-xs font-bold hover:bg-muted text-muted-foreground transition-colors cursor-pointer"
-                >
-                  {isArabic ? "إغلاق" : "Close"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInspectingReport(null);
+                      setInspectingQuestion(null);
+                    }}
+                    className="px-4 py-2 rounded-xl border border-border text-xs font-bold hover:bg-muted text-muted-foreground transition-colors cursor-pointer"
+                  >
+                    {isArabic ? "إغلاق" : "Close"}
+                  </button>
+
+                  {inspectingQuestion && (
+                    <button
+                      type="button"
+                      disabled={isDeletingQuestion || isSavingQuestion}
+                      onClick={handleDeleteQuestionFromReport}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-600 border border-rose-500/30 hover:border-rose-600 text-rose-500 hover:text-white text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+                      title={isArabic ? "حذف السؤال نهائياً من قاعدة البيانات" : "Permanently delete question from database"}
+                    >
+                      {isDeletingQuestion ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={13} />
+                      )}
+                      {isDeletingQuestion
+                        ? (isArabic ? "جاري الحذف…" : "Deleting…")
+                        : (isArabic ? "حذف السؤال نهائياً" : "Delete Question from DB")}
+                    </button>
+                  )}
+                </div>
 
                 {inspectingQuestion && (
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      disabled={isSavingQuestion}
+                      disabled={isSavingQuestion || isDeletingQuestion}
                       onClick={() => handleSaveQuestionChanges(false)}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 border-primary text-primary hover:bg-primary/10 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
                     >
@@ -875,7 +947,7 @@ function AdminQuestionReports() {
 
                     <button
                       type="button"
-                      disabled={isSavingQuestion}
+                      disabled={isSavingQuestion || isDeletingQuestion}
                       onClick={() => handleSaveQuestionChanges(true)}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-md transition-all disabled:opacity-50 cursor-pointer"
                     >
