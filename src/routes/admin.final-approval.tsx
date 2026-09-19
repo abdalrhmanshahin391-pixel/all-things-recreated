@@ -35,6 +35,7 @@ import {
   Hand,
   Highlighter,
   RotateCcw,
+  RotateCw,
   Plus,
   Move,
   Copy,
@@ -202,10 +203,12 @@ export function AdminFinalApproval() {
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
-  // Inspection Tools: Pan vs Highlight
+  // Inspection Tools: Pan vs Highlight & Page Rotation
   const [activeTool, setActiveTool] = useState<"pan" | "highlight">("pan");
   const [highlightColor, setHighlightColor] = useState<string>("#facc15"); // yellow default
+  const [highlightWidth, setHighlightWidth] = useState<number>(16);
   const [pageHighlights, setPageHighlights] = useState<Record<number, HighlightStroke[]>>({});
+  const [pageRotations, setPageRotations] = useState<Record<number, number>>({});
   const [currentDrawingStroke, setCurrentDrawingStroke] = useState<HighlightStroke | null>(null);
   const imgElementRef = useRef<HTMLImageElement | null>(null);
 
@@ -619,6 +622,69 @@ export function AdminFinalApproval() {
     toast.success(`Kept selected question, removed ${toRemove.length} duplicate copy(s).`);
   };
 
+  // ── Page Rotation & View Transformation Helpers ───────────────────────────
+  const currentRotation = pageRotations[effectivePageNumber] || 0;
+
+  const handleRotateCw = () => {
+    const p = effectivePageNumber;
+    setPageRotations((prev) => {
+      const nextRot = ((prev[p] || 0) + 90) % 360;
+      toast.info(`Rotated Page ${p} to ${nextRot}°`);
+      return { ...prev, [p]: nextRot };
+    });
+  };
+
+  const handleRotateCcw = () => {
+    const p = effectivePageNumber;
+    setPageRotations((prev) => {
+      const nextRot = ((prev[p] || 0) + 270) % 360;
+      toast.info(`Rotated Page ${p} to ${nextRot}°`);
+      return { ...prev, [p]: nextRot };
+    });
+  };
+
+  const handleResetRotation = () => {
+    const p = effectivePageNumber;
+    setPageRotations((prev) => ({
+      ...prev,
+      [p]: 0,
+    }));
+    toast.info(`Page ${p} rotation reset to 0°`);
+  };
+
+  const handleResetPanZoom = () => {
+    setQaZoom(1);
+    setQaPan({ x: 0, y: 0 });
+    handleResetRotation();
+    toast.info("View reset to center (100% zoom, 0° rotation)");
+  };
+
+  // Helper to accurately map mouse screen coordinates to 0..1 image texture coordinates
+  // even when rotated by 90°, 180°, or 270° and scaled/panned!
+  function getLocalImageCoords(
+    e: MouseEvent | React.MouseEvent,
+    imgEl: HTMLElement,
+    rotation: number,
+  ): { x: number; y: number } {
+    const rect = imgEl.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+
+    const rad = (-rotation * Math.PI) / 180;
+    const rx = dx * Math.cos(rad) - dy * Math.sin(rad);
+    const ry = dx * Math.sin(rad) + dy * Math.cos(rad);
+
+    const isQuarter = (Math.abs(rotation) / 90) % 2 === 1;
+    const unrotatedW = isQuarter ? rect.height : rect.width;
+    const unrotatedH = isQuarter ? rect.width : rect.height;
+
+    const relX = Math.max(0, Math.min(1, (rx + unrotatedW / 2) / (unrotatedW || 1)));
+    const relY = Math.max(0, Math.min(1, (ry + unrotatedH / 2) / (unrotatedH || 1)));
+    return { x: relX, y: relY };
+  }
+
   // ── Pan & Drag Zoom Handlers ──────────────────────────────────────────────
   const handleImageMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0 && e.button !== 1) return; // Left or middle click
@@ -639,68 +705,87 @@ export function AdminFinalApproval() {
     if (activeTool === "highlight") {
       const img = imgElementRef.current;
       if (!img) return;
-      const rect = img.getBoundingClientRect();
-      const relX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      const relY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+      const rot = pageRotations[effectivePageNumber] || 0;
+      const coords = getLocalImageCoords(e, img, rot);
 
       const newStroke: HighlightStroke = {
         id: `stroke_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         color: highlightColor,
-        width: 14,
-        points: [{ x: relX, y: relY }],
+        width: highlightWidth,
+        points: [coords],
       };
       setCurrentDrawingStroke(newStroke);
     }
   };
 
-  const handleImageMouseMove = (e: React.MouseEvent) => {
-    if (isPanning) {
-      const dx = e.clientX - panStartRef.current.x;
-      const dy = e.clientY - panStartRef.current.y;
-      setQaPan({
-        x: panStartRef.current.panX + dx,
-        y: panStartRef.current.panY + dy,
-      });
-      return;
-    }
+  // Window-level listeners ensure panning and highlighting remain ultra-smooth
+  // even if the user's mouse moves outside the container during a fast drag!
+  useEffect(() => {
+    if (!isPanning && !currentDrawingStroke) return;
 
-    if (currentDrawingStroke) {
-      const img = imgElementRef.current;
-      if (!img) return;
-      const rect = img.getBoundingClientRect();
-      const relX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      const relY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-
-      setCurrentDrawingStroke((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          points: [...prev.points, { x: relX, y: relY }],
-        };
-      });
-    }
-  };
-
-  const handleImageMouseUp = () => {
-    if (isPanning) {
-      setIsPanning(false);
-    }
-
-    if (currentDrawingStroke) {
-      if (currentDrawingStroke.points.length > 1) {
-        const pNum = effectivePageNumber;
-        setPageHighlights((prev) => ({
-          ...prev,
-          [pNum]: [...(prev[pNum] || []), currentDrawingStroke],
-        }));
+    const onMouseMove = (e: MouseEvent) => {
+      if (isPanning) {
+        const dx = e.clientX - panStartRef.current.x;
+        const dy = e.clientY - panStartRef.current.y;
+        setQaPan({
+          x: panStartRef.current.panX + dx,
+          y: panStartRef.current.panY + dy,
+        });
+      } else if (currentDrawingStroke) {
+        const img = imgElementRef.current;
+        if (!img) return;
+        const rot = pageRotations[effectivePageNumber] || 0;
+        const coords = getLocalImageCoords(e, img, rot);
+        setCurrentDrawingStroke((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            points: [...prev.points, coords],
+          };
+        });
       }
-      setCurrentDrawingStroke(null);
-    }
-  };
+    };
 
-  const handleResetPanZoom = () => {
-    setQaZoom(1);
-    setQaPan({ x: 0, y: 0 });
+    const onMouseUp = () => {
+      if (isPanning) {
+        setIsPanning(false);
+      }
+      if (currentDrawingStroke) {
+        if (currentDrawingStroke.points.length > 1) {
+          const pNum = effectivePageNumber;
+          setPageHighlights((prev) => ({
+            ...prev,
+            [pNum]: [...(prev[pNum] || []), currentDrawingStroke],
+          }));
+        }
+        setCurrentDrawingStroke(null);
+      }
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [isPanning, currentDrawingStroke, effectivePageNumber, pageRotations]);
+
+  const handleViewerWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    if (e.ctrlKey || e.metaKey || !e.shiftKey) {
+      // Zoom with mouse wheel smoothly
+      if (e.deltaY < 0) {
+        setQaZoom((z) => Math.min(4.0, parseFloat((z + 0.15).toFixed(2))));
+      } else {
+        setQaZoom((z) => Math.max(0.4, parseFloat((z - 0.15).toFixed(2))));
+      }
+    } else {
+      // Shift + Wheel to pan horizontally/vertically
+      setQaPan((prev) => ({
+        x: prev.x - e.deltaX,
+        y: prev.y - e.deltaY,
+      }));
+    }
   };
 
   const handleUndoHighlight = () => {
@@ -1000,9 +1085,21 @@ export function AdminFinalApproval() {
       } else if (e.key === "h" || e.key === "H") {
         e.preventDefault();
         setActiveTool((t) => (t === "highlight" ? "pan" : "highlight"));
+      } else if (e.key === "r" || e.key === "R") {
+        e.preventDefault();
+        handleRotateCw();
+      } else if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        setQaZoom((z) => Math.min(4.0, parseFloat((z + 0.2).toFixed(2))));
+      } else if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        setQaZoom((z) => Math.max(0.4, parseFloat((z - 0.2).toFixed(2))));
+      } else if (e.key === "0") {
+        e.preventDefault();
+        handleResetPanZoom();
       }
     },
-    [activeBatchId, activeQuestion, filteredQuestions.length]
+    [activeBatchId, activeQuestion, filteredQuestions.length, effectivePageNumber]
   );
 
   useEffect(() => {
@@ -1394,9 +1491,9 @@ export function AdminFinalApproval() {
                 {/* Document Viewer Toolbar */}
                 <div className="p-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400 shrink-0 gap-2 flex-wrap">
                   {/* Page Navigation */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <FileText size={14} className="text-cyan-400" />
-                    <span className="font-bold text-white hidden sm:inline">Scanned Page:</span>
+                    <span className="font-bold text-white hidden sm:inline">Page:</span>
                     <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded-lg border border-slate-800">
                       <button
                         onClick={() => setViewingPageNumber((p) => Math.max(1, p - 1))}
@@ -1419,6 +1516,35 @@ export function AdminFinalApproval() {
                     </div>
                   </div>
 
+                  {/* Page Rotation (90° CCW / 90° CW) */}
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                    <button
+                      onClick={handleRotateCcw}
+                      className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
+                      title="Rotate 90° Counter-Clockwise"
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                    {currentRotation !== 0 ? (
+                      <button
+                        onClick={handleResetRotation}
+                        className="px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 hover:bg-cyan-900 font-mono text-[10px] font-bold border border-cyan-700/60 cursor-pointer transition-colors"
+                        title="Click to reset rotation to 0°"
+                      >
+                        {currentRotation}°
+                      </button>
+                    ) : (
+                      <span className="px-1 text-[11px] font-mono text-slate-500 font-medium">0°</span>
+                    )}
+                    <button
+                      onClick={handleRotateCw}
+                      className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
+                      title="Rotate 90° Clockwise (Shortcut: R)"
+                    >
+                      <RotateCw size={13} />
+                    </button>
+                  </div>
+
                   {/* Tool Switcher: Pan vs Highlight */}
                   <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
                     <button
@@ -1428,7 +1554,7 @@ export function AdminFinalApproval() {
                           ? "bg-slate-800 text-white shadow-sm"
                           : "text-slate-400 hover:text-white"
                       }`}
-                      title="Pan Mode (Drag mouse to move image in any direction)"
+                      title="Pan Mode (Drag mouse to move image anywhere after zoom)"
                     >
                       <Hand size={13} />
                       <span>Pan</span>
@@ -1440,44 +1566,66 @@ export function AdminFinalApproval() {
                           ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
                           : "text-slate-400 hover:text-white"
                       }`}
-                      title="Highlight Mode (Draw marker lines directly on scan)"
+                      title="Highlight Mode (Draw marker lines directly on scan. Shortcut: H)"
                     >
                       <Highlighter size={13} />
                       <span>Highlight</span>
                     </button>
                   </div>
 
-                  {/* Highlight Color & Actions (when highlight mode active) */}
+                  {/* Highlight Color, Width & Actions (when highlight mode active) */}
                   {activeTool === "highlight" && (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
                       {[
                         { color: "#facc15", label: "Yellow" },
                         { color: "#10b981", label: "Emerald" },
                         { color: "#06b6d4", label: "Cyan" },
                         { color: "#f43f5e", label: "Rose" },
+                        { color: "#f97316", label: "Orange" },
                       ].map((c) => (
                         <button
                           key={c.color}
                           onClick={() => setHighlightColor(c.color)}
                           style={{ backgroundColor: c.color }}
-                          className={`w-5 h-5 rounded-full transition-transform cursor-pointer ${
+                          className={`w-4 h-4 rounded-full transition-transform cursor-pointer ${
                             highlightColor === c.color ? "scale-125 ring-2 ring-white" : "opacity-80"
                           }`}
                           title={`Marker: ${c.label}`}
                         />
                       ))}
+                      <div className="h-3 w-[1px] bg-slate-800 mx-0.5" />
+                      {/* Stroke Width Selector */}
+                      {[
+                        { width: 8, label: "S" },
+                        { width: 16, label: "M" },
+                        { width: 28, label: "L" },
+                      ].map((s) => (
+                        <button
+                          key={s.width}
+                          onClick={() => setHighlightWidth(s.width)}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                            highlightWidth === s.width
+                              ? "bg-slate-700 text-white"
+                              : "text-slate-500 hover:text-slate-300"
+                          }`}
+                          title={`Line width: ${s.width}px`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                      <div className="h-3 w-[1px] bg-slate-800 mx-0.5" />
                       <button
                         onClick={handleUndoHighlight}
                         disabled={currentPageHighlights.length === 0}
-                        className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer ml-1"
+                        className="p-1 rounded hover:bg-slate-800 text-slate-300 disabled:opacity-40 cursor-pointer"
                         title="Undo Last Highlight"
                       >
-                        <RotateCcw size={12} />
+                        <RotateCcw size={11} />
                       </button>
                       <button
                         onClick={handleClearHighlights}
                         disabled={currentPageHighlights.length === 0}
-                        className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] disabled:opacity-40 cursor-pointer"
+                        className="px-1.5 py-0.5 rounded hover:bg-slate-800 text-slate-300 text-[10px] disabled:opacity-40 cursor-pointer"
                         title="Clear Page Highlights"
                       >
                         Clear
@@ -1485,29 +1633,29 @@ export function AdminFinalApproval() {
                     </div>
                   )}
 
-                  {/* Zoom Controls */}
-                  <div className="flex items-center gap-1">
+                  {/* Zoom & Reset Controls */}
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
                     <button
-                      onClick={() => setQaZoom((z) => Math.max(0.5, z - 0.2))}
-                      className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
-                      title="Zoom Out"
+                      onClick={() => setQaZoom((z) => Math.max(0.4, parseFloat((z - 0.2).toFixed(2))))}
+                      className="p-1 rounded hover:bg-slate-800 text-slate-300 cursor-pointer"
+                      title="Zoom Out (-)"
                     >
                       <ZoomOut size={13} />
                     </button>
-                    <span className="font-mono text-[11px] w-9 text-center text-slate-300">
+                    <span className="font-mono text-[11px] w-10 text-center text-cyan-300 font-bold">
                       {Math.round(qaZoom * 100)}%
                     </span>
                     <button
-                      onClick={() => setQaZoom((z) => Math.min(3.0, z + 0.2))}
-                      className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
-                      title="Zoom In"
+                      onClick={() => setQaZoom((z) => Math.min(4.0, parseFloat((z + 0.2).toFixed(2))))}
+                      className="p-1 rounded hover:bg-slate-800 text-slate-300 cursor-pointer"
+                      title="Zoom In (+)"
                     >
                       <ZoomIn size={13} />
                     </button>
                     <button
                       onClick={handleResetPanZoom}
-                      className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold ml-1 cursor-pointer"
-                      title="Reset Zoom & Pan to Center"
+                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold ml-1 cursor-pointer transition-colors"
+                      title="Reset Pan, Zoom & Rotation to Center (0)"
                     >
                       Reset
                     </button>
@@ -1517,15 +1665,13 @@ export function AdminFinalApproval() {
                 {/* Scanned Image Viewer (Mouse Drag Pan & Highlight Layer) */}
                 <div
                   className="flex-1 overflow-hidden relative flex items-center justify-center bg-slate-950/90 select-none cursor-default"
+                  onWheel={handleViewerWheel}
                   onMouseDown={handleImageMouseDown}
-                  onMouseMove={handleImageMouseMove}
-                  onMouseUp={handleImageMouseUp}
-                  onMouseLeave={handleImageMouseUp}
                 >
                   {currentImageSrc ? (
                     <div
                       style={{
-                        transform: `translate(${qaPan.x}px, ${qaPan.y}px) scale(${qaZoom})`,
+                        transform: `translate(${qaPan.x}px, ${qaPan.y}px) scale(${qaZoom}) rotate(${currentRotation}deg)`,
                         transformOrigin: "center center",
                         transition: isPanning || currentDrawingStroke ? "none" : "transform 0.1s ease-out",
                         cursor:
@@ -1535,7 +1681,7 @@ export function AdminFinalApproval() {
                             ? "grabbing"
                             : "grab",
                       }}
-                      className="relative inline-block select-none shadow-2xl rounded-lg overflow-hidden border border-slate-700 max-w-full"
+                      className="relative inline-block select-none shadow-2xl rounded-lg overflow-hidden border border-slate-700"
                     >
                       {/* Scanned JPEG Image */}
                       <img
@@ -1559,7 +1705,7 @@ export function AdminFinalApproval() {
                             points={stroke.points.map((p) => `${p.x * 1000},${p.y * 1000}`).join(" ")}
                             fill="none"
                             stroke={stroke.color}
-                            strokeWidth={stroke.width || 14}
+                            strokeWidth={stroke.width || 16}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             opacity={0.65}
@@ -1571,10 +1717,10 @@ export function AdminFinalApproval() {
                             points={currentDrawingStroke.points.map((p) => `${p.x * 1000},${p.y * 1000}`).join(" ")}
                             fill="none"
                             stroke={currentDrawingStroke.color}
-                            strokeWidth={currentDrawingStroke.width || 14}
+                            strokeWidth={currentDrawingStroke.width || 16}
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            opacity={0.65}
+                            opacity={0.75}
                           />
                         )}
                       </svg>
@@ -1596,8 +1742,13 @@ export function AdminFinalApproval() {
                   )}
 
                   {/* Bottom Tool Hint */}
-                  <div className="absolute bottom-2 left-2 pointer-events-none bg-slate-900/80 backdrop-blur border border-slate-800 px-2 py-1 rounded-lg text-[10px] text-slate-400">
-                    {activeTool === "pan" ? "Drag mouse to pan freely • Hold Shift or use buttons to zoom" : "Drag mouse over text to highlight • Press H to switch to Pan"}
+                  <div className="absolute bottom-2 left-2 pointer-events-none bg-slate-900/80 backdrop-blur border border-slate-800 px-2.5 py-1 rounded-lg text-[10px] text-slate-400 flex items-center gap-2">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                    <span>
+                      {activeTool === "pan"
+                        ? "Drag mouse to pan freely • Scroll wheel to zoom • Press R to rotate 90° • Press H for highlighter"
+                        : "Drag over text to highlight • Press H to switch to Pan • Press R to rotate"}
+                    </span>
                   </div>
                 </div>
               </div>
