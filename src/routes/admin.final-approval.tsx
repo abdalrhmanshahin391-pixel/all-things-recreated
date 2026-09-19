@@ -51,6 +51,10 @@ import {
   getPageJpegFromCache,
   getSessionPageImages,
   getAllCachedPageJpegs,
+  saveApprovalBatchToIndexedDb,
+  getApprovalBatchFromIndexedDb,
+  getAllApprovalBatchesFromIndexedDb,
+  deleteApprovalBatchFromIndexedDb,
 } from "@/lib/pdf-page-image";
 import {
   listApprovalBatches,
@@ -246,25 +250,49 @@ export function AdminFinalApproval() {
         console.warn("[FinalApproval] Server list failed, checking local backup:", e);
       }
 
-      // Merge with client localStorage batches
+      // Merge with client IndexedDB and localStorage batches
       let localBatches: FinalApprovalBatchSummary[] = [];
+      try {
+        const idbBatches = await getAllApprovalBatchesFromIndexedDb();
+        if (Array.isArray(idbBatches)) {
+          for (const b of idbBatches) {
+            localBatches.push({
+              id: b.id,
+              title: b.title,
+              status: b.status,
+              total_questions: b.total_questions || b.questions?.length || 0,
+              approved_questions: b.approved_questions || b.questions?.filter((q: any) => q.isApproved).length || 0,
+              flagged_questions: b.flagged_questions || b.questions?.filter((q: any) => q.needsReview).length || 0,
+              created_at: b.created_at,
+              updated_at: b.updated_at,
+              created_by_email: b.created_by_email,
+              notes: b.notes,
+            });
+          }
+        }
+      } catch {}
+
       try {
         const raw = localStorage.getItem("final_approval_batches_v1");
         if (raw) {
           const list = JSON.parse(raw);
           if (Array.isArray(list)) {
-            localBatches = list.map((b: any) => ({
-              id: b.id,
-              title: b.title,
-              status: b.status,
-              total_questions: b.total_questions,
-              approved_questions: b.approved_questions,
-              flagged_questions: b.flagged_questions,
-              created_at: b.created_at,
-              updated_at: b.updated_at,
-              created_by_email: b.created_by_email,
-              notes: b.notes,
-            }));
+            for (const b of list) {
+              if (!localBatches.some((lb) => lb.id === b.id)) {
+                localBatches.push({
+                  id: b.id,
+                  title: b.title,
+                  status: b.status,
+                  total_questions: b.total_questions,
+                  approved_questions: b.approved_questions,
+                  flagged_questions: b.flagged_questions,
+                  created_at: b.created_at,
+                  updated_at: b.updated_at,
+                  created_by_email: b.created_by_email,
+                  notes: b.notes,
+                });
+              }
+            }
           }
         }
       } catch {}
@@ -308,6 +336,7 @@ export function AdminFinalApproval() {
       setActiveBatchId(batchId);
       let loadedBatch: FinalApprovalBatch | null = null;
 
+      // 1. Try server function
       try {
         const res = await getBatchFn({ data: { batchId } });
         if (res?.batch) loadedBatch = res.batch;
@@ -315,12 +344,79 @@ export function AdminFinalApproval() {
         console.warn("[FinalApproval] Server getBatch failed, checking local backup:", err);
       }
 
+      // 2. Try IndexedDB full approval batch store
+      if (!loadedBatch || !loadedBatch.questions || loadedBatch.questions.length === 0) {
+        try {
+          const idbBatch = await getApprovalBatchFromIndexedDb(batchId);
+          if (idbBatch) {
+            loadedBatch = { ...(loadedBatch || {}), ...idbBatch };
+          }
+        } catch (idbErr) {
+          console.warn("[FinalApproval] IDB batch fetch warning:", idbErr);
+        }
+      }
+
+      // 3. Try localStorage batches summary list
       if (!loadedBatch) {
         try {
           const raw = localStorage.getItem("final_approval_batches_v1");
           const list = raw ? JSON.parse(raw) : [];
           loadedBatch = list.find((b: any) => b.id === batchId) || null;
         } catch {}
+      }
+
+      // 4. Try dedicated localStorage questions key
+      if (loadedBatch && (!loadedBatch.questions || loadedBatch.questions.length === 0)) {
+        try {
+          const rawQ = localStorage.getItem(`final_approval_questions_${batchId}`);
+          if (rawQ) {
+            const parsedQ = JSON.parse(rawQ);
+            if (Array.isArray(parsedQ) && parsedQ.length > 0) {
+              loadedBatch.questions = parsedQ;
+            }
+          }
+        } catch {}
+      }
+
+      // 5. CRITICAL AUTO-RESCUE FOR EXISTING BATCHES:
+      // If questions are still empty/missing, but batch exists, rescue questions from mcq_124_pro_extracted_questions!
+      if (loadedBatch && (!loadedBatch.questions || loadedBatch.questions.length === 0)) {
+        try {
+          const rawExtracted = localStorage.getItem("mcq_124_pro_extracted_questions");
+          if (rawExtracted) {
+            const extracted = JSON.parse(rawExtracted);
+            if (Array.isArray(extracted) && extracted.length > 0) {
+              console.log(`[FinalApproval] Rescuing ${extracted.length} questions from mcq_124_pro_extracted_questions for batch ${batchId}`);
+              const rescued = extracted.map((q: any) => ({
+                ...q,
+                isApproved: q.isApproved ?? false,
+                needsReview: q.needsReview ?? true,
+                lifecycleStatus: loadedBatch?.status || "pending_approval_extraction",
+              }));
+              loadedBatch.questions = rescued;
+              loadedBatch.total_questions = rescued.length;
+
+              // Save rescued questions immediately to IndexedDB and LocalStorage so it's permanently restored
+              await saveApprovalBatchToIndexedDb(loadedBatch);
+              try {
+                localStorage.setItem(`final_approval_questions_${batchId}`, JSON.stringify(rescued));
+                const rawList = localStorage.getItem("final_approval_batches_v1");
+                if (rawList) {
+                  const bList = JSON.parse(rawList);
+                  const bIdx = bList.findIndex((b: any) => b.id === batchId);
+                  if (bIdx >= 0) {
+                    bList[bIdx].questions = rescued;
+                    bList[bIdx].total_questions = rescued.length;
+                    localStorage.setItem("final_approval_batches_v1", JSON.stringify(bList));
+                  }
+                }
+              } catch {}
+              toast.success(`Restored ${rescued.length} questions for this batch!`, { duration: 4000 });
+            }
+          }
+        } catch (rescueErr) {
+          console.warn("[FinalApproval] Auto-rescue warning:", rescueErr);
+        }
       }
 
       if (loadedBatch) {
@@ -386,6 +482,12 @@ export function AdminFinalApproval() {
       } catch (e) {
         console.warn("Server delete warning:", e);
       }
+
+      await deleteApprovalBatchFromIndexedDb(batchId);
+
+      try {
+        localStorage.removeItem(`final_approval_questions_${batchId}`);
+      } catch {}
 
       try {
         const raw = localStorage.getItem("final_approval_batches_v1");
@@ -809,6 +911,26 @@ export function AdminFinalApproval() {
         console.warn("[FinalApproval] Server update failed, continuing with local store:", err);
       }
 
+      // Persist to IndexedDB (unlimited capacity)
+      await saveApprovalBatchToIndexedDb({
+        ...(activeBatch || {}),
+        id: activeBatchId,
+        status: newStatus,
+        questions: updatedQuestions,
+        highlights: pageHighlights,
+        approved_questions: updatedQuestions.filter((q: any) => q.isApproved).length,
+        flagged_questions: updatedQuestions.filter((q: any) => q.needsReview).length,
+        total_questions: updatedQuestions.length,
+        updated_at: new Date().toISOString(),
+      });
+
+      // Persist to dedicated localStorage key
+      try {
+        localStorage.setItem(`final_approval_questions_${activeBatchId}`, JSON.stringify(updatedQuestions));
+      } catch (e) {
+        console.warn("Could not save to final_approval_questions_ key:", e);
+      }
+
       // Persist to localStorage backup
       try {
         const raw = localStorage.getItem("final_approval_batches_v1");
@@ -821,6 +943,7 @@ export function AdminFinalApproval() {
             list[idx].highlights = pageHighlights;
             list[idx].approved_questions = updatedQuestions.filter((q: any) => q.isApproved).length;
             list[idx].flagged_questions = updatedQuestions.filter((q: any) => q.needsReview).length;
+            list[idx].total_questions = updatedQuestions.length;
             list[idx].updated_at = new Date().toISOString();
             localStorage.setItem("final_approval_batches_v1", JSON.stringify(list));
           }

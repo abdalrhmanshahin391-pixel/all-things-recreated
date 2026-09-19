@@ -50,6 +50,9 @@ import {
   saveSessionPageImages,
   getSessionPageImages,
   deleteSessionPageImages,
+  saveApprovalBatchToIndexedDb,
+  getApprovalBatchFromIndexedDb,
+  getAllApprovalBatchesFromIndexedDb,
 } from "@/lib/pdf-page-image";
 
 type Stage = "extract" | "solve" | "import" | "archive";
@@ -348,10 +351,29 @@ export function McqGenerator124ProPage() {
           const res = await getApprovalBatchFn({ data: { batchId: search.batchId! } });
           if (res?.batch) loadedBatch = res.batch;
         } catch {}
+        if (!loadedBatch || !loadedBatch.questions || loadedBatch.questions.length === 0) {
+          try {
+            const idbBatch = await getApprovalBatchFromIndexedDb(search.batchId!);
+            if (idbBatch) loadedBatch = { ...(loadedBatch || {}), ...idbBatch };
+          } catch {}
+        }
         if (!loadedBatch) {
-          const raw = localStorage.getItem("final_approval_batches_v1");
-          const list = raw ? JSON.parse(raw) : [];
-          loadedBatch = list.find((b: any) => b.id === search.batchId) || null;
+          try {
+            const raw = localStorage.getItem("final_approval_batches_v1");
+            const list = raw ? JSON.parse(raw) : [];
+            loadedBatch = list.find((b: any) => b.id === search.batchId) || null;
+          } catch {}
+        }
+        if (loadedBatch && (!loadedBatch.questions || loadedBatch.questions.length === 0)) {
+          try {
+            const rawQ = localStorage.getItem(`final_approval_questions_${search.batchId}`);
+            if (rawQ) {
+              const parsedQ = JSON.parse(rawQ);
+              if (Array.isArray(parsedQ) && parsedQ.length > 0) {
+                loadedBatch.questions = parsedQ;
+              }
+            }
+          } catch {}
         }
         if (loadedBatch && isMounted) {
           if (Array.isArray(loadedBatch.questions) && loadedBatch.questions.length > 0) {
@@ -424,7 +446,31 @@ export function McqGenerator124ProPage() {
         await saveSessionPageImages(batchId, imagesToSend);
       }
 
-      // 1. Save lightweight summary to LocalStorage (no huge base64 images to prevent QuotaExceededError)
+      // Save complete batch with questions and images to IndexedDB (unlimited capacity)
+      const fullApprovalBatch = {
+        id: batchId,
+        title: sendBatchTitle.trim(),
+        status: batchLifecycleStatus,
+        total_questions: taggedQuestions.length,
+        approved_questions: taggedQuestions.filter((q) => q.isApproved).length,
+        flagged_questions: taggedQuestions.filter((q) => q.needsReview).length,
+        created_at: now,
+        updated_at: now,
+        created_by_email: "admin",
+        notes: sendBatchNotes.trim(),
+        questions: taggedQuestions,
+        page_images: imagesToSend,
+      };
+      await saveApprovalBatchToIndexedDb(fullApprovalBatch);
+
+      // Save questions in dedicated localStorage key for instant access
+      try {
+        localStorage.setItem(`final_approval_questions_${batchId}`, JSON.stringify(taggedQuestions));
+      } catch (e) {
+        console.warn("Could not save to final_approval_questions_ key:", e);
+      }
+
+      // 1. Save summary + questions to LocalStorage
       const localBatchSummary = {
         id: batchId,
         title: sendBatchTitle.trim(),
@@ -436,6 +482,7 @@ export function McqGenerator124ProPage() {
         updated_at: now,
         created_by_email: "admin",
         notes: sendBatchNotes.trim(),
+        questions: taggedQuestions,
       };
 
       try {
@@ -494,25 +541,49 @@ export function McqGenerator124ProPage() {
         console.warn("Could not load batches from server:", e);
       }
 
-      // Merge with client batches
+      // Merge with IndexedDB and localStorage client batches
       let localBatches: FinalApprovalBatchSummary[] = [];
+      try {
+        const idbBatches = await getAllApprovalBatchesFromIndexedDb();
+        if (Array.isArray(idbBatches)) {
+          for (const b of idbBatches) {
+            localBatches.push({
+              id: b.id,
+              title: b.title,
+              status: b.status,
+              total_questions: b.total_questions || b.questions?.length || 0,
+              approved_questions: b.approved_questions || b.questions?.filter((q: any) => q.isApproved).length || 0,
+              flagged_questions: b.flagged_questions || b.questions?.filter((q: any) => q.needsReview).length || 0,
+              created_at: b.created_at,
+              updated_at: b.updated_at,
+              created_by_email: b.created_by_email,
+              notes: b.notes,
+            });
+          }
+        }
+      } catch {}
+
       try {
         const raw = localStorage.getItem("final_approval_batches_v1");
         if (raw) {
           const list = JSON.parse(raw);
           if (Array.isArray(list)) {
-            localBatches = list.map((b: any) => ({
-              id: b.id,
-              title: b.title,
-              status: b.status,
-              total_questions: b.total_questions,
-              approved_questions: b.approved_questions,
-              flagged_questions: b.flagged_questions,
-              created_at: b.created_at,
-              updated_at: b.updated_at,
-              created_by_email: b.created_by_email,
-              notes: b.notes,
-            }));
+            for (const b of list) {
+              if (!localBatches.some((lb) => lb.id === b.id)) {
+                localBatches.push({
+                  id: b.id,
+                  title: b.title,
+                  status: b.status,
+                  total_questions: b.total_questions,
+                  approved_questions: b.approved_questions,
+                  flagged_questions: b.flagged_questions,
+                  created_at: b.created_at,
+                  updated_at: b.updated_at,
+                  created_by_email: b.created_by_email,
+                  notes: b.notes,
+                });
+              }
+            }
           }
         }
       } catch {}
@@ -552,11 +623,43 @@ export function McqGenerator124ProPage() {
         console.warn("Server batch fetch warning, checking client backup:", e);
       }
 
+      if (!loadedBatch || !loadedBatch.questions || loadedBatch.questions.length === 0) {
+        try {
+          const idbBatch = await getApprovalBatchFromIndexedDb(selectedBatchIdToImport);
+          if (idbBatch) loadedBatch = { ...(loadedBatch || {}), ...idbBatch };
+        } catch {}
+      }
+
       if (!loadedBatch) {
         try {
           const raw = localStorage.getItem("final_approval_batches_v1");
           const list = raw ? JSON.parse(raw) : [];
           loadedBatch = list.find((b: any) => b.id === selectedBatchIdToImport) || null;
+        } catch {}
+      }
+
+      if (loadedBatch && (!loadedBatch.questions || loadedBatch.questions.length === 0)) {
+        try {
+          const rawQ = localStorage.getItem(`final_approval_questions_${selectedBatchIdToImport}`);
+          if (rawQ) {
+            const parsedQ = JSON.parse(rawQ);
+            if (Array.isArray(parsedQ) && parsedQ.length > 0) {
+              loadedBatch.questions = parsedQ;
+            }
+          }
+        } catch {}
+      }
+
+      // Auto-fallback to currently extracted questions if batch questions were not yet serialized
+      if (loadedBatch && (!loadedBatch.questions || loadedBatch.questions.length === 0)) {
+        try {
+          const rawExtracted = localStorage.getItem("mcq_124_pro_extracted_questions");
+          if (rawExtracted) {
+            const parsedExtracted = JSON.parse(rawExtracted);
+            if (Array.isArray(parsedExtracted) && parsedExtracted.length > 0) {
+              loadedBatch.questions = parsedExtracted;
+            }
+          }
         } catch {}
       }
 

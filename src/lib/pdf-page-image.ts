@@ -58,7 +58,8 @@ export function canvasToJpegBase64(canvas: HTMLCanvasElement, quality = 0.90): s
 const IDB_NAME = "mcq_124_pro_cache";
 const IDB_STORE = "page_images";
 const IDB_SESSION_STORE = "session_images";
-const IDB_VERSION = 2;
+const IDB_BATCHES_STORE = "approval_batches";
+const IDB_VERSION = 3;
 
 let cachedDb: IDBDatabase | null = null;
 
@@ -100,6 +101,9 @@ function openPageImageDb(): Promise<IDBDatabase | null> {
           }
           if (!db.objectStoreNames.contains(IDB_SESSION_STORE)) {
             db.createObjectStore(IDB_SESSION_STORE, { keyPath: "sessionId" });
+          }
+          if (!db.objectStoreNames.contains(IDB_BATCHES_STORE)) {
+            db.createObjectStore(IDB_BATCHES_STORE, { keyPath: "id" });
           }
         } catch {
           // ignore
@@ -324,6 +328,187 @@ export async function deleteSessionPageImages(sessionId: string): Promise<void> 
 export const saveBatchPageImages = saveSessionPageImages;
 export const getBatchPageImages = getSessionPageImages;
 export const deleteBatchPageImages = deleteSessionPageImages;
+
+// ── Approval Batch Persistence in IndexedDB ────────────────────────────────
+export async function saveApprovalBatchToIndexedDb(batch: any): Promise<void> {
+  if (!batch || !batch.id) return;
+  try {
+    const db = await Promise.race([
+      openPageImageDb(),
+      new Promise<null>((r) => setTimeout(() => r(null), 1500)),
+    ]);
+    if (!db) return;
+
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(), 1500);
+      try {
+        if (db.objectStoreNames.contains(IDB_BATCHES_STORE)) {
+          const tx = db.transaction(IDB_BATCHES_STORE, "readwrite");
+          tx.objectStore(IDB_BATCHES_STORE).put(batch);
+          tx.oncomplete = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+          tx.onerror = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+        } else if (db.objectStoreNames.contains(IDB_SESSION_STORE)) {
+          const tx = db.transaction(IDB_SESSION_STORE, "readwrite");
+          tx.objectStore(IDB_SESSION_STORE).put({
+            sessionId: `batch_full_${batch.id}`,
+            batch,
+            updatedAt: Date.now(),
+          });
+          tx.oncomplete = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+          tx.onerror = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+        } else {
+          clearTimeout(timer);
+          resolve();
+        }
+      } catch {
+        clearTimeout(timer);
+        resolve();
+      }
+    });
+  } catch (err) {
+    console.warn("Failed to save approval batch to IndexedDB:", err);
+  }
+}
+
+export async function getApprovalBatchFromIndexedDb(batchId: string): Promise<any | null> {
+  if (!batchId) return null;
+  try {
+    const db = await Promise.race([
+      openPageImageDb(),
+      new Promise<null>((r) => setTimeout(() => r(null), 1500)),
+    ]);
+    if (!db) return null;
+
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), 1500);
+      try {
+        if (db.objectStoreNames.contains(IDB_BATCHES_STORE)) {
+          const tx = db.transaction(IDB_BATCHES_STORE, "readonly");
+          const req = tx.objectStore(IDB_BATCHES_STORE).get(batchId);
+          req.onsuccess = () => {
+            clearTimeout(timer);
+            if (req.result) {
+              resolve(req.result);
+            } else if (db.objectStoreNames.contains(IDB_SESSION_STORE)) {
+              try {
+                const tx2 = db.transaction(IDB_SESSION_STORE, "readonly");
+                const req2 = tx2.objectStore(IDB_SESSION_STORE).get(`batch_full_${batchId}`);
+                req2.onsuccess = () => resolve(req2.result?.batch || null);
+                req2.onerror = () => resolve(null);
+              } catch {
+                resolve(null);
+              }
+            } else {
+              resolve(null);
+            }
+          };
+          req.onerror = () => {
+            clearTimeout(timer);
+            resolve(null);
+          };
+        } else if (db.objectStoreNames.contains(IDB_SESSION_STORE)) {
+          const tx = db.transaction(IDB_SESSION_STORE, "readonly");
+          const req = tx.objectStore(IDB_SESSION_STORE).get(`batch_full_${batchId}`);
+          req.onsuccess = () => {
+            clearTimeout(timer);
+            resolve(req.result?.batch || null);
+          };
+          req.onerror = () => {
+            clearTimeout(timer);
+            resolve(null);
+          };
+        } else {
+          clearTimeout(timer);
+          resolve(null);
+        }
+      } catch {
+        clearTimeout(timer);
+        resolve(null);
+      }
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function getAllApprovalBatchesFromIndexedDb(): Promise<any[]> {
+  try {
+    const db = await Promise.race([
+      openPageImageDb(),
+      new Promise<null>((r) => setTimeout(() => r(null), 1500)),
+    ]);
+    if (!db) return [];
+
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve([]), 1500);
+      try {
+        if (db.objectStoreNames.contains(IDB_BATCHES_STORE)) {
+          const tx = db.transaction(IDB_BATCHES_STORE, "readonly");
+          const req = tx.objectStore(IDB_BATCHES_STORE).getAll();
+          req.onsuccess = () => {
+            clearTimeout(timer);
+            resolve(Array.isArray(req.result) ? req.result : []);
+          };
+          req.onerror = () => {
+            clearTimeout(timer);
+            resolve([]);
+          };
+        } else {
+          clearTimeout(timer);
+          resolve([]);
+        }
+      } catch {
+        clearTimeout(timer);
+        resolve([]);
+      }
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteApprovalBatchFromIndexedDb(batchId: string): Promise<void> {
+  if (!batchId) return;
+  try {
+    const db = await Promise.race([
+      openPageImageDb(),
+      new Promise<null>((r) => setTimeout(() => r(null), 1500)),
+    ]);
+    if (!db) return;
+
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(), 1500);
+      try {
+        if (db.objectStoreNames.contains(IDB_BATCHES_STORE)) {
+          const tx = db.transaction(IDB_BATCHES_STORE, "readwrite");
+          tx.objectStore(IDB_BATCHES_STORE).delete(batchId);
+        }
+        if (db.objectStoreNames.contains(IDB_SESSION_STORE)) {
+          const tx = db.transaction(IDB_SESSION_STORE, "readwrite");
+          tx.objectStore(IDB_SESSION_STORE).delete(`batch_full_${batchId}`);
+          tx.objectStore(IDB_SESSION_STORE).delete(batchId);
+        }
+        clearTimeout(timer);
+        resolve();
+      } catch {
+        clearTimeout(timer);
+        resolve();
+      }
+    });
+  } catch {}
+}
 
 export async function clearPageJpegCache(): Promise<void> {
   try {
