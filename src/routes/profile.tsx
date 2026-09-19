@@ -44,7 +44,7 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
-  const { user, profile, isGolden, isCommittee, isRealAdmin, isQa, loading } = useAuth();
+  const { user, profile, isGolden, isCommittee, isCommitteeEn, isCommitteeAr, isRealAdmin, isQa, loading } = useAuth();
   const navigate = useNavigate();
 
   const [fullName, setFullName] = useState("");
@@ -278,8 +278,10 @@ function ProfilePage() {
                 <AdminBadge size="md" />
               ) : isGolden ? (
                 <GoldenBadge size="md" />
+              ) : isCommitteeEn ? (
+                <CommitteeBadge size="md" label="Committee" />
               ) : isCommittee ? (
-                <CommitteeBadge size="md" />
+                <CommitteeBadge size="md" isAr />
               ) : isQa ? (
                 <QaBadge size="md" />
               ) : (
@@ -296,7 +298,12 @@ function ProfilePage() {
                 Golden member — all courses and lectures included.
               </div>
             )}
-            {!isGolden && isCommittee && (
+            {!isGolden && isCommitteeEn && (
+              <div className="mt-1 text-xs font-semibold text-primary">
+                Committee member — editing privileges active in the Committee section.
+              </div>
+            )}
+            {!isGolden && !isCommitteeEn && isCommittee && (
               <div className="mt-1 text-xs font-semibold text-primary" dir="rtl">
                 عضو في لجنة الطب والجراحة
               </div>

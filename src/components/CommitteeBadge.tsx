@@ -12,14 +12,26 @@ export function CommitteeBadge({
   size = "sm",
   dot,
   head,
+  label: customLabel,
+  isAr,
   className = "",
 }: {
   size?: "sm" | "md";
   dot?: boolean;
   head?: boolean;
+  label?: string;
+  isAr?: boolean;
   className?: string;
 }) {
-  const label = head ? HEAD_LABEL : LABEL;
+  const defaultLabel = isAr
+    ? head
+      ? "رئيس لجنة الطب والجراحة"
+      : "لجنة الطب والجراحة"
+    : head
+    ? "Committee Head"
+    : "Committee";
+  const label = customLabel || defaultLabel;
+  const isArabicText = /[\u0600-\u06FF]/.test(label);
   const Icon = head ? Star : ShieldCheck;
   if (dot) {
     return (
@@ -39,7 +51,7 @@ export function CommitteeBadge({
       className={`inline-flex shrink-0 items-center gap-1 rounded-full font-bold committee-chip ${pad} ${className}`}
     >
       <Icon size={size === "md" ? 13 : 11} />
-      <span>{label}</span>
+      <span dir={isArabicText ? "rtl" : undefined}>{label}</span>
     </span>
   );
 }

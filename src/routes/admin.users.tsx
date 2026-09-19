@@ -53,14 +53,15 @@ export const Route = createFileRoute("/admin/users")({
   component: AdminUsersPage,
 });
 
-type RoleKey = "admin" | "qa" | "committee" | "committee_head" | "golden";
-type Filter = "all" | "admin" | "qa" | "committee" | "committee_head" | "golden" | "none" | "unverified";
+type RoleKey = "admin" | "qa" | "committee" | "committee_en" | "committee_head" | "golden";
+type Filter = "all" | "admin" | "qa" | "committee" | "committee_en" | "committee_head" | "golden" | "none" | "unverified";
 
 const ROLE_LABEL: Record<RoleKey, string> = {
   admin: "Admin",
   qa: "QA Reviewer",
-  committee: "Committee",
-  committee_head: "Committee Head",
+  committee: "لجنة الطب والجراحة",
+  committee_en: "Committee",
+  committee_head: "رئيس اللجنة",
   golden: "Golden account",
 };
 
@@ -109,6 +110,7 @@ function AdminUsersPage() {
       if (filter === "admin" && !u.roles.includes("admin")) return false;
       if (filter === "qa" && !u.roles.includes("qa")) return false;
       if (filter === "committee" && !u.roles.includes("committee")) return false;
+      if (filter === "committee_en" && !u.roles.includes("committee_en")) return false;
       if (filter === "committee_head" && !u.roles.includes("committee_head")) return false;
       if (filter === "golden" && !u.roles.includes("golden")) return false;
       if (filter === "none" && u.roles.length > 0) return false;
@@ -129,6 +131,7 @@ function AdminUsersPage() {
       admins: users.filter((u) => u.roles.includes("admin")).length,
       qa: users.filter((u) => u.roles.includes("qa")).length,
       committee: users.filter((u) => u.roles.includes("committee")).length,
+      committee_en: users.filter((u) => u.roles.includes("committee_en")).length,
       heads: users.filter((u) => u.roles.includes("committee_head")).length,
       golden: users.filter((u) => u.roles.includes("golden")).length,
     }),
@@ -248,8 +251,9 @@ function AdminUsersPage() {
           <Stat label="Users" value={counts.total} />
           <Stat label="Admins" value={counts.admins} />
           <Stat label="QA Reviewers" value={counts.qa} />
-          <Stat label="Committee" value={counts.committee} />
-          <Stat label="Committee Heads" value={counts.heads} />
+          <Stat label="لجنة الطب والجراحة" value={counts.committee} />
+          <Stat label="Committee" value={counts.committee_en} />
+          <Stat label="رؤساء اللجنة" value={counts.heads} />
           <Stat label="Golden accounts" value={counts.golden} />
         </div>
 
@@ -261,8 +265,8 @@ function AdminUsersPage() {
             administration site.{" "}
             <span className="font-semibold text-foreground">QA Reviewer</span> has clearance to review,
             edit, and approve extracted MCQs in Final Approval before solving.{" "}
-            <span className="font-semibold text-foreground">Committee (لجنة الطب والجراحة)</span> can
-            only add, edit and upload years, semesters, subjects and resources inside the Committee
+            <span className="font-semibold text-foreground">لجنة الطب والجراحة / Committee</span> have
+            clearance to add, edit and upload years, semesters, subjects and resources inside the Committee
             section — nothing else.{" "}
             <span className="font-semibold text-foreground">Golden account</span> is a normal member
             who gets every paid course and lecture for free — no admin access.
@@ -287,8 +291,9 @@ function AdminUsersPage() {
             ["all", "All"],
             ["admin", "Admins"],
             ["qa", "QA Reviewers"],
-            ["committee", "Committee"],
-            ["committee_head", "Committee Heads"],
+            ["committee", "لجنة الطب والجراحة"],
+            ["committee_en", "Committee"],
+            ["committee_head", "رئيس اللجنة"],
             ["golden", "Golden accounts"],
             ["none", "No role"],
             ["unverified", "Not verified"],
@@ -458,6 +463,14 @@ function AdminUsersPage() {
                         variant="committee"
                       />
                       <RoleChip
+                        label={ROLE_LABEL.committee_en}
+                        icon={<UserCog size={13} />}
+                        active={u.roles.includes("committee_en")}
+                        busy={busyRole === `${u.id}:committee_en`}
+                        onClick={() => toggleRole(u, "committee_en")}
+                        variant="committee"
+                      />
+                      <RoleChip
                         label={ROLE_LABEL.committee_head}
                         icon={<Star size={13} />}
                         active={u.roles.includes("committee_head")}
@@ -572,7 +585,8 @@ export function UserRoleBadge({ roles, size = "sm" }: { roles: string[]; size?: 
   // Higher priority roles take absolute precedence
   if (specificRoles.includes("admin")) return <AdminBadge size={size} />;
   if (specificRoles.includes("committee_head")) return <CommitteeBadge size={size} head />;
-  if (specificRoles.includes("committee")) return <CommitteeBadge size={size} />;
+  if (specificRoles.includes("committee_en")) return <CommitteeBadge size={size} label="Committee" />;
+  if (specificRoles.includes("committee")) return <CommitteeBadge size={size} isAr />;
   if (specificRoles.includes("golden")) return <GoldenBadge size={size} />;
 
   // Special QA badge ONLY when the user's sole role is QA (strict rule: if 2+ roles exist, QA badge does not appear)

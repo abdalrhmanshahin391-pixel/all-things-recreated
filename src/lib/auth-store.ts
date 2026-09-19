@@ -16,6 +16,8 @@ export type AuthSnapshot = {
   isRealAdmin: boolean;
   isQa: boolean;
   isCommittee: boolean;
+  isCommitteeEn: boolean;
+  isCommitteeAr: boolean;
   isCommitteeHead: boolean;
   isGolden: boolean;
   /** true until the very first session check resolves */
@@ -29,6 +31,8 @@ const EMPTY: AuthSnapshot = {
   isRealAdmin: false,
   isQa: false,
   isCommittee: false,
+  isCommitteeEn: false,
+  isCommitteeAr: false,
   isCommitteeHead: false,
   isGolden: false,
   loading: true,
@@ -57,10 +61,11 @@ function emit(next: Partial<AuthSnapshot>) {
 async function loadExtras(uid: string) {
   if (extrasFor === uid) return;
   extrasFor = uid;
-  const [{ data: prof }, { data: roles }, { data: qaContent }] = await Promise.all([
+  const [{ data: prof }, { data: roles }, { data: qaContent }, { data: committeeEnContent }] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", uid),
     (supabase.from as any)("site_content").select("value_en").eq("key", "qa_user_ids").maybeSingle(),
+    (supabase.from as any)("site_content").select("value_en").eq("key", "committee_en_user_ids").maybeSingle(),
   ]);
   // A newer auth event may have landed while we were fetching.
   if (snapshot.user?.id !== uid) return;
@@ -75,13 +80,27 @@ async function loadExtras(uid: string) {
     } catch {}
   }
 
+  let persistentCommitteeEn = false;
+  if (committeeEnContent?.value_en) {
+    try {
+      const ids = JSON.parse(committeeEnContent.value_en);
+      if (Array.isArray(ids) && ids.includes(uid)) persistentCommitteeEn = true;
+    } catch {}
+  }
+
+  const isCommitteeAr = list.some((r) => r.role === "committee");
+  const isCommitteeEn = persistentCommitteeEn || list.some((r) => r.role === "committee_en");
+  const isCommitteeHead = list.some((r) => r.role === "committee_head");
+  const isCommittee = isCommitteeAr || isCommitteeEn || isCommitteeHead;
+
   emit({
     profile: (prof as Profile | null) ?? null,
     isRealAdmin: list.some((r) => r.role === "admin"),
     isQa: list.some((r) => r.role === "qa" || r.role === "admin") || persistentQa,
-    // A head is a committee member with extra powers.
-    isCommittee: list.some((r) => r.role === "committee" || r.role === "committee_head"),
-    isCommitteeHead: list.some((r) => r.role === "committee_head"),
+    isCommittee,
+    isCommitteeEn,
+    isCommitteeAr,
+    isCommitteeHead,
     isGolden: list.some((r) => r.role === "golden"),
     // Roles are part of "who is this user" — admin pages redirect on
     // !isAdmin, so loading must not clear before the roles are known.
@@ -102,7 +121,7 @@ function start() {
     if (!uid) {
       extrasFor = null;
       extrasLoaded.clear();
-      emit({ session: null, user: null, profile: null, isRealAdmin: false, isQa: false, isCommittee: false, isCommitteeHead: false, isGolden: false, loading: false });
+      emit({ session: null, user: null, profile: null, isRealAdmin: false, isQa: false, isCommittee: false, isCommitteeEn: false, isCommitteeAr: false, isCommitteeHead: false, isGolden: false, loading: false });
       return;
     }
     emit({ session: s, user: s?.user ?? null, loading: !extrasLoaded.has(uid) });

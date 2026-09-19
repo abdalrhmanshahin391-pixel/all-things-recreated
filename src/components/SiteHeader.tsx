@@ -54,7 +54,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
   const [open, setOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useTranslation();
-  const { user, profile, isAdmin, isRealAdmin, isGolden, isCommittee, isCommitteeHead, isQa, adminMode, setAdminMode, loading: authLoading } = useAuth();
+  const { user, profile, isAdmin, isRealAdmin, isGolden, isCommittee, isCommitteeEn, isCommitteeAr, isCommitteeHead, isQa, adminMode, setAdminMode, loading: authLoading } = useAuth();
   const { lang, toggle: toggleLang } = useLang();
   const settings = useSiteSettings();
   const skin = resolveHeaderSkin(settings.header_style);
@@ -182,8 +182,12 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
             <AdminBadge />
           ) : isGolden ? (
             <GoldenBadge />
+          ) : isCommitteeHead ? (
+            <CommitteeBadge head />
+          ) : isCommitteeEn ? (
+            <CommitteeBadge label="Committee" />
           ) : isCommittee ? (
-            <CommitteeBadge head={isCommitteeHead} />
+            <CommitteeBadge isAr />
           ) : isQa ? (
             <QaBadge />
           ) : (
@@ -202,8 +206,12 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                   <AdminBadge />
                 ) : isGolden ? (
                   <GoldenBadge />
+                ) : isCommitteeHead ? (
+                  <CommitteeBadge head />
+                ) : isCommitteeEn ? (
+                  <CommitteeBadge label="Committee" />
                 ) : isCommittee ? (
-                  <CommitteeBadge head={isCommitteeHead} />
+                  <CommitteeBadge isAr />
                 ) : isQa ? (
                   <QaBadge />
                 ) : (
@@ -217,11 +225,13 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                     ? "Golden member"
                     : isCommitteeHead
                       ? "رئيس لجنة الطب والجراحة"
-                      : isCommittee
-                        ? "لجنة الطب والجراحة"
-                        : isQa
-                          ? "QA Reviewer"
-                          : t("cms.header.roleUser")}
+                      : isCommitteeEn
+                        ? "Committee"
+                        : isCommittee
+                          ? "لجنة الطب والجراحة"
+                          : isQa
+                            ? "QA Reviewer"
+                            : t("cms.header.roleUser")}
               </p>
             </div>
             <div className="py-1 overflow-y-auto overscroll-contain flex-1 min-h-0">
