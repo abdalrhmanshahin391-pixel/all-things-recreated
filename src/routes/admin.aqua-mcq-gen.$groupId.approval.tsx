@@ -231,6 +231,18 @@ function ApprovalScreen() {
     finally { setBusy(false); }
   }
 
+  /** Mark this question as needing a second look (or clear that mark). */
+  async function toggleFlag() {
+    if (!draft) return;
+    const next = !draft.flagged;
+    await save(
+      { flagged: next, flag_reason: next ? "Flagged during review." : "" },
+      next ? "Flagged for a second look." : "Flag removed.",
+    );
+    setDraft({ ...draft, flagged: next, flag_reason: next ? "Flagged during review." : "" });
+    if (next) setIndex((i) => Math.min(items.length - 1, i + 1));
+  }
+
   async function removeCurrent() {
     if (!draft || !confirm("Remove this question from the page?")) return;
     setBusy(true);
