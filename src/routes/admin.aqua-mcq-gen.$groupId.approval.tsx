@@ -306,41 +306,70 @@ function ApprovalScreen() {
                   </span>
                 </div>
                 <div
-                  className={`relative h-[70vh] overflow-hidden bg-muted/40 ${marking ? "cursor-crosshair" : ""}`}
+                  ref={paneRef}
+                  className={`relative h-[70vh] touch-none overflow-hidden overscroll-contain bg-muted/40 ${marking ? "cursor-crosshair" : ""}`}
+                  style={{ touchAction: "none" }}
                   onWheel={(e) => { e.preventDefault(); setZoom((z) => Math.min(6, Math.max(0.5, z * (e.deltaY < 0 ? 1.1 : 0.9)))); }}
                   onPointerDown={(e) => {
-                    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                    paneRef.current?.setPointerCapture?.(e.pointerId);
+                    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+                    // two fingers: start a pinch and stop any drag/highlight
+                    if (pointers.current.size === 2) {
+                      const [a, b] = [...pointers.current.values()];
+                      pinchRef.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom };
+                      dragRef.current = null; markStart.current = null; setMarkDraft(null);
+                      return;
+                    }
+
+                    // double tap: zoom in, then back to fit
+                    const now = Date.now();
+                    if (!marking && now - lastTap.current < 300) {
+                      setZoom((z) => (z > 1.2 ? 1 : 2.2));
+                      if (zoom > 1.2) setPan({ x: 0, y: 0 });
+                      lastTap.current = 0;
+                      return;
+                    }
+                    lastTap.current = now;
+
                     if (marking) { markStart.current = layerPoint(e); return; }
                     dragRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
                   }}
                   onPointerMove={(e) => {
+                    if (pointers.current.has(e.pointerId)) {
+                      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                    }
+
+                    if (pointers.current.size >= 2 && pinchRef.current) {
+                      const [a, b] = [...pointers.current.values()];
+                      const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+                      const next = Math.min(6, Math.max(0.5, pinchRef.current.zoom * (dist / pinchRef.current.dist)));
+                      schedule(() => setZoom(next));
+                      return;
+                    }
+
                     if (marking) {
                       const a = markStart.current; if (!a) return;
                       const b = layerPoint(e); if (!b) return;
-                      setMarkDraft({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) });
+                      schedule(() => setMarkDraft({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) }));
                       return;
                     }
-                    if (dragRef.current) setPan({ x: e.clientX - dragRef.current.x, y: e.clientY - dragRef.current.y });
+
+                    const d = dragRef.current;
+                    if (d) { const nx = e.clientX - d.x, ny = e.clientY - d.y; schedule(() => setPan({ x: nx, y: ny })); }
                   }}
-                  onPointerUp={() => {
-                    if (marking) {
-                      const page = draft?.page_no ?? 0;
-                      if (markDraft && markDraft.w > 0.005 && markDraft.h > 0.004) {
-                        setMarks((m) => ({ ...m, [page]: [...(m[page] ?? []), markDraft] }));
-                      }
-                      markStart.current = null; setMarkDraft(null); return;
-                    }
-                    dragRef.current = null;
-                  }}
+                  onPointerUp={(e) => endPointer(e)}
+                  onPointerCancel={(e) => endPointer(e)}
+                  onPointerLeave={(e) => endPointer(e)}
                 >
                   {pageUrl ? (
                     <div
                       ref={layerRef}
-                      className="absolute left-0 top-0 w-full"
-                      style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "top left" }}
+                      className="absolute left-0 top-0 w-full will-change-transform"
+                      style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`, transformOrigin: "top left" }}
                     >
                       <img src={pageUrl} alt={`Page ${draft?.page_no}`} draggable={false}
-                        className="block w-full max-w-none select-none" />
+                        className="pointer-events-none block w-full max-w-none select-none" />
                       {[...(marks[draft?.page_no ?? 0] ?? []), ...(markDraft ? [markDraft] : [])].map((m, i) => (
                         <div key={i} className="pointer-events-none absolute rounded-[2px] bg-yellow-300/40 ring-1 ring-yellow-500/60"
                           style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%`, width: `${m.w * 100}%`, height: `${m.h * 100}%` }} />
