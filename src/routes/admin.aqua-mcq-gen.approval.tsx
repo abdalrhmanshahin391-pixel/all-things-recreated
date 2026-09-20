@@ -40,7 +40,7 @@ function ApprovalPicker() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      try { setGroups(await listGroups({ data: {} } as any) as any); }
+      try { setGroups(await listGroups() as any); }
       catch (e: any) { toast.error(String(e?.message ?? e)); setGroups([]); }
     })();
   }, [user, listGroups]);
