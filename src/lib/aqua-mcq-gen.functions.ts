@@ -302,10 +302,14 @@ export const amgUpdateGroup = createServerFn({ method: "POST" })
       mode: z.enum(["standard", "batch"]).optional(),
       form_b_style: z.enum(["in_question", "multi_answer"]).optional(),
       instructions: z.string().max(4000).optional(),
-      status: z.enum(["draft", "extracting", "paused", "approval", "solving", "importing", "done"]).optional(),
+      status: z.enum(["draft", "extracting", "paused", "approval", "solving", "importing", "imported", "done"]).optional(),
       source_name: z.string().max(200).optional(),
       page_count: z.number().int().min(0).max(1000).optional(),
       error: z.string().max(500).nullable().optional(),
+      answer_source: z.enum(["ai", "source", "key"]).optional(),
+      answer_key: z.string().max(20000).optional(),
+      source_text: z.string().max(40000).optional(),
+      prefer_source: z.boolean().optional(),
     }),
   }).parse(d))
   .handler(async ({ data, context }) => {
