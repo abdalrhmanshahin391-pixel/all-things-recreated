@@ -111,6 +111,7 @@ import { Route as SummariesNewRouteImport } from './routes/summaries.new'
 import { Route as UUniSlugRouteImport } from './routes/u.$uniSlug'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
+import { Route as AdminAquaMcqGenIndexRouteImport } from './routes/admin.aqua-mcq-gen.index'
 import { Route as AdminEventsIndexRouteImport } from './routes/admin.events.index'
 import { Route as AdminEventsEventIdRouteImport } from './routes/admin.events.$eventId'
 import { Route as AdminGermanIndexRouteImport } from './routes/admin.german.index'
@@ -661,6 +662,11 @@ const Char91DotmcpChar93InvokeToolToolRoute =
     path: '/.mcp/invoke-tool/$tool',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminAquaMcqGenIndexRoute = AdminAquaMcqGenIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminAquaMcqGenRoute,
+} as any)
 const AdminEventsIndexRoute = AdminEventsIndexRouteImport.update({
   id: '/admin/events/',
   path: '/admin/events/',
@@ -964,6 +970,7 @@ export interface FileRoutesByFullPath {
   '/german/$courseId/tap': typeof GermanCourseIdTapRoute
   '/hy/guides/$slug': typeof HyGuidesSlugRoute
   '/ru/guides/$slug': typeof RuGuidesSlugRoute
+  '/admin/aqua-mcq-gen/': typeof AdminAquaMcqGenIndexRoute
   '/admin/events/': typeof AdminEventsIndexRoute
   '/admin/german/': typeof AdminGermanIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
@@ -1007,7 +1014,6 @@ export interface FileRoutesByTo {
   '/admin/about': typeof AdminAboutRoute
   '/admin/ad-studio': typeof AdminAdStudioRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
-  '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenRouteWithChildren
   '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
   '/admin/committee': typeof AdminCommitteeRoute
@@ -1094,6 +1100,7 @@ export interface FileRoutesByTo {
   '/german/$courseId/tap': typeof GermanCourseIdTapRoute
   '/hy/guides/$slug': typeof HyGuidesSlugRoute
   '/ru/guides/$slug': typeof RuGuidesSlugRoute
+  '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenIndexRoute
   '/admin/events': typeof AdminEventsIndexRoute
   '/admin/german': typeof AdminGermanIndexRoute
   '/admin/pages': typeof AdminPagesIndexRoute
@@ -1234,6 +1241,7 @@ export interface FileRoutesById {
   '/german/$courseId/tap': typeof GermanCourseIdTapRoute
   '/hy/guides/$slug': typeof HyGuidesSlugRoute
   '/ru/guides/$slug': typeof RuGuidesSlugRoute
+  '/admin/aqua-mcq-gen/': typeof AdminAquaMcqGenIndexRoute
   '/admin/events/': typeof AdminEventsIndexRoute
   '/admin/german/': typeof AdminGermanIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
@@ -1375,6 +1383,7 @@ export interface FileRouteTypes {
     | '/german/$courseId/tap'
     | '/hy/guides/$slug'
     | '/ru/guides/$slug'
+    | '/admin/aqua-mcq-gen/'
     | '/admin/events/'
     | '/admin/german/'
     | '/admin/pages/'
@@ -1418,7 +1427,6 @@ export interface FileRouteTypes {
     | '/admin/about'
     | '/admin/ad-studio'
     | '/admin/ai-keys'
-    | '/admin/aqua-mcq-gen'
     | '/admin/aquavisionx'
     | '/admin/backups'
     | '/admin/committee'
@@ -1505,6 +1513,7 @@ export interface FileRouteTypes {
     | '/german/$courseId/tap'
     | '/hy/guides/$slug'
     | '/ru/guides/$slug'
+    | '/admin/aqua-mcq-gen'
     | '/admin/events'
     | '/admin/german'
     | '/admin/pages'
@@ -1644,6 +1653,7 @@ export interface FileRouteTypes {
     | '/german/$courseId/tap'
     | '/hy/guides/$slug'
     | '/ru/guides/$slug'
+    | '/admin/aqua-mcq-gen/'
     | '/admin/events/'
     | '/admin/german/'
     | '/admin/pages/'
@@ -2493,6 +2503,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/aqua-mcq-gen/': {
+      id: '/admin/aqua-mcq-gen/'
+      path: '/'
+      fullPath: '/admin/aqua-mcq-gen/'
+      preLoaderRoute: typeof AdminAquaMcqGenIndexRouteImport
+      parentRoute: typeof AdminAquaMcqGenRoute
+    }
     '/admin/events/': {
       id: '/admin/events/'
       path: '/admin/events'
@@ -2850,11 +2867,13 @@ const StudyHubRouteWithChildren = StudyHubRoute._addFileChildren(
 )
 
 interface AdminAquaMcqGenRouteChildren {
+  AdminAquaMcqGenIndexRoute: typeof AdminAquaMcqGenIndexRoute
   AdminAquaMcqGenGroupIdApprovalRoute: typeof AdminAquaMcqGenGroupIdApprovalRoute
   AdminAquaMcqGenGroupIdSolveRoute: typeof AdminAquaMcqGenGroupIdSolveRoute
 }
 
 const AdminAquaMcqGenRouteChildren: AdminAquaMcqGenRouteChildren = {
+  AdminAquaMcqGenIndexRoute: AdminAquaMcqGenIndexRoute,
   AdminAquaMcqGenGroupIdApprovalRoute: AdminAquaMcqGenGroupIdApprovalRoute,
   AdminAquaMcqGenGroupIdSolveRoute: AdminAquaMcqGenGroupIdSolveRoute,
 }

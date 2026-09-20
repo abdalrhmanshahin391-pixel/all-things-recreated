@@ -114,6 +114,7 @@ export const DEFAULT_LAYOUT: HubLayout = {
         t("/admin/vision-pro-batch", "Vision Pro batch 50%", "ScanEye"),
         t("/admin/aquavisionx", "AquaVisionX", "ScanEye"),
         t("/admin/aqua-mcq-gen", "Aqua MCQ Gen Pro", "Sparkles"),
+        t("/admin/aqua-mcq-gen/approval", "Question approval", "CheckCheck"),
         t("/admin/patch-ipad-prox", "Patch iPad ProX", "ScanEye"),
         t("/admin/jarvis-batch-german-ipad", "50% iPad Germany", "Languages"),
         t("/admin/gemini-keys", "Gemini Batch Keys", "Zap"),
@@ -144,7 +145,7 @@ export function isAllowedHubTile(tile: HubTile | null | undefined): boolean {
   if (tile.id && REMOVED_ADMIN_ROUTES.has(tile.id)) return false;
   if (to.includes("124") || to.includes("final-approval") || to.includes("mcq-generator")) return false;
   if (id.includes("124") || id.includes("final-approval") || id.includes("mcq-generator")) return false;
-  if (label.includes("1.24") || label.includes("24.1") || label.includes("final approval")) return false;
+  if (label.includes("1.24") || label.includes("24.1")) return false;
   if (labelAr.includes("1.24") || labelAr.includes("الموافقة النهائية")) return false;
 
   return true;
