@@ -20,6 +20,7 @@ import {
   Crown,
   Star,
   CheckSquare,
+  BadgeCheck,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -35,7 +36,7 @@ import {
 import { toast } from "sonner";
 import { UserModerationDialog } from "@/components/admin/UserModerationDialog";
 import { UserEditDialog } from "@/components/admin/UserEditDialog";
-import { AdminBadge } from "@/components/RoleBadge";
+import { AdminBadge, QaBadge } from "@/components/RoleBadge";
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
 
