@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
-  ArrowLeft, Loader2, Check, SkipForward, Trash2, Plus, Sparkles, Copy, ZoomIn, ZoomOut,
+  ArrowLeft, Loader2, Check, Flag, Trash2, Plus, Sparkles, Copy, ZoomIn, ZoomOut,
   RotateCcw, AlertTriangle, History, Highlighter, Undo2, Eraser, ChevronDown,
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -501,8 +501,8 @@ function ApprovalScreen() {
                             stem: draft.stem, number_label: draft.number_label, form: draft.form,
                             statements: draft.statements, options: draft.options,
                           }, "Saved.")}>Save changes</Button>
-                        <Button variant="outline" disabled={busy} onClick={() => setIndex((i) => Math.min(items.length - 1, i + 1))}>
-                          <SkipForward className="mr-1 h-4 w-4" /> Skip
+                        <Button variant="outline" disabled={busy} onClick={() => toggleFlag()}>
+                          <Flag className="mr-1 h-4 w-4" /> {draft.flagged ? "Unflag" : "Flag"}
                         </Button>
                         {draft.flagged ? (
                           <Button variant="secondary" disabled={busy} onClick={() => aiComplete(false)}>
