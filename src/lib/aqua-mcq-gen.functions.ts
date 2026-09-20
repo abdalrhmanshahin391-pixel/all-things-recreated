@@ -151,23 +151,31 @@ function normaliseQuestions(json: any): any[] {
 }
 
 async function storeQuestions(supabase: any, group: any, page: any, questions: any[]) {
-  await supabase.from(ITEMS).delete().eq("group_id", group.id).eq("page_no", page.page_no).eq("status", "pending");
+  await supabase.from(ITEMS).delete().eq("group_id", group.id).eq("page_no", page.page_no).eq("status", "pending").eq("archived", false);
   if (!questions.length) return 0;
-  const rows = questions.map((q, i) => ({
-    group_id: group.id,
-    page_id: page.id,
-    page_no: page.page_no,
-    order_index: i,
-    form: q.form,
-    number_label: q.number,
-    stem: q.stem,
-    statements: q.statements,
-    options: q.options,
-    flagged: q.flagged,
-    flag_reason: q.flag_reason,
-    answer_mode: q.form === "B" && String(group.form_b_style) === "multi_answer" ? "multiple" : "single",
-    dup_hash: dupHash(q.stem),
-  }));
+  const rows = questions.map((q, i) => {
+    const base = {
+      form: q.form,
+      number_label: q.number,
+      stem: q.stem,
+      statements: q.statements,
+      options: q.options,
+      flagged: q.flagged,
+      flag_reason: q.flag_reason,
+      answer_mode: q.form === "B" && String(group.form_b_style) === "multi_answer" ? "multiple" : "single",
+      answer_labels: [] as string[],
+    };
+    return {
+      group_id: group.id,
+      page_id: page.id,
+      page_no: page.page_no,
+      order_index: i,
+      ...base,
+      // Snapshot of the freshly extracted question, used to restart approval later.
+      orig: base,
+      dup_hash: dupHash(q.stem),
+    };
+  });
   const { error } = await supabase.from(ITEMS).insert(rows);
   if (error) throw new Error(error.message);
   return rows.length;
