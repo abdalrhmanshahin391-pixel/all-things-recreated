@@ -20,7 +20,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   AMG_MODELS, amgListGroups, amgCreateGroup, amgUpdateGroup, amgDeleteGroup, amgGetGroup,
   amgRegisterPage, amgExtractPage, amgStartBatch, amgPollBatch,
-  amgListKeys, amgSaveKey,
+  amgListKeys, amgSaveKey, amgRestoreGroupItems, amgPurgeGroupItems,
 } from "@/lib/aqua-mcq-gen.functions";
 
 const BUCKET = "amg-pages";
