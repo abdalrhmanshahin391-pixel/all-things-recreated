@@ -270,13 +270,15 @@ export const amgListGroups = createServerFn({ method: "GET" })
     if (!list.length) return [];
     const { data: items } = await supabase.from(ITEMS).select("group_id, status, flagged, archived");
     return list.map((g: any) => {
-      const mine = (items ?? []).filter((i: any) => i.group_id === g.id);
+      const all = (items ?? []).filter((i: any) => i.group_id === g.id);
+      const mine = all.filter((i: any) => !i.archived);
       return {
         ...g,
         total: mine.length,
         pending: mine.filter((i: any) => i.status === "pending").length,
         approved: mine.filter((i: any) => i.status === "approved").length,
         flagged: mine.filter((i: any) => i.flagged && i.status === "pending").length,
+        archived: all.filter((i: any) => i.archived).length,
       };
     });
   });
