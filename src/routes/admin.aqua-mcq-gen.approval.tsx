@@ -1,14 +1,15 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, CheckCheck, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCheck, Loader2, Trash2 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { guardRedirect } from "@/lib/guard-redirect";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { amgListGroups } from "@/lib/aqua-mcq-gen.functions";
+import { amgListGroups, amgClearGroupItems } from "@/lib/aqua-mcq-gen.functions";
 
 export const Route = createFileRoute("/admin/aqua-mcq-gen/approval")({
   head: () => ({
@@ -30,26 +31,44 @@ type GroupRow = {
 };
 
 function ApprovalPicker() {
-  const { user, loading } = useAuth();
+  const { user, loading, isRealAdmin } = useAuth();
   const navigate = useNavigate();
   useEffect(() => { if (!loading && !user) guardRedirect(navigate); }, [loading, user, navigate]);
 
   const listGroups = useServerFn(amgListGroups);
+  const clearGroup = useServerFn(amgClearGroupItems);
   const [groups, setGroups] = useState<GroupRow[] | null>(null);
   const [denied, setDenied] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (!user) return;
-    (async () => {
-      try { setGroups(await listGroups() as any); }
-      catch (e: any) {
-        const msg = String(e?.message ?? e);
-        if (/forbidden/i.test(msg)) setDenied(true);
-        else toast.error(msg);
-        setGroups([]);
-      }
-    })();
-  }, [user, listGroups]);
+  const reload = useCallback(async () => {
+    try { setGroups(await listGroups() as any); }
+    catch (e: any) {
+      const msg = String(e?.message ?? e);
+      if (/forbidden/i.test(msg)) setDenied(true);
+      else toast.error(msg);
+      setGroups([]);
+    }
+  }, [listGroups]);
+
+  useEffect(() => { if (user) void reload(); }, [user, reload]);
+
+  /** Admin only: wipe the review copy but keep the pages in Aqua MCQ Gen Pro. */
+  async function clearReview(g: GroupRow) {
+    const ok = window.confirm(
+      `Delete the questions of "${g.name}" from Question approval?\n\n` +
+      "The group and its uploaded pages stay in Aqua MCQ Gen Pro, so you can send them again. " +
+      "This cannot be undone.",
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res: any = await clearGroup({ data: { groupId: g.id } });
+      toast.success(`${res.removed ?? 0} question(s) removed from approval.`);
+      await reload();
+    } catch (e: any) { toast.error(String(e?.message ?? e)); }
+    finally { setBusy(false); }
+  }
 
   if (loading) return null;
 
@@ -81,20 +100,36 @@ function ApprovalPicker() {
             </CardContent></Card>
           ) : (
             groups.map((g) => (
-              <Link key={g.id} to="/admin/aqua-mcq-gen/$groupId/approval" params={{ groupId: g.id }} className="block">
-                <Card className="transition hover:border-primary hover:bg-primary/5">
-                  <CardContent className="flex flex-wrap items-center justify-between gap-2 p-4">
-                    <div>
-                      <p className="font-medium">{g.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {g.total ?? 0} questions · {g.approved ?? 0} approved
-                        {(g.flagged ?? 0) > 0 ? ` · ${g.flagged} need a look` : ""}
-                      </p>
-                    </div>
+              <Card key={g.id} className="transition hover:border-primary hover:bg-primary/5">
+                <CardContent className="flex flex-wrap items-center justify-between gap-2 p-4">
+                  <Link
+                    to="/admin/aqua-mcq-gen/$groupId/approval"
+                    params={{ groupId: g.id }}
+                    className="min-w-0 flex-1"
+                  >
+                    <p className="font-medium">{g.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {g.total ?? 0} questions · {g.approved ?? 0} approved
+                      {(g.flagged ?? 0) > 0 ? ` · ${g.flagged} need a look` : ""}
+                    </p>
+                  </Link>
+                  <div className="flex items-center gap-2">
                     <Badge variant="secondary">{g.status}</Badge>
-                  </CardContent>
-                </Card>
-              </Link>
+                    {isRealAdmin ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive"
+                        disabled={busy}
+                        title="Delete these questions from approval only"
+                        onClick={() => clearReview(g)}
+                      >
+                        <Trash2 className="mr-1 h-4 w-4" /> Delete
+                      </Button>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
             ))
           )}
         </div>

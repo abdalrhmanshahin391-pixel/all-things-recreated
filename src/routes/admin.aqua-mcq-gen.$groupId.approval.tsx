@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
-  ArrowLeft, Loader2, Check, SkipForward, Trash2, Plus, Sparkles, Copy, ZoomIn, ZoomOut,
+  ArrowLeft, Loader2, Check, Flag, Trash2, Plus, Sparkles, Copy, ZoomIn, ZoomOut,
   RotateCcw, AlertTriangle, History, Highlighter, Undo2, Eraser, ChevronDown,
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -103,6 +103,42 @@ function ApprovalScreen() {
     };
   }
 
+  // Touch handling for tablets: one finger drags, two fingers pinch, double
+  // tap zooms. Updates are painted once per frame so it stays smooth.
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
+  const lastTap = useRef(0);
+  const rafRef = useRef<number | null>(null);
+  const pendingRef = useRef<(() => void) | null>(null);
+
+  const schedule = useCallback((fn: () => void) => {
+    pendingRef.current = fn;
+    if (rafRef.current != null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const run = pendingRef.current;
+      pendingRef.current = null;
+      run?.();
+    });
+  }, []);
+
+  useEffect(() => () => { if (rafRef.current != null) cancelAnimationFrame(rafRef.current); }, []);
+
+  function endPointer(e: React.PointerEvent) {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size < 2) pinchRef.current = null;
+    if (marking) {
+      const page = draft?.page_no ?? 0;
+      if (markStart.current && markDraft && markDraft.w > 0.005 && markDraft.h > 0.004) {
+        const box = markDraft;
+        setMarks((m) => ({ ...m, [page]: [...(m[page] ?? []), box] }));
+      }
+      markStart.current = null; setMarkDraft(null);
+    }
+    dragRef.current = null;
+  }
+
   const reloadItems = useCallback(async () => {
     const rows: any = await listItems({ data: { groupId, filter, pageNo: pageFilter } });
     setItems(rows as Item[]);
@@ -193,6 +229,18 @@ function ApprovalScreen() {
       await reloadItems();
     } catch (e: any) { toast.error(String(e?.message ?? e)); }
     finally { setBusy(false); }
+  }
+
+  /** Mark this question as needing a second look (or clear that mark). */
+  async function toggleFlag() {
+    if (!draft) return;
+    const next = !draft.flagged;
+    await save(
+      { flagged: next, flag_reason: next ? "Flagged during review." : "" },
+      next ? "Flagged for a second look." : "Flag removed.",
+    );
+    setDraft({ ...draft, flagged: next, flag_reason: next ? "Flagged during review." : "" });
+    if (next) setIndex((i) => Math.min(items.length - 1, i + 1));
   }
 
   async function removeCurrent() {
@@ -302,45 +350,74 @@ function ApprovalScreen() {
                     <Eraser className="h-4 w-4" />
                   </Button>
                   <span className="text-xs text-muted-foreground">
-                    Page {draft?.page_no ?? "—"} · {marking ? "drag to highlight" : "scroll to zoom, drag to move"}
+                    Page {draft?.page_no ?? "—"} · {marking ? "drag to highlight" : "pinch or scroll to zoom, drag to move, double tap to zoom"}
                   </span>
                 </div>
                 <div
-                  className={`relative h-[70vh] overflow-hidden bg-muted/40 ${marking ? "cursor-crosshair" : ""}`}
+                  ref={paneRef}
+                  className={`relative h-[70vh] touch-none overflow-hidden overscroll-contain bg-muted/40 ${marking ? "cursor-crosshair" : ""}`}
+                  style={{ touchAction: "none" }}
                   onWheel={(e) => { e.preventDefault(); setZoom((z) => Math.min(6, Math.max(0.5, z * (e.deltaY < 0 ? 1.1 : 0.9)))); }}
                   onPointerDown={(e) => {
-                    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                    paneRef.current?.setPointerCapture?.(e.pointerId);
+                    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+                    // two fingers: start a pinch and stop any drag/highlight
+                    if (pointers.current.size === 2) {
+                      const [a, b] = [...pointers.current.values()];
+                      pinchRef.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom };
+                      dragRef.current = null; markStart.current = null; setMarkDraft(null);
+                      return;
+                    }
+
+                    // double tap: zoom in, then back to fit
+                    const now = Date.now();
+                    if (!marking && now - lastTap.current < 300) {
+                      setZoom((z) => (z > 1.2 ? 1 : 2.2));
+                      if (zoom > 1.2) setPan({ x: 0, y: 0 });
+                      lastTap.current = 0;
+                      return;
+                    }
+                    lastTap.current = now;
+
                     if (marking) { markStart.current = layerPoint(e); return; }
                     dragRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
                   }}
                   onPointerMove={(e) => {
+                    if (pointers.current.has(e.pointerId)) {
+                      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                    }
+
+                    if (pointers.current.size >= 2 && pinchRef.current) {
+                      const [a, b] = [...pointers.current.values()];
+                      const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+                      const next = Math.min(6, Math.max(0.5, pinchRef.current.zoom * (dist / pinchRef.current.dist)));
+                      schedule(() => setZoom(next));
+                      return;
+                    }
+
                     if (marking) {
                       const a = markStart.current; if (!a) return;
                       const b = layerPoint(e); if (!b) return;
-                      setMarkDraft({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) });
+                      schedule(() => setMarkDraft({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) }));
                       return;
                     }
-                    if (dragRef.current) setPan({ x: e.clientX - dragRef.current.x, y: e.clientY - dragRef.current.y });
+
+                    const d = dragRef.current;
+                    if (d) { const nx = e.clientX - d.x, ny = e.clientY - d.y; schedule(() => setPan({ x: nx, y: ny })); }
                   }}
-                  onPointerUp={() => {
-                    if (marking) {
-                      const page = draft?.page_no ?? 0;
-                      if (markDraft && markDraft.w > 0.005 && markDraft.h > 0.004) {
-                        setMarks((m) => ({ ...m, [page]: [...(m[page] ?? []), markDraft] }));
-                      }
-                      markStart.current = null; setMarkDraft(null); return;
-                    }
-                    dragRef.current = null;
-                  }}
+                  onPointerUp={(e) => endPointer(e)}
+                  onPointerCancel={(e) => endPointer(e)}
+                  onPointerLeave={(e) => endPointer(e)}
                 >
                   {pageUrl ? (
                     <div
                       ref={layerRef}
-                      className="absolute left-0 top-0 w-full"
-                      style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "top left" }}
+                      className="absolute left-0 top-0 w-full will-change-transform"
+                      style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`, transformOrigin: "top left" }}
                     >
                       <img src={pageUrl} alt={`Page ${draft?.page_no}`} draggable={false}
-                        className="block w-full max-w-none select-none" />
+                        className="pointer-events-none block w-full max-w-none select-none" />
                       {[...(marks[draft?.page_no ?? 0] ?? []), ...(markDraft ? [markDraft] : [])].map((m, i) => (
                         <div key={i} className="pointer-events-none absolute rounded-[2px] bg-yellow-300/40 ring-1 ring-yellow-500/60"
                           style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%`, width: `${m.w * 100}%`, height: `${m.h * 100}%` }} />
@@ -436,8 +513,8 @@ function ApprovalScreen() {
                             stem: draft.stem, number_label: draft.number_label, form: draft.form,
                             statements: draft.statements, options: draft.options,
                           }, "Saved.")}>Save changes</Button>
-                        <Button variant="outline" disabled={busy} onClick={() => setIndex((i) => Math.min(items.length - 1, i + 1))}>
-                          <SkipForward className="mr-1 h-4 w-4" /> Skip
+                        <Button variant="outline" disabled={busy} onClick={() => toggleFlag()}>
+                          <Flag className="mr-1 h-4 w-4" /> {draft.flagged ? "Unflag" : "Flag"}
                         </Button>
                         {draft.flagged ? (
                           <Button variant="secondary" disabled={busy} onClick={() => aiComplete(false)}>

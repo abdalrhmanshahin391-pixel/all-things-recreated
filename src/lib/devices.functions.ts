@@ -95,7 +95,7 @@ export const recordDevice = createServerFn({ method: "POST" })
     const [{ data: prof }, { data: existing }, admin, globalLimit] = await Promise.all([
       supabaseAdmin
         .from("profiles")
-        .select("device_limit, locked_at")
+        .select("device_limit, locked_at, lock_reason")
         .eq("id", userId)
         .maybeSingle(),
       supabaseAdmin
@@ -119,9 +119,20 @@ export const recordDevice = createServerFn({ method: "POST" })
       return { ok: true, status: "ok", limit: 999, count: list.length };
     }
 
-    const lockedAt = (prof as { locked_at?: string | null } | null)?.locked_at ?? null;
+    let lockedAt = (prof as { locked_at?: string | null } | null)?.locked_at ?? null;
+    const lockReason = (prof as { lock_reason?: string | null } | null)?.lock_reason ?? null;
     const index = list.findIndex((d) => d.device_id === data.deviceId);
     const hasSlot = index > -1 ? index < limit : list.length < limit;
+
+    // A device-limit lock left over from a smaller limit clears itself once the
+    // account fits inside the current limit again. Manual locks never do.
+    if (lockedAt && lockReason === "device_limit" && hasSlot) {
+      await supabaseAdmin
+        .from("profiles")
+        .update({ locked_at: null, lock_reason: null })
+        .eq("id", userId);
+      lockedAt = null;
+    }
 
     if (lockedAt || !hasSlot) {
       if (!lockedAt) {

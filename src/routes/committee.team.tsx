@@ -113,6 +113,13 @@ function TeamPage() {
           >
             لجنة الطب والجراحة
           </h1>
+          <p
+            dir="ltr"
+            lang="en"
+            className="mt-2 font-display text-xl md:text-2xl font-black tracking-tight text-foreground/80"
+          >
+            Medical and Surgical Committee
+          </p>
           <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
             {ar
               ? "الطلاب الذين يجمعون المصادر ويرتّبونها سنةً بعد سنة."
