@@ -1,52 +1,89 @@
-# Finish Paddle Live Payments — Handoff Plan
+# Aqua MCQ Gen Pro
 
-The site's payment code is already fully wired to the user's verified Paddle account. The server secrets are saved (`PADDLE_LIVE_API_KEY`, `PAYMENTS_LIVE_WEBHOOK_SECRET`). Only 3 setup steps remain — all are copy-paste tasks, no coding.
+A brand-new question factory. AquaVisionX and Question Generator stay exactly as they are.
 
-## Step 1 — Get the live client token from Paddle and save it here
+Everything is organised in **groups**. You name a group (e.g. "TB"), upload a PDF into it, and it moves through four stages: Extraction → Final approval → Solve & explain → Import. Several groups can exist at once without mixing. Work is saved as you go, so leaving the page loses nothing. You can pause, resume, or delete a group at any time.
 
-The checkout window can't open without this public token.
+## New role: QA (quality assurance)
 
-1. Open: https://vendors.paddle.com/authentication
-2. Under "Client-side tokens", copy the **live** token (starts with `live_`).
-3. Save it in the project as the environment variable:
-   `VITE_PAYMENTS_CLIENT_TOKEN = live_xxxxxxxx`
-   (This is a public token — safe to set as a frontend env var. In Lovable: Project Settings → add env variable, or paste it in chat and it gets set in code config.)
+Same access as the committee role, plus the Final question approval screen. Admins also have it. Nobody else can see it.
 
-## Step 2 — Add the webhook in Paddle so paid orders unlock courses
+## Stage 1 — Extraction
 
-Without this, customers pay but nothing unlocks.
+Before starting a group you choose:
 
-1. Open: https://vendors.paddle.com/notifications
-2. Click **New notification destination**.
-3. URL (exact):
-   `https://aquaqbank.com/api/public/payments/webhook?env=live`
-4. Subscribe to these events (exact):
-   - `transaction.completed`
-   - `adjustment.created`
-5. Save. The signing secret for this destination is already saved in the project as `PAYMENTS_LIVE_WEBHOOK_SECRET` — if Paddle shows a NEW secret for this destination, copy it and update that secret value.
+- **The file**: a text PDF, or a PDF made of photographed A4 pages.
+- **Provider and model**: Google (Gemini 2.5 Flash-Lite, 2.5 Flash, 2.5 Pro) or OpenAI (GPT-4.1 mini, GPT-4.1, GPT-5.6 Luna).
+- **Mode**: Standard, or 50% batch (cheaper, slower).
+- **Combination style** for Form B questions: statements inside the question with one correct combination answer, or statements as the options with several correct answers.
+- **Custom instructions**: a free-text box for anything specific about that PDF.
 
-## Step 3 — Match each course to its Paddle price
+How pages are read:
 
-Each course in Course Control has a price id/name field. The checkout looks up a Paddle price by that value.
+- Every page is sent **on its own**, never the whole PDF at once.
+- Photographed pages are enhanced first (upscaled, straightened, contrast cleaned) and sent to the AI **as an image**, not as OCR text.
+- The AI is told the two question shapes:
+  - **Form A** — numbered stem, then options A–D.
+  - **Form B** — numbered stem plus numbered statements 1,2,3,4 all belonging to the question, then options A–D that are combinations ("1,2", "all mentioned", …).
+  - If statements 1–4 appear above options A–D, it is Form B.
+- Anything incomplete (missing option, missing statement, question cut across the page break) is saved and marked **FLAGGED** in yellow rather than dropped. First and last question of each page get extra attention for split questions.
 
-1. Open: https://vendors.paddle.com/products-v2
-2. For each course, create/open the product and its price (make sure it is in **live** mode, not sandbox).
-3. For each price, set **one** of:
-   - custom data: `external_id` = the exact value typed in Course Control, OR
-   - name the price exactly the same as the value in Course Control.
-4. Alternatively, paste the real Paddle price id (starts with `pri_`) directly into Course Control.
+Keys: this tool has its own key slots, separate from other tools. You can save, change or remove a Google key and an OpenAI key, and pick the default model.
 
-## Step 4 — Test with a real small payment
+## Stage 2 — Final question approval
 
-1. Set one course to a small price (e.g. 1 JOD/USD).
-2. Buy it from a normal account on https://aquaqbank.com.
-3. Confirm: checkout opens, payment succeeds, the course unlocks immediately.
-4. If payment succeeds but the course doesn't unlock, the webhook (Step 2) is the problem.
+You send questions to approval as a whole group. Admins and QA open a split screen:
 
-## Technical reference (for Antigravity)
+- **Left** — the exact PDF page the question came from: zoom with the mouse wheel, drag to pan, highlight an area, focus/scope on a region.
+- **Right** — the question: edit the text, add or remove options, add a missing question to that page, delete a question, approve, or skip for now.
+- Flagged questions: fill the missing parts yourself, ask the AI to complete just that one, or let the AI complete all flagged ones.
 
-- Webhook handler: `src/routes/api/public/payments/webhook.ts` — reads `?env=live|sandbox` (default sandbox), verifies signature via `PAYMENTS_LIVE_WEBHOOK_SECRET`, unlocks courses on `transaction.completed`, handles refunds via `adjustment.created`.
-- Server API: `src/lib/paddle.server.ts` — uses `PADDLE_LIVE_API_KEY` against `https://api.paddle.com`.
-- Client checkout: `src/lib/paddle.ts` — needs `VITE_PAYMENTS_CLIENT_TOKEN`.
-- Price lookup: `src/utils/payments.functions.ts` — resolves `pri_...` id, or matches `custom_data.external_id` / price name / product name.
-- Already saved secrets: `PADDLE_LIVE_API_KEY`, `PAYMENTS_LIVE_WEBHOOK_SECRET`. Missing: `VITE_PAYMENTS_CLIENT_TOKEN`.
+Also in this screen:
+
+- **Duplicates** section — finds repeated questions, delete one by one or all at once.
+- **Filters** — by page, flagged only, or all.
+- **Approved list + log** — see what was approved, by whom and when, and pull any question back into approval.
+
+Approved questions appear in Stage 3 straight away; you can start solving the ready ones or wait for the whole group.
+
+## Stage 3 — Solve & explain
+
+Modes: Standard or 50% batch. Answer source, chosen per group:
+
+1. AI decides.
+2. A source PDF you upload (AI fills the gap only when the source has no answer) — with a switch for "always prefer the source answer".
+3. A key answer list you paste.
+
+For Form B, the answer must be one of the printed combinations.
+
+Explanation format (same layout as AquaVisionX, nothing else copied):
+
+- Overview of the question
+- Correct answer
+- Why the correct answer is right
+- Why the wrong ones are wrong
+- Table of right/wrong with a short note each
+- A trick or memory aid when one exists
+
+If the answer is "all of the above", only the reasons each item is correct are shown — no "why wrong" section.
+
+## Stage 4 — Import
+
+Pick the destination course (and subject), review the count, import. Page images for that group are deleted automatically after a successful import.
+
+## Delivery: phase by phase
+
+1. **Phase 1** — groups, keys and models, page-by-page extraction with image enhancement, both modes, both forms, flagging, custom instructions.
+2. **Phase 2** — Final approval: split screen, page viewer tools, editing, flag completion, duplicates, filters, approved log and return.
+3. **Phase 3** — Solve & explain with the three answer sources and the explanation format.
+4. **Phase 4** — Import into a course, plus cleanup of page images, stop/delete group polish.
+
+You test each phase before the next starts.
+
+## Technical notes
+
+- New tables: `amg_groups`, `amg_pages` (page image in a private bucket + enhancement state), `amg_items` (form, stem, statements, options, flags, approval state, answer, explanation, duplicate hash), `amg_events` (approval log). RLS: admin + QA only, with GRANTs; `qa` added to the `app_role` enum and to the roles admin screen.
+- Private storage bucket `amg-pages` for rendered page images, deleted on import.
+- Page rendering and image enhancement happen in the browser (canvas) before upload, so pages arrive already high-resolution and deskewed; the model receives them as images.
+- Server functions in `src/lib/aqua-mcq-gen.functions.ts` call Google/OpenAI directly with the tool's own stored keys; batch mode uses each provider's batch endpoint, standard mode the normal one. Strict JSON schemas per stage.
+- New routes: `/admin/aqua-mcq-gen` (groups + extraction), `/admin/aqua-mcq-gen/$groupId/approval`, `/.../solve`, `/.../import`. All state lives in the database, so navigation never resets progress.
