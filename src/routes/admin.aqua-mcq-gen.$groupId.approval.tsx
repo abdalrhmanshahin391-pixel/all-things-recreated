@@ -86,9 +86,6 @@ function ApprovalScreen() {
   const [markDraft, setMarkDraft] = useState<Mark | null>(null);
   const [openDup, setOpenDup] = useState<number | null>(null);
 
-  const pageNo = draftPageNo();
-  function draftPageNo() { return 0; }
-
   function layerPoint(e: React.PointerEvent) {
     const box = layerRef.current?.getBoundingClientRect();
     if (!box || !box.width || !box.height) return null;
@@ -271,19 +268,62 @@ function ApprovalScreen() {
                   <Button size="icon" variant="ghost" onClick={() => setZoom((z) => Math.min(6, z * 1.25))}><ZoomIn className="h-4 w-4" /></Button>
                   <Button size="icon" variant="ghost" onClick={() => setZoom((z) => Math.max(0.5, z / 1.25))}><ZoomOut className="h-4 w-4" /></Button>
                   <Button size="icon" variant="ghost" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}><RotateCcw className="h-4 w-4" /></Button>
-                  <span className="text-xs text-muted-foreground">Page {draft?.page_no ?? "—"} · scroll to zoom, drag to move</span>
+                  <Button size="icon" variant={marking ? "secondary" : "ghost"} title="Highlight" onClick={() => setMarking((v) => !v)}>
+                    <Highlighter className="h-4 w-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" title="Undo last highlight"
+                    onClick={() => setMarks((m) => { const p = draft?.page_no ?? 0; return { ...m, [p]: (m[p] ?? []).slice(0, -1) }; })}>
+                    <Undo2 className="h-4 w-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" title="Clear highlights"
+                    onClick={() => setMarks((m) => ({ ...m, [draft?.page_no ?? 0]: [] }))}>
+                    <Eraser className="h-4 w-4" />
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Page {draft?.page_no ?? "—"} · {marking ? "drag to highlight" : "scroll to zoom, drag to move"}
+                  </span>
                 </div>
                 <div
-                  className="relative h-[70vh] overflow-hidden bg-muted/40"
+                  className={`relative h-[70vh] overflow-hidden bg-muted/40 ${marking ? "cursor-crosshair" : ""}`}
                   onWheel={(e) => { e.preventDefault(); setZoom((z) => Math.min(6, Math.max(0.5, z * (e.deltaY < 0 ? 1.1 : 0.9)))); }}
-                  onPointerDown={(e) => { dragRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y }; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); }}
-                  onPointerMove={(e) => { if (dragRef.current) setPan({ x: e.clientX - dragRef.current.x, y: e.clientY - dragRef.current.y }); }}
-                  onPointerUp={() => { dragRef.current = null; }}
+                  onPointerDown={(e) => {
+                    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                    if (marking) { markStart.current = layerPoint(e); return; }
+                    dragRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+                  }}
+                  onPointerMove={(e) => {
+                    if (marking) {
+                      const a = markStart.current; if (!a) return;
+                      const b = layerPoint(e); if (!b) return;
+                      setMarkDraft({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) });
+                      return;
+                    }
+                    if (dragRef.current) setPan({ x: e.clientX - dragRef.current.x, y: e.clientY - dragRef.current.y });
+                  }}
+                  onPointerUp={() => {
+                    if (marking) {
+                      const page = draft?.page_no ?? 0;
+                      if (markDraft && markDraft.w > 0.005 && markDraft.h > 0.004) {
+                        setMarks((m) => ({ ...m, [page]: [...(m[page] ?? []), markDraft] }));
+                      }
+                      markStart.current = null; setMarkDraft(null); return;
+                    }
+                    dragRef.current = null;
+                  }}
                 >
                   {pageUrl ? (
-                    <img src={pageUrl} alt={`Page ${draft?.page_no}`} draggable={false}
-                      className="absolute left-0 top-0 max-w-none select-none"
-                      style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "top left", width: "100%" }} />
+                    <div
+                      ref={layerRef}
+                      className="absolute left-0 top-0 w-full"
+                      style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "top left" }}
+                    >
+                      <img src={pageUrl} alt={`Page ${draft?.page_no}`} draggable={false}
+                        className="block w-full max-w-none select-none" />
+                      {[...(marks[draft?.page_no ?? 0] ?? []), ...(markDraft ? [markDraft] : [])].map((m, i) => (
+                        <div key={i} className="pointer-events-none absolute rounded-[2px] bg-yellow-300/40 ring-1 ring-yellow-500/60"
+                          style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%`, width: `${m.w * 100}%`, height: `${m.h * 100}%` }} />
+                      ))}
+                    </div>
                   ) : (
                     <p className="p-6 text-sm text-muted-foreground">No picture for this page.</p>
                   )}
