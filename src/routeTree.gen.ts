@@ -112,6 +112,7 @@ import { Route as UUniSlugRouteImport } from './routes/u.$uniSlug'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as AdminAquaMcqGenIndexRouteImport } from './routes/admin.aqua-mcq-gen.index'
+import { Route as AdminAquaMcqGenApprovalRouteImport } from './routes/admin.aqua-mcq-gen.approval'
 import { Route as AdminEventsIndexRouteImport } from './routes/admin.events.index'
 import { Route as AdminEventsEventIdRouteImport } from './routes/admin.events.$eventId'
 import { Route as AdminGermanIndexRouteImport } from './routes/admin.german.index'
@@ -667,6 +668,11 @@ const AdminAquaMcqGenIndexRoute = AdminAquaMcqGenIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminAquaMcqGenRoute,
 } as any)
+const AdminAquaMcqGenApprovalRoute = AdminAquaMcqGenApprovalRouteImport.update({
+  id: '/approval',
+  path: '/approval',
+  getParentRoute: () => AdminAquaMcqGenRoute,
+} as any)
 const AdminEventsIndexRoute = AdminEventsIndexRouteImport.update({
   id: '/admin/events/',
   path: '/admin/events/',
@@ -953,6 +959,7 @@ export interface FileRoutesByFullPath {
   '/summaries/': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/admin/aqua-mcq-gen/approval': typeof AdminAquaMcqGenApprovalRoute
   '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
@@ -1084,6 +1091,7 @@ export interface FileRoutesByTo {
   '/summaries': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/admin/aqua-mcq-gen/approval': typeof AdminAquaMcqGenApprovalRoute
   '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
@@ -1224,6 +1232,7 @@ export interface FileRoutesById {
   '/summaries/': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/admin/aqua-mcq-gen/approval': typeof AdminAquaMcqGenApprovalRoute
   '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
@@ -1366,6 +1375,7 @@ export interface FileRouteTypes {
     | '/summaries/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/admin/aqua-mcq-gen/approval'
     | '/admin/events/$eventId'
     | '/admin/german/$courseId'
     | '/admin/pages/$pageId'
@@ -1497,6 +1507,7 @@ export interface FileRouteTypes {
     | '/summaries'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/admin/aqua-mcq-gen/approval'
     | '/admin/events/$eventId'
     | '/admin/german/$courseId'
     | '/admin/pages/$pageId'
@@ -1636,6 +1647,7 @@ export interface FileRouteTypes {
     | '/summaries/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/admin/aqua-mcq-gen/approval'
     | '/admin/events/$eventId'
     | '/admin/german/$courseId'
     | '/admin/pages/$pageId'
@@ -2510,6 +2522,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAquaMcqGenIndexRouteImport
       parentRoute: typeof AdminAquaMcqGenRoute
     }
+    '/admin/aqua-mcq-gen/approval': {
+      id: '/admin/aqua-mcq-gen/approval'
+      path: '/approval'
+      fullPath: '/admin/aqua-mcq-gen/approval'
+      preLoaderRoute: typeof AdminAquaMcqGenApprovalRouteImport
+      parentRoute: typeof AdminAquaMcqGenRoute
+    }
     '/admin/events/': {
       id: '/admin/events/'
       path: '/admin/events'
@@ -2867,12 +2886,14 @@ const StudyHubRouteWithChildren = StudyHubRoute._addFileChildren(
 )
 
 interface AdminAquaMcqGenRouteChildren {
+  AdminAquaMcqGenApprovalRoute: typeof AdminAquaMcqGenApprovalRoute
   AdminAquaMcqGenIndexRoute: typeof AdminAquaMcqGenIndexRoute
   AdminAquaMcqGenGroupIdApprovalRoute: typeof AdminAquaMcqGenGroupIdApprovalRoute
   AdminAquaMcqGenGroupIdSolveRoute: typeof AdminAquaMcqGenGroupIdSolveRoute
 }
 
 const AdminAquaMcqGenRouteChildren: AdminAquaMcqGenRouteChildren = {
+  AdminAquaMcqGenApprovalRoute: AdminAquaMcqGenApprovalRoute,
   AdminAquaMcqGenIndexRoute: AdminAquaMcqGenIndexRoute,
   AdminAquaMcqGenGroupIdApprovalRoute: AdminAquaMcqGenGroupIdApprovalRoute,
   AdminAquaMcqGenGroupIdSolveRoute: AdminAquaMcqGenGroupIdSolveRoute,
