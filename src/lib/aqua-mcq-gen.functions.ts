@@ -268,7 +268,7 @@ export const amgListGroups = createServerFn({ method: "GET" })
     const { data: groups } = await supabase.from(GROUPS).select("*").order("created_at", { ascending: false });
     const list = groups ?? [];
     if (!list.length) return [];
-    const { data: items } = await supabase.from(ITEMS).select("group_id, status, flagged");
+    const { data: items } = await supabase.from(ITEMS).select("group_id, status, flagged, archived");
     return list.map((g: any) => {
       const mine = (items ?? []).filter((i: any) => i.group_id === g.id);
       return {
@@ -356,7 +356,7 @@ export const amgGetGroup = createServerFn({ method: "POST" })
     const { data: group } = await supabase.from(GROUPS).select("*").eq("id", data.groupId).maybeSingle();
     if (!group) throw new Error("This group no longer exists.");
     const { data: pages } = await supabase.from(PAGES).select("*").eq("group_id", data.groupId).order("page_no");
-    const { data: items } = await supabase.from(ITEMS).select("id, page_no, status, flagged").eq("group_id", data.groupId);
+    const { data: items } = await supabase.from(ITEMS).select("id, page_no, status, flagged").eq("group_id", data.groupId).eq("archived", false);
     return { group, pages: pages ?? [], items: items ?? [] };
   });
 
@@ -609,7 +609,7 @@ export const amgListItems = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureReviewer(context);
-    let q = supabase.from(ITEMS).select("*").eq("group_id", data.groupId).order("page_no").order("order_index");
+    let q = supabase.from(ITEMS).select("*").eq("group_id", data.groupId).eq("archived", false).order("page_no").order("order_index");
     if (data.filter === "pending") q = q.eq("status", "pending");
     if (data.filter === "approved") q = q.eq("status", "approved");
     if (data.filter === "flagged") q = q.eq("flagged", true).eq("status", "pending");
@@ -671,7 +671,7 @@ export const amgAddItem = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureReviewer(context);
     const { data: page } = await supabase.from(PAGES).select("id").eq("group_id", data.groupId).eq("page_no", data.pageNo).maybeSingle();
-    const { data: last } = await supabase.from(ITEMS).select("order_index").eq("group_id", data.groupId).eq("page_no", data.pageNo)
+    const { data: last } = await supabase.from(ITEMS).select("order_index").eq("group_id", data.groupId).eq("archived", false).eq("page_no", data.pageNo)
       .order("order_index", { ascending: false }).limit(1).maybeSingle();
     const { data: row, error } = await supabase.from(ITEMS).insert({
       group_id: data.groupId, page_id: page?.id ?? null, page_no: data.pageNo,
@@ -732,7 +732,7 @@ export const amgDuplicates = createServerFn({ method: "POST" })
     const { supabase } = await ensureReviewer(context);
     const { data: rows } = await supabase.from(ITEMS)
       .select("id, page_no, order_index, number_label, stem, statements, options, dup_hash, status, flagged")
-      .eq("group_id", data.groupId).order("page_no").order("order_index");
+      .eq("group_id", data.groupId).eq("archived", false).order("page_no").order("order_index");
     const byHash = new Map<string, any[]>();
     for (const r of rows ?? []) {
       if (!r.dup_hash) continue;
@@ -881,7 +881,7 @@ export const amgSolveBatch = createServerFn({ method: "POST" })
     if (!group) throw new Error("This group no longer exists.");
 
     const { data: items } = await supabase.from(ITEMS)
-      .select("*").eq("group_id", data.groupId).eq("status", "approved").eq("solved", false)
+      .select("*").eq("group_id", data.groupId).eq("archived", false).eq("status", "approved").eq("solved", false)
       .order("page_no").order("order_index").limit(data.limit ?? 4);
 
     const answerSource = String(group.answer_source ?? "ai");
@@ -946,7 +946,7 @@ export const amgSolveBatch = createServerFn({ method: "POST" })
 
     const { count: remaining } = await supabase.from(ITEMS)
       .select("id", { count: "exact", head: true })
-      .eq("group_id", data.groupId).eq("status", "approved").eq("solved", false);
+      .eq("group_id", data.groupId).eq("archived", false).eq("status", "approved").eq("solved", false);
 
     return { solved, failures, remaining: remaining ?? 0 };
   });
@@ -958,7 +958,7 @@ export const amgProgress = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureReviewer(context);
     const { data: rows } = await supabase.from(ITEMS)
-      .select("status, solved, solve_error").eq("group_id", data.groupId);
+      .select("status, solved, solve_error").eq("group_id", data.groupId).eq("archived", false);
     const list = rows ?? [];
     return {
       total: list.length,
@@ -980,7 +980,7 @@ export const amgImportGroup = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = await ensureStaff(context);
     const { data: items } = await supabase.from(ITEMS)
-      .select("*").eq("group_id", data.groupId).eq("status", "approved").eq("solved", true)
+      .select("*").eq("group_id", data.groupId).eq("archived", false).eq("status", "approved").eq("solved", true)
       .order("page_no").order("order_index");
     if (!items?.length) throw new Error("There is no approved, solved question to import yet.");
 
