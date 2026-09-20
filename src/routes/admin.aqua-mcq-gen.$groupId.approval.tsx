@@ -164,7 +164,7 @@ function ApprovalScreen() {
   }
 
   async function addToPage() {
-    const pageNo = draft?.page_no ?? pageFilter || 1;
+    const pageNo = draft?.page_no ?? (pageFilter || 1);
     setBusy(true);
     try {
       await addItem({ data: { groupId, pageNo } });
