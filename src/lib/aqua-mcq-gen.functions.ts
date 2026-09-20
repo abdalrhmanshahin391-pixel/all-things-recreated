@@ -561,3 +561,193 @@ export const amgPollBatch = createServerFn({ method: "POST" })
     await supabase.from(EVENTS).insert({ group_id: group.id, action: "batch_extract_done", detail: { questions: stored } });
     return { state: "done" as const, stored };
   });
+
+// =========================================================== approval =======
+
+/** Signed links to every page picture of a group (for the review screen). */
+export const amgPageUrls = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureStaff(context);
+    const { data: pages } = await supabase.from(PAGES).select("page_no, storage_path").eq("group_id", data.groupId).order("page_no");
+    const out: { page_no: number; url: string | null }[] = [];
+    for (const p of pages ?? []) {
+      if (!p.storage_path) { out.push({ page_no: p.page_no, url: null }); continue; }
+      const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(p.storage_path, 60 * 60 * 6);
+      out.push({ page_no: p.page_no, url: signed?.signedUrl ?? null });
+    }
+    return out;
+  });
+
+export const amgListItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    groupId: z.string().uuid(),
+    filter: z.enum(["pending", "flagged", "approved", "all"]).default("pending"),
+    pageNo: z.number().int().min(0).max(1000).default(0),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureStaff(context);
+    let q = supabase.from(ITEMS).select("*").eq("group_id", data.groupId).order("page_no").order("order_index");
+    if (data.filter === "pending") q = q.eq("status", "pending");
+    if (data.filter === "approved") q = q.eq("status", "approved");
+    if (data.filter === "flagged") q = q.eq("flagged", true).eq("status", "pending");
+    if (data.pageNo > 0) q = q.eq("page_no", data.pageNo);
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    return rows ?? [];
+  });
+
+const ItemPatch = z.object({
+  stem: z.string().max(8000).optional(),
+  number_label: z.string().max(16).optional(),
+  form: z.enum(["A", "B"]).optional(),
+  statements: z.array(z.object({ n: z.string().max(8), text: z.string().max(2000) })).max(30).optional(),
+  options: z.array(z.object({ label: z.string().max(8), text: z.string().max(2000) })).max(30).optional(),
+  answer_mode: z.enum(["single", "multiple"]).optional(),
+  answer_labels: z.array(z.string().max(8)).max(30).optional(),
+  flagged: z.boolean().optional(),
+  flag_reason: z.string().max(300).optional(),
+});
+
+export const amgUpdateItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ itemId: z.string().uuid(), patch: ItemPatch }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureStaff(context);
+    const patch: any = { ...data.patch, updated_at: new Date().toISOString() };
+    if (typeof patch.stem === "string") patch.dup_hash = dupHash(patch.stem);
+    const { data: row, error } = await supabase.from(ITEMS).update(patch).eq("id", data.itemId).select("*").single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
+export const amgAddItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    groupId: z.string().uuid(),
+    pageNo: z.number().int().min(1).max(1000),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureStaff(context);
+    const { data: page } = await supabase.from(PAGES).select("id").eq("group_id", data.groupId).eq("page_no", data.pageNo).maybeSingle();
+    const { data: last } = await supabase.from(ITEMS).select("order_index").eq("group_id", data.groupId).eq("page_no", data.pageNo)
+      .order("order_index", { ascending: false }).limit(1).maybeSingle();
+    const { data: row, error } = await supabase.from(ITEMS).insert({
+      group_id: data.groupId, page_id: page?.id ?? null, page_no: data.pageNo,
+      order_index: (last?.order_index ?? -1) + 1,
+      form: "A", stem: "", options: [{ label: "A", text: "" }, { label: "B", text: "" }, { label: "C", text: "" }, { label: "D", text: "" }],
+      flagged: true, flag_reason: "Added by hand — still empty.",
+    }).select("*").single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
+export const amgDeleteItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ itemIds: z.array(z.string().uuid()).min(1).max(500) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureStaff(context);
+    const { error } = await supabase.from(ITEMS).delete().in("id", data.itemIds);
+    if (error) throw new Error(error.message);
+    return { ok: true, removed: data.itemIds.length };
+  });
+
+export const amgSetStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    itemIds: z.array(z.string().uuid()).min(1).max(1000),
+    status: z.enum(["pending", "approved", "skipped"]),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = await ensureStaff(context);
+    const { error } = await supabase.from(ITEMS).update({ status: data.status, updated_at: new Date().toISOString() }).in("id", data.itemIds);
+    if (error) throw new Error(error.message);
+    const { data: first } = await supabase.from(ITEMS).select("group_id").eq("id", data.itemIds[0]).maybeSingle();
+    if (first) {
+      await supabase.from(EVENTS).insert({
+        group_id: first.group_id, actor_id: userId,
+        action: data.status === "approved" ? "approved" : data.status === "pending" ? "returned_to_review" : "skipped",
+        detail: { count: data.itemIds.length },
+      });
+    }
+    return { ok: true };
+  });
+
+export const amgListEvents = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureStaff(context);
+    const { data: rows } = await supabase.from(EVENTS).select("*").eq("group_id", data.groupId)
+      .order("created_at", { ascending: false }).limit(100);
+    return rows ?? [];
+  });
+
+/** Questions whose text repeats inside the group, newest copies listed first. */
+export const amgDuplicates = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureStaff(context);
+    const { data: rows } = await supabase.from(ITEMS)
+      .select("id, page_no, order_index, stem, dup_hash, status")
+      .eq("group_id", data.groupId).order("page_no").order("order_index");
+    const byHash = new Map<string, any[]>();
+    for (const r of rows ?? []) {
+      if (!r.dup_hash) continue;
+      const list = byHash.get(r.dup_hash) ?? [];
+      list.push(r);
+      byHash.set(r.dup_hash, list);
+    }
+    return [...byHash.values()].filter((l) => l.length > 1).map((l) => ({ keep: l[0], extras: l.slice(1) }));
+  });
+
+/** Ask the AI to fill in whatever is missing, reading the page picture again. */
+export const amgCompleteItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    groupId: z.string().uuid(),
+    itemIds: z.array(z.string().uuid()).min(1).max(40),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureStaff(context);
+    const { data: group } = await supabase.from(GROUPS).select("*").eq("id", data.groupId).maybeSingle();
+    if (!group) throw new Error("This group no longer exists.");
+    const apiKey = await getKey(supabase, group.provider);
+    const { data: items } = await supabase.from(ITEMS).select("*").in("id", data.itemIds);
+    const { data: pages } = await supabase.from(PAGES).select("page_no, storage_path").eq("group_id", data.groupId);
+
+    let fixed = 0;
+    const failures: string[] = [];
+    for (const item of items ?? []) {
+      const page = (pages ?? []).find((p: any) => p.page_no === item.page_no);
+      if (!page?.storage_path) { failures.push(`Page ${item.page_no} has no picture.`); continue; }
+      try {
+        const b64 = await downloadPageBase64(supabase, page.storage_path);
+        const prompt = `${buildPrompt(group, item.page_no)}
+
+You are NOT transcribing the whole page this time. Find ONLY this question on the page and return it complete, filling in whatever is missing:
+${JSON.stringify({ number: item.number_label, form: item.form, stem: item.stem, statements: item.statements, options: item.options, missing: item.flag_reason })}
+
+Return the same JSON shape with exactly ONE question in "questions". If part of it truly is not on this page, keep "flagged":true and say why.`;
+        const text = group.provider === "google"
+          ? await callGoogle(apiKey, group.model, prompt, b64)
+          : await callOpenAI(apiKey, group.model, prompt, b64);
+        const [q] = normaliseQuestions(parseJson(text));
+        if (!q) { failures.push(`Question ${item.number_label || item.id.slice(0, 6)} came back empty.`); continue; }
+        const { error } = await supabase.from(ITEMS).update({
+          form: q.form, number_label: q.number || item.number_label, stem: q.stem,
+          statements: q.statements, options: q.options,
+          flagged: q.flagged, flag_reason: q.flag_reason, dup_hash: dupHash(q.stem),
+          updated_at: new Date().toISOString(),
+        }).eq("id", item.id);
+        if (error) throw new Error(error.message);
+        fixed += 1;
+      } catch (e: any) {
+        failures.push(`Question ${item.number_label || item.id.slice(0, 6)}: ${String(e?.message ?? e).slice(0, 160)}`);
+      }
+    }
+    return { fixed, failures };
+  });
