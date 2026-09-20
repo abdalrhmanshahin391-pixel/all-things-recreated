@@ -5889,7 +5889,13 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "user" | "committee" | "golden" | "committee_head"
+      app_role:
+        | "admin"
+        | "user"
+        | "committee"
+        | "golden"
+        | "committee_head"
+        | "qa"
       coupon_discount_type: "percent" | "fixed"
       package_type: "individual" | "group"
       subject_access: "paid" | "free_logged_in" | "free_public"
@@ -6020,7 +6026,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user", "committee", "golden", "committee_head"],
+      app_role: [
+        "admin",
+        "user",
+        "committee",
+        "golden",
+        "committee_head",
+        "qa",
+      ],
       coupon_discount_type: ["percent", "fixed"],
       package_type: ["individual", "group"],
       subject_access: ["paid", "free_logged_in", "free_public"],
