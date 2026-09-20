@@ -85,6 +85,8 @@ function ApprovalScreen() {
   const markStart = useRef<{ x: number; y: number } | null>(null);
   const [markDraft, setMarkDraft] = useState<Mark | null>(null);
   const [openDup, setOpenDup] = useState<number | null>(null);
+  const [tab, setTab] = useState("review");
+  const [focusId, setFocusId] = useState<string | null>(null);
 
   function layerPoint(e: React.PointerEvent) {
     const box = layerRef.current?.getBoundingClientRect();
@@ -100,6 +102,20 @@ function ApprovalScreen() {
     setItems(rows as Item[]);
     setIndex((i) => Math.min(i, Math.max(0, rows.length - 1)));
   }, [listItems, groupId, filter, pageFilter]);
+
+  useEffect(() => {
+    if (!focusId) return;
+    const at = items.findIndex((it) => it.id === focusId);
+    if (at >= 0) { setIndex(at); setFocusId(null); }
+  }, [items, focusId]);
+
+  /** Jump to a repeated question inside the review tab. */
+  function openInReview(id: string) {
+    setTab("review");
+    setFilter("all");
+    setPageFilter(0);
+    setFocusId(id);
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -230,7 +246,7 @@ function ApprovalScreen() {
         </Link>
         <h1 className="text-2xl font-bold">Final question approval{group ? ` — ${group.name}` : ""}</h1>
 
-        <Tabs defaultValue="review" className="mt-4">
+        <Tabs value={tab} onValueChange={setTab} className="mt-4">
           <TabsList>
             <TabsTrigger value="review">Review</TabsTrigger>
             <TabsTrigger value="dups" onClick={loadDups}>Repeated questions</TabsTrigger>
@@ -453,17 +469,70 @@ function ApprovalScreen() {
               </Button>
             </div>
             {!dups.length ? <p className="text-sm text-muted-foreground">No repeated questions found.</p> : null}
-            {dups.map((d, i) => (
-              <Card key={i}><CardContent className="space-y-2 p-4">
-                <p className="text-sm font-medium">Kept: page {d.keep.page_no} — {d.keep.stem.slice(0, 120)}…</p>
-                {d.extras.map((e: any) => (
-                  <div key={e.id} className="flex items-center justify-between gap-2 rounded border p-2 text-sm">
-                    <span>Repeat on page {e.page_no}</span>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeDuplicates([e.id])}>Delete</Button>
+            {dups.map((d, i) => {
+              const copies: any[] = d.items ?? [d.keep, ...d.extras];
+              const open = openDup === i;
+              const sameStem = copies.every((c) => norm(c.stem) === norm(copies[0].stem));
+              const sameOptions = copies.every((c) => optionsText(c) === optionsText(copies[0]));
+              return (
+                <Card key={i}><CardContent className="space-y-2 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium">
+                      {copies.length} copies · pages {copies.map((c) => c.page_no).join(", ")} — {String(d.keep.stem).slice(0, 110)}…
+                    </p>
+                    <Button size="sm" variant="ghost" onClick={() => setOpenDup(open ? null : i)}>
+                      <ChevronDown className={`mr-1 h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+                      {open ? "Hide details" : "See details"}
+                    </Button>
                   </div>
-                ))}
-              </CardContent></Card>
-            ))}
+
+                  {open ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        Wording {sameStem ? "is identical" : "differs slightly"} · choices {sameOptions ? "are identical" : "differ"}.
+                      </p>
+                      {copies.map((c, ci) => (
+                        <div key={c.id} className="rounded border p-3 text-sm">
+                          <div className="mb-1 flex flex-wrap items-center gap-2">
+                            <span className="font-semibold">{ci === 0 ? "Kept copy" : `Repeat ${ci}`}</span>
+                            <span className="text-muted-foreground">
+                              page {c.page_no}{c.number_label ? ` · question ${c.number_label}` : ""}
+                              {c.flagged ? " · needs a look" : ""}
+                            </span>
+                            <span className="ms-auto flex gap-1">
+                              <Button size="sm" variant="ghost" onClick={() => openInReview(c.id)}>Open in review</Button>
+                              {ci > 0 ? (
+                                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeDuplicates([c.id])}>Delete</Button>
+                              ) : null}
+                            </span>
+                          </div>
+                          <p className="whitespace-pre-wrap">{c.stem}</p>
+                          {Array.isArray(c.statements) && c.statements.length ? (
+                            <ul className="mt-1 list-decimal ps-5 text-muted-foreground">
+                              {c.statements.map((st: any, k: number) => <li key={k}>{typeof st === "string" ? st : st?.text}</li>)}
+                            </ul>
+                          ) : null}
+                          {Array.isArray(c.options) && c.options.length ? (
+                            <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                              {c.options.map((o: any, k: number) => (
+                                <li key={k}>{(o?.label ?? String.fromCharCode(65 + k))}. {o?.text ?? String(o)}</li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    d.extras.map((e: any) => (
+                      <div key={e.id} className="flex items-center justify-between gap-2 rounded border p-2 text-sm">
+                        <span>Repeat on page {e.page_no}</span>
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeDuplicates([e.id])}>Delete</Button>
+                      </div>
+                    ))
+                  )}
+                </CardContent></Card>
+              );
+            })}
           </TabsContent>
 
           <TabsContent value="log" className="mt-4 space-y-2">
