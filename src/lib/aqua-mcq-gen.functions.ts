@@ -634,20 +634,87 @@ const ItemPatch = z.object({
 });
 
 /**
- * Admin-only: clear the review copy of a group (all extracted questions) while
- * keeping the group and its uploaded pages, so they can be sent again.
+ * Admin-only: take a group's questions out of approval. They are kept aside
+ * (archived) with the group, so approval can be restarted from the freshly
+ * extracted copy without reading the paper again.
  */
 export const amgClearGroupItems = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = await ensureAdmin(context);
-    const { count } = await supabase.from(ITEMS).select("id", { count: "exact", head: true }).eq("group_id", data.groupId);
-    const { error } = await supabase.from(ITEMS).delete().eq("group_id", data.groupId);
+    const { count } = await supabase.from(ITEMS).select("id", { count: "exact", head: true })
+      .eq("group_id", data.groupId).eq("archived", false);
+    const { error } = await supabase.from(ITEMS)
+      .update({ archived: true, updated_at: new Date().toISOString() })
+      .eq("group_id", data.groupId).eq("archived", false);
     if (error) throw new Error(error.message);
     await supabase.from(GROUPS).update({ status: "draft" }).eq("id", data.groupId);
     await supabase.from(EVENTS).insert({
       group_id: data.groupId, actor_id: userId, action: "review_cleared", detail: { count: count ?? 0 },
+    });
+    return { ok: true, removed: count ?? 0 };
+  });
+
+/**
+ * Admin-only: put the set-aside questions back into approval, exactly as
+ * extraction produced them (approval edits and approvals are discarded).
+ */
+export const amgRestoreGroupItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = await ensureAdmin(context);
+    const { data: rows, error: readErr } = await supabase.from(ITEMS)
+      .select("*").eq("group_id", data.groupId).eq("archived", true);
+    if (readErr) throw new Error(readErr.message);
+    const list = rows ?? [];
+    if (!list.length) throw new Error("There is nothing to bring back for this group.");
+
+    const now = new Date().toISOString();
+    for (const item of list) {
+      const o: any = item.orig ?? {};
+      const patch: any = {
+        archived: false,
+        status: "pending",
+        solved: false,
+        solve_error: null,
+        explanation: null,
+        answer_labels: Array.isArray(o.answer_labels) ? o.answer_labels : [],
+        form: o.form ?? item.form,
+        number_label: o.number_label ?? item.number_label,
+        stem: typeof o.stem === "string" ? o.stem : item.stem,
+        statements: o.statements ?? item.statements,
+        options: o.options ?? item.options,
+        answer_mode: o.answer_mode ?? item.answer_mode,
+        flagged: typeof o.flagged === "boolean" ? o.flagged : item.flagged,
+        flag_reason: typeof o.flag_reason === "string" ? o.flag_reason : item.flag_reason,
+        updated_at: now,
+      };
+      patch.dup_hash = dupHash(String(patch.stem ?? ""));
+      const { error } = await supabase.from(ITEMS).update(patch).eq("id", item.id);
+      if (error) throw new Error(error.message);
+    }
+
+    await supabase.from(GROUPS).update({ status: "review" }).eq("id", data.groupId);
+    await supabase.from(EVENTS).insert({
+      group_id: data.groupId, actor_id: userId, action: "review_restored", detail: { count: list.length },
+    });
+    return { ok: true, restored: list.length };
+  });
+
+/** Admin-only: permanently delete the set-aside questions of a group. */
+export const amgPurgeGroupItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = await ensureAdmin(context);
+    const { count } = await supabase.from(ITEMS).select("id", { count: "exact", head: true })
+      .eq("group_id", data.groupId).eq("archived", true);
+    const { error } = await supabase.from(ITEMS).delete().eq("group_id", data.groupId).eq("archived", true);
+    if (error) throw new Error(error.message);
+    await supabase.from(EVENTS).insert({
+      group_id: data.groupId, actor_id: userId, action: "review_purged", detail: { count: count ?? 0 },
     });
     return { ok: true, removed: count ?? 0 };
   });
