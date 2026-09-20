@@ -174,6 +174,10 @@ function AquaMcqGenPro() {
     setBusy(true); stopRef.current = false;
     try {
       setProgress("Opening the file…");
+      const [{ loadPdfForRenderPreferWorker, clearPdfRenderCache }, { renderPageToCanvas, canvasToJpegBase64 }] = await Promise.all([
+        import("@/lib/pdf-page-render"),
+        import("@/lib/pdf-page-image"),
+      ]);
       const doc = await loadPdfForRenderPreferWorker(file);
       const total = doc.numPages as number;
       await updateGroup({ data: { groupId: active.id, patch: { source_name: file.name.slice(0, 200), page_count: total, status: "extracting", error: null } } });
