@@ -113,6 +113,7 @@ export const DEFAULT_LAYOUT: HubLayout = {
         t("/admin/jarvis-batch-v2-ipad", "Jarvis Batch v2 iPad", "Sparkles"),
         t("/admin/vision-pro-batch", "Vision Pro batch 50%", "ScanEye"),
         t("/admin/aquavisionx", "AquaVisionX", "ScanEye"),
+        t("/admin/aqua-mcq-gen", "Aqua MCQ Gen Pro", "Sparkles"),
         t("/admin/patch-ipad-prox", "Patch iPad ProX", "ScanEye"),
         t("/admin/jarvis-batch-german-ipad", "50% iPad Germany", "Languages"),
         t("/admin/gemini-keys", "Gemini Batch Keys", "Zap"),

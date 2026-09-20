@@ -233,6 +233,268 @@ export type Database = {
         }
         Relationships: []
       }
+      amg_events: {
+        Row: {
+          action: string
+          actor: string | null
+          actor_name: string
+          created_at: string
+          detail: Json
+          group_id: string
+          id: string
+          item_id: string | null
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          actor_name?: string
+          created_at?: string
+          detail?: Json
+          group_id: string
+          id?: string
+          item_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          actor_name?: string
+          created_at?: string
+          detail?: Json
+          group_id?: string
+          id?: string
+          item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amg_events_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "amg_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      amg_groups: {
+        Row: {
+          answer_key: string
+          answer_source: string
+          batch_map: Json
+          batch_name: string | null
+          batch_stage: string | null
+          created_at: string
+          created_by: string | null
+          error: string | null
+          form_b_style: string
+          id: string
+          instructions: string
+          mode: string
+          model: string
+          name: string
+          page_count: number
+          pages_done: number
+          prefer_source: boolean
+          provider: string
+          source_name: string
+          source_storage_path: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          answer_key?: string
+          answer_source?: string
+          batch_map?: Json
+          batch_name?: string | null
+          batch_stage?: string | null
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          form_b_style?: string
+          id?: string
+          instructions?: string
+          mode?: string
+          model?: string
+          name: string
+          page_count?: number
+          pages_done?: number
+          prefer_source?: boolean
+          provider?: string
+          source_name?: string
+          source_storage_path?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          answer_key?: string
+          answer_source?: string
+          batch_map?: Json
+          batch_name?: string | null
+          batch_stage?: string | null
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          form_b_style?: string
+          id?: string
+          instructions?: string
+          mode?: string
+          model?: string
+          name?: string
+          page_count?: number
+          pages_done?: number
+          prefer_source?: boolean
+          provider?: string
+          source_name?: string
+          source_storage_path?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      amg_items: {
+        Row: {
+          answer_labels: string[]
+          answer_mode: string
+          created_at: string
+          dup_hash: string
+          explanation: Json | null
+          flag_reason: string
+          flagged: boolean
+          form: string
+          group_id: string
+          id: string
+          number_label: string
+          options: Json
+          order_index: number
+          page_id: string | null
+          page_no: number
+          solve_error: string | null
+          solved: boolean
+          statements: Json
+          status: string
+          stem: string
+          updated_at: string
+        }
+        Insert: {
+          answer_labels?: string[]
+          answer_mode?: string
+          created_at?: string
+          dup_hash?: string
+          explanation?: Json | null
+          flag_reason?: string
+          flagged?: boolean
+          form?: string
+          group_id: string
+          id?: string
+          number_label?: string
+          options?: Json
+          order_index?: number
+          page_id?: string | null
+          page_no?: number
+          solve_error?: string | null
+          solved?: boolean
+          statements?: Json
+          status?: string
+          stem?: string
+          updated_at?: string
+        }
+        Update: {
+          answer_labels?: string[]
+          answer_mode?: string
+          created_at?: string
+          dup_hash?: string
+          explanation?: Json | null
+          flag_reason?: string
+          flagged?: boolean
+          form?: string
+          group_id?: string
+          id?: string
+          number_label?: string
+          options?: Json
+          order_index?: number
+          page_id?: string | null
+          page_no?: number
+          solve_error?: string | null
+          solved?: boolean
+          statements?: Json
+          status?: string
+          stem?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amg_items_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "amg_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "amg_items_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "amg_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      amg_keys: {
+        Row: {
+          api_key: string
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          api_key: string
+          provider: string
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      amg_pages: {
+        Row: {
+          created_at: string
+          error: string | null
+          group_id: string
+          id: string
+          page_no: number
+          status: string
+          storage_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          group_id: string
+          id?: string
+          page_no: number
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          group_id?: string
+          id?: string
+          page_no?: number
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amg_pages_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "amg_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       announcement_audiences: {
         Row: {
           announcement_id: string
@@ -5739,6 +6001,7 @@ export type Database = {
         Returns: boolean
       }
       can_manage_events: { Args: never; Returns: boolean }
+      can_use_amg: { Args: { _user_id: string }; Returns: boolean }
       can_view_lecture_course: {
         Args: { _course_id: string }
         Returns: boolean
@@ -5889,7 +6152,13 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "user" | "committee" | "golden" | "committee_head"
+      app_role:
+        | "admin"
+        | "user"
+        | "committee"
+        | "golden"
+        | "committee_head"
+        | "qa"
       coupon_discount_type: "percent" | "fixed"
       package_type: "individual" | "group"
       subject_access: "paid" | "free_logged_in" | "free_public"
@@ -6020,7 +6289,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user", "committee", "golden", "committee_head"],
+      app_role: [
+        "admin",
+        "user",
+        "committee",
+        "golden",
+        "committee_head",
+        "qa",
+      ],
       coupon_discount_type: ["percent", "fixed"],
       package_type: ["individual", "group"],
       subject_access: ["paid", "free_logged_in", "free_public"],

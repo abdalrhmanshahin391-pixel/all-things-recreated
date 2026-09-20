@@ -37,6 +37,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAboutRouteImport } from './routes/admin.about'
 import { Route as AdminAdStudioRouteImport } from './routes/admin.ad-studio'
 import { Route as AdminAiKeysRouteImport } from './routes/admin.ai-keys'
+import { Route as AdminAquaMcqGenRouteImport } from './routes/admin.aqua-mcq-gen'
 import { Route as AdminAquavisionxRouteImport } from './routes/admin.aquavisionx'
 import { Route as AdminBackupsRouteImport } from './routes/admin.backups'
 import { Route as AdminCommitteeRouteImport } from './routes/admin.committee'
@@ -284,6 +285,11 @@ const AdminAdStudioRoute = AdminAdStudioRouteImport.update({
 const AdminAiKeysRoute = AdminAiKeysRouteImport.update({
   id: '/admin/ai-keys',
   path: '/admin/ai-keys',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAquaMcqGenRoute = AdminAquaMcqGenRouteImport.update({
+  id: '/admin/aqua-mcq-gen',
+  path: '/admin/aqua-mcq-gen',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminAquavisionxRoute = AdminAquavisionxRouteImport.update({
@@ -852,6 +858,7 @@ export interface FileRoutesByFullPath {
   '/admin/about': typeof AdminAboutRoute
   '/admin/ad-studio': typeof AdminAdStudioRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
+  '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenRoute
   '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
   '/admin/committee': typeof AdminCommitteeRoute
@@ -984,6 +991,7 @@ export interface FileRoutesByTo {
   '/admin/about': typeof AdminAboutRoute
   '/admin/ad-studio': typeof AdminAdStudioRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
+  '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenRoute
   '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
   '/admin/committee': typeof AdminCommitteeRoute
@@ -1116,6 +1124,7 @@ export interface FileRoutesById {
   '/admin/about': typeof AdminAboutRoute
   '/admin/ad-studio': typeof AdminAdStudioRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
+  '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenRoute
   '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
   '/admin/committee': typeof AdminCommitteeRoute
@@ -1254,6 +1263,7 @@ export interface FileRouteTypes {
     | '/admin/about'
     | '/admin/ad-studio'
     | '/admin/ai-keys'
+    | '/admin/aqua-mcq-gen'
     | '/admin/aquavisionx'
     | '/admin/backups'
     | '/admin/committee'
@@ -1386,6 +1396,7 @@ export interface FileRouteTypes {
     | '/admin/about'
     | '/admin/ad-studio'
     | '/admin/ai-keys'
+    | '/admin/aqua-mcq-gen'
     | '/admin/aquavisionx'
     | '/admin/backups'
     | '/admin/committee'
@@ -1517,6 +1528,7 @@ export interface FileRouteTypes {
     | '/admin/about'
     | '/admin/ad-studio'
     | '/admin/ai-keys'
+    | '/admin/aqua-mcq-gen'
     | '/admin/aquavisionx'
     | '/admin/backups'
     | '/admin/committee'
@@ -1654,6 +1666,7 @@ export interface RootRouteChildren {
   AdminAboutRoute: typeof AdminAboutRoute
   AdminAdStudioRoute: typeof AdminAdStudioRoute
   AdminAiKeysRoute: typeof AdminAiKeysRoute
+  AdminAquaMcqGenRoute: typeof AdminAquaMcqGenRoute
   AdminAquavisionxRoute: typeof AdminAquavisionxRoute
   AdminBackupsRoute: typeof AdminBackupsRoute
   AdminCommitteeRoute: typeof AdminCommitteeRoute
@@ -1934,6 +1947,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/ai-keys'
       fullPath: '/admin/ai-keys'
       preLoaderRoute: typeof AdminAiKeysRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/aqua-mcq-gen': {
+      id: '/admin/aqua-mcq-gen'
+      path: '/admin/aqua-mcq-gen'
+      fullPath: '/admin/aqua-mcq-gen'
+      preLoaderRoute: typeof AdminAquaMcqGenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/aquavisionx': {
@@ -2856,6 +2876,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminAboutRoute: AdminAboutRoute,
   AdminAdStudioRoute: AdminAdStudioRoute,
   AdminAiKeysRoute: AdminAiKeysRoute,
+  AdminAquaMcqGenRoute: AdminAquaMcqGenRoute,
   AdminAquavisionxRoute: AdminAquavisionxRoute,
   AdminBackupsRoute: AdminBackupsRoute,
   AdminCommitteeRoute: AdminCommitteeRoute,
