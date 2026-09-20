@@ -278,6 +278,9 @@ export type Database = {
         Row: {
           answer_key: string
           answer_source: string
+          batch_map: Json
+          batch_name: string | null
+          batch_stage: string | null
           created_at: string
           created_by: string | null
           error: string | null
@@ -299,6 +302,9 @@ export type Database = {
         Insert: {
           answer_key?: string
           answer_source?: string
+          batch_map?: Json
+          batch_name?: string | null
+          batch_stage?: string | null
           created_at?: string
           created_by?: string | null
           error?: string | null
@@ -320,6 +326,9 @@ export type Database = {
         Update: {
           answer_key?: string
           answer_source?: string
+          batch_map?: Json
+          batch_name?: string | null
+          batch_stage?: string | null
           created_at?: string
           created_by?: string | null
           error?: string | null
