@@ -19,6 +19,7 @@ export type AuthSnapshot = {
   isCommitteeAr: boolean;
   isCommitteeHead: boolean;
   isGolden: boolean;
+  isQa: boolean;
   /** true until the very first session check resolves */
   loading: boolean;
 };
@@ -33,6 +34,7 @@ const EMPTY: AuthSnapshot = {
   isCommitteeAr: false,
   isCommitteeHead: false,
   isGolden: false,
+  isQa: false,
   loading: true,
 };
 
@@ -90,6 +92,7 @@ async function loadExtras(uid: string) {
     isCommitteeAr,
     isCommitteeHead,
     isGolden: list.some((r) => r.role === "golden"),
+    isQa: list.some((r) => r.role === "qa"),
     // Roles are part of "who is this user" — admin pages redirect on
     // !isAdmin, so loading must not clear before the roles are known.
     loading: false,
@@ -109,7 +112,7 @@ function start() {
     if (!uid) {
       extrasFor = null;
       extrasLoaded.clear();
-      emit({ session: null, user: null, profile: null, isRealAdmin: false, isCommittee: false, isCommitteeEn: false, isCommitteeAr: false, isCommitteeHead: false, isGolden: false, loading: false });
+      emit({ session: null, user: null, profile: null, isRealAdmin: false, isCommittee: false, isCommitteeEn: false, isCommitteeAr: false, isCommitteeHead: false, isGolden: false, isQa: false, loading: false });
       return;
     }
     emit({ session: s, user: s?.user ?? null, loading: !extrasLoaded.has(uid) });

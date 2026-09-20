@@ -704,7 +704,7 @@ export const amgDuplicates = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureReviewer(context);
     const { data: rows } = await supabase.from(ITEMS)
-      .select("id, page_no, order_index, stem, dup_hash, status")
+      .select("id, page_no, order_index, number_label, stem, statements, options, dup_hash, status, flagged")
       .eq("group_id", data.groupId).order("page_no").order("order_index");
     const byHash = new Map<string, any[]>();
     for (const r of rows ?? []) {
@@ -713,7 +713,8 @@ export const amgDuplicates = createServerFn({ method: "POST" })
       list.push(r);
       byHash.set(r.dup_hash, list);
     }
-    return [...byHash.values()].filter((l) => l.length > 1).map((l) => ({ keep: l[0], extras: l.slice(1) }));
+    return [...byHash.values()].filter((l) => l.length > 1)
+      .map((l) => ({ keep: l[0], extras: l.slice(1), items: l }));
   });
 
 /** Ask the AI to fill in whatever is missing, reading the page picture again. */
