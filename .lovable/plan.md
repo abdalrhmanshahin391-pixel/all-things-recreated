@@ -27,6 +27,11 @@ In the "Repeated questions" tab, each group becomes expandable:
 - Matching text is shown plainly; differing wording is marked so you can see exactly why two questions were treated as the same.
 - Each copy gets "Open in review" (jumps to that question) and "Delete this one", so you choose which copy survives instead of only deleting the extras.
 
+## 4. Slightly fuller explanations
+
+- The solving step asks for a bit more depth: why the right answer is right, a short reason for each wrong option, and one key take-home line — still concise, no essays.
+- Nothing else in Aqua MCQ Gen changes: same answer rules, printed combinations, formatting and import behaviour.
+
 ## Technical notes
 
 - Split the access check: `can_use_amg(uuid)` becomes admin-only (generator, solve, import, page storage); a new `can_review_amg(uuid)` = admin or qa gates approval-stage functions and the `amg_items` / `amg_events` / `amg_pages` read policies used by the approval screen. `src/lib/aqua-mcq-gen.functions.ts` gets a second guard (`ensureReviewer`) used by `amgGetGroup`, `amgPageUrls`, `amgListItems`, `amgUpdateItem`, `amgAddItem`, `amgDeleteItems`, `amgSetStatus`, `amgDuplicates`, `amgCompleteItems`, `amgListEvents`; the rest keep `ensureStaff`.
