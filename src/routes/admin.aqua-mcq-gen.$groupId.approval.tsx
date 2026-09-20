@@ -338,7 +338,7 @@ function ApprovalScreen() {
                     <Eraser className="h-4 w-4" />
                   </Button>
                   <span className="text-xs text-muted-foreground">
-                    Page {draft?.page_no ?? "—"} · {marking ? "drag to highlight" : "scroll to zoom, drag to move"}
+                    Page {draft?.page_no ?? "—"} · {marking ? "drag to highlight" : "pinch or scroll to zoom, drag to move, double tap to zoom"}
                   </span>
                 </div>
                 <div
