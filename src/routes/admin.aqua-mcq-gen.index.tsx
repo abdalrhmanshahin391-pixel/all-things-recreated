@@ -20,7 +20,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   AMG_MODELS, amgListGroups, amgCreateGroup, amgUpdateGroup, amgDeleteGroup, amgGetGroup,
   amgRegisterPage, amgExtractPage, amgStartBatch, amgPollBatch,
-  amgListKeys, amgSaveKey,
+  amgListKeys, amgSaveKey, amgRestoreGroupItems, amgPurgeGroupItems,
 } from "@/lib/aqua-mcq-gen.functions";
 
 const BUCKET = "amg-pages";
@@ -44,7 +44,7 @@ type GroupRow = {
   mode: "standard" | "batch"; form_b_style: "in_question" | "multi_answer";
   instructions: string | null; status: string; source_name: string | null;
   page_count: number; error: string | null; batch_name: string | null;
-  total?: number; pending?: number; approved?: number; flagged?: number;
+  total?: number; pending?: number; approved?: number; flagged?: number; archived?: number;
 };
 type PageRow = { id: string; page_no: number; status: string; storage_path: string | null; error: string | null };
 
@@ -89,6 +89,8 @@ function AquaMcqGenPro() {
   const pollBatch = useServerFn(amgPollBatch);
   const listKeys = useServerFn(amgListKeys);
   const saveKey = useServerFn(amgSaveKey);
+  const restoreItems = useServerFn(amgRestoreGroupItems);
+  const purgeItems = useServerFn(amgPurgeGroupItems);
 
   const [denied, setDenied] = useState(false);
   const [groups, setGroups] = useState<GroupRow[]>([]);
@@ -197,6 +199,38 @@ function AquaMcqGenPro() {
     } catch (e: any) {
       toast.error(String(e?.message ?? e));
     } finally { setBusy(false); setProgress(""); }
+  }
+
+  /** Bring set-aside questions back into approval, as extraction produced them. */
+  async function onRestore(groupId: string) {
+    const ok = window.confirm(
+      "Start approval again for these questions?\n\n" +
+      "They come back exactly as they came out of the reading step — nothing approved, " +
+      "and any edits made during the previous approval are lost.",
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res: any = await restoreItems({ data: { groupId } });
+      toast.success(`${res.restored ?? 0} question(s) are back in approval.`);
+      await refreshGroups();
+      await refreshActive(groupId);
+    } catch (e: any) { toast.error(String(e?.message ?? e)); }
+    finally { setBusy(false); }
+  }
+
+  /** Delete the set-aside questions for good. */
+  async function onPurge(groupId: string) {
+    const ok = window.confirm("Delete the removed questions permanently? This cannot be undone.");
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res: any = await purgeItems({ data: { groupId } });
+      toast.success(`${res.removed ?? 0} question(s) deleted for good.`);
+      await refreshGroups();
+      await refreshActive(groupId);
+    } catch (e: any) { toast.error(String(e?.message ?? e)); }
+    finally { setBusy(false); }
   }
 
   async function onExtract() {
@@ -375,6 +409,20 @@ function AquaMcqGenPro() {
                     {active.provider === "google" ? "Google" : "OpenAI"} · {active.model} · {active.mode === "batch" ? "50% saver" : "standard"} ·{" "}
                     {active.form_b_style === "multi_answer" ? "statements as choices" : "statements inside the question"}
                   </div>
+                  {(groups.find((g) => g.id === active.id)?.archived ?? 0) > 0 ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                      <span>
+                        {groups.find((g) => g.id === active.id)?.archived} question(s) were removed from approval.
+                        You can start approval again without reading the paper.
+                      </span>
+                      <span className="flex gap-2">
+                        <Button size="sm" disabled={busy} onClick={() => onRestore(active.id)}>Start approval again</Button>
+                        <Button size="sm" variant="ghost" className="text-destructive" disabled={busy} onClick={() => onPurge(active.id)}>
+                          Delete permanently
+                        </Button>
+                      </span>
+                    </div>
+                  ) : null}
                   {active.error ? (
                     <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
                       <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" /> {active.error}

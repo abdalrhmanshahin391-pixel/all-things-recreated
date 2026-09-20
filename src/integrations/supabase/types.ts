@@ -356,6 +356,7 @@ export type Database = {
         Row: {
           answer_labels: string[]
           answer_mode: string
+          archived: boolean
           created_at: string
           dup_hash: string
           explanation: Json | null
@@ -367,6 +368,7 @@ export type Database = {
           number_label: string
           options: Json
           order_index: number
+          orig: Json | null
           page_id: string | null
           page_no: number
           solve_error: string | null
@@ -379,6 +381,7 @@ export type Database = {
         Insert: {
           answer_labels?: string[]
           answer_mode?: string
+          archived?: boolean
           created_at?: string
           dup_hash?: string
           explanation?: Json | null
@@ -390,6 +393,7 @@ export type Database = {
           number_label?: string
           options?: Json
           order_index?: number
+          orig?: Json | null
           page_id?: string | null
           page_no?: number
           solve_error?: string | null
@@ -402,6 +406,7 @@ export type Database = {
         Update: {
           answer_labels?: string[]
           answer_mode?: string
+          archived?: boolean
           created_at?: string
           dup_hash?: string
           explanation?: Json | null
@@ -413,6 +418,7 @@ export type Database = {
           number_label?: string
           options?: Json
           order_index?: number
+          orig?: Json | null
           page_id?: string | null
           page_no?: number
           solve_error?: string | null

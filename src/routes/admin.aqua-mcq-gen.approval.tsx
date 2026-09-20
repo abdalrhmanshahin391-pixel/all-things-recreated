@@ -53,12 +53,13 @@ function ApprovalPicker() {
 
   useEffect(() => { if (user) void reload(); }, [user, reload]);
 
-  /** Admin only: wipe the review copy but keep the pages in Aqua MCQ Gen Pro. */
+  /** Admin only: take the questions out of approval; they can be restored later. */
   async function clearReview(g: GroupRow) {
     const ok = window.confirm(
-      `Delete the questions of "${g.name}" from Question approval?\n\n` +
-      "The group and its uploaded pages stay in Aqua MCQ Gen Pro, so you can send them again. " +
-      "This cannot be undone.",
+      `Remove the questions of "${g.name}" from Question approval?\n\n` +
+      "They are kept aside with the group. In Aqua MCQ Gen Pro you can press " +
+      "\"Start approval again\" to bring them back as freshly read questions — " +
+      "without reading the paper again. Any approval work done so far will be lost.",
     );
     if (!ok) return;
     setBusy(true);
