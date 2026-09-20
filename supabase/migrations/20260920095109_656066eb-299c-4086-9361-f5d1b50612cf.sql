@@ -1,0 +1,1 @@
+ALTER TABLE public.amg_groups ADD COLUMN IF NOT EXISTS source_text text NOT NULL DEFAULT '';
