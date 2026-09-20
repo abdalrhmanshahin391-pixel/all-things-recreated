@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
-import { AdminBadge, StudentBadge } from "@/components/RoleBadge";
+import { AdminBadge, StudentBadge, QaBadge } from "@/components/RoleBadge";
 import { PushToggle } from "@/components/PushToggle";
 import {
   AlertCircle,

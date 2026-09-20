@@ -27,7 +27,7 @@ import { EventEntryButtons } from "@/components/events/EventButtons";
 
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
-import { AdminBadge, StudentBadge } from "@/components/RoleBadge";
+import { AdminBadge, StudentBadge, QaBadge } from "@/components/RoleBadge";
 import { useLang } from "@/components/LanguageProvider";
 import { RaziWordmark } from "@/components/brand/RaziWordmark";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
