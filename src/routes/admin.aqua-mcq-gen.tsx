@@ -360,6 +360,9 @@ function AquaMcqGenPro() {
                   <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
                     <span>{active.name}</span>
                     <span className="flex gap-2">
+                      <Button size="sm" variant="secondary" asChild>
+                        <Link to="/admin/aqua-mcq-gen/$groupId/approval" params={{ groupId: active.id }}>Final approval</Link>
+                      </Button>
                       <Button size="sm" variant="ghost" onClick={() => onDelete(active.id)}><Trash2 className="mr-1 h-4 w-4" /> Delete</Button>
                     </span>
                   </CardTitle>
