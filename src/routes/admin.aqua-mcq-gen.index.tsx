@@ -44,7 +44,7 @@ type GroupRow = {
   mode: "standard" | "batch"; form_b_style: "in_question" | "multi_answer";
   instructions: string | null; status: string; source_name: string | null;
   page_count: number; error: string | null; batch_name: string | null;
-  total?: number; pending?: number; approved?: number; flagged?: number;
+  total?: number; pending?: number; approved?: number; flagged?: number; archived?: number;
 };
 type PageRow = { id: string; page_no: number; status: string; storage_path: string | null; error: string | null };
 
