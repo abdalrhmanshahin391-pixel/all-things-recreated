@@ -42,6 +42,12 @@ type Item = {
   flagged: boolean; flag_reason: string; status: string; answer_mode: string;
 };
 
+/** Normalised text used to point out how two copies differ. */
+function norm(t: any) { return String(t ?? "").replace(/\s+/g, " ").trim().toLowerCase(); }
+function optionsText(c: any) {
+  return Array.isArray(c?.options) ? c.options.map((o: any) => norm(o?.text ?? o)).join(" | ") : "";
+}
+
 function ApprovalScreen() {
   const { groupId } = Route.useParams();
   const { user, loading } = useAuth();
