@@ -30,26 +30,44 @@ type GroupRow = {
 };
 
 function ApprovalPicker() {
-  const { user, loading } = useAuth();
+  const { user, loading, isRealAdmin } = useAuth();
   const navigate = useNavigate();
   useEffect(() => { if (!loading && !user) guardRedirect(navigate); }, [loading, user, navigate]);
 
   const listGroups = useServerFn(amgListGroups);
+  const clearGroup = useServerFn(amgClearGroupItems);
   const [groups, setGroups] = useState<GroupRow[] | null>(null);
   const [denied, setDenied] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (!user) return;
-    (async () => {
-      try { setGroups(await listGroups() as any); }
-      catch (e: any) {
-        const msg = String(e?.message ?? e);
-        if (/forbidden/i.test(msg)) setDenied(true);
-        else toast.error(msg);
-        setGroups([]);
-      }
-    })();
-  }, [user, listGroups]);
+  const reload = useCallback(async () => {
+    try { setGroups(await listGroups() as any); }
+    catch (e: any) {
+      const msg = String(e?.message ?? e);
+      if (/forbidden/i.test(msg)) setDenied(true);
+      else toast.error(msg);
+      setGroups([]);
+    }
+  }, [listGroups]);
+
+  useEffect(() => { if (user) void reload(); }, [user, reload]);
+
+  /** Admin only: wipe the review copy but keep the pages in Aqua MCQ Gen Pro. */
+  async function clearReview(g: GroupRow) {
+    const ok = window.confirm(
+      `Delete the questions of "${g.name}" from Question approval?\n\n` +
+      "The group and its uploaded pages stay in Aqua MCQ Gen Pro, so you can send them again. " +
+      "This cannot be undone.",
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res: any = await clearGroup({ data: { groupId: g.id } });
+      toast.success(`${res.removed ?? 0} question(s) removed from approval.`);
+      await reload();
+    } catch (e: any) { toast.error(String(e?.message ?? e)); }
+    finally { setBusy(false); }
+  }
 
   if (loading) return null;
 
