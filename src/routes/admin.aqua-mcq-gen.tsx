@@ -363,6 +363,9 @@ function AquaMcqGenPro() {
                       <Button size="sm" variant="secondary" asChild>
                         <Link to="/admin/aqua-mcq-gen/$groupId/approval" params={{ groupId: active.id }}>Final approval</Link>
                       </Button>
+                      <Button size="sm" variant="secondary" asChild>
+                        <Link to="/admin/aqua-mcq-gen/$groupId/solve" params={{ groupId: active.id }}>Solve &amp; import</Link>
+                      </Button>
                       <Button size="sm" variant="ghost" onClick={() => onDelete(active.id)}><Trash2 className="mr-1 h-4 w-4" /> Delete</Button>
                     </span>
                   </CardTitle>

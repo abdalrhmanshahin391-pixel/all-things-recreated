@@ -302,10 +302,14 @@ export const amgUpdateGroup = createServerFn({ method: "POST" })
       mode: z.enum(["standard", "batch"]).optional(),
       form_b_style: z.enum(["in_question", "multi_answer"]).optional(),
       instructions: z.string().max(4000).optional(),
-      status: z.enum(["draft", "extracting", "paused", "approval", "solving", "importing", "done"]).optional(),
+      status: z.enum(["draft", "extracting", "paused", "approval", "solving", "importing", "imported", "done"]).optional(),
       source_name: z.string().max(200).optional(),
       page_count: z.number().int().min(0).max(1000).optional(),
       error: z.string().max(500).nullable().optional(),
+      answer_source: z.enum(["ai", "source", "key"]).optional(),
+      answer_key: z.string().max(20000).optional(),
+      source_text: z.string().max(40000).optional(),
+      prefer_source: z.boolean().optional(),
     }),
   }).parse(d))
   .handler(async ({ data, context }) => {
@@ -750,4 +754,247 @@ Return the same JSON shape with exactly ONE question in "questions". If part of 
       }
     }
     return { fixed, failures };
+  });
+
+// =========================================================== solve & import ===
+
+const SOLVE_SYSTEM = `You are a medical exam tutor. You are given ONE multiple-choice question with its options.
+
+Return STRICT JSON only, no markdown fences:
+{"answers":["A"],"concept":"<=8 words","explanation":"markdown","summary_table":"markdown table"}
+
+Rules:
+- "answers" holds the labels of the correct options exactly as given (e.g. ["C"] or ["1","3"]).
+- ANSWER MODE SINGLE: exactly one label. MULTIPLE: every correct label.
+- If the message lists ALLOWED ANSWER SETS (the combinations printed on the paper), you MUST return exactly one of those sets.
+- "explanation" is GitHub-flavored Markdown with THREE sections separated by BLANK LINES:
+  **Concept** — 2-3 sentences on the mechanism.
+  **Why the correct answer is right** — 2-3 short bullets.
+  **Why the other options are wrong** — one bullet per wrong option, each starting with the option's OWN TEXT in **bold** (no letter prefix), then a dash and one sentence.
+- "summary_table" is a Markdown table: | Option | Verdict | Reason | with a |---|---|---| separator and one row per option; the Option column holds the option TEXT only (no letter prefix), correct rows ✓ and wrong rows ✗.
+- Never invent options and never change their wording or order.
+- Output JSON only.`;
+
+async function callGoogleText(apiKey: string, model: string, system: string, prompt: string): Promise<string> {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json" },
+    }),
+  });
+  const json: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Google refused the question (${res.status}): ${JSON.stringify(json).slice(0, 300)}`);
+  return json?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text ?? "").join("") ?? "";
+}
+
+async function callOpenAiText(apiKey: string, model: string, system: string, prompt: string): Promise<string> {
+  const body: any = {
+    model,
+    response_format: { type: "json_object" },
+    messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+  };
+  if (!/^gpt-5/.test(model)) body.temperature = 0.2;
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify(body),
+  });
+  const json: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`OpenAI refused the question (${res.status}): ${JSON.stringify(json).slice(0, 300)}`);
+  return json?.choices?.[0]?.message?.content ?? "";
+}
+
+/** "12: C" / "12 - A,B" / "12) 1,3" → { "12": ["C"] } */
+function parseAnswerKey(text: string): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const line of String(text ?? "").split(/[\r\n;]+/)) {
+    const m = line.match(/^\s*([\w.]+)\s*[).:\-–=]+\s*([A-Za-z0-9](?:\s*[,/+ ]\s*[A-Za-z0-9])*)\s*$/);
+    if (!m) continue;
+    const labels = m[2].split(/[,/+ ]+/).map((s) => s.trim().toUpperCase()).filter(Boolean);
+    if (labels.length) out.set(m[1].trim().toUpperCase(), labels);
+  }
+  return out;
+}
+
+function comboSetsFromItem(item: any): string[][] {
+  if (item.form !== "B") return [];
+  const raw = Array.isArray(item.statements) ? item.statements : [];
+  const sets: string[][] = [];
+  for (const s of raw) {
+    const nums = String(s?.text ?? "").match(/\d+/g);
+    if (nums && nums.length > 1) sets.push(nums);
+  }
+  return sets;
+}
+
+/** Solve a slice of approved questions. Call repeatedly until remaining is 0. */
+export const amgSolveBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    groupId: z.string().uuid(),
+    limit: z.number().int().min(1).max(10).optional(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureStaff(context);
+    const { data: group } = await supabase.from(GROUPS).select("*").eq("id", data.groupId).maybeSingle();
+    if (!group) throw new Error("This group no longer exists.");
+
+    const { data: items } = await supabase.from(ITEMS)
+      .select("*").eq("group_id", data.groupId).eq("status", "approved").eq("solved", false)
+      .order("page_no").order("order_index").limit(data.limit ?? 4);
+
+    const answerSource = String(group.answer_source ?? "ai");
+    const keyMap = answerSource === "key" ? parseAnswerKey(group.answer_key ?? "") : new Map<string, string[]>();
+    const sourceText = String(group.source_text ?? "").trim();
+    const apiKey = await getKey(supabase, group.provider);
+
+    let solved = 0;
+    const failures: string[] = [];
+
+    for (const item of items ?? []) {
+      try {
+        const opts = Array.isArray(item.options) ? item.options : [];
+        if (opts.length < 2) throw new Error("It has no options.");
+        const optText = opts.map((o: any) => `${o.label}. ${o.text}`).join("\n");
+        const sets = comboSetsFromItem(item);
+        const given = keyMap.get(String(item.number_label ?? "").toUpperCase());
+        const keyBlock = given?.length
+          ? `OFFICIAL ANSWER KEY: the correct option(s) for this question are ${given.join(", ")}. You MUST mark exactly these and explain why they are right.\n`
+          : "";
+        const sourceBlock = sourceText && (answerSource === "source" || group.prefer_source)
+          ? `REFERENCE SOURCE (base the answer and explanation on this text):\n${sourceText.slice(0, 20000)}\n\n`
+          : "";
+        const comboBlock = sets.length
+          ? `ALLOWED ANSWER SETS (printed on the paper — choose exactly one):\n${sets.map((s) => s.join(",")).join("\n")}\n`
+          : "";
+        const mode = item.answer_mode === "multiple" ? "MULTIPLE" : "SINGLE";
+        const prompt = `${sourceBlock}${keyBlock}ANSWER MODE: ${mode}\n${comboBlock}--- QUESTION ---\n${item.stem}\n\n${optText}\n--- END ---`;
+
+        const text = group.provider === "google"
+          ? await callGoogleText(apiKey, group.model, SOLVE_SYSTEM, prompt)
+          : await callOpenAiText(apiKey, group.model, SOLVE_SYSTEM, prompt);
+        const json = parseJson(text);
+
+        const labels: string[] = Array.isArray(json?.answers) ? json.answers.map((a: any) => String(a).trim().toUpperCase()) : [];
+        const valid = labels.filter((l) => opts.some((o: any) => String(o.label).toUpperCase() === l));
+        if (!valid.length) throw new Error("The answer did not match any option.");
+        if (sets.length) {
+          const ok = sets.some((s) => s.length === valid.length && s.every((n) => valid.includes(n)));
+          if (!ok) throw new Error("The answer is not one of the paper's printed combinations.");
+        }
+
+        const { error } = await supabase.from(ITEMS).update({
+          answer_labels: valid,
+          answer_mode: valid.length > 1 ? "multiple" : item.answer_mode,
+          explanation: {
+            concept: String(json?.concept ?? "").slice(0, 200),
+            explanation: String(json?.explanation ?? "").slice(0, 12000),
+            summary_table: String(json?.summary_table ?? "").slice(0, 6000),
+          },
+          solved: true,
+          solve_error: null,
+        }).eq("id", item.id);
+        if (error) throw new Error(error.message);
+        solved += 1;
+      } catch (e: any) {
+        const msg = String(e?.message ?? e).slice(0, 200);
+        failures.push(`Question ${item.number_label || item.id.slice(0, 6)}: ${msg}`);
+        await supabase.from(ITEMS).update({ solve_error: msg }).eq("id", item.id);
+      }
+    }
+
+    const { count: remaining } = await supabase.from(ITEMS)
+      .select("id", { count: "exact", head: true })
+      .eq("group_id", data.groupId).eq("status", "approved").eq("solved", false);
+
+    return { solved, failures, remaining: remaining ?? 0 };
+  });
+
+/** Counts for the solve/import screen. */
+export const amgProgress = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureStaff(context);
+    const { data: rows } = await supabase.from(ITEMS)
+      .select("status, solved, solve_error").eq("group_id", data.groupId);
+    const list = rows ?? [];
+    return {
+      total: list.length,
+      pending: list.filter((r: any) => r.status === "pending").length,
+      approved: list.filter((r: any) => r.status === "approved").length,
+      imported: list.filter((r: any) => r.status === "imported").length,
+      solved: list.filter((r: any) => r.solved).length,
+      failed: list.filter((r: any) => !r.solved && r.solve_error).length,
+    };
+  });
+
+/** Import every approved + solved question into a course subject. */
+export const amgImportGroup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    groupId: z.string().uuid(),
+    subjectId: z.string().uuid(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = await ensureStaff(context);
+    const { data: items } = await supabase.from(ITEMS)
+      .select("*").eq("group_id", data.groupId).eq("status", "approved").eq("solved", true)
+      .order("page_no").order("order_index");
+    if (!items?.length) throw new Error("There is no approved, solved question to import yet.");
+
+    const { count } = await supabase.from("questions")
+      .select("id", { count: "exact", head: true }).eq("subject_id", data.subjectId);
+    let sort = (count ?? 0) + 1;
+
+    let inserted = 0, skipped = 0, failed = 0;
+    const errors: string[] = [];
+
+    for (const item of items) {
+      try {
+        const exp = (item.explanation ?? {}) as any;
+        const explanation = [String(exp.explanation ?? ""), exp.summary_table ? `\n\n${exp.summary_table}` : ""].join("").trim() || null;
+        const { data: q, error: qErr } = await supabase.from("questions").upsert(
+          {
+            subject_id: data.subjectId,
+            stem: item.stem,
+            explanation,
+            answer_mode: item.answer_mode ?? "single",
+            sort_order: sort,
+          },
+          { onConflict: "subject_id,stem_hash", ignoreDuplicates: true },
+        ).select("id").maybeSingle();
+        if (qErr) throw new Error(qErr.message);
+        if (!q?.id) { skipped += 1; continue; }
+
+        const correct = (item.answer_labels ?? []).map((l: string) => String(l).toUpperCase());
+        const rows = (Array.isArray(item.options) ? item.options : []).map((o: any, idx: number) => ({
+          question_id: q.id,
+          label: o.label || String.fromCharCode(65 + idx),
+          text: o.text ?? "",
+          is_correct: correct.includes(String(o.label).toUpperCase()),
+          sort_order: idx + 1,
+        }));
+        const { error: oErr } = await supabase.from("question_options").insert(rows);
+        if (oErr) throw new Error(oErr.message);
+
+        await supabase.from(ITEMS).update({ status: "imported" }).eq("id", item.id);
+        inserted += 1;
+        sort += 1;
+      } catch (e: any) {
+        failed += 1;
+        errors.push(String(e?.message ?? e).slice(0, 160));
+      }
+    }
+
+    await supabase.from(EVENTS).insert({
+      group_id: data.groupId, actor: userId, action: "import",
+      detail: { inserted, skipped, failed, subject_id: data.subjectId },
+    });
+    if (inserted) await supabase.from(GROUPS).update({ status: "imported" }).eq("id", data.groupId);
+
+    return { inserted, skipped, failed, errors: errors.slice(0, 5) };
   });

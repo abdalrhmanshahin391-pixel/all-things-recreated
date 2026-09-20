@@ -138,6 +138,7 @@ import { Route as LecturesCourseIdIndexRouteImport } from './routes/lectures.$co
 import { Route as RuGuidesIndexRouteImport } from './routes/ru.guides.index'
 import { Route as RuGuidesSlugRouteImport } from './routes/ru.guides.$slug'
 import { Route as AdminAquaMcqGenGroupIdApprovalRouteImport } from './routes/admin.aqua-mcq-gen.$groupId.approval'
+import { Route as AdminAquaMcqGenGroupIdSolveRouteImport } from './routes/admin.aqua-mcq-gen.$groupId.solve'
 import { Route as AdminGermanCourseIdManageRouteImport } from './routes/admin.german.$courseId.manage'
 import { Route as ApiPublicPaymentsWebhookRouteImport } from './routes/api/public/payments/webhook'
 import { Route as GermanCourseIdReviewIndexRouteImport } from './routes/german.$courseId.review.index'
@@ -797,6 +798,12 @@ const AdminAquaMcqGenGroupIdApprovalRoute =
     path: '/$groupId/approval',
     getParentRoute: () => AdminAquaMcqGenRoute,
   } as any)
+const AdminAquaMcqGenGroupIdSolveRoute =
+  AdminAquaMcqGenGroupIdSolveRouteImport.update({
+    id: '/$groupId/solve',
+    path: '/$groupId/solve',
+    getParentRoute: () => AdminAquaMcqGenRoute,
+  } as any)
 const AdminGermanCourseIdManageRoute =
   AdminGermanCourseIdManageRouteImport.update({
     id: '/manage',
@@ -967,6 +974,7 @@ export interface FileRoutesByFullPath {
   '/lectures/$courseId/': typeof LecturesCourseIdIndexRoute
   '/ru/guides/': typeof RuGuidesIndexRoute
   '/admin/aqua-mcq-gen/$groupId/approval': typeof AdminAquaMcqGenGroupIdApprovalRoute
+  '/admin/aqua-mcq-gen/$groupId/solve': typeof AdminAquaMcqGenGroupIdSolveRoute
   '/admin/german/$courseId/manage': typeof AdminGermanCourseIdManageRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/german/$courseId/review/run': typeof GermanCourseIdReviewRunRoute
@@ -1096,6 +1104,7 @@ export interface FileRoutesByTo {
   '/lectures/$courseId': typeof LecturesCourseIdIndexRoute
   '/ru/guides': typeof RuGuidesIndexRoute
   '/admin/aqua-mcq-gen/$groupId/approval': typeof AdminAquaMcqGenGroupIdApprovalRoute
+  '/admin/aqua-mcq-gen/$groupId/solve': typeof AdminAquaMcqGenGroupIdSolveRoute
   '/admin/german/$courseId/manage': typeof AdminGermanCourseIdManageRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/german/$courseId/review/run': typeof GermanCourseIdReviewRunRoute
@@ -1235,6 +1244,7 @@ export interface FileRoutesById {
   '/lectures/$courseId/': typeof LecturesCourseIdIndexRoute
   '/ru/guides/': typeof RuGuidesIndexRoute
   '/admin/aqua-mcq-gen/$groupId/approval': typeof AdminAquaMcqGenGroupIdApprovalRoute
+  '/admin/aqua-mcq-gen/$groupId/solve': typeof AdminAquaMcqGenGroupIdSolveRoute
   '/admin/german/$courseId/manage': typeof AdminGermanCourseIdManageRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/german/$courseId/review/run': typeof GermanCourseIdReviewRunRoute
@@ -1375,6 +1385,7 @@ export interface FileRouteTypes {
     | '/lectures/$courseId/'
     | '/ru/guides/'
     | '/admin/aqua-mcq-gen/$groupId/approval'
+    | '/admin/aqua-mcq-gen/$groupId/solve'
     | '/admin/german/$courseId/manage'
     | '/api/public/payments/webhook'
     | '/german/$courseId/review/run'
@@ -1504,6 +1515,7 @@ export interface FileRouteTypes {
     | '/lectures/$courseId'
     | '/ru/guides'
     | '/admin/aqua-mcq-gen/$groupId/approval'
+    | '/admin/aqua-mcq-gen/$groupId/solve'
     | '/admin/german/$courseId/manage'
     | '/api/public/payments/webhook'
     | '/german/$courseId/review/run'
@@ -1642,6 +1654,7 @@ export interface FileRouteTypes {
     | '/lectures/$courseId/'
     | '/ru/guides/'
     | '/admin/aqua-mcq-gen/$groupId/approval'
+    | '/admin/aqua-mcq-gen/$groupId/solve'
     | '/admin/german/$courseId/manage'
     | '/api/public/payments/webhook'
     | '/german/$courseId/review/run'
@@ -2669,6 +2682,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAquaMcqGenGroupIdApprovalRouteImport
       parentRoute: typeof AdminAquaMcqGenRoute
     }
+    '/admin/aqua-mcq-gen/$groupId/solve': {
+      id: '/admin/aqua-mcq-gen/$groupId/solve'
+      path: '/$groupId/solve'
+      fullPath: '/admin/aqua-mcq-gen/$groupId/solve'
+      preLoaderRoute: typeof AdminAquaMcqGenGroupIdSolveRouteImport
+      parentRoute: typeof AdminAquaMcqGenRoute
+    }
     '/admin/german/$courseId/manage': {
       id: '/admin/german/$courseId/manage'
       path: '/manage'
@@ -2831,10 +2851,12 @@ const StudyHubRouteWithChildren = StudyHubRoute._addFileChildren(
 
 interface AdminAquaMcqGenRouteChildren {
   AdminAquaMcqGenGroupIdApprovalRoute: typeof AdminAquaMcqGenGroupIdApprovalRoute
+  AdminAquaMcqGenGroupIdSolveRoute: typeof AdminAquaMcqGenGroupIdSolveRoute
 }
 
 const AdminAquaMcqGenRouteChildren: AdminAquaMcqGenRouteChildren = {
   AdminAquaMcqGenGroupIdApprovalRoute: AdminAquaMcqGenGroupIdApprovalRoute,
+  AdminAquaMcqGenGroupIdSolveRoute: AdminAquaMcqGenGroupIdSolveRoute,
 }
 
 const AdminAquaMcqGenRouteWithChildren = AdminAquaMcqGenRoute._addFileChildren(

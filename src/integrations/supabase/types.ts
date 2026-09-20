@@ -296,6 +296,7 @@ export type Database = {
           provider: string
           source_name: string
           source_storage_path: string | null
+          source_text: string
           status: string
           updated_at: string
         }
@@ -320,6 +321,7 @@ export type Database = {
           provider?: string
           source_name?: string
           source_storage_path?: string | null
+          source_text?: string
           status?: string
           updated_at?: string
         }
@@ -344,6 +346,7 @@ export type Database = {
           provider?: string
           source_name?: string
           source_storage_path?: string | null
+          source_text?: string
           status?: string
           updated_at?: string
         }
