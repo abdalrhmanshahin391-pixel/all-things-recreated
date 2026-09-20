@@ -623,6 +623,25 @@ const ItemPatch = z.object({
   flag_reason: z.string().max(300).optional(),
 });
 
+/**
+ * Admin-only: clear the review copy of a group (all extracted questions) while
+ * keeping the group and its uploaded pages, so they can be sent again.
+ */
+export const amgClearGroupItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = await ensureAdmin(context);
+    const { count } = await supabase.from(ITEMS).select("id", { count: "exact", head: true }).eq("group_id", data.groupId);
+    const { error } = await supabase.from(ITEMS).delete().eq("group_id", data.groupId);
+    if (error) throw new Error(error.message);
+    await supabase.from(GROUPS).update({ status: "draft" }).eq("id", data.groupId);
+    await supabase.from(EVENTS).insert({
+      group_id: data.groupId, actor_id: userId, action: "review_cleared", detail: { count: count ?? 0 },
+    });
+    return { ok: true, removed: count ?? 0 };
+  });
+
 export const amgUpdateItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ itemId: z.string().uuid(), patch: ItemPatch }).parse(d))
