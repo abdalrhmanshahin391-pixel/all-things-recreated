@@ -409,6 +409,20 @@ function AquaMcqGenPro() {
                     {active.provider === "google" ? "Google" : "OpenAI"} · {active.model} · {active.mode === "batch" ? "50% saver" : "standard"} ·{" "}
                     {active.form_b_style === "multi_answer" ? "statements as choices" : "statements inside the question"}
                   </div>
+                  {(groups.find((g) => g.id === active.id)?.archived ?? 0) > 0 ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                      <span>
+                        {groups.find((g) => g.id === active.id)?.archived} question(s) were removed from approval.
+                        You can start approval again without reading the paper.
+                      </span>
+                      <span className="flex gap-2">
+                        <Button size="sm" disabled={busy} onClick={() => onRestore(active.id)}>Start approval again</Button>
+                        <Button size="sm" variant="ghost" className="text-destructive" disabled={busy} onClick={() => onPurge(active.id)}>
+                          Delete permanently
+                        </Button>
+                      </span>
+                    </div>
+                  ) : null}
                   {active.error ? (
                     <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
                       <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" /> {active.error}
