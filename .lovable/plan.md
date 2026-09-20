@@ -16,6 +16,7 @@ Add a highlighter to the page viewer on the approval screen:
 - QA gets committee-level viewing/editing access **plus** the Final question approval screen.
 - QA does **not** get Aqua MCQ Gen Pro (extraction, solve, import). Those stay admin-only. A QA member opening the generator sees a short "admins only" message.
 - QA appears in the roles screen (`/admin/users`): a QA filter, a QA count, and a QA toggle on each person's card, alongside Admin / Committee / رئيس اللجنة / Golden.
+- QA members get their own green badge with a tick mark, shown wherever the other role badges appear (header, profile, people lists). Admin still outranks it when someone has both.
 - Admins keep everything they have today.
 
 ## 3. Duplicate details
@@ -31,5 +32,6 @@ In the "Repeated questions" tab, each group becomes expandable:
 - Split the access check: `can_use_amg(uuid)` becomes admin-only (generator, solve, import, page storage); a new `can_review_amg(uuid)` = admin or qa gates approval-stage functions and the `amg_items` / `amg_events` / `amg_pages` read policies used by the approval screen. `src/lib/aqua-mcq-gen.functions.ts` gets a second guard (`ensureReviewer`) used by `amgGetGroup`, `amgPageUrls`, `amgListItems`, `amgUpdateItem`, `amgAddItem`, `amgDeleteItems`, `amgSetStatus`, `amgDuplicates`, `amgCompleteItems`, `amgListEvents`; the rest keep `ensureStaff`.
 - Add `qa` to the committee access helpers (`can_access_committee_subject`, `can_manage_committee`) so QA reads/edits committee content like a committee member.
 - `src/lib/admin-users.functions.ts`: stop stripping `"qa"` from the returned roles (line 110) and allow `qa` in `adminToggleUserRole`; `src/routes/admin.users.tsx`: add `qa` to `RoleKey`, `Filter`, `ROLE_LABEL`, the filter list, the stat row, and the per-user toggles.
+- New `QaBadge` (green token-based styling, `CheckCheck`/`BadgeCheck` icon) added to `src/components/RoleBadge.tsx` and the badge picker in `admin.users.tsx`; `useAuth`/`auth-store` expose `isQa`. Priority: Admin > Golden > Committee head > Committee > QA > Student.
 - `amgDuplicates` returns `stem` already; extend the select to include `number_label` and return all copies in one `items` array plus a token-level diff computed in the UI.
 - Highlight state in `admin.aqua-mcq-gen.$groupId.approval.tsx` is React state keyed by page number, rendered as absolutely positioned divs inside the same transformed layer as the image.
