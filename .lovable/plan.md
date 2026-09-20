@@ -16,6 +16,7 @@ Add a highlighter to the page viewer on the approval screen:
 - QA gets committee-level viewing/editing access **plus** the Final question approval screen.
 - QA does **not** get Aqua MCQ Gen Pro (extraction, solve, import). Those stay admin-only. A QA member opening the generator sees a short "admins only" message.
 - QA appears in the roles screen (`/admin/users`): a QA filter, a QA count, and a QA toggle on each person's card, alongside Admin / Committee / رئيس اللجنة / Golden.
+- QA members get their own green badge with a tick mark, shown wherever the other role badges appear (header, profile, people lists). Admin still outranks it when someone has both.
 - Admins keep everything they have today.
 
 ## 3. Duplicate details
