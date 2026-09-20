@@ -6004,6 +6004,7 @@ export type Database = {
         Returns: boolean
       }
       can_manage_events: { Args: never; Returns: boolean }
+      can_review_amg: { Args: { _user_id: string }; Returns: boolean }
       can_use_amg: { Args: { _user_id: string }; Returns: boolean }
       can_view_lecture_course: {
         Args: { _course_id: string }

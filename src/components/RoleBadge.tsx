@@ -1,4 +1,4 @@
-import { GraduationCap, ShieldCheck } from "lucide-react";
+import { BadgeCheck, GraduationCap, ShieldCheck } from "lucide-react";
 
 /** Special badge for site administrators. */
 export function AdminBadge({
@@ -81,6 +81,50 @@ export function StudentBadgeResponsive({ className = "" }: { className?: string 
     <>
       <StudentBadge className={`hidden sm:inline-flex ${className}`} />
       <StudentBadge dot className={`sm:hidden ${className}`} />
+    </>
+  );
+}
+
+/** Green badge with a tick for quality-assurance members. */
+export function QaBadge({
+  size = "sm",
+  dot,
+  className = "",
+}: {
+  size?: "sm" | "md";
+  dot?: boolean;
+  className?: string;
+}) {
+  const green =
+    "border border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300";
+  if (dot) {
+    return (
+      <span
+        title="QA"
+        aria-label="QA"
+        className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${green} ${className}`}
+      >
+        <BadgeCheck size={11} />
+      </span>
+    );
+  }
+  const pad = size === "md" ? "px-2.5 py-1 text-[11px]" : "px-2 py-0.5 text-[10px]";
+  return (
+    <span
+      title="Quality assurance"
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full font-black uppercase tracking-[0.14em] ${green} ${pad} ${className}`}
+    >
+      <BadgeCheck size={size === "md" ? 13 : 11} />
+      QA
+    </span>
+  );
+}
+
+export function QaBadgeResponsive({ className = "" }: { className?: string }) {
+  return (
+    <>
+      <QaBadge className={`hidden sm:inline-flex ${className}`} />
+      <QaBadge dot className={`sm:hidden ${className}`} />
     </>
   );
 }

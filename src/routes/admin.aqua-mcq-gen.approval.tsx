@@ -57,8 +57,8 @@ function ApprovalPicker() {
     <div className="min-h-screen bg-background">
       <SiteHeader />
       <main className="container mx-auto max-w-3xl px-4 py-8">
-        <Link to="/admin/aqua-mcq-gen" className="mb-3 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" /> Back to Aqua MCQ Gen Pro
+        <Link to="/admin" className="mb-3 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> Back to admin
         </Link>
         <h1 className="flex items-center gap-2 text-2xl font-bold">
           <CheckCheck className="h-6 w-6" /> Question approval

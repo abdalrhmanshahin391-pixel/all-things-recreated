@@ -41,6 +41,14 @@ async function ensureStaff(context: any): Promise<Ctx> {
   return { supabase, userId };
 }
 
+/** Approval stage: admins and QA members. */
+async function ensureReviewer(context: any): Promise<Ctx> {
+  const { supabase, userId } = context;
+  const { data: allowed } = await supabase.rpc("can_review_amg", { _user_id: userId });
+  if (!allowed) throw new Error("Forbidden");
+  return { supabase, userId };
+}
+
 async function ensureAdmin(context: any): Promise<Ctx> {
   const { supabase, userId } = context;
   const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
@@ -248,7 +256,7 @@ export const amgDeleteKey = createServerFn({ method: "POST" })
 export const amgListGroups = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase } = await ensureStaff(context);
+    const { supabase } = await ensureReviewer(context);
     const { data: groups } = await supabase.from(GROUPS).select("*").order("created_at", { ascending: false });
     const list = groups ?? [];
     if (!list.length) return [];
@@ -336,7 +344,7 @@ export const amgGetGroup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureStaff(context);
+    const { supabase } = await ensureReviewer(context);
     const { data: group } = await supabase.from(GROUPS).select("*").eq("id", data.groupId).maybeSingle();
     if (!group) throw new Error("This group no longer exists.");
     const { data: pages } = await supabase.from(PAGES).select("*").eq("group_id", data.groupId).order("page_no");
@@ -573,7 +581,7 @@ export const amgPageUrls = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureStaff(context);
+    const { supabase } = await ensureReviewer(context);
     const { data: pages } = await supabase.from(PAGES).select("page_no, storage_path").eq("group_id", data.groupId).order("page_no");
     const out: { page_no: number; url: string | null }[] = [];
     for (const p of pages ?? []) {
@@ -592,7 +600,7 @@ export const amgListItems = createServerFn({ method: "POST" })
     pageNo: z.number().int().min(0).max(1000).default(0),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureStaff(context);
+    const { supabase } = await ensureReviewer(context);
     let q = supabase.from(ITEMS).select("*").eq("group_id", data.groupId).order("page_no").order("order_index");
     if (data.filter === "pending") q = q.eq("status", "pending");
     if (data.filter === "approved") q = q.eq("status", "approved");
@@ -619,7 +627,7 @@ export const amgUpdateItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ itemId: z.string().uuid(), patch: ItemPatch }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureStaff(context);
+    const { supabase } = await ensureReviewer(context);
     const patch: any = { ...data.patch, updated_at: new Date().toISOString() };
     if (typeof patch.stem === "string") patch.dup_hash = dupHash(patch.stem);
     const { data: row, error } = await supabase.from(ITEMS).update(patch).eq("id", data.itemId).select("*").single();
@@ -634,7 +642,7 @@ export const amgAddItem = createServerFn({ method: "POST" })
     pageNo: z.number().int().min(1).max(1000),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureStaff(context);
+    const { supabase } = await ensureReviewer(context);
     const { data: page } = await supabase.from(PAGES).select("id").eq("group_id", data.groupId).eq("page_no", data.pageNo).maybeSingle();
     const { data: last } = await supabase.from(ITEMS).select("order_index").eq("group_id", data.groupId).eq("page_no", data.pageNo)
       .order("order_index", { ascending: false }).limit(1).maybeSingle();
@@ -652,7 +660,7 @@ export const amgDeleteItems = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ itemIds: z.array(z.string().uuid()).min(1).max(500) }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureStaff(context);
+    const { supabase } = await ensureReviewer(context);
     const { error } = await supabase.from(ITEMS).delete().in("id", data.itemIds);
     if (error) throw new Error(error.message);
     return { ok: true, removed: data.itemIds.length };
@@ -665,7 +673,7 @@ export const amgSetStatus = createServerFn({ method: "POST" })
     status: z.enum(["pending", "approved", "skipped"]),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = await ensureStaff(context);
+    const { supabase, userId } = await ensureReviewer(context);
     const { error } = await supabase.from(ITEMS).update({ status: data.status, updated_at: new Date().toISOString() }).in("id", data.itemIds);
     if (error) throw new Error(error.message);
     const { data: first } = await supabase.from(ITEMS).select("group_id").eq("id", data.itemIds[0]).maybeSingle();
@@ -683,7 +691,7 @@ export const amgListEvents = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureStaff(context);
+    const { supabase } = await ensureReviewer(context);
     const { data: rows } = await supabase.from(EVENTS).select("*").eq("group_id", data.groupId)
       .order("created_at", { ascending: false }).limit(100);
     return rows ?? [];
@@ -694,9 +702,9 @@ export const amgDuplicates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureStaff(context);
+    const { supabase } = await ensureReviewer(context);
     const { data: rows } = await supabase.from(ITEMS)
-      .select("id, page_no, order_index, stem, dup_hash, status")
+      .select("id, page_no, order_index, number_label, stem, statements, options, dup_hash, status, flagged")
       .eq("group_id", data.groupId).order("page_no").order("order_index");
     const byHash = new Map<string, any[]>();
     for (const r of rows ?? []) {
@@ -705,7 +713,8 @@ export const amgDuplicates = createServerFn({ method: "POST" })
       list.push(r);
       byHash.set(r.dup_hash, list);
     }
-    return [...byHash.values()].filter((l) => l.length > 1).map((l) => ({ keep: l[0], extras: l.slice(1) }));
+    return [...byHash.values()].filter((l) => l.length > 1)
+      .map((l) => ({ keep: l[0], extras: l.slice(1), items: l }));
   });
 
 /** Ask the AI to fill in whatever is missing, reading the page picture again. */
@@ -716,7 +725,7 @@ export const amgCompleteItems = createServerFn({ method: "POST" })
     itemIds: z.array(z.string().uuid()).min(1).max(40),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureStaff(context);
+    const { supabase } = await ensureReviewer(context);
     const { data: group } = await supabase.from(GROUPS).select("*").eq("id", data.groupId).maybeSingle();
     if (!group) throw new Error("This group no longer exists.");
     const apiKey = await getKey(supabase, group.provider);
@@ -768,9 +777,11 @@ Rules:
 - ANSWER MODE SINGLE: exactly one label. MULTIPLE: every correct label.
 - If the message lists ALLOWED ANSWER SETS (the combinations printed on the paper), you MUST return exactly one of those sets.
 - "explanation" is GitHub-flavored Markdown with THREE sections separated by BLANK LINES:
-  **Concept** — 2-3 sentences on the mechanism.
-  **Why the correct answer is right** — 2-3 short bullets.
-  **Why the other options are wrong** — one bullet per wrong option, each starting with the option's OWN TEXT in **bold** (no letter prefix), then a dash and one sentence.
+  **Concept** — 3-4 sentences on the mechanism, including the key clue in the stem that points to it.
+  **Why the correct answer is right** — 3-4 short bullets (typical presentation, diagnostic clue, or rule that settles it).
+  **Why the other options are wrong** — one bullet per wrong option, each starting with the option's OWN TEXT in **bold** (no letter prefix), then a dash and 1-2 sentences saying what it would look like instead.
+  Finish with one line starting with **Take-home** — a single sentence worth remembering.
+- Keep it useful but tight: never exceed ~180 words in total.
 - "summary_table" is a Markdown table: | Option | Verdict | Reason | with a |---|---|---| separator and one row per option; the Option column holds the option TEXT only (no letter prefix), correct rows ✓ and wrong rows ✗.
 - Never invent options and never change their wording or order.
 - Output JSON only.`;
@@ -918,7 +929,7 @@ export const amgProgress = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureStaff(context);
+    const { supabase } = await ensureReviewer(context);
     const { data: rows } = await supabase.from(ITEMS)
       .select("status, solved, solve_error").eq("group_id", data.groupId);
     const list = rows ?? [];

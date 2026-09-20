@@ -107,7 +107,7 @@ export const adminListUsersAndDevices = createServerFn({ method: "GET" })
     const users: AdminUserRow[] = ((rpcRes.data ?? []) as any[]).map((r) => {
       const p = profMap.get(r.id) ?? {};
       const rawRoles = (r.roles ?? []) as string[];
-      let roles = rawRoles.filter((x) => x !== "qa");
+      let roles = [...rawRoles];
       if (committeeEnSet.has(r.id) && !roles.includes("committee_en")) {
         roles = [...roles, "committee_en"];
       }
