@@ -18,6 +18,7 @@ import {
   GraduationCap,
   Package as PackageIcon,
   CheckSquare,
+  CheckCheck,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -283,6 +284,14 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                 {t("cms.header.packages", { defaultValue: "Packages" })}
               </MenuLink>
               <InstallAppButton />
+              {isQa && !isAdmin && (
+                <>
+                  <div className="my-1 mx-3 border-t border-border" />
+                  <MenuLink to="/admin/aqua-mcq-gen/approval" icon={<CheckCheck size={16} />} onClick={() => setOpen(false)}>
+                    Question approval
+                  </MenuLink>
+                </>
+              )}
               {isLectureStaff && !isAdmin && (
                 <>
                   <div className="my-1 mx-3 border-t border-border" />
