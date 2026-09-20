@@ -36,12 +36,18 @@ function ApprovalPicker() {
 
   const listGroups = useServerFn(amgListGroups);
   const [groups, setGroups] = useState<GroupRow[] | null>(null);
+  const [denied, setDenied] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     (async () => {
       try { setGroups(await listGroups() as any); }
-      catch (e: any) { toast.error(String(e?.message ?? e)); setGroups([]); }
+      catch (e: any) {
+        const msg = String(e?.message ?? e);
+        if (/forbidden/i.test(msg)) setDenied(true);
+        else toast.error(msg);
+        setGroups([]);
+      }
     })();
   }, [user, listGroups]);
 
@@ -60,7 +66,11 @@ function ApprovalPicker() {
         <p className="mt-1 text-sm text-muted-foreground">Choose a group to review its questions beside the original pages.</p>
 
         <div className="mt-6 space-y-3">
-          {groups === null ? (
+          {denied ? (
+            <Card><CardContent className="p-6 text-sm text-muted-foreground">
+              This tool is for admins and quality-assurance members only.
+            </CardContent></Card>
+          ) : groups === null ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading your groups…
             </p>
