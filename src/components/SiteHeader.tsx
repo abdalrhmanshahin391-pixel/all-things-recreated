@@ -53,7 +53,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
   const [open, setOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useTranslation();
-  const { user, profile, isAdmin, isRealAdmin, isGolden, isCommittee, isCommitteeEn, isCommitteeAr, isCommitteeHead, adminMode, setAdminMode, loading: authLoading } = useAuth();
+  const { user, profile, isAdmin, isRealAdmin, isGolden, isQa, isCommittee, isCommitteeEn, isCommitteeAr, isCommitteeHead, adminMode, setAdminMode, loading: authLoading } = useAuth();
   const { lang, toggle: toggleLang } = useLang();
   const settings = useSiteSettings();
   const skin = resolveHeaderSkin(settings.header_style);
@@ -187,6 +187,8 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
             <CommitteeBadge label="Committee" />
           ) : isCommittee ? (
             <CommitteeBadge isAr />
+          ) : isQa ? (
+            <QaBadge />
           ) : (
             <StudentBadge />
           )}
@@ -209,6 +211,8 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                   <CommitteeBadge label="Committee" />
                 ) : isCommittee ? (
                   <CommitteeBadge isAr />
+                ) : isQa ? (
+                  <QaBadge />
                 ) : (
                   <StudentBadge />
                 )}
@@ -224,7 +228,9 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                         ? "Committee"
                         : isCommittee
                           ? "لجنة الطب والجراحة"
-                          : t("cms.header.roleUser")}
+                          : isQa
+                            ? "Quality assurance"
+                            : t("cms.header.roleUser")}
               </p>
             </div>
             <div className="py-1 overflow-y-auto overscroll-contain flex-1 min-h-0">

@@ -44,7 +44,7 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
-  const { user, profile, isGolden, isCommittee, isCommitteeEn, isCommitteeAr, isRealAdmin, loading } = useAuth();
+  const { user, profile, isGolden, isQa, isCommittee, isCommitteeEn, isCommitteeAr, isRealAdmin, loading } = useAuth();
   const navigate = useNavigate();
 
   const [fullName, setFullName] = useState("");
@@ -282,6 +282,8 @@ function ProfilePage() {
                 <CommitteeBadge size="md" label="Committee" />
               ) : isCommittee ? (
                 <CommitteeBadge size="md" isAr />
+              ) : isQa ? (
+                <QaBadge size="md" />
               ) : (
                 <StudentBadge size="md" />
               )}
