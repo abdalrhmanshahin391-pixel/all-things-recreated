@@ -201,6 +201,38 @@ function AquaMcqGenPro() {
     } finally { setBusy(false); setProgress(""); }
   }
 
+  /** Bring set-aside questions back into approval, as extraction produced them. */
+  async function onRestore(groupId: string) {
+    const ok = window.confirm(
+      "Start approval again for these questions?\n\n" +
+      "They come back exactly as they came out of the reading step — nothing approved, " +
+      "and any edits made during the previous approval are lost.",
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res: any = await restoreItems({ data: { groupId } });
+      toast.success(`${res.restored ?? 0} question(s) are back in approval.`);
+      await refreshGroups();
+      await refreshActive(groupId);
+    } catch (e: any) { toast.error(String(e?.message ?? e)); }
+    finally { setBusy(false); }
+  }
+
+  /** Delete the set-aside questions for good. */
+  async function onPurge(groupId: string) {
+    const ok = window.confirm("Delete the removed questions permanently? This cannot be undone.");
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const res: any = await purgeItems({ data: { groupId } });
+      toast.success(`${res.removed ?? 0} question(s) deleted for good.`);
+      await refreshGroups();
+      await refreshActive(groupId);
+    } catch (e: any) { toast.error(String(e?.message ?? e)); }
+    finally { setBusy(false); }
+  }
+
   async function onExtract() {
     if (!active) return;
     setBusy(true); stopRef.current = false;
