@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowLeft, Loader2, Check, SkipForward, Trash2, Plus, Sparkles, Copy, ZoomIn, ZoomOut,
-  RotateCcw, AlertTriangle, History,
+  RotateCcw, AlertTriangle, History, Highlighter, Undo2, Eraser, ChevronDown,
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
@@ -74,6 +74,29 @@ function ApprovalScreen() {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const dragRef = useRef<{ x: number; y: number } | null>(null);
+  const layerRef = useRef<HTMLDivElement | null>(null);
+
+  // Highlighter: boxes are kept as fractions of the page picture, so they
+  // stay on the same words while zooming or moving. They are a reading aid
+  // and are never saved.
+  type Mark = { x: number; y: number; w: number; h: number };
+  const [marking, setMarking] = useState(false);
+  const [marks, setMarks] = useState<Record<number, Mark[]>>({});
+  const markStart = useRef<{ x: number; y: number } | null>(null);
+  const [markDraft, setMarkDraft] = useState<Mark | null>(null);
+  const [openDup, setOpenDup] = useState<number | null>(null);
+
+  const pageNo = draftPageNo();
+  function draftPageNo() { return 0; }
+
+  function layerPoint(e: React.PointerEvent) {
+    const box = layerRef.current?.getBoundingClientRect();
+    if (!box || !box.width || !box.height) return null;
+    return {
+      x: Math.min(1, Math.max(0, (e.clientX - box.left) / box.width)),
+      y: Math.min(1, Math.max(0, (e.clientY - box.top) / box.height)),
+    };
+  }
 
   const reloadItems = useCallback(async () => {
     const rows: any = await listItems({ data: { groupId, filter, pageNo: pageFilter } });
