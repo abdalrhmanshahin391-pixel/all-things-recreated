@@ -89,6 +89,8 @@ function AquaMcqGenPro() {
   const pollBatch = useServerFn(amgPollBatch);
   const listKeys = useServerFn(amgListKeys);
   const saveKey = useServerFn(amgSaveKey);
+  const restoreItems = useServerFn(amgRestoreGroupItems);
+  const purgeItems = useServerFn(amgPurgeGroupItems);
 
   const [denied, setDenied] = useState(false);
   const [groups, setGroups] = useState<GroupRow[]>([]);
