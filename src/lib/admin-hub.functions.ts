@@ -17,9 +17,12 @@ export const saveAdminHubLayout = createServerFn({ method: "POST" })
     if (roleErr) throw roleErr;
     if (!isAdmin) throw new Error("Forbidden");
 
+    const { mergeLayout } = await import("@/lib/admin-hub-defaults");
+    const sanitizedLayout = mergeLayout(data.layout);
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await (supabaseAdmin.from as any)("admin_hub_layout").upsert(
-      { id: true, layout: data.layout, updated_at: new Date().toISOString() },
+      { id: true, layout: sanitizedLayout, updated_at: new Date().toISOString() },
       { onConflict: "id" },
     );
     if (error) throw error;

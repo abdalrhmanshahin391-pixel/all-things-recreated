@@ -56,6 +56,21 @@ function AdminHome() {
   const layout = override ?? mergeLayout(stored);
   const favorites = layout.favorites ?? [];
 
+  // Automatically heal the stored database layout if it contains obsolete tiles
+  useEffect(() => {
+    if (!isAdmin || !stored) return;
+    const raw = JSON.stringify(stored);
+    if (
+      raw.includes("124") ||
+      raw.includes("24.1") ||
+      raw.includes("final-approval") ||
+      raw.includes("mcq-generator")
+    ) {
+      const sanitized = mergeLayout(stored);
+      void saveAdminHubLayout({ data: { layout: sanitized } });
+    }
+  }, [isAdmin, stored]);
+
   async function toggleFavorite(tileKey: string, e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();

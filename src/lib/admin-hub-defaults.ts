@@ -127,6 +127,28 @@ export const DEFAULT_LAYOUT: HubLayout = {
   ],
 };
 
+export const REMOVED_ADMIN_ROUTES = new Set([
+  "/admin/mcq-generator-124-pro",
+  "/admin/final-approval",
+]);
+
+export function isAllowedHubTile(tile: HubTile | null | undefined): boolean {
+  if (!tile || !tile.to) return false;
+  const to = tile.to.toLowerCase();
+  const id = (tile.id ?? "").toLowerCase();
+  const label = (tile.label ?? "").toLowerCase();
+  const labelAr = (tile.labelAr ?? "").toLowerCase();
+
+  if (REMOVED_ADMIN_ROUTES.has(tile.to)) return false;
+  if (tile.id && REMOVED_ADMIN_ROUTES.has(tile.id)) return false;
+  if (to.includes("124") || to.includes("final-approval") || to.includes("mcq-generator")) return false;
+  if (id.includes("124") || id.includes("final-approval") || id.includes("mcq-generator")) return false;
+  if (label.includes("1.24") || label.includes("24.1") || label.includes("final approval")) return false;
+  if (labelAr.includes("1.24") || labelAr.includes("الموافقة النهائية")) return false;
+
+  return true;
+}
+
 /**
  * Merge a stored layout over the defaults so newly shipped admin pages
  * still show up in their default group even if they aren't in the saved copy.
@@ -141,21 +163,33 @@ export function mergeLayout(stored: unknown): HubLayout {
     id: g.id,
     label: g.label,
     labelAr: g.labelAr,
-    tiles: (g.tiles ?? []).filter((x) => x && x.to),
+    tiles: (g.tiles ?? []).filter(isAllowedHubTile),
   }));
 
   const known = new Set(groups.flatMap((g) => g.tiles.map((x) => x.id ?? x.to)));
 
   for (const dg of DEFAULT_LAYOUT.groups) {
-    const missing = dg.tiles.filter((x) => !known.has(x.id));
+    const missing = dg.tiles.filter((x) => isAllowedHubTile(x) && !known.has(x.id));
     if (missing.length === 0) continue;
     const target = groups.find((g) => g.id === dg.id);
     if (target) target.tiles.push(...missing.map((m) => ({ ...m })));
     else groups.push({ ...dg, tiles: missing.map((m) => ({ ...m })) });
   }
 
+  const rawFavs = Array.isArray(s.favorites) ? s.favorites.filter((x): x is string => typeof x === "string") : [];
+  const favorites = rawFavs.filter((favId) => {
+    const lower = favId.toLowerCase();
+    return (
+      !REMOVED_ADMIN_ROUTES.has(favId) &&
+      !lower.includes("124") &&
+      !lower.includes("24.1") &&
+      !lower.includes("final-approval") &&
+      !lower.includes("mcq-generator")
+    );
+  });
+
   return {
     groups,
-    favorites: Array.isArray(s.favorites) ? s.favorites.filter((x): x is string => typeof x === "string") : [],
+    favorites,
   };
 }
