@@ -137,6 +137,7 @@ import { Route as HyGuidesSlugRouteImport } from './routes/hy.guides.$slug'
 import { Route as LecturesCourseIdIndexRouteImport } from './routes/lectures.$courseId.index'
 import { Route as RuGuidesIndexRouteImport } from './routes/ru.guides.index'
 import { Route as RuGuidesSlugRouteImport } from './routes/ru.guides.$slug'
+import { Route as AdminAquaMcqGenGroupIdApprovalRouteImport } from './routes/admin.aqua-mcq-gen.$groupId.approval'
 import { Route as AdminGermanCourseIdManageRouteImport } from './routes/admin.german.$courseId.manage'
 import { Route as ApiPublicPaymentsWebhookRouteImport } from './routes/api/public/payments/webhook'
 import { Route as GermanCourseIdReviewIndexRouteImport } from './routes/german.$courseId.review.index'
@@ -790,6 +791,12 @@ const RuGuidesSlugRoute = RuGuidesSlugRouteImport.update({
   path: '/ru/guides/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminAquaMcqGenGroupIdApprovalRoute =
+  AdminAquaMcqGenGroupIdApprovalRouteImport.update({
+    id: '/$groupId/approval',
+    path: '/$groupId/approval',
+    getParentRoute: () => AdminAquaMcqGenRoute,
+  } as any)
 const AdminGermanCourseIdManageRoute =
   AdminGermanCourseIdManageRouteImport.update({
     id: '/manage',
@@ -858,7 +865,7 @@ export interface FileRoutesByFullPath {
   '/admin/about': typeof AdminAboutRoute
   '/admin/ad-studio': typeof AdminAdStudioRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
-  '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenRoute
+  '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenRouteWithChildren
   '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
   '/admin/committee': typeof AdminCommitteeRoute
@@ -959,6 +966,7 @@ export interface FileRoutesByFullPath {
   '/hy/guides/': typeof HyGuidesIndexRoute
   '/lectures/$courseId/': typeof LecturesCourseIdIndexRoute
   '/ru/guides/': typeof RuGuidesIndexRoute
+  '/admin/aqua-mcq-gen/$groupId/approval': typeof AdminAquaMcqGenGroupIdApprovalRoute
   '/admin/german/$courseId/manage': typeof AdminGermanCourseIdManageRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/german/$courseId/review/run': typeof GermanCourseIdReviewRunRoute
@@ -991,7 +999,7 @@ export interface FileRoutesByTo {
   '/admin/about': typeof AdminAboutRoute
   '/admin/ad-studio': typeof AdminAdStudioRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
-  '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenRoute
+  '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenRouteWithChildren
   '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
   '/admin/committee': typeof AdminCommitteeRoute
@@ -1087,6 +1095,7 @@ export interface FileRoutesByTo {
   '/hy/guides': typeof HyGuidesIndexRoute
   '/lectures/$courseId': typeof LecturesCourseIdIndexRoute
   '/ru/guides': typeof RuGuidesIndexRoute
+  '/admin/aqua-mcq-gen/$groupId/approval': typeof AdminAquaMcqGenGroupIdApprovalRoute
   '/admin/german/$courseId/manage': typeof AdminGermanCourseIdManageRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/german/$courseId/review/run': typeof GermanCourseIdReviewRunRoute
@@ -1124,7 +1133,7 @@ export interface FileRoutesById {
   '/admin/about': typeof AdminAboutRoute
   '/admin/ad-studio': typeof AdminAdStudioRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
-  '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenRoute
+  '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenRouteWithChildren
   '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
   '/admin/committee': typeof AdminCommitteeRoute
@@ -1225,6 +1234,7 @@ export interface FileRoutesById {
   '/hy/guides/': typeof HyGuidesIndexRoute
   '/lectures/$courseId/': typeof LecturesCourseIdIndexRoute
   '/ru/guides/': typeof RuGuidesIndexRoute
+  '/admin/aqua-mcq-gen/$groupId/approval': typeof AdminAquaMcqGenGroupIdApprovalRoute
   '/admin/german/$courseId/manage': typeof AdminGermanCourseIdManageRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/german/$courseId/review/run': typeof GermanCourseIdReviewRunRoute
@@ -1364,6 +1374,7 @@ export interface FileRouteTypes {
     | '/hy/guides/'
     | '/lectures/$courseId/'
     | '/ru/guides/'
+    | '/admin/aqua-mcq-gen/$groupId/approval'
     | '/admin/german/$courseId/manage'
     | '/api/public/payments/webhook'
     | '/german/$courseId/review/run'
@@ -1492,6 +1503,7 @@ export interface FileRouteTypes {
     | '/hy/guides'
     | '/lectures/$courseId'
     | '/ru/guides'
+    | '/admin/aqua-mcq-gen/$groupId/approval'
     | '/admin/german/$courseId/manage'
     | '/api/public/payments/webhook'
     | '/german/$courseId/review/run'
@@ -1629,6 +1641,7 @@ export interface FileRouteTypes {
     | '/hy/guides/'
     | '/lectures/$courseId/'
     | '/ru/guides/'
+    | '/admin/aqua-mcq-gen/$groupId/approval'
     | '/admin/german/$courseId/manage'
     | '/api/public/payments/webhook'
     | '/german/$courseId/review/run'
@@ -1666,7 +1679,7 @@ export interface RootRouteChildren {
   AdminAboutRoute: typeof AdminAboutRoute
   AdminAdStudioRoute: typeof AdminAdStudioRoute
   AdminAiKeysRoute: typeof AdminAiKeysRoute
-  AdminAquaMcqGenRoute: typeof AdminAquaMcqGenRoute
+  AdminAquaMcqGenRoute: typeof AdminAquaMcqGenRouteWithChildren
   AdminAquavisionxRoute: typeof AdminAquavisionxRoute
   AdminBackupsRoute: typeof AdminBackupsRoute
   AdminCommitteeRoute: typeof AdminCommitteeRoute
@@ -2649,6 +2662,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RuGuidesSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/aqua-mcq-gen/$groupId/approval': {
+      id: '/admin/aqua-mcq-gen/$groupId/approval'
+      path: '/$groupId/approval'
+      fullPath: '/admin/aqua-mcq-gen/$groupId/approval'
+      preLoaderRoute: typeof AdminAquaMcqGenGroupIdApprovalRouteImport
+      parentRoute: typeof AdminAquaMcqGenRoute
+    }
     '/admin/german/$courseId/manage': {
       id: '/admin/german/$courseId/manage'
       path: '/manage'
@@ -2809,6 +2829,18 @@ const StudyHubRouteWithChildren = StudyHubRoute._addFileChildren(
   StudyHubRouteChildren,
 )
 
+interface AdminAquaMcqGenRouteChildren {
+  AdminAquaMcqGenGroupIdApprovalRoute: typeof AdminAquaMcqGenGroupIdApprovalRoute
+}
+
+const AdminAquaMcqGenRouteChildren: AdminAquaMcqGenRouteChildren = {
+  AdminAquaMcqGenGroupIdApprovalRoute: AdminAquaMcqGenGroupIdApprovalRoute,
+}
+
+const AdminAquaMcqGenRouteWithChildren = AdminAquaMcqGenRoute._addFileChildren(
+  AdminAquaMcqGenRouteChildren,
+)
+
 interface AdminGermanCourseIdRouteChildren {
   AdminGermanCourseIdManageRoute: typeof AdminGermanCourseIdManageRoute
 }
@@ -2876,7 +2908,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminAboutRoute: AdminAboutRoute,
   AdminAdStudioRoute: AdminAdStudioRoute,
   AdminAiKeysRoute: AdminAiKeysRoute,
-  AdminAquaMcqGenRoute: AdminAquaMcqGenRoute,
+  AdminAquaMcqGenRoute: AdminAquaMcqGenRouteWithChildren,
   AdminAquavisionxRoute: AdminAquavisionxRoute,
   AdminBackupsRoute: AdminBackupsRoute,
   AdminCommitteeRoute: AdminCommitteeRoute,
