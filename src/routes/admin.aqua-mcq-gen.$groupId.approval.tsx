@@ -103,6 +103,42 @@ function ApprovalScreen() {
     };
   }
 
+  // Touch handling for tablets: one finger drags, two fingers pinch, double
+  // tap zooms. Updates are painted once per frame so it stays smooth.
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
+  const lastTap = useRef(0);
+  const rafRef = useRef<number | null>(null);
+  const pendingRef = useRef<(() => void) | null>(null);
+
+  const schedule = useCallback((fn: () => void) => {
+    pendingRef.current = fn;
+    if (rafRef.current != null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const run = pendingRef.current;
+      pendingRef.current = null;
+      run?.();
+    });
+  }, []);
+
+  useEffect(() => () => { if (rafRef.current != null) cancelAnimationFrame(rafRef.current); }, []);
+
+  function endPointer(e: React.PointerEvent) {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size < 2) pinchRef.current = null;
+    if (marking) {
+      const page = draft?.page_no ?? 0;
+      if (markStart.current && markDraft && markDraft.w > 0.005 && markDraft.h > 0.004) {
+        const box = markDraft;
+        setMarks((m) => ({ ...m, [page]: [...(m[page] ?? []), box] }));
+      }
+      markStart.current = null; setMarkDraft(null);
+    }
+    dragRef.current = null;
+  }
+
   const reloadItems = useCallback(async () => {
     const rows: any = await listItems({ data: { groupId, filter, pageNo: pageFilter } });
     setItems(rows as Item[]);
