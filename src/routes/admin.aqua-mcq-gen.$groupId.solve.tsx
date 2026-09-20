@@ -101,7 +101,7 @@ function SolveScreen() {
   async function saveSettings() {
     setBusy(true);
     try {
-      await updateGroup({ data: { groupId, answerSource, answerKey, sourceText, preferSource } });
+      await updateGroup({ data: { groupId, patch: { answer_source: answerSource as "ai" | "source" | "key", answer_key: answerKey, source_text: sourceText, prefer_source: preferSource } } });
       toast.success("Saved");
       await refresh();
     } catch (e: any) {
@@ -115,7 +115,7 @@ function SolveScreen() {
     stopRef.current = false;
     setRunning(true);
     try {
-      await updateGroup({ data: { groupId, answerSource, answerKey, sourceText, preferSource } });
+      await updateGroup({ data: { groupId, patch: { answer_source: answerSource as "ai" | "source" | "key", answer_key: answerKey, source_text: sourceText, prefer_source: preferSource } } });
       // eslint-disable-next-line no-constant-condition
       while (true) {
         if (stopRef.current) { say("Stopped."); break; }
