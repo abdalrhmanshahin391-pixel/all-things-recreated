@@ -14,7 +14,6 @@ export type AuthSnapshot = {
   user: User | null;
   profile: Profile | null;
   isRealAdmin: boolean;
-  isQa: boolean;
   isCommittee: boolean;
   isCommitteeEn: boolean;
   isCommitteeAr: boolean;
@@ -29,7 +28,6 @@ const EMPTY: AuthSnapshot = {
   user: null,
   profile: null,
   isRealAdmin: false,
-  isQa: false,
   isCommittee: false,
   isCommitteeEn: false,
   isCommitteeAr: false,
@@ -61,24 +59,15 @@ function emit(next: Partial<AuthSnapshot>) {
 async function loadExtras(uid: string) {
   if (extrasFor === uid) return;
   extrasFor = uid;
-  const [{ data: prof }, { data: roles }, { data: qaContent }, { data: committeeEnContent }] = await Promise.all([
+  const [{ data: prof }, { data: roles }, { data: committeeEnContent }] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", uid),
-    (supabase.from as any)("site_content").select("value_en").eq("key", "qa_user_ids").maybeSingle(),
     (supabase.from as any)("site_content").select("value_en").eq("key", "committee_en_user_ids").maybeSingle(),
   ]);
   // A newer auth event may have landed while we were fetching.
   if (snapshot.user?.id !== uid) return;
   extrasLoaded.add(uid);
   const list = (roles ?? []) as { role: string }[];
-
-  let persistentQa = false;
-  if (qaContent?.value_en) {
-    try {
-      const ids = JSON.parse(qaContent.value_en);
-      if (Array.isArray(ids) && ids.includes(uid)) persistentQa = true;
-    } catch {}
-  }
 
   let persistentCommitteeEn = false;
   if (committeeEnContent?.value_en) {
@@ -96,7 +85,6 @@ async function loadExtras(uid: string) {
   emit({
     profile: (prof as Profile | null) ?? null,
     isRealAdmin: list.some((r) => r.role === "admin"),
-    isQa: list.some((r) => r.role === "qa" || r.role === "admin") || persistentQa,
     isCommittee,
     isCommitteeEn,
     isCommitteeAr,
@@ -121,7 +109,7 @@ function start() {
     if (!uid) {
       extrasFor = null;
       extrasLoaded.clear();
-      emit({ session: null, user: null, profile: null, isRealAdmin: false, isQa: false, isCommittee: false, isCommitteeEn: false, isCommitteeAr: false, isCommitteeHead: false, isGolden: false, loading: false });
+      emit({ session: null, user: null, profile: null, isRealAdmin: false, isCommittee: false, isCommitteeEn: false, isCommitteeAr: false, isCommitteeHead: false, isGolden: false, loading: false });
       return;
     }
     emit({ session: s, user: s?.user ?? null, loading: !extrasLoaded.has(uid) });

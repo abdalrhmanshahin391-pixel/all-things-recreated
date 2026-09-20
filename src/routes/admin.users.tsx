@@ -35,7 +35,7 @@ import {
 import { toast } from "sonner";
 import { UserModerationDialog } from "@/components/admin/UserModerationDialog";
 import { UserEditDialog } from "@/components/admin/UserEditDialog";
-import { AdminBadge, QaBadge } from "@/components/RoleBadge";
+import { AdminBadge } from "@/components/RoleBadge";
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
 
@@ -46,19 +46,18 @@ export const Route = createFileRoute("/admin/users")({
       {
         name: "description",
         content:
-          "Manage every registered account and grant Admin, QA, or لجنة الطب والجراحة permissions.",
+          "Manage every registered account and grant Admin, Committee, or Golden permissions.",
       },
     ],
   }),
   component: AdminUsersPage,
 });
 
-type RoleKey = "admin" | "qa" | "committee" | "committee_en" | "committee_head" | "golden";
-type Filter = "all" | "admin" | "qa" | "committee" | "committee_en" | "committee_head" | "golden" | "none" | "unverified";
+type RoleKey = "admin" | "committee" | "committee_en" | "committee_head" | "golden";
+type Filter = "all" | "admin" | "committee" | "committee_en" | "committee_head" | "golden" | "none" | "unverified";
 
 const ROLE_LABEL: Record<RoleKey, string> = {
   admin: "Admin",
-  qa: "QA Reviewer",
   committee: "لجنة الطب والجراحة",
   committee_en: "Committee",
   committee_head: "رئيس اللجنة",
@@ -108,7 +107,6 @@ function AdminUsersPage() {
     const q = query.trim().toLowerCase();
     return users.filter((u) => {
       if (filter === "admin" && !u.roles.includes("admin")) return false;
-      if (filter === "qa" && !u.roles.includes("qa")) return false;
       if (filter === "committee" && !u.roles.includes("committee")) return false;
       if (filter === "committee_en" && !u.roles.includes("committee_en")) return false;
       if (filter === "committee_head" && !u.roles.includes("committee_head")) return false;
@@ -129,7 +127,6 @@ function AdminUsersPage() {
     () => ({
       total: users.length,
       admins: users.filter((u) => u.roles.includes("admin")).length,
-      qa: users.filter((u) => u.roles.includes("qa")).length,
       committee: users.filter((u) => u.roles.includes("committee")).length,
       committee_en: users.filter((u) => u.roles.includes("committee_en")).length,
       heads: users.filter((u) => u.roles.includes("committee_head")).length,
@@ -250,7 +247,6 @@ function AdminUsersPage() {
         <div className="flex flex-wrap gap-2 mb-6">
           <Stat label="Users" value={counts.total} />
           <Stat label="Admins" value={counts.admins} />
-          <Stat label="QA Reviewers" value={counts.qa} />
           <Stat label="لجنة الطب والجراحة" value={counts.committee} />
           <Stat label="Committee" value={counts.committee_en} />
           <Stat label="رؤساء اللجنة" value={counts.heads} />
@@ -263,8 +259,6 @@ function AdminUsersPage() {
             <span className="font-semibold text-foreground">What can each role do?</span>{" "}
             <span className="font-semibold text-foreground">Admin</span> controls the whole
             administration site.{" "}
-            <span className="font-semibold text-foreground">QA Reviewer</span> has clearance to review,
-            edit, and approve extracted MCQs in Final Approval before solving.{" "}
             <span className="font-semibold text-foreground">لجنة الطب والجراحة / Committee</span> have
             clearance to add, edit and upload years, semesters, subjects and resources inside the Committee
             section — nothing else.{" "}
@@ -290,7 +284,6 @@ function AdminUsersPage() {
           {([
             ["all", "All"],
             ["admin", "Admins"],
-            ["qa", "QA Reviewers"],
             ["committee", "لجنة الطب والجراحة"],
             ["committee_en", "Committee"],
             ["committee_head", "رئيس اللجنة"],
@@ -447,14 +440,6 @@ function AdminUsersPage() {
                         onClick={() => toggleRole(u, "admin")}
                       />
                       <RoleChip
-                        label={ROLE_LABEL.qa}
-                        icon={<CheckSquare size={13} />}
-                        active={u.roles.includes("qa")}
-                        busy={busyRole === `${u.id}:qa`}
-                        onClick={() => toggleRole(u, "qa")}
-                        variant="qa"
-                      />
-                      <RoleChip
                         label={ROLE_LABEL.committee}
                         icon={<UserCog size={13} />}
                         active={u.roles.includes("committee")}
@@ -589,17 +574,10 @@ export function UserRoleBadge({ roles, size = "sm" }: { roles: string[]; size?: 
   if (specificRoles.includes("committee")) return <CommitteeBadge size={size} isAr />;
   if (specificRoles.includes("golden")) return <GoldenBadge size={size} />;
 
-  // Special QA badge ONLY when the user's sole role is QA (strict rule: if 2+ roles exist, QA badge does not appear)
-  if (specificRoles.includes("qa") && specificRoles.length === 1) {
-    return <QaBadge size={size} />;
-  }
-
-  // If user has 2+ roles and QA was one of them, the non-QA role badge takes precedence
-  const nonQa = specificRoles.filter((r) => r !== "qa");
-  if (nonQa.length > 0) {
+  if (specificRoles.length > 0) {
     return (
       <span className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border border-border bg-card text-foreground uppercase">
-        {nonQa[0]}
+        {specificRoles[0]}
       </span>
     );
   }
@@ -619,13 +597,11 @@ function RoleChip({
   icon: React.ReactNode;
   active: boolean;
   busy: boolean;
-  variant?: "default" | "qa" | "committee";
+  variant?: "default" | "committee";
   onClick: () => void;
 }) {
   const activeClass =
-    variant === "qa"
-      ? "qa-chip"
-      : variant === "committee"
+    variant === "committee"
       ? "committee-chip font-bold shadow-sm"
       : "bg-primary text-primary-foreground border-primary";
 

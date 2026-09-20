@@ -28,7 +28,6 @@ import { EventEntryButtons } from "@/components/events/EventButtons";
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
 import { AdminBadge, StudentBadge } from "@/components/RoleBadge";
-import { QaBadge } from "@/components/QaBadge";
 import { useLang } from "@/components/LanguageProvider";
 import { RaziWordmark } from "@/components/brand/RaziWordmark";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -54,7 +53,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
   const [open, setOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useTranslation();
-  const { user, profile, isAdmin, isRealAdmin, isGolden, isCommittee, isCommitteeEn, isCommitteeAr, isCommitteeHead, isQa, adminMode, setAdminMode, loading: authLoading } = useAuth();
+  const { user, profile, isAdmin, isRealAdmin, isGolden, isCommittee, isCommitteeEn, isCommitteeAr, isCommitteeHead, adminMode, setAdminMode, loading: authLoading } = useAuth();
   const { lang, toggle: toggleLang } = useLang();
   const settings = useSiteSettings();
   const skin = resolveHeaderSkin(settings.header_style);
@@ -188,8 +187,6 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
             <CommitteeBadge label="Committee" />
           ) : isCommittee ? (
             <CommitteeBadge isAr />
-          ) : isQa ? (
-            <QaBadge />
           ) : (
             <StudentBadge />
           )}
@@ -212,8 +209,6 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                   <CommitteeBadge label="Committee" />
                 ) : isCommittee ? (
                   <CommitteeBadge isAr />
-                ) : isQa ? (
-                  <QaBadge />
                 ) : (
                   <StudentBadge />
                 )}
@@ -229,9 +224,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                         ? "Committee"
                         : isCommittee
                           ? "لجنة الطب والجراحة"
-                          : isQa
-                            ? "QA Reviewer"
-                            : t("cms.header.roleUser")}
+                          : t("cms.header.roleUser")}
               </p>
             </div>
             <div className="py-1 overflow-y-auto overscroll-contain flex-1 min-h-0">
@@ -292,17 +285,12 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
                   </MenuLink>
                 </>
               )}
-              {(isAdmin || isCommitteeHead || isQa) && (
+              {(isAdmin || isCommitteeHead) && (
                 <>
                   <div className="my-1 mx-3 border-t border-border" />
                   {isAdmin && (
                     <MenuLink to="/admin" icon={<LayoutGrid size={16} />} onClick={() => setOpen(false)}>
                       Admin
-                    </MenuLink>
-                  )}
-                  {isQa && (
-                    <MenuLink to="/admin/final-approval" icon={<CheckSquare size={16} />} onClick={() => setOpen(false)}>
-                      Final Approval (QA)
                     </MenuLink>
                   )}
                   {isCommitteeHead && (

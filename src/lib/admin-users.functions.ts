@@ -52,7 +52,7 @@ export const adminListUsersAndDevices = createServerFn({ method: "GET" })
     // Canonical user list comes from an admin RPC that reads auth.users +
     // profiles + roles, so the admin sees every real account even when
     // the profiles row is missing after a remix.
-    const [rpcRes, devicesRes, profilesRes, settingsRes, qaContentRes, committeeEnContentRes] = await Promise.all([
+    const [rpcRes, devicesRes, profilesRes, settingsRes, committeeEnContentRes] = await Promise.all([
       context.supabase.rpc("admin_list_all_users"),
       supabaseAdmin
         .from("user_devices")
@@ -68,23 +68,10 @@ export const adminListUsersAndDevices = createServerFn({ method: "GET" })
         .maybeSingle(),
       (supabaseAdmin.from as any)("site_content")
         .select("value_en")
-        .eq("key", "qa_user_ids")
-        .maybeSingle(),
-      (supabaseAdmin.from as any)("site_content")
-        .select("value_en")
         .eq("key", "committee_en_user_ids")
         .maybeSingle(),
     ]);
     if (rpcRes.error) throw new Error(rpcRes.error.message);
-
-    let persistentQaIds: string[] = [];
-    if (qaContentRes?.data?.value_en) {
-      try {
-        const parsed = JSON.parse(qaContentRes.data.value_en);
-        if (Array.isArray(parsed)) persistentQaIds = parsed;
-      } catch {}
-    }
-    const qaSet = new Set(persistentQaIds);
 
     let persistentCommitteeEnIds: string[] = [];
     if (committeeEnContentRes?.data?.value_en) {
@@ -119,8 +106,8 @@ export const adminListUsersAndDevices = createServerFn({ method: "GET" })
 
     const users: AdminUserRow[] = ((rpcRes.data ?? []) as any[]).map((r) => {
       const p = profMap.get(r.id) ?? {};
-      const baseRoles = (r.roles ?? []) as string[];
-      let roles = qaSet.has(r.id) && !baseRoles.includes("qa") ? [...baseRoles, "qa"] : baseRoles;
+      const rawRoles = (r.roles ?? []) as string[];
+      let roles = rawRoles.filter((x) => x !== "qa");
       if (committeeEnSet.has(r.id) && !roles.includes("committee_en")) {
         roles = [...roles, "committee_en"];
       }
@@ -503,47 +490,7 @@ export const adminToggleUserRole = createServerFn({ method: "POST" })
       console.warn(`[adminToggleUserRole] RPC failed for ${role}:`, e);
     }
 
-    if (role === "qa") {
-      try {
-        const { data: existingRow } = await (supabaseAdmin.from as any)("site_content")
-          .select("value_en")
-          .eq("key", "qa_user_ids")
-          .maybeSingle();
-
-        let qaIds: string[] = [];
-        if (existingRow?.value_en) {
-          try {
-            const parsed = JSON.parse(existingRow.value_en);
-            if (Array.isArray(parsed)) qaIds = parsed;
-          } catch {}
-        }
-
-        if (grant) {
-          if (!qaIds.includes(userId)) qaIds.push(userId);
-        } else {
-          qaIds = qaIds.filter((id) => id !== userId);
-        }
-
-        await (supabaseAdmin.from as any)("site_content").upsert(
-          {
-            key: "qa_user_ids",
-            group_key: "roles",
-            group_label: "System Roles",
-            label: "QA Reviewer User IDs",
-            value_en: JSON.stringify(qaIds),
-            value_ar: JSON.stringify(qaIds),
-            default_en: "[]",
-            default_ar: "[]",
-            sort_order: 999,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "key" },
-        );
-      } catch (storeErr) {
-        console.warn("[adminToggleUserRole] Error saving to resilient QA store:", storeErr);
-        if (!rpcSucceeded) throw storeErr;
-      }
-    } else if (role === "committee_en") {
+    if (role === "committee_en") {
       try {
         const { data: existingRow } = await (supabaseAdmin.from as any)("site_content")
           .select("value_en")

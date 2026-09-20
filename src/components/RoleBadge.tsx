@@ -84,5 +84,3 @@ export function StudentBadgeResponsive({ className = "" }: { className?: string 
     </>
   );
 }
-
-export { QaBadge, QaBadgeResponsive } from "./QaBadge";

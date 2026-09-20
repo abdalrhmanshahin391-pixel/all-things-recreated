@@ -49,7 +49,6 @@ import { Route as AdminCoursesRouteImport } from './routes/admin.courses'
 import { Route as AdminCoursesHubRouteImport } from './routes/admin.courses-hub'
 import { Route as AdminDatabaseRouteImport } from './routes/admin.database'
 import { Route as AdminDevicesRouteImport } from './routes/admin.devices'
-import { Route as AdminFinalApprovalRouteImport } from './routes/admin.final-approval'
 import { Route as AdminGeminiKeysRouteImport } from './routes/admin.gemini-keys'
 import { Route as AdminGermanRouteImport } from './routes/admin.german'
 import { Route as AdminGroupsRouteImport } from './routes/admin.groups'
@@ -61,7 +60,6 @@ import { Route as AdminLectureCentreRouteImport } from './routes/admin.lecture-c
 import { Route as AdminLecturesRouteImport } from './routes/admin.lectures'
 import { Route as AdminLegalRouteImport } from './routes/admin.legal'
 import { Route as AdminMarketingRouteImport } from './routes/admin.marketing'
-import { Route as AdminMcqGenerator124ProRouteImport } from './routes/admin.mcq-generator-124-pro'
 import { Route as AdminNavigationRouteImport } from './routes/admin.navigation'
 import { Route as AdminNotificationsRouteImport } from './routes/admin.notifications'
 import { Route as AdminPackagesRouteImport } from './routes/admin.packages'
@@ -348,11 +346,6 @@ const AdminDevicesRoute = AdminDevicesRouteImport.update({
   path: '/admin/devices',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminFinalApprovalRoute = AdminFinalApprovalRouteImport.update({
-  id: '/admin/final-approval',
-  path: '/admin/final-approval',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminGeminiKeysRoute = AdminGeminiKeysRouteImport.update({
   id: '/admin/gemini-keys',
   path: '/admin/gemini-keys',
@@ -407,11 +400,6 @@ const AdminLegalRoute = AdminLegalRouteImport.update({
 const AdminMarketingRoute = AdminMarketingRouteImport.update({
   id: '/admin/marketing',
   path: '/admin/marketing',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminMcqGenerator124ProRoute = AdminMcqGenerator124ProRouteImport.update({
-  id: '/admin/mcq-generator-124-pro',
-  path: '/admin/mcq-generator-124-pro',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminNavigationRoute = AdminNavigationRouteImport.update({
@@ -876,7 +864,6 @@ export interface FileRoutesByFullPath {
   '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
-  '/admin/final-approval': typeof AdminFinalApprovalRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
   '/admin/german': typeof AdminGermanRouteWithChildren
   '/admin/groups': typeof AdminGroupsRoute
@@ -888,7 +875,6 @@ export interface FileRoutesByFullPath {
   '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
-  '/admin/mcq-generator-124-pro': typeof AdminMcqGenerator124ProRoute
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/packages': typeof AdminPackagesRoute
@@ -1010,7 +996,6 @@ export interface FileRoutesByTo {
   '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
-  '/admin/final-approval': typeof AdminFinalApprovalRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
   '/admin/groups': typeof AdminGroupsRoute
   '/admin/jarvis-batch': typeof AdminJarvisBatchRoute
@@ -1021,7 +1006,6 @@ export interface FileRoutesByTo {
   '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
-  '/admin/mcq-generator-124-pro': typeof AdminMcqGenerator124ProRoute
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/packages': typeof AdminPackagesRoute
@@ -1144,7 +1128,6 @@ export interface FileRoutesById {
   '/admin/courses-hub': typeof AdminCoursesHubRoute
   '/admin/database': typeof AdminDatabaseRoute
   '/admin/devices': typeof AdminDevicesRoute
-  '/admin/final-approval': typeof AdminFinalApprovalRoute
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
   '/admin/german': typeof AdminGermanRouteWithChildren
   '/admin/groups': typeof AdminGroupsRoute
@@ -1156,7 +1139,6 @@ export interface FileRoutesById {
   '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
-  '/admin/mcq-generator-124-pro': typeof AdminMcqGenerator124ProRoute
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/packages': typeof AdminPackagesRoute
@@ -1284,7 +1266,6 @@ export interface FileRouteTypes {
     | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
-    | '/admin/final-approval'
     | '/admin/gemini-keys'
     | '/admin/german'
     | '/admin/groups'
@@ -1296,7 +1277,6 @@ export interface FileRouteTypes {
     | '/admin/lectures'
     | '/admin/legal'
     | '/admin/marketing'
-    | '/admin/mcq-generator-124-pro'
     | '/admin/navigation'
     | '/admin/notifications'
     | '/admin/packages'
@@ -1418,7 +1398,6 @@ export interface FileRouteTypes {
     | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
-    | '/admin/final-approval'
     | '/admin/gemini-keys'
     | '/admin/groups'
     | '/admin/jarvis-batch'
@@ -1429,7 +1408,6 @@ export interface FileRouteTypes {
     | '/admin/lectures'
     | '/admin/legal'
     | '/admin/marketing'
-    | '/admin/mcq-generator-124-pro'
     | '/admin/navigation'
     | '/admin/notifications'
     | '/admin/packages'
@@ -1551,7 +1529,6 @@ export interface FileRouteTypes {
     | '/admin/courses-hub'
     | '/admin/database'
     | '/admin/devices'
-    | '/admin/final-approval'
     | '/admin/gemini-keys'
     | '/admin/german'
     | '/admin/groups'
@@ -1563,7 +1540,6 @@ export interface FileRouteTypes {
     | '/admin/lectures'
     | '/admin/legal'
     | '/admin/marketing'
-    | '/admin/mcq-generator-124-pro'
     | '/admin/navigation'
     | '/admin/notifications'
     | '/admin/packages'
@@ -1690,7 +1666,6 @@ export interface RootRouteChildren {
   AdminCoursesHubRoute: typeof AdminCoursesHubRoute
   AdminDatabaseRoute: typeof AdminDatabaseRoute
   AdminDevicesRoute: typeof AdminDevicesRoute
-  AdminFinalApprovalRoute: typeof AdminFinalApprovalRoute
   AdminGeminiKeysRoute: typeof AdminGeminiKeysRoute
   AdminGermanRoute: typeof AdminGermanRouteWithChildren
   AdminGroupsRoute: typeof AdminGroupsRoute
@@ -1702,7 +1677,6 @@ export interface RootRouteChildren {
   AdminLecturesRoute: typeof AdminLecturesRoute
   AdminLegalRoute: typeof AdminLegalRoute
   AdminMarketingRoute: typeof AdminMarketingRoute
-  AdminMcqGenerator124ProRoute: typeof AdminMcqGenerator124ProRoute
   AdminNavigationRoute: typeof AdminNavigationRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminPackagesRoute: typeof AdminPackagesRoute
@@ -2046,13 +2020,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDevicesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/final-approval': {
-      id: '/admin/final-approval'
-      path: '/admin/final-approval'
-      fullPath: '/admin/final-approval'
-      preLoaderRoute: typeof AdminFinalApprovalRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/gemini-keys': {
       id: '/admin/gemini-keys'
       path: '/admin/gemini-keys'
@@ -2128,13 +2095,6 @@ declare module '@tanstack/react-router' {
       path: '/admin/marketing'
       fullPath: '/admin/marketing'
       preLoaderRoute: typeof AdminMarketingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/mcq-generator-124-pro': {
-      id: '/admin/mcq-generator-124-pro'
-      path: '/admin/mcq-generator-124-pro'
-      fullPath: '/admin/mcq-generator-124-pro'
-      preLoaderRoute: typeof AdminMcqGenerator124ProRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/navigation': {
@@ -2908,7 +2868,6 @@ const rootRouteChildren: RootRouteChildren = {
   AdminCoursesHubRoute: AdminCoursesHubRoute,
   AdminDatabaseRoute: AdminDatabaseRoute,
   AdminDevicesRoute: AdminDevicesRoute,
-  AdminFinalApprovalRoute: AdminFinalApprovalRoute,
   AdminGeminiKeysRoute: AdminGeminiKeysRoute,
   AdminGermanRoute: AdminGermanRouteWithChildren,
   AdminGroupsRoute: AdminGroupsRoute,
@@ -2920,7 +2879,6 @@ const rootRouteChildren: RootRouteChildren = {
   AdminLecturesRoute: AdminLecturesRoute,
   AdminLegalRoute: AdminLegalRoute,
   AdminMarketingRoute: AdminMarketingRoute,
-  AdminMcqGenerator124ProRoute: AdminMcqGenerator124ProRoute,
   AdminNavigationRoute: AdminNavigationRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
   AdminPackagesRoute: AdminPackagesRoute,

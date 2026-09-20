@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
-import { AdminBadge, StudentBadge, QaBadge } from "@/components/RoleBadge";
+import { AdminBadge, StudentBadge } from "@/components/RoleBadge";
 import { PushToggle } from "@/components/PushToggle";
 import {
   AlertCircle,
@@ -44,7 +44,7 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
-  const { user, profile, isGolden, isCommittee, isCommitteeEn, isCommitteeAr, isRealAdmin, isQa, loading } = useAuth();
+  const { user, profile, isGolden, isCommittee, isCommitteeEn, isCommitteeAr, isRealAdmin, loading } = useAuth();
   const navigate = useNavigate();
 
   const [fullName, setFullName] = useState("");
@@ -282,8 +282,6 @@ function ProfilePage() {
                 <CommitteeBadge size="md" label="Committee" />
               ) : isCommittee ? (
                 <CommitteeBadge size="md" isAr />
-              ) : isQa ? (
-                <QaBadge size="md" />
               ) : (
                 <StudentBadge size="md" />
               )}
@@ -306,11 +304,6 @@ function ProfilePage() {
             {!isGolden && !isCommitteeEn && isCommittee && (
               <div className="mt-1 text-xs font-semibold text-primary" dir="rtl">
                 عضو في لجنة الطب والجراحة
-              </div>
-            )}
-            {!isRealAdmin && !isGolden && !isCommittee && isQa && (
-              <div className="mt-1 text-xs font-semibold text-emerald-600">
-                QA Reviewer — authorized to review and approve questions.
               </div>
             )}
           </div>
