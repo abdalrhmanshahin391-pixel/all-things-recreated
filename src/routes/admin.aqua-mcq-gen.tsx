@@ -15,8 +15,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { loadPdfForRenderPreferWorker, clearPdfRenderCache } from "@/lib/pdf-page-render";
-import { renderPageToCanvas, canvasToJpegBase64 } from "@/lib/pdf-page-image";
+// PDF helpers are loaded in the browser only (see onPdf) — a static import
+// pulls the huge pdf.js bundle into the server build.
 import {
   AMG_MODELS, amgListGroups, amgCreateGroup, amgUpdateGroup, amgDeleteGroup, amgGetGroup,
   amgRegisterPage, amgExtractPage, amgStartBatch, amgPollBatch,
@@ -174,6 +174,10 @@ function AquaMcqGenPro() {
     setBusy(true); stopRef.current = false;
     try {
       setProgress("Opening the file…");
+      const [{ loadPdfForRenderPreferWorker, clearPdfRenderCache }, { renderPageToCanvas, canvasToJpegBase64 }] = await Promise.all([
+        import("@/lib/pdf-page-render"),
+        import("@/lib/pdf-page-image"),
+      ]);
       const doc = await loadPdfForRenderPreferWorker(file);
       const total = doc.numPages as number;
       await updateGroup({ data: { groupId: active.id, patch: { source_name: file.name.slice(0, 200), page_count: total, status: "extracting", error: null } } });
