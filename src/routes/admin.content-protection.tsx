@@ -231,10 +231,12 @@ function AdminContentProtection() {
                 Watermark strength ({Math.round(toggles.protect_watermark_opacity * 100)}%)
               </label>
               <input
-                type="range" min={2} max={40} value={Math.round(toggles.protect_watermark_opacity * 100)}
+                type="range" min={2} max={100} value={Math.round(toggles.protect_watermark_opacity * 100)}
                 onChange={(e) => setToggles((t) => ({ ...t, protect_watermark_opacity: Number(e.target.value) / 100 }))}
                 onMouseUp={() => patch({ protect_watermark_opacity: toggles.protect_watermark_opacity })}
                 onTouchEnd={() => patch({ protect_watermark_opacity: toggles.protect_watermark_opacity })}
+                onKeyUp={() => patch({ protect_watermark_opacity: toggles.protect_watermark_opacity })}
+                aria-label="Watermark strength"
                 className="mt-3 w-full accent-indigo-600"
               />
             </div>

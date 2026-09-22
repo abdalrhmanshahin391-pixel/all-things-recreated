@@ -269,7 +269,7 @@ export function ProtectedContent({
 
   if (!active && !watermarked) return <>{children}</>;
 
-  const opacity = Math.min(Math.max(settings.protect_watermark_opacity ?? 0.06, 0.02), 0.25);
+  const opacity = Math.min(Math.max(settings.protect_watermark_opacity ?? 0.1, 0.02), 1);
   const terms = settings.protect_terms_en?.trim() || DEFAULT_TERMS_EN;
 
   if (active && settings.protect_consent_required && consented === false) {
