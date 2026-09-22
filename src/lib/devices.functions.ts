@@ -101,7 +101,7 @@ export const recordDevice = createServerFn({ method: "POST" })
     const [{ data: prof }, { data: existing }, admin, globalLimit] = await Promise.all([
       supabaseAdmin
         .from("profiles")
-        .select("device_limit, locked_at, lock_reason, lock_kind")
+        .select("device_limit, locked_at, lock_reason, lock_kind, lock_until")
         .eq("id", userId)
         .maybeSingle(),
       supabaseAdmin
@@ -130,17 +130,32 @@ export const recordDevice = createServerFn({ method: "POST" })
       locked_at?: string | null;
       lock_reason?: string | null;
       lock_kind?: string | null;
+      lock_until?: string | null;
     } | null;
-    const lockReason = profileLock?.lock_reason ?? (profileLock?.lock_kind ? "manual" : null);
+    let lockReason = profileLock?.lock_reason ?? (profileLock?.lock_kind ? "manual" : null);
     const index = list.findIndex((d) => d.device_id === data.deviceId);
     const hasSlot = index > -1 ? index < limit : list.length < limit;
+
+    if (
+      lockedAt &&
+      profileLock?.lock_kind === "suspend" &&
+      profileLock.lock_until &&
+      new Date(profileLock.lock_until).getTime() <= Date.now()
+    ) {
+      await supabaseAdmin
+        .from("profiles")
+        .update({ locked_at: null, lock_reason: null, lock_kind: null, lock_until: null, lock_message: null })
+        .eq("id", userId);
+      lockedAt = null;
+      lockReason = null;
+    }
 
     // A device-limit lock left over from a smaller limit clears itself once the
     // account fits inside the current limit again. Manual locks never do.
     if (lockedAt && lockReason === "device_limit" && hasSlot) {
       await supabaseAdmin
         .from("profiles")
-        .update({ locked_at: null, lock_reason: null })
+        .update({ locked_at: null, lock_reason: null, lock_kind: null, lock_until: null, lock_message: null })
         .eq("id", userId);
       lockedAt = null;
     }
@@ -198,6 +213,22 @@ export const getLockInfo = createServerFn({ method: "GET" })
       globalDeviceLimit(supabaseAdmin),
     ]);
     const p = (prof ?? {}) as any;
+    const suspensionExpired =
+      p.locked_at &&
+      p.lock_kind === "suspend" &&
+      p.lock_until &&
+      new Date(p.lock_until).getTime() <= Date.now();
+    if (suspensionExpired) {
+      await supabaseAdmin
+        .from("profiles")
+        .update({ locked_at: null, lock_reason: null, lock_kind: null, lock_until: null, lock_message: null })
+        .eq("id", context.userId);
+      p.locked_at = null;
+      p.lock_reason = null;
+      p.lock_kind = null;
+      p.lock_until = null;
+      p.lock_message = null;
+    }
     return {
       locked: !!p.locked_at,
       lockedAt: (p.locked_at as string | null) ?? null,
@@ -260,7 +291,7 @@ export const redeemUnlockCode = createServerFn({ method: "POST" })
     await supabaseAdmin.from("user_devices").delete().eq("user_id", userId);
     await supabaseAdmin
       .from("profiles")
-      .update({ locked_at: null, lock_reason: null })
+       .update({ locked_at: null, lock_reason: null, lock_kind: null, lock_until: null, lock_message: null })
       .eq("id", userId);
 
     if (data.deviceId) {
@@ -432,7 +463,7 @@ export const adminSetUserLock = createServerFn({ method: "POST" })
       .update(
         data.locked
           ? { locked_at: new Date().toISOString(), lock_reason: "manual" }
-          : { locked_at: null, lock_reason: null },
+          : { locked_at: null, lock_reason: null, lock_kind: null, lock_until: null, lock_message: null },
       )
       .eq("id", data.userId);
     if (error) throw new Error(error.message);
@@ -448,7 +479,7 @@ export const adminUnlockAndReset = createServerFn({ method: "POST" })
     await supabaseAdmin.from("user_devices").delete().eq("user_id", data.userId);
     const { error } = await supabaseAdmin
       .from("profiles")
-      .update({ locked_at: null, lock_reason: null })
+      .update({ locked_at: null, lock_reason: null, lock_kind: null, lock_until: null, lock_message: null })
       .eq("id", data.userId);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -461,6 +492,14 @@ export const adminListLockStates = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data } = await supabaseAdmin
       .from("profiles")
-      .select("id, locked_at, lock_reason");
-    return { locks: (data ?? []) as { id: string; locked_at: string | null; lock_reason: string | null }[] };
+      .select("id, locked_at, lock_reason, lock_kind, lock_until");
+    return {
+      locks: (data ?? []) as {
+        id: string;
+        locked_at: string | null;
+        lock_reason: string | null;
+        lock_kind: string | null;
+        lock_until: string | null;
+      }[],
+    };
   });

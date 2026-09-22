@@ -58,16 +58,34 @@ function LockedPage() {
 
   useEffect(() => {
     let alive = true;
-    (async () => {
+    let checking = false;
+    const check = async () => {
+      if (checking) return;
+      checking = true;
       try {
         const res = await info();
-        if (alive) setState(res);
+        if (!alive) return;
+        if (!res.locked) {
+          window.location.replace("/");
+          return;
+        }
+        setState(res);
       } catch {
-        navigate({ to: "/login" });
+        if (alive) navigate({ to: "/login" });
+      } finally {
+        checking = false;
       }
-    })();
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 15_000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       alive = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -97,6 +115,13 @@ function LockedPage() {
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader variant="light" />
       <main className="mx-auto max-w-2xl px-6 pt-32 pb-24">
+        {!state ? (
+          <div className="rounded-3xl border border-border bg-card px-8 py-16 text-center shadow-xl">
+            <Loader2 size={30} className="mx-auto animate-spin text-primary" />
+            <h1 className="mt-5 text-xl font-black">Checking your account…</h1>
+            <p className="mt-2 text-sm text-muted-foreground">You will return to the site automatically if your account is active.</p>
+          </div>
+        ) : (
         <div className="rounded-3xl border border-border bg-card shadow-xl overflow-hidden">
           <div className="bg-primary/10 px-8 py-10 text-center">
             <div className="mx-auto h-16 w-16 rounded-2xl bg-primary/15 grid place-items-center">
@@ -176,6 +201,7 @@ function LockedPage() {
             </div>
           </div>
         </div>
+        )}
       </main>
     </div>
   );

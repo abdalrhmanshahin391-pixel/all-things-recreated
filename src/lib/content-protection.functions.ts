@@ -149,7 +149,7 @@ export const adminContentProtectionOverview = createServerFn({ method: "POST" })
         .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(4000),
-      (supabaseAdmin.from as any)("profiles").select("id,username,full_name,email,locked_at"),
+      (supabaseAdmin.from as any)("profiles").select("id,username,full_name,email,locked_at,lock_reason"),
     ]);
 
     const byUser = new Map<string, ProtectionRow>();
@@ -178,6 +178,23 @@ export const adminContentProtectionOverview = createServerFn({ method: "POST" })
       row.events += 1;
       row.score += WEIGHTS[e.kind] ?? 1;
       row.breakdown[e.kind] = (row.breakdown[e.kind] ?? 0) + 1;
+    }
+
+    for (const p of profiles ?? []) {
+      if (!p.locked_at || byUser.has(p.id)) continue;
+      byUser.set(p.id, {
+        user_id: p.id,
+        username: p.username ?? "—",
+        full_name: p.full_name ?? "",
+        email: p.email ?? "",
+        code: p.id.slice(0, 8).toUpperCase(),
+        score: 0,
+        level: "low",
+        events: 0,
+        last_event_at: null,
+        locked: true,
+        breakdown: {},
+      });
     }
 
     const rows = [...byUser.values()]
@@ -247,7 +264,7 @@ export const adminSetContentLock = createServerFn({ method: "POST" })
       .update(
         data.locked
           ? { locked_at: new Date().toISOString(), lock_reason: "content_protection" }
-          : { locked_at: null, lock_reason: null },
+          : { locked_at: null, lock_reason: null, lock_kind: null, lock_until: null, lock_message: null },
       )
       .eq("id", data.userId);
     if (error) throw error;
