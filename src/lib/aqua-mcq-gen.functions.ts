@@ -1249,5 +1249,5 @@ export const amgRewriteSubjectExplanations = createServerFn({ method: "POST" })
         rewritten += 1;
       } catch (e: any) { failures.push(String(e?.message ?? e).slice(0, 160)); }
     }
-    return { rewritten, remaining: (questions ?? []).length === data.limit, failures };
+    return { rewritten, remaining: (questions ?? []).length === data.limit, failures, total: total ?? 0 };
   });
