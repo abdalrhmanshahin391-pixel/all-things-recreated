@@ -262,11 +262,41 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>{AMG_MODELS[provider].map((item) => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}</SelectContent>
         </Select>
-        <Button onClick={rewriteAll} disabled={rewriting || !rows.length}>{rewriting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Rewrite explanations</Button>
+        <Button onClick={() => { setProgress(null); setConfirmOpen(true); }} disabled={rewriting || !rows.length}>{rewriting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Rewrite explanations</Button>
         <label className="flex items-center gap-2 text-xs text-white/70 md:col-span-3">
           <input type="checkbox" checked={onlyEmpty} onChange={(event) => setOnlyEmpty(event.target.checked)} className="accent-amber-400" />
           Only questions without an explanation
         </label>
+
+        {confirmOpen && !rewriting && (
+          <div className="md:col-span-3 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4 text-sm text-white/80">
+            <p className="font-bold text-white">Replace {onlyEmpty ? "missing" : "old"} explanations in this subject?</p>
+            <p className="mt-1 text-xs text-white/60">
+              Model: {AMG_MODELS[provider].find((m) => m.id === model)?.label ?? model} ({provider === "google" ? "Google AI Studio" : "OpenAI"}).
+              Questions, options and answers will not change.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button onClick={() => void rewriteAll()}><Sparkles className="mr-2 h-4 w-4" />Start rewriting</Button>
+              <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
+            </div>
+          </div>
+        )}
+
+        {(rewriting || progress) && (
+          <div className="md:col-span-3 rounded-xl border border-white/10 bg-black/40 p-4 text-sm text-white/80">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                {rewriting && <Loader2 className="h-4 w-4 animate-spin text-amber-300" />}
+                {progress?.message ?? "Starting…"}
+              </span>
+              {rewriting
+                ? <Button variant="outline" onClick={() => { stopRef.current = true; }}>Stop</Button>
+                : <Button variant="outline" onClick={() => setProgress(null)}>Hide</Button>}
+            </div>
+            {progress?.failed ? <p className="mt-2 text-xs text-amber-300">{progress.failed} question(s) failed.</p> : null}
+            {progress?.error ? <p className="mt-1 text-xs text-rose-300 break-words">{progress.error}</p> : null}
+          </div>
+        )}
       </div>
 
       {!loading && filtered.length === 0 && (
