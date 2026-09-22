@@ -906,6 +906,8 @@ function buildNewExplanation(json: any, opts: any[], correctLabels: string[]): s
   if (String(json?.memory_aid ?? "").trim()) parts.push(`### Easy way to remember\n${String(json.memory_aid).trim()}`);
   const fallbackAnswer = opts.filter((o: any) => correct.has(String(o.label).toUpperCase())).map((o: any) => o.text).join(", ");
   parts.push(`**Answer:** ${cleanTableCell(json?.answer_line || fallbackAnswer)}`);
+  const sourceAnswer = String(json?.source_answer ?? "").trim();
+  if (json?.source_found === true && sourceAnswer) parts.push(`**Answer from the book:** ${cleanTableCell(sourceAnswer)}`);
   return parts.filter(Boolean).join("\n\n");
 }
 
