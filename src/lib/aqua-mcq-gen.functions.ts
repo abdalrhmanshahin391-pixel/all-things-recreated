@@ -881,6 +881,7 @@ Rules:
 - "answer_line" contains only the final answer wording. Never include A/B/C/D. For combination questions, name the correct statements rather than returning only numbers.
 - Keep the total professional and focused, roughly 220-320 words plus the rows.
 - Never invent options and never change their wording or order.
+- "source_found": set it to true ONLY when a REFERENCE SOURCE block was supplied in the message AND that text clearly states or supports the answer. In that case "source_answer" holds the answer as the source states it, in one or two short sentences taken from that text. Otherwise set "source_found" to false and omit "source_answer". Never invent a source answer and never quote more than two sentences.
 - Output JSON only.`;
 
 function cleanTableCell(value: unknown): string {
