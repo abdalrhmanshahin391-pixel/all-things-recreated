@@ -1219,7 +1219,7 @@ export const amgRewriteSubjectExplanations = createServerFn({ method: "POST" })
     const { supabase } = await ensureAdmin(context);
     let query = supabase.from("questions").select("id,stem,explanation,answer_mode,question_options(label,text,is_correct,sort_order)")
       .eq("subject_id", data.subjectId).order("sort_order").limit(data.limit);
-    if (data.onlyEmpty) query = query.or("explanation.is.null,explanation.eq.");
+    if (data.onlyEmpty) query = query.is("explanation", null);
     else query = query.not("explanation", "like", "%| Option | Correct? | Explanation |%");
     const { data: questions, error } = await query;
     if (error) throw new Error(error.message);
