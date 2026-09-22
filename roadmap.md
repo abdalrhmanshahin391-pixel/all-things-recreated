@@ -5,4 +5,4 @@
 - [x] Enforce printed combination sets before AquaVisionX solve and import
 - [x] Add AquaVisionX PDF, pasted-text, and public-link answer resources
 - [x] Fix false device-security locks while preserving the 30-device boundary
-- [ ] Prevent stale lock screens and keep every admin lock view synchronized
+- [x] Prevent stale lock screens and keep every admin lock view synchronized
