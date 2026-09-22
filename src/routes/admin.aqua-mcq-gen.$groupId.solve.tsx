@@ -34,6 +34,7 @@ export const Route = createFileRoute("/admin/aqua-mcq-gen/$groupId/solve")({
 });
 
 type Progress = { total: number; pending: number; approved: number; imported: number; solved: number; failed: number };
+type SavedSolveRun = { state: "active" | "paused" | "failed" | "completed"; log: string[]; updatedAt: string };
 
 function SolveScreen() {
   const { groupId } = Route.useParams();
@@ -58,6 +59,8 @@ function SolveScreen() {
   const [log, setLog] = useState<string[]>([]);
   const [pdfSources, setPdfSources] = useState<{ id: string; file_name: string }[]>([]);
   const stopRef = useRef(false);
+  const runStorageKey = `amg-solve-run:${groupId}`;
+  const [savedRun, setSavedRun] = useState<SavedSolveRun | null>(null);
 
   const [courses, setCourses] = useState<{ id: string; title: string }[]>([]);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
@@ -84,13 +87,29 @@ function SolveScreen() {
   }
 
   useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(runStorageKey);
+      if (raw) {
+        const saved = JSON.parse(raw) as SavedSolveRun;
+        setSavedRun(saved);
+        setLog(Array.isArray(saved.log) ? saved.log.slice(0, 80) : []);
+      }
+    } catch {
+      window.localStorage.removeItem(runStorageKey);
+    }
     void refresh();
     (async () => {
       const { data } = await supabase.from("courses").select("id,title").order("created_at", { ascending: false });
       setCourses(((data ?? []) as any[]).map((r) => ({ id: r.id, title: r.title })));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupId]);
+  }, [groupId, runStorageKey]);
+
+  function saveRun(state: SavedSolveRun["state"], nextLog = log) {
+    const value: SavedSolveRun = { state, log: nextLog.slice(0, 80), updatedAt: new Date().toISOString() };
+    setSavedRun(value);
+    window.localStorage.setItem(runStorageKey, JSON.stringify(value));
+  }
 
   useEffect(() => {
     if (!courseId) { setGroups([]); setSgId(""); return; }
@@ -124,22 +143,24 @@ function SolveScreen() {
   async function runSolve() {
     stopRef.current = false;
     setRunning(true);
+    saveRun("active");
     try {
       await updateGroup({ data: { groupId, patch: { answer_source: answerSource as "ai" | "source" | "key", answer_key: answerKey, source_text: sourceText, prefer_source: preferSource } } });
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        if (stopRef.current) { say("Stopped."); break; }
+        if (stopRef.current) { say("Paused. You can continue later."); saveRun("paused"); break; }
         const r: any = await solveBatch({ data: { groupId, limit: 4 } });
         if (r.solved) say(`Solved ${r.solved} — ${r.remaining} left`);
         for (const f of r.failures ?? []) say(f);
         setStats(await progressFn({ data: { groupId } }) as any);
-        if (!r.solved && !(r.failures ?? []).length) { say("Nothing left to solve."); break; }
-        if (r.remaining === 0) { say("All approved questions are solved."); break; }
-        if (!r.solved) { say("Stopped — the remaining questions keep failing."); break; }
+        if (!r.solved && !(r.failures ?? []).length) { say("Nothing left to solve."); saveRun("completed"); break; }
+        if (r.remaining === 0) { say("All approved questions are solved."); saveRun("completed"); break; }
+        if (!r.solved) { say("Paused — the remaining questions keep failing."); saveRun("failed"); break; }
       }
     } catch (e: any) {
       toast.error(e?.message || "Solving failed");
       say(String(e?.message ?? e));
+      saveRun("failed");
     } finally {
       setRunning(false);
     }
@@ -207,6 +228,8 @@ function SolveScreen() {
     if (!stats?.approved) return 0;
     return Math.round((stats.solved / stats.approved) * 100);
   }, [stats]);
+  const unfinished = Math.max(0, (stats?.approved ?? 0) - (stats?.solved ?? 0));
+  const canContinue = unfinished > 0 && savedRun && savedRun.state !== "completed";
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-4 p-4">
@@ -288,12 +311,17 @@ function SolveScreen() {
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={saveSettings} disabled={busy || running}>Save</Button>
             <Button size="sm" onClick={runSolve} disabled={running || !stats?.approved}>
-              {running ? "Solving…" : "Solve & explain approved questions"}
+              {running ? "Solving…" : canContinue ? `Continue solving (${unfinished} left)` : "Solve & explain approved questions"}
             </Button>
             {running && (
               <Button size="sm" variant="destructive" onClick={() => { stopRef.current = true; }}>Stop</Button>
             )}
           </div>
+          {canContinue && !running && (
+            <p className="text-xs text-muted-foreground">
+              Your completed questions are saved. Continue from the next unsolved question whenever you are ready.
+            </p>
+          )}
         </CardContent>
       </Card>
 
