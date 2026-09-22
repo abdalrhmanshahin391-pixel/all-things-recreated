@@ -17,7 +17,15 @@ import { QuestionImagePicker } from "@/components/admin/QuestionImagePicker";
 import { useCourseOptions, yearLabel, getYearSortPriority } from "@/lib/course-options";
 
 export const Route = createFileRoute("/admin/questions")({
-  head: () => ({ meta: [{ title: "Q add choice — AquaQBank" }] }),
+  head: () => ({ meta: [
+    { title: "Manage Questions — AquaQBank Admin" },
+    { name: "description", content: "Create, edit, reorganise and improve course questions and explanations." },
+    { property: "og:title", content: "Manage Questions — AquaQBank Admin" },
+    { property: "og:description", content: "Create, edit, reorganise and improve course questions and explanations." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+    { name: "robots", content: "noindex, nofollow" },
+  ] }),
   component: AdminQuestionsPage,
 });
 

@@ -106,6 +106,8 @@ function RunPage() {
   const [reloadVersion, setReloadVersion] = useState(0);
   const hasAccess = accessReady === accessKey;
   const [courseSections, setCourseSections] = useState<CourseSectionGroup[]>([]);
+  const [sessionReady, setSessionReady] = useState(false);
+  const sessionKey = `aqua-quiz:${user?.id ?? "guest"}:${courseId}:${mode}:${subjects}:${pool}:${timed}:${duration}`;
 
   // Access gate: paid course requires admin OR an enrollment row.
   // Free ($0) courses auto-enroll on first entry.
@@ -185,6 +187,7 @@ function RunPage() {
     setReviewMode(false);
     setReviewIndex(0);
     setSecondsLeft(initialSeconds);
+    setSessionReady(false);
     (async () => {
       let subjectIds: string[] = [];
       if (subjects === "all") {
@@ -319,6 +322,24 @@ function RunPage() {
 
       if (cancelled) return;
       setQuestions(list);
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(sessionKey) ?? "null");
+        if (saved && Array.isArray(saved.questionIds) && saved.questionIds.join("|") === list.map((q) => q.id).join("|")) {
+          const restoredAnswers: SelectedAnswers = {};
+          for (const q of list) {
+            const ids = Array.isArray(saved.answerOptionIds?.[q.id]) ? saved.answerOptionIds[q.id] : [];
+            restoredAnswers[q.id] = q.options.filter((option) => ids.includes(option.id)).map((option) => option.label);
+          }
+          setAnswers(restoredAnswers);
+          setSubmitted(saved.submitted ?? {});
+          setCurrent(Math.max(0, Math.min(Number(saved.current) || 0, list.length - 1)));
+          setFinished(Boolean(saved.finished));
+          setReviewMode(Boolean(saved.reviewMode));
+          setReviewIndex(Math.max(0, Number(saved.reviewIndex) || 0));
+          setSecondsLeft(Math.max(0, Number(saved.secondsLeft) || initialSeconds));
+        }
+      } catch { sessionStorage.removeItem(sessionKey); }
+      setSessionReady(true);
       setLoading(false);
     })().catch((error) => {
       if (cancelled) return;
@@ -331,7 +352,19 @@ function RunPage() {
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [courseId, subjects, pool, user, hasAccess, accessKey, initialSeconds, mode, reloadVersion]);
+  }, [courseId, subjects, pool, user?.id, hasAccess, accessKey, initialSeconds, mode, reloadVersion, sessionKey]);
+
+  useEffect(() => {
+    if (!sessionReady || !questions.length) return;
+    const answerOptionIds: Record<string, string[]> = {};
+    for (const q of questions) {
+      const labels = new Set(answers[q.id] ?? []);
+      answerOptionIds[q.id] = q.options.filter((option) => labels.has(option.label)).map((option) => option.id);
+    }
+    sessionStorage.setItem(sessionKey, JSON.stringify({
+      questionIds: questions.map((q) => q.id), answerOptionIds, submitted, current, finished, reviewMode, reviewIndex, secondsLeft,
+    }));
+  }, [sessionReady, sessionKey, questions, answers, submitted, current, finished, reviewMode, reviewIndex, secondsLeft]);
 
   useEffect(() => {
     if (mode !== "study" || !questions.length) return;

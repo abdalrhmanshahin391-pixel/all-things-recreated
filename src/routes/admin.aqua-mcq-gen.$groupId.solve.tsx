@@ -7,12 +7,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import {
   amgGetGroup, amgUpdateGroup, amgSolveBatch, amgProgress, amgImportGroup,
+  amgAddPdfSource, amgListPdfSources, amgDeletePdfSource, amgImportCourseSubject,
 } from "@/lib/aqua-mcq-gen.functions";
+
+const SOURCE_BUCKET = "amg-sources";
 
 export const Route = createFileRoute("/admin/aqua-mcq-gen/$groupId/solve")({
   head: () => ({
@@ -38,6 +42,10 @@ function SolveScreen() {
   const solveBatch = useServerFn(amgSolveBatch);
   const progressFn = useServerFn(amgProgress);
   const importFn = useServerFn(amgImportGroup);
+  const addPdfSource = useServerFn(amgAddPdfSource);
+  const listPdfSources = useServerFn(amgListPdfSources);
+  const deletePdfSource = useServerFn(amgDeletePdfSource);
+  const importCourseSubject = useServerFn(amgImportCourseSubject);
 
   const [group, setGroup] = useState<any>(null);
   const [stats, setStats] = useState<Progress | null>(null);
@@ -48,6 +56,7 @@ function SolveScreen() {
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<string[]>([]);
+  const [pdfSources, setPdfSources] = useState<{ id: string; file_name: string }[]>([]);
   const stopRef = useRef(false);
 
   const [courses, setCourses] = useState<{ id: string; title: string }[]>([]);
@@ -68,6 +77,7 @@ function SolveScreen() {
       setSourceText(String(r.group?.source_text ?? ""));
       setPreferSource(Boolean(r.group?.prefer_source));
       setStats(await progressFn({ data: { groupId } }) as any);
+      setPdfSources(await listPdfSources({ data: { groupId } }) as any);
     } catch (e: any) {
       toast.error(e?.message || "Could not load this group");
     }
@@ -151,6 +161,48 @@ function SolveScreen() {
     }
   }
 
+  async function uploadSourcePdf(file: File) {
+    if (file.size > 20 * 1024 * 1024) { toast.error("The PDF must be 20 MB or smaller."); return; }
+    setBusy(true);
+    const storagePath = `${groupId}/${crypto.randomUUID()}.pdf`;
+    try {
+      const { loadPdfForText, getPageText, clearPdfRenderCache } = await import("@/lib/pdf-page-render");
+      const doc = await loadPdfForText(file);
+      const pages: string[] = [];
+      for (let page = 1; page <= Number(doc.numPages || 0); page++) pages.push(await getPageText(doc, page));
+      clearPdfRenderCache();
+      if (!pages.some((page) => page.trim())) throw new Error("No selectable text was found in this PDF.");
+      const { error: uploadError } = await supabase.storage.from(SOURCE_BUCKET).upload(storagePath, file, { contentType: "application/pdf" });
+      if (uploadError) throw uploadError;
+      await addPdfSource({ data: { groupId, fileName: file.name, storagePath, pages } });
+      setPdfSources(await listPdfSources({ data: { groupId } }) as any);
+      toast.success("Source PDF added. The AI will find the relevant sections for each question.");
+    } catch (e: any) {
+      await supabase.storage.from(SOURCE_BUCKET).remove([storagePath]);
+      toast.error(e?.message || "Could not read this PDF");
+    } finally { setBusy(false); }
+  }
+
+  async function removeSource(id: string) {
+    setBusy(true);
+    try {
+      await deletePdfSource({ data: { sourceId: id } });
+      setPdfSources(await listPdfSources({ data: { groupId } }) as any);
+    } catch (e: any) { toast.error(e?.message || "Could not remove the source"); }
+    finally { setBusy(false); }
+  }
+
+  async function bringCourseQuestions() {
+    if (!subjectId) { toast.error("Pick a course section first"); return; }
+    setBusy(true);
+    try {
+      const result: any = await importCourseSubject({ data: { groupId, subjectId } });
+      toast.success(`Added ${result.imported} existing question(s) for re-solving.`);
+      await refresh();
+    } catch (e: any) { toast.error(e?.message || "Could not add the questions"); }
+    finally { setBusy(false); }
+  }
+
   const pct = useMemo(() => {
     if (!stats?.approved) return 0;
     return Math.round((stats.solved / stats.approved) * 100);
@@ -203,8 +255,20 @@ function SolveScreen() {
           )}
 
           {(answerSource === "source" || preferSource) && (
-            <div className="space-y-1">
-              <Label className="text-sm">Source / reference text</Label>
+            <div className="space-y-3">
+              <Label className="text-sm">Source PDF</Label>
+              <Input type="file" accept="application/pdf" disabled={busy} onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void uploadSourcePdf(file);
+                event.currentTarget.value = "";
+              }} />
+              {pdfSources.map((source) => (
+                <div key={source.id} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
+                  <span className="truncate">{source.file_name}</span>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => removeSource(source.id)} disabled={busy}>Remove</Button>
+                </div>
+              ))}
+              <Label className="text-sm">Extra source / reference text</Label>
               <Textarea rows={6} value={sourceText} onChange={(e) => setSourceText(e.target.value)}
                 placeholder="Paste the book chapter, lecture notes or any text the answers must come from." />
             </div>
@@ -255,6 +319,9 @@ function SolveScreen() {
           </div>
           <Button size="sm" onClick={runImport} disabled={busy || running || !subjectId}>
             Import {stats?.solved ?? 0} solved question(s)
+          </Button>
+          <Button size="sm" variant="outline" onClick={bringCourseQuestions} disabled={busy || running || !subjectId}>
+            Bring this subject into MCQ Gen for re-solving
           </Button>
         </CardContent>
       </Card>
