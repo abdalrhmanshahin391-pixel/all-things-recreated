@@ -4,3 +4,4 @@
 - [x] Verify sample conversion, checks, and live build
 - [x] Enforce printed combination sets before AquaVisionX solve and import
 - [x] Add AquaVisionX PDF, pasted-text, and public-link answer resources
+- [x] Fix false device-security locks while preserving the 30-device boundary

@@ -24,7 +24,10 @@ const WEIGHTS: Record<string, number> = {
   devtools: 8,
   screen_share: 12,
   rapid_flip: 4,
-  focus_loss: 1,
+  // Switching apps, changing tabs, locking a phone, and browser UI on iPad
+  // all produce this signal during normal use. Keep logging it for context,
+  // but never let it contribute to an automatic account lock.
+  focus_loss: 0,
   consent_accepted: 0,
 };
 
