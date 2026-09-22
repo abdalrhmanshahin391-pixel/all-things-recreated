@@ -921,13 +921,13 @@ function explanationItemsForQuestion(item: any, opts: any[], answerLabels: strin
   const items = statementRows.length ? statementRows : numberedOptions.length ? numberedOptions : stemRows;
   if (!items.length) return { items: opts, correctLabels: answerLabels };
 
-  const direct = answerLabels.filter((label) => items.some((row) => row.label === label));
+  const direct = answerLabels.filter((label) => items.some((row: { label: string }) => row.label === label));
   if (direct.length) return { items, correctLabels: direct };
 
   const chosen = opts.filter((option: any) => answerLabels.includes(String(option?.label ?? "").toUpperCase()));
   const allChosen = chosen.some((option: any) => /all\s+(?:mentioned|of\s+the\s+above)/i.test(String(option?.text ?? "")));
   const expanded = allChosen
-    ? items.map((row) => row.label)
+    ? items.map((row: { label: string }) => row.label)
     : [...new Set(chosen.flatMap((option: any) => String(option?.text ?? "").match(/\d+/g) ?? []))];
   return { items, correctLabels: expanded };
 }

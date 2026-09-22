@@ -115,7 +115,7 @@ function RunPage() {
   const [adminEditing, setAdminEditing] = useState<Question | null>(null);
   const [resolveQuestion, setResolveQuestion] = useState<Question | null>(null);
   const [resolveProvider, setResolveProvider] = useState<"google" | "openai">("google");
-  const [resolveModel, setResolveModel] = useState(AMG_MODELS.google[0]);
+  const [resolveModel, setResolveModel] = useState<string>(AMG_MODELS.google[0].id);
   const [resolving, setResolving] = useState(false);
   const resolveCourseQuestion = useServerFn(amgResolveCourseQuestion);
   const updateCourseQuestion = useServerFn(amgUpdateCourseQuestion);
@@ -964,14 +964,14 @@ function RunPage() {
             <Select value={resolveProvider} onValueChange={(value) => {
               const provider = value as "google" | "openai";
               setResolveProvider(provider);
-              setResolveModel(AMG_MODELS[provider][0]);
+              setResolveModel(AMG_MODELS[provider][0].id);
             }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="google">Google</SelectItem><SelectItem value="openai">OpenAI</SelectItem></SelectContent>
             </Select>
             <Select value={resolveModel} onValueChange={setResolveModel}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{AMG_MODELS[resolveProvider].map((model) => <SelectItem key={model} value={model}>{model}</SelectItem>)}</SelectContent>
+              <SelectContent>{AMG_MODELS[resolveProvider].map((model) => <SelectItem key={model.id} value={model.id}>{model.label}</SelectItem>)}</SelectContent>
             </Select>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setResolveQuestion(null)} disabled={resolving}>Cancel</Button>
