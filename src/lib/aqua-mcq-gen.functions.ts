@@ -1095,19 +1095,21 @@ export const amgImportGroup = createServerFn({ method: "POST" })
       try {
         const exp = (item.explanation ?? {}) as any;
         const explanation = [String(exp.explanation ?? ""), exp.summary_table ? `\n\n${exp.summary_table}` : ""].join("").trim() || null;
-        const { data: q, error: qErr } = await supabase.from("questions").upsert(
-          {
+        const questionPayload = {
             subject_id: data.subjectId,
             stem: item.stem,
             explanation,
             answer_mode: item.answer_mode ?? "single",
             sort_order: sort,
-          },
-          { onConflict: "subject_id,stem_hash", ignoreDuplicates: true },
-        ).select("id").maybeSingle();
+        };
+        const questionQuery = item.origin_question_id
+          ? supabase.from("questions").update(questionPayload).eq("id", item.origin_question_id).select("id").maybeSingle()
+          : supabase.from("questions").upsert(questionPayload, { onConflict: "subject_id,stem_hash", ignoreDuplicates: true }).select("id").maybeSingle();
+        const { data: q, error: qErr } = await questionQuery;
         if (qErr) throw new Error(qErr.message);
         if (!q?.id) { skipped += 1; continue; }
 
+        if (item.origin_question_id) await supabase.from("question_options").delete().eq("question_id", q.id);
         const correct = (item.answer_labels ?? []).map((l: string) => String(l).toUpperCase());
         const rows = (Array.isArray(item.options) ? item.options : []).map((o: any, idx: number) => ({
           question_id: q.id,
@@ -1135,4 +1137,106 @@ export const amgImportGroup = createServerFn({ method: "POST" })
     if (inserted) await supabase.from(GROUPS).update({ status: "imported" }).eq("id", data.groupId);
 
     return { inserted, skipped, failed, errors: errors.slice(0, 5) };
+  });
+
+export const amgAddPdfSource = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    groupId: z.string().uuid(), fileName: z.string().min(1).max(200), storagePath: z.string().min(1).max(500),
+    pages: z.array(z.string().max(120000)).min(1).max(1000),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = await ensureAdmin(context);
+    const chunks: string[] = [];
+    for (const page of data.pages) {
+      const text = page.replace(/\s+\n/g, "\n").trim();
+      for (let start = 0; start < text.length; start += 6000) chunks.push(text.slice(start, start + 7000));
+    }
+    const { data: row, error } = await supabase.from(SOURCES).insert({
+      group_id: data.groupId, file_name: data.fileName, storage_path: data.storagePath,
+      extracted_text: data.pages.join("\n\n").slice(0, 1_000_000), chunks, created_by: userId,
+    }).select("id,file_name,created_at").single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
+export const amgListPdfSources = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const { data: rows, error } = await supabase.from(SOURCES).select("id,file_name,created_at").eq("group_id", data.groupId).order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return rows ?? [];
+  });
+
+export const amgDeletePdfSource = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ sourceId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const { data: row } = await supabase.from(SOURCES).select("storage_path").eq("id", data.sourceId).maybeSingle();
+    if (row?.storage_path) await supabase.storage.from(SOURCE_BUCKET).remove([row.storage_path]);
+    const { error } = await supabase.from(SOURCES).delete().eq("id", data.sourceId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const amgImportCourseSubject = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid(), subjectId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const { data: questions, error } = await supabase.from("questions")
+      .select("id,stem,answer_mode,sort_order,question_options(label,text,is_correct,sort_order)")
+      .eq("subject_id", data.subjectId).order("sort_order");
+    if (error) throw new Error(error.message);
+    let imported = 0;
+    for (const q of questions ?? []) {
+      const options = [...(q.question_options ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
+      const row = {
+        group_id: data.groupId, page_no: 0, order_index: q.sort_order ?? imported, form: q.answer_mode === "multiple" ? "B" : "A",
+        number_label: String((q.sort_order ?? imported) + 1), stem: q.stem, statements: [],
+        options: options.map((o: any) => ({ label: o.label, text: o.text })), status: "approved", archived: false,
+        flagged: false, answer_mode: q.answer_mode ?? "single", answer_labels: options.filter((o: any) => o.is_correct).map((o: any) => o.label),
+        solved: false, explanation: {}, solve_error: null, dup_hash: dupHash(q.stem), origin_question_id: q.id,
+      };
+      const { error: upsertError } = await supabase.from(ITEMS).upsert(row, { onConflict: "group_id,origin_question_id" });
+      if (upsertError) throw new Error(upsertError.message);
+      imported += 1;
+    }
+    await supabase.from(GROUPS).update({ status: "approval" }).eq("id", data.groupId);
+    return { imported };
+  });
+
+export const amgRewriteSubjectExplanations = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    subjectId: z.string().uuid(), provider: z.enum(["google", "openai"]), model: z.string().min(2).max(60),
+    onlyEmpty: z.boolean(), limit: z.number().int().min(1).max(10).default(4),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    let query = supabase.from("questions").select("id,stem,explanation,answer_mode,question_options(label,text,is_correct,sort_order)")
+      .eq("subject_id", data.subjectId).order("sort_order").limit(data.limit);
+    if (data.onlyEmpty) query = query.or("explanation.is.null,explanation.eq.");
+    else query = query.not("explanation", "like", "%| Option | Correct? | Explanation |%");
+    const { data: questions, error } = await query;
+    if (error) throw new Error(error.message);
+    const apiKey = await getKey(supabase, data.provider);
+    let rewritten = 0;
+    const failures: string[] = [];
+    for (const q of questions ?? []) {
+      try {
+        const opts = [...(q.question_options ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
+        const correct = opts.filter((o: any) => o.is_correct).map((o: any) => String(o.label).toUpperCase());
+        const prompt = `OFFICIAL ANSWER: ${correct.join(", ")}\nANSWER MODE: ${q.answer_mode === "multiple" ? "MULTIPLE" : "SINGLE"}\n--- QUESTION ---\n${q.stem}\n\n${opts.map((o: any) => `${o.label}. ${o.text}`).join("\n")}\n--- END ---`;
+        const text = data.provider === "google" ? await callGoogleText(apiKey, data.model, SOLVE_SYSTEM, prompt) : await callOpenAiText(apiKey, data.model, SOLVE_SYSTEM, prompt);
+        const explanation = buildNewExplanation(parseJson(text), opts, correct).slice(0, 18000);
+        const { error: updateError } = await supabase.from("questions").update({ explanation }).eq("id", q.id);
+        if (updateError) throw new Error(updateError.message);
+        rewritten += 1;
+      } catch (e: any) { failures.push(String(e?.message ?? e).slice(0, 160)); }
+    }
+    return { rewritten, remaining: (questions ?? []).length === data.limit, failures };
   });
