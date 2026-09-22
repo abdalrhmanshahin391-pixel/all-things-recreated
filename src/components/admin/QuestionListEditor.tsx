@@ -48,6 +48,9 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
   const [model, setModel] = useState<string>(AMG_MODELS.google[1].id);
   const [onlyEmpty, setOnlyEmpty] = useState(false);
   const [rewriting, setRewriting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; failed: number; total: number; message: string; error: string | null } | null>(null);
+  const stopRef = useRef(false);
 
   const load = useCallback(async () => {
     if (!subjectId) {
