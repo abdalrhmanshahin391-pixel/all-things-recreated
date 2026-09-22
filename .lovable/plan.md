@@ -8,7 +8,9 @@ Update the MCQ Gen explanation instructions so each table row treats its option 
 - Do not explain why it was selected, excluded, preferred, or not chosen.
 - Do not compare it with another option unless that comparison is medically necessary to establish whether the statement is true.
 - Keep the existing Yes/No verdict and the moderately detailed 2–3 sentence explanation.
-- Apply the same rule to ordinary options and numbered statements in combination questions.
+- For an ordinary question, show one row per answer option.
+- For a combination question, ignore the printed A–D combinations in the explanation table. Show one row for each underlying numbered statement and explain whether that statement itself is medically true or false.
+- Remove the statement numbers from the visible wording, while preserving the original statement order.
 
 Example:
 
@@ -21,6 +23,18 @@ Not:
 ```text
 | Air-droplet | No | This option is not chosen because food, water, and contact are the correct answers. |
 ```
+
+For a combination question, the table must follow this shape:
+
+```text
+| Statement wording | Correct? | Explanation of that statement |
+| Statement 1 text  | Yes/No   | Why statement 1 is medically true or false |
+| Statement 2 text  | Yes/No   | Why statement 2 is medically true or false |
+| Statement 3 text  | Yes/No   | Why statement 3 is medically true or false |
+| Statement 4 text  | Yes/No   | Why statement 4 is medically true or false |
+```
+
+The table must never show rows such as `1,3`, `2,4`, `1,2,3`, or `all mentioned`; those printed combinations are used only to determine the final correct set.
 
 ## Leave and resume later
 
