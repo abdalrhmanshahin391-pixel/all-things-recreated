@@ -8,6 +8,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
