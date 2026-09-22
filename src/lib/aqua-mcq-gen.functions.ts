@@ -875,8 +875,11 @@ Rules:
 - ANSWER MODE SINGLE: exactly one label. MULTIPLE: every correct label.
 - If the message lists ALLOWED ANSWER SETS (the combinations printed on the paper), you MUST return exactly one of those sets.
 - "intro" is 4-5 professional sentences explaining the topic, mechanism, clinical context, and rule that decides the question.
-- "rows" has exactly one row for every displayed option. For a combination question, these are the numbered statement texts. Never include A/B/C/D or 1/2/3/4 prefixes in "item".
-- Each row gives a Yes/No verdict and a moderately detailed 2-3 sentence reason. Do not create separate right-answer or wrong-answer sections.
+- For an ordinary question, "rows" has exactly one row for every displayed option.
+- For a combination question, "rows" has exactly one row for every underlying numbered statement listed under EXPLANATION STATEMENTS. Never create rows for printed combinations such as "1,3", "2,4", "1,2,3", or "all mentioned".
+- Never include A/B/C/D or 1/2/3/4 prefixes in a row's "item". Preserve the supplied item wording and order.
+- Treat every row as its own true/false medical question. Explain why that option or statement itself is medically correct or medically incorrect in 2-3 focused sentences.
+- Never explain that an item is wrong because another answer was selected, and never discuss why it was chosen, excluded, or preferred. Do not create separate right-answer or wrong-answer sections.
 - "key_point" is optional and expands one important exam point without repetition. "memory_aid" is one short line.
 - "answer_line" contains only the final answer wording. Never include A/B/C/D. For combination questions, name the correct statements rather than returning only numbers.
 - Keep the total professional and focused, roughly 220-320 words plus the rows.
@@ -888,11 +891,52 @@ function cleanTableCell(value: unknown): string {
   return String(value ?? "").replace(/\|/g, "\\|").replace(/\s+/g, " ").trim();
 }
 
+function stripItemPrefix(value: unknown): string {
+  return cleanTableCell(value).replace(/^\s*(?:[A-J]|\d+)\s*[.)\-:]\s*/i, "");
+}
+
+function numberedStatementsFromStem(stem: string): Array<{ label: string; text: string }> {
+  const text = String(stem ?? "");
+  const matches = [...text.matchAll(/(?:^|\n)\s*([1-9]\d*)\s*[.)\-:]\s*([^\n]+)/g)];
+  return matches.map((match) => ({ label: match[1], text: match[2].trim() })).filter((row) => row.text);
+}
+
+function isPrintedCombination(value: unknown): boolean {
+  const text = String(value ?? "").trim().toLowerCase();
+  return /^(?:\d+\s*[,/+&]\s*)+\d+$/.test(text) || /all\s+(?:mentioned|of\s+the\s+above)/i.test(text);
+}
+
+function explanationItemsForQuestion(item: any, opts: any[], answerLabels: string[]) {
+  if (String(item?.form ?? "A").toUpperCase() !== "B") {
+    return { items: opts, correctLabels: answerLabels };
+  }
+
+  const statementRows = (Array.isArray(item?.statements) ? item.statements : [])
+    .filter((statement: any) => /^\d+$/.test(String(statement?.n ?? "")) && !isPrintedCombination(statement?.text))
+    .map((statement: any) => ({ label: String(statement.n), text: String(statement.text) }));
+  const numberedOptions = opts
+    .filter((option: any) => /^\d+$/.test(String(option?.label ?? "")) && !isPrintedCombination(option?.text))
+    .map((option: any) => ({ label: String(option.label), text: String(option.text) }));
+  const stemRows = numberedStatementsFromStem(String(item?.stem ?? ""));
+  const items = statementRows.length ? statementRows : numberedOptions.length ? numberedOptions : stemRows;
+  if (!items.length) return { items: opts, correctLabels: answerLabels };
+
+  const direct = answerLabels.filter((label) => items.some((row) => row.label === label));
+  if (direct.length) return { items, correctLabels: direct };
+
+  const chosen = opts.filter((option: any) => answerLabels.includes(String(option?.label ?? "").toUpperCase()));
+  const allChosen = chosen.some((option: any) => /all\s+(?:mentioned|of\s+the\s+above)/i.test(String(option?.text ?? "")));
+  const expanded = allChosen
+    ? items.map((row) => row.label)
+    : [...new Set(chosen.flatMap((option: any) => String(option?.text ?? "").match(/\d+/g) ?? []))];
+  return { items, correctLabels: expanded };
+}
+
 function buildNewExplanation(json: any, opts: any[], correctLabels: string[]): string {
   const correct = new Set(correctLabels.map((label) => label.toUpperCase()));
   const rowsByItem = new Map((Array.isArray(json?.rows) ? json.rows : []).map((row: any) => [cleanTableCell(row?.item).toLowerCase(), row]));
   const table = opts.map((option: any) => {
-    const item = cleanTableCell(option?.text).replace(/^\s*(?:[A-J]|\d+)\s*[.)\-:]\s*/i, "");
+    const item = stripItemPrefix(option?.text);
     const generated = rowsByItem.get(item.toLowerCase()) as any;
     const verdict = correct.has(String(option?.label ?? "").toUpperCase()) ? "✓ Yes" : "✗ No";
     return `| ${item} | ${verdict} | ${cleanTableCell(generated?.reason || "No explanation supplied.")} |`;
@@ -1016,7 +1060,11 @@ export const amgSolveBatch = createServerFn({ method: "POST" })
           ? `ALLOWED ANSWER SETS (printed on the paper — choose exactly one):\n${sets.map((s) => s.join(",")).join("\n")}\n`
           : "";
         const mode = item.answer_mode === "multiple" ? "MULTIPLE" : "SINGLE";
-        const prompt = `${sourceBlock}${keyBlock}ANSWER MODE: ${mode}\n${comboBlock}--- QUESTION ---\n${item.stem}\n\n${optText}\n--- END ---`;
+        const preliminaryExplanation = explanationItemsForQuestion(item, opts, given ?? []);
+        const statementBlock = String(item.form ?? "A") === "B" && preliminaryExplanation.items.length
+          ? `EXPLANATION STATEMENTS (write one row for each of these statements, not for the printed combinations):\n${preliminaryExplanation.items.map((row: any) => `${row.label}. ${row.text}`).join("\n")}\n`
+          : "";
+        const prompt = `${sourceBlock}${keyBlock}ANSWER MODE: ${mode}\n${comboBlock}${statementBlock}--- QUESTION ---\n${item.stem}\n\n${optText}\n--- END ---`;
 
         const text = group.provider === "google"
           ? await callGoogleText(apiKey, group.model, SOLVE_SYSTEM, prompt)
@@ -1031,10 +1079,11 @@ export const amgSolveBatch = createServerFn({ method: "POST" })
           if (!ok) throw new Error("The answer is not one of the paper's printed combinations.");
         }
 
+        const explanationSpec = explanationItemsForQuestion(item, opts, valid);
         const { error } = await supabase.from(ITEMS).update({
           answer_labels: valid,
           answer_mode: valid.length > 1 ? "multiple" : item.answer_mode,
-          explanation: { explanation: buildNewExplanation(json, opts, valid).slice(0, 18000), format: "verdict_table_v1" },
+          explanation: { explanation: buildNewExplanation(json, explanationSpec.items, explanationSpec.correctLabels).slice(0, 18000), format: "verdict_table_v1" },
           solved: true,
           solve_error: null,
         }).eq("id", item.id);
@@ -1217,6 +1266,7 @@ export const amgRewriteSubjectExplanations = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({
     subjectId: z.string().uuid(), provider: z.enum(["google", "openai"]), model: z.string().min(2).max(60),
     onlyEmpty: z.boolean(), limit: z.number().int().min(1).max(10).default(4),
+    excludeIds: z.array(z.string().uuid()).max(500).optional(),
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
@@ -1228,26 +1278,79 @@ export const amgRewriteSubjectExplanations = createServerFn({ method: "POST" })
       supabase.from("questions").select("id", { count: "exact", head: true }).eq("subject_id", data.subjectId),
     );
 
-    const { data: questions, error } = await applyFilter(
+    let batchQuery = applyFilter(
       supabase.from("questions").select("id,stem,explanation,answer_mode,question_options(label,text,is_correct,sort_order)")
         .eq("subject_id", data.subjectId).order("sort_order").limit(data.limit),
     );
+    if (data.excludeIds?.length) batchQuery = batchQuery.not("id", "in", `(${data.excludeIds.join(",")})`);
+    const { data: questions, error } = await batchQuery;
     if (error) throw new Error(error.message);
     if (!(questions ?? []).length) return { rewritten: 0, remaining: false, failures: [], total: total ?? 0 };
     const apiKey = await getKey(supabase, data.provider);
     let rewritten = 0;
-    const failures: string[] = [];
+    const failures: Array<{ id: string; message: string }> = [];
     for (const q of questions ?? []) {
       try {
         const opts = [...(q.question_options ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
         const correct = opts.filter((o: any) => o.is_correct).map((o: any) => String(o.label).toUpperCase());
-        const prompt = `OFFICIAL ANSWER: ${correct.join(", ")}\nANSWER MODE: ${q.answer_mode === "multiple" ? "MULTIPLE" : "SINGLE"}\n--- QUESTION ---\n${q.stem}\n\n${opts.map((o: any) => `${o.label}. ${o.text}`).join("\n")}\n--- END ---`;
+        const combination = opts.length > 1 && opts.every((option: any) => isPrintedCombination(option.text));
+        const item = { form: combination ? "B" : "A", stem: q.stem, statements: [] };
+        const explanationSpec = explanationItemsForQuestion(item, opts, correct);
+        const statementBlock = combination && explanationSpec.items.length
+          ? `EXPLANATION STATEMENTS (write one row for each statement, never for the printed combinations):\n${explanationSpec.items.map((row: any) => `${row.label}. ${row.text}`).join("\n")}\n`
+          : "";
+        const prompt = `OFFICIAL ANSWER: ${correct.join(", ")}\nANSWER MODE: ${q.answer_mode === "multiple" ? "MULTIPLE" : "SINGLE"}\n${statementBlock}--- QUESTION ---\n${q.stem}\n\n${opts.map((o: any) => `${o.label}. ${o.text}`).join("\n")}\n--- END ---`;
         const text = data.provider === "google" ? await callGoogleText(apiKey, data.model, SOLVE_SYSTEM, prompt) : await callOpenAiText(apiKey, data.model, SOLVE_SYSTEM, prompt);
-        const explanation = buildNewExplanation(parseJson(text), opts, correct).slice(0, 18000);
+        const explanation = buildNewExplanation(parseJson(text), explanationSpec.items, explanationSpec.correctLabels).slice(0, 18000);
         const { error: updateError } = await supabase.from("questions").update({ explanation }).eq("id", q.id);
         if (updateError) throw new Error(updateError.message);
         rewritten += 1;
-      } catch (e: any) { failures.push(String(e?.message ?? e).slice(0, 160)); }
+      } catch (e: any) { failures.push({ id: q.id, message: String(e?.message ?? e).slice(0, 160) }); }
     }
     return { rewritten, remaining: (questions ?? []).length === data.limit, failures, total: total ?? 0 };
+  });
+
+export const amgResolveCourseQuestion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    questionId: z.string().uuid(), provider: z.enum(["google", "openai"]), model: z.string().min(2).max(60),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const { data: q, error } = await supabase.from("questions")
+      .select("id,subject_id,stem,explanation,image_url,answer_mode,sort_order,question_options(id,label,text,is_correct,sort_order)")
+      .eq("id", data.questionId).maybeSingle();
+    if (error || !q) throw new Error(error?.message || "Question not found.");
+    const opts = [...(q.question_options ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
+    if (opts.length < 2) throw new Error("This question has fewer than two options.");
+    const combination = opts.every((option: any) => isPrintedCombination(option.text));
+    const item = { form: combination ? "B" : "A", stem: q.stem, statements: [] };
+    const preliminary = explanationItemsForQuestion(item, opts, []);
+    const statementBlock = combination && preliminary.items.length
+      ? `EXPLANATION STATEMENTS (write one row for each statement, never for the printed combinations):\n${preliminary.items.map((row: any) => `${row.label}. ${row.text}`).join("\n")}\n`
+      : "";
+    const prompt = `ANSWER MODE: ${q.answer_mode === "multiple" ? "MULTIPLE" : "SINGLE"}\n${statementBlock}--- QUESTION ---\n${q.stem}\n\n${opts.map((option: any) => `${option.label}. ${option.text}`).join("\n")}\n--- END ---`;
+    const apiKey = await getKey(supabase, data.provider);
+    const text = data.provider === "google"
+      ? await callGoogleText(apiKey, data.model, SOLVE_SYSTEM, prompt)
+      : await callOpenAiText(apiKey, data.model, SOLVE_SYSTEM, prompt);
+    const json = parseJson(text);
+    const labels = Array.isArray(json?.answers) ? json.answers.map((label: any) => String(label).trim().toUpperCase()) : [];
+    const valid = labels.filter((label: string) => opts.some((option: any) => String(option.label).toUpperCase() === label));
+    if (!valid.length || (q.answer_mode !== "multiple" && valid.length !== 1)) throw new Error("The AI returned an invalid answer, so the question was not changed.");
+    const explanationSpec = explanationItemsForQuestion(item, opts, valid);
+    const explanation = buildNewExplanation(json, explanationSpec.items, explanationSpec.correctLabels).slice(0, 18000);
+
+    for (const option of opts) {
+      const { error: optionError } = await supabase.from("question_options")
+        .update({ is_correct: valid.includes(String(option.label).toUpperCase()) }).eq("id", option.id);
+      if (optionError) throw new Error(optionError.message);
+    }
+    const { error: updateError } = await supabase.from("questions").update({ explanation }).eq("id", q.id);
+    if (updateError) throw new Error(updateError.message);
+    return {
+      ...q,
+      explanation,
+      options: opts.map((option: any) => ({ ...option, is_correct: valid.includes(String(option.label).toUpperCase()) })),
+    };
   });

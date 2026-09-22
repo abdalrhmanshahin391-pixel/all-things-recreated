@@ -6,3 +6,6 @@
 - [x] Add AquaVisionX PDF, pasted-text, and public-link answer resources
 - [x] Fix false device-security locks while preserving the 30-device boundary
 - [x] Prevent stale lock screens and keep every admin lock view synchronized
+- [ ] Make explanation rows judge each option or combination statement independently
+- [ ] Preserve and resume MCQ solving and course explanation rewrite progress
+- [ ] Add admin-only edit and re-solve controls on course question screens
