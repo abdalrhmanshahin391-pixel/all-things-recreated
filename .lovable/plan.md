@@ -10,16 +10,24 @@ Every explanation will have exactly these parts:
 
 ```text
 Shigellosis — routes of transmission            <- short title line
-Shigellosis is an intestinal infection caused by  <- 2-3 sentence intro: what the
-bacteria of the genus Shigella. Its main mode of     topic is and the rule that
-transmission is the fecal-oral route: ...            decides the question
+Shigellosis is an intestinal infection caused by  <- 4-5 sentence intro: what the
+bacteria of the genus Shigella. Its main mode of     topic is, the underlying
+transmission is the fecal-oral route. Its very low   mechanism, the important
+infectious dose makes person-to-person spread        clinical context, and the rule
+especially important. Food and water can also ...   that decides the question
 
 | Option            | Correct? | Explanation                                  |
 |-------------------|----------|----------------------------------------------|
-| 1. Food           | Yes      | Food can be contaminated by an infected ...  |
-| 2. Contact        | Yes      | Person-to-person spread; low infectious ...  |
-| 3. Water          | Yes      | Fecally contaminated water transmits ...     |
-| 4. Air-droplet    | No       | Shigella is not a respiratory infection ...  |
+| Food              | Yes      | Food can be contaminated by an infected food |
+|                   |          | handler or fecally contaminated water.       |
+| Contact           | Yes      | Direct fecal-oral transfer is important      |
+|                   |          | because only a small inoculum causes disease.|
+| Water             | Yes      | Drinking or using fecally contaminated water |
+|                   |          | can carry Shigella to the gastrointestinal   |
+|                   |          | tract and produce infection.                 |
+| Air-droplet       | No       | Shigella is an enteric, not respiratory,     |
+|                   |          | pathogen and is not normally transmitted by  |
+|                   |          | coughing, sneezing, or respiratory droplets. |
 
 Why contact transmission is so important       <- one short "key point" block,
 Shigella has a very low infectious dose, so ...    only when the question has a
@@ -29,17 +37,18 @@ Shigella has a very low infectious dose, so ...    only when the question has a
 Easy way to remember
 Shigellosis -> fecal-oral -> food + water + contact, not air-droplet
 
-Answer: D. 1, 2, 3
+Answer: Food, contact, and water
 ```
 
 Rules the model must follow:
 
-- **One row per item.** For a normal A-D question, one row per option. For a combination question (numbered statements with printed A-D combinations), one row per **statement** (1, 2, 3, 4) — not per combination.
-- Each row says Yes or No and gives a short professional reason (1-2 sentences, exam-level detail).
+- **One row per item.** For a normal A-D question, one row per option. For a combination question (numbered statements with printed A-D combinations), one row per **statement** — not per combination.
+- The table displays only each option's or statement's wording. It never displays A/B/C/D or 1/2/3/4 prefixes.
+- Each row says Yes or No and gives a professional, moderately detailed reason (usually 2-3 focused sentences with mechanism or clinical context where useful).
 - **No "why the correct answer is right" and no "why the others are wrong" sections** — the table carries that.
 - The key-point block is optional and short; the memory aid is one line.
-- Ends with the final answer line (letter + text for normal questions, the printed combination for combination questions).
-- Professional, detailed, but tight — roughly 150-220 words plus the table.
+- Ends with the final answer wording only. It never displays the A/B/C/D letter. For combination questions it names the correct statements rather than showing only their numbers.
+- Professional and detailed without becoming long — roughly 220-320 words plus the table.
 
 The explanation panel students see is updated to render this shape: title, intro, verdict table with green ✓ / red ✗ per row, key point, memory aid, answer line. Older explanations written in the previous format keep rendering exactly as they do now.
 
