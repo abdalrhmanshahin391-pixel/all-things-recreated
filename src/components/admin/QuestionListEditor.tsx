@@ -20,28 +20,29 @@ import { AMG_MODELS, amgRewriteSubjectExplanations } from "@/lib/aqua-mcq-gen.fu
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-type Option = { id?: string; label: string; text: string; is_correct: boolean; sort_order: number };
-type Question = {
+export type EditableQuestionOption = { id?: string; label: string; text: string; is_correct: boolean; sort_order: number };
+export type EditableQuestion = {
   id: string;
   stem: string;
   explanation: string | null;
   sort_order: number;
   image_url: string | null;
   answer_mode: "single" | "multiple";
-  options: Option[];
+  options: EditableQuestionOption[];
 };
+type RewriteProgress = { done: number; failed: number; total: number; message: string; error: string | null; failedIds?: string[]; state?: "active" | "paused" | "failed" | "completed" };
 
 const LETTERS = "ABCDEFGHIJ".split("");
 
 export function QuestionListEditor({ subjectId }: { subjectId: string }) {
-  const [rows, setRows] = useState<Question[]>([]);
+  const [rows, setRows] = useState<EditableQuestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   // Keep typing responsive: filtering the (possibly large) list happens at a
   // lower priority than the keystroke itself.
   const deferredQuery = useDeferredValue(query);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [editing, setEditing] = useState<Question | null>(null);
+  const [editing, setEditing] = useState<EditableQuestion | null>(null);
   const [busy, setBusy] = useState(false);
   const rewriteExplanations = useServerFn(amgRewriteSubjectExplanations);
   const [provider, setProvider] = useState<"google" | "openai">("google");
@@ -49,8 +50,9 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
   const [onlyEmpty, setOnlyEmpty] = useState(false);
   const [rewriting, setRewriting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [progress, setProgress] = useState<{ done: number; failed: number; total: number; message: string; error: string | null } | null>(null);
+  const [progress, setProgress] = useState<RewriteProgress | null>(null);
   const stopRef = useRef(false);
+  const rewriteStorageKey = `course-explanation-rewrite:${subjectId}`;
 
   const load = useCallback(async () => {
     if (!subjectId) {
@@ -67,7 +69,7 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
       toast.error(error.message);
       return;
     }
-    const list: Question[] = (data ?? []).map((q: any) => ({
+    const list: EditableQuestion[] = (data ?? []).map((q: any) => ({
       id: q.id,
       stem: q.stem ?? "",
       explanation: q.explanation ?? null,
@@ -91,6 +93,25 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(rewriteStorageKey);
+      if (!raw) { setProgress(null); return; }
+      const saved = JSON.parse(raw) as RewriteProgress & { provider?: "google" | "openai"; model?: string; onlyEmpty?: boolean };
+      setProgress(saved);
+      if (saved.provider) setProvider(saved.provider);
+      if (saved.model) setModel(saved.model);
+      if (typeof saved.onlyEmpty === "boolean") setOnlyEmpty(saved.onlyEmpty);
+    } catch {
+      window.localStorage.removeItem(rewriteStorageKey);
+    }
+  }, [rewriteStorageKey]);
+
+  function persistRewrite(next: RewriteProgress) {
+    setProgress(next);
+    window.localStorage.setItem(rewriteStorageKey, JSON.stringify({ ...next, provider, model, onlyEmpty }));
+  }
 
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase();
@@ -159,26 +180,34 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
     setConfirmOpen(false);
     stopRef.current = false;
     setRewriting(true);
-    setProgress({ done: 0, failed: 0, total: 0, message: "Starting…", error: null });
+    const continuing = progress && progress.state !== "completed";
+    const initial: RewriteProgress = continuing
+      ? { ...progress, message: "Continuing…", state: "active" }
+      : { done: 0, failed: 0, total: 0, message: "Starting…", error: null, failedIds: [], state: "active" };
+    persistRewrite(initial);
     try {
-      let done = 0;
-      let failed = 0;
-      let total = 0;
+      let done = initial.done;
+      let failed = initial.failed;
+      let total = initial.total;
+      const failedIds = new Set(initial.failedIds ?? []);
       for (;;) {
-        const result: any = await rewriteExplanations({ data: { subjectId, provider, model, onlyEmpty, limit: 4 } });
+        const result: any = await rewriteExplanations({ data: { subjectId, provider, model, onlyEmpty, limit: 4, excludeIds: [...failedIds] } });
         done += result.rewritten ?? 0;
         failed += result.failures?.length ?? 0;
+        for (const failure of result.failures ?? []) if (failure?.id) failedIds.add(String(failure.id));
         if (typeof result.total === "number" && !total) total = result.total;
-        const lastError = result.failures?.length ? String(result.failures[0]) : null;
-        setProgress({
+        const lastError = result.failures?.length ? String(result.failures[0]?.message ?? result.failures[0]) : null;
+        persistRewrite({
           done,
           failed,
           total,
           message: total ? `Rewriting… ${done} of ${total} done` : `Rewriting… ${done} done`,
           error: lastError,
+          failedIds: [...failedIds],
+          state: "active",
         });
         if (!result.rewritten && !result.failures?.length) {
-          setProgress({
+          persistRewrite({
             done,
             failed,
             total,
@@ -186,15 +215,17 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
               ? "Every question in this subject already has an explanation."
               : "All explanations in this subject already use the new format.",
             error: lastError,
+            failedIds: [...failedIds],
+            state: "completed",
           });
           break;
         }
         if (!result.remaining) {
-          setProgress({ done, failed, total, message: `Finished. ${done} rewritten${failed ? `, ${failed} failed` : ""}.`, error: lastError });
+          persistRewrite({ done, failed, total, message: `Finished. ${done} rewritten${failed ? `, ${failed} failed` : ""}.`, error: lastError, failedIds: [...failedIds], state: "completed" });
           break;
         }
         if (stopRef.current) {
-          setProgress({ done, failed, total, message: `Stopped. ${done} rewritten${failed ? `, ${failed} failed` : ""}.`, error: lastError });
+          persistRewrite({ done, failed, total, message: `Paused. ${done} rewritten${failed ? `, ${failed} failed` : ""}. You can continue later.`, error: lastError, failedIds: [...failedIds], state: "paused" });
           break;
         }
       }
@@ -202,7 +233,8 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
       await load();
     } catch (e: any) {
       const message = e?.message || "Could not rewrite explanations";
-      setProgress((prev) => ({ ...(prev ?? { done: 0, failed: 0, total: 0 }), message: "Stopped because of an error.", error: message }));
+      const next: RewriteProgress = { ...(progress ?? { done: 0, failed: 0, total: 0 }), message: "Paused because of an error. You can continue later.", error: message, state: "failed" };
+      persistRewrite(next);
       toast.error(message);
     }
     finally { setRewriting(false); stopRef.current = false; }
@@ -262,7 +294,10 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>{AMG_MODELS[provider].map((item) => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}</SelectContent>
         </Select>
-        <Button onClick={() => { setProgress(null); setConfirmOpen(true); }} disabled={rewriting || !rows.length}>{rewriting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Rewrite explanations</Button>
+        <Button onClick={() => {
+          if (progress && progress.state !== "completed") void rewriteAll();
+          else { setProgress(null); setConfirmOpen(true); }
+        }} disabled={rewriting || !rows.length}>{rewriting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}{progress && progress.state !== "completed" ? "Continue rewriting" : "Rewrite explanations"}</Button>
         <label className="flex items-center gap-2 text-xs text-white/70 md:col-span-3">
           <input type="checkbox" checked={onlyEmpty} onChange={(event) => setOnlyEmpty(event.target.checked)} className="accent-amber-400" />
           Only questions without an explanation
@@ -393,18 +428,18 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
   );
 }
 
-function EditQuestionDialog({
+export function EditQuestionDialog({
   question,
   onClose,
   onSaved,
 }: {
-  question: Question;
+  question: EditableQuestion;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [stem, setStem] = useState(question.stem);
   const [explanation, setExplanation] = useState(question.explanation ?? "");
-  const [options, setOptions] = useState<Option[]>(
+  const [options, setOptions] = useState<EditableQuestionOption[]>(
     question.options.length
       ? question.options
       : [
