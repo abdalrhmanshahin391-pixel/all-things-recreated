@@ -273,9 +273,11 @@ function CourseDetailPage() {
     (!course.discount_ends_at || new Date(course.discount_ends_at).getTime() > Date.now());
   const wasPrice = discountLive ? Number(course!.compare_at_price) : null;
   const isSubjectLocked = (s: Subject) => {
-    if (enrolled || isFree) return false;
+    if (isAdmin) return false;
     if (s.access_level === "free_public") return false;
-    if (s.access_level === "free_logged_in" && user) return false;
+    if (!user) return true;
+    if (s.access_level === "free_logged_in") return false;
+    if (enrolled || isFree) return false;
     return true;
   };
 
@@ -342,14 +344,25 @@ function CourseDetailPage() {
   };
 
   const startSession = (mode: "study" | "session" | "exam") => {
-    if (!user) {
+    const chosenSubjects = selected.size
+      ? subjects.filter((s) => selected.has(s.id))
+      : subjects.filter((s) => !isSubjectLocked(s));
+
+    if (!chosenSubjects.length) {
+      toast.error(isArabic ? "يرجى اختيار مادة متاحة أولاً" : "Please select at least one available subject first");
+      return;
+    }
+
+    if (!isAdmin && !user && chosenSubjects.some((s) => s.access_level !== "free_public")) {
       navigate({ to: "/login" });
       return;
     }
-    if (anySelectedLocked && !enrolled) {
+
+    if (!isAdmin && !isFree && !enrolled && chosenSubjects.some((s) => s.access_level === "paid")) {
       navigate({ to: "/courses/$courseId/checkout", params: { courseId } });
       return;
     }
+
     const subjectIds = selected.size ? Array.from(selected).join(",") : "all";
     navigate({
       to: "/courses/$courseId/run",
@@ -360,6 +373,7 @@ function CourseDetailPage() {
         timed: timed && mode === "exam" ? 1 : 0,
         duration: timed && mode === "exam" ? durationMin : 0,
         pool,
+        t: Date.now(),
       },
     });
   };

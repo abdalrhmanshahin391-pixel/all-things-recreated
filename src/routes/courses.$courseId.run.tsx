@@ -19,6 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { MoveQuestionControl, type CourseSectionGroup } from "@/components/course/MoveQuestionControl";
 import { moveSingleCourseQuestion } from "@/lib/course-sorter.functions";
 import { ReportQuestionModal } from "@/components/ReportQuestionModal";
+import { loadCourseRunQuestionsServerFn } from "@/lib/course-enrollment.functions";
+import { ensureFreeEnrollment } from "@/lib/course-access";
 import {
   Flag,
   CheckCircle2,
@@ -45,6 +47,7 @@ export const Route = createFileRoute("/courses/$courseId/run")({
     timed: Number(search.timed) === 1 ? 1 : 0,
     duration: Math.max(0, Math.min(600, Number(search.duration) || 0)),
     pool: (search.pool === "flagged" || search.pool === "incorrect" ? search.pool : "all") as Pool,
+    t: Number(search.t) || undefined,
   }),
   head: () => ({
     meta: [
@@ -85,10 +88,10 @@ function toggleSelection(current: string[] | undefined, label: string, multiple:
 
 function RunPage() {
   const { courseId } = Route.useParams();
-  const { mode, subjects, timed, duration, pool } = Route.useSearch();
+  const { mode, subjects, timed, duration, pool, t } = Route.useSearch();
   const navigate = useNavigate();
   const { isAdmin, user, loading: authLoading } = useAuth();
-  const accessKey = `${courseId}:${user?.id ?? "guest"}:${isAdmin ? "admin" : "student"}`;
+  const accessKey = `${courseId}:${user?.id ?? "guest"}:${isAdmin ? "admin" : "student"}:${t ?? 0}`;
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,7 +135,6 @@ function RunPage() {
       setAccessReady(accessKey);
       return;
     }
-    if (!user) return;
     let cancelled = false;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS);
@@ -146,17 +148,32 @@ function RunPage() {
       if (!c) throw new Error("Course not found");
       const price = Number(c?.price ?? 0);
       if (price <= 0) {
-        // Record free enrollment when allowed; content queries still enforce RLS.
-        const { error: enrollmentError } = await (supabase.from as any)("user_courses").upsert(
-          { user_id: user.id, course_id: courseId },
-          { onConflict: "user_id,course_id", ignoreDuplicates: true },
-        ).abortSignal(controller.signal);
-        // Some installations only allow administrators to write enrollments.
-        // That must not prevent students reading already-public free content.
-        if (enrollmentError && enrollmentError.code !== "42501") throw enrollmentError;
+        if (user) {
+          await ensureFreeEnrollment(user.id, courseId, "questions");
+        }
         if (!cancelled) setAccessReady(accessKey);
         return;
       }
+
+      // If course is paid and user is not logged in:
+      if (!user) {
+        let subjectIds: string[] = subjects === "all" ? [] : subjects.split(",").filter(Boolean);
+        if (subjectIds.length) {
+          const { data: subs } = await (supabase.from as any)("subjects")
+            .select("access_level")
+            .in("id", subjectIds);
+          const allPublic = (subs ?? []).length > 0 && (subs ?? []).every((s: any) => s.access_level === "free_public");
+          if (allPublic) {
+            if (!cancelled) setAccessReady(accessKey);
+            return;
+          }
+        }
+        setAccessDenied(accessKey);
+        navigate({ to: "/login" });
+        return;
+      }
+
+      // User is logged in for paid course:
       const { data: enr, error: enrollmentError } = await (supabase.from as any)("user_courses")
         .select("id")
         .eq("user_id", user.id)
@@ -166,9 +183,38 @@ function RunPage() {
       if (enrollmentError) throw enrollmentError;
       if (cancelled) return;
       if (!enr) {
-        setAccessDenied(accessKey);
-        navigate({ to: "/courses/$courseId/checkout", params: { courseId } });
-        return;
+        // Check active package purchase
+        const { data: purchases } = await (supabase.from as any)("package_purchases")
+          .select("package_id, status")
+          .eq("user_id", user.id);
+        const pkgIds = (purchases ?? [])
+          .filter((p: any) => !p.status || p.status === "active" || p.status === "completed")
+          .map((p: any) => p.package_id);
+        let hasPkg = false;
+        if (pkgIds.length > 0) {
+          const { data: links } = await (supabase.from as any)("package_courses")
+            .select("id")
+            .eq("course_id", courseId)
+            .in("package_id", pkgIds)
+            .limit(1);
+          if (links && links.length > 0) hasPkg = true;
+        }
+
+        // Check if requested subjects are free_public or free_logged_in
+        let allFree = false;
+        let subjectIds: string[] = subjects === "all" ? [] : subjects.split(",").filter(Boolean);
+        if (subjectIds.length) {
+          const { data: subs } = await (supabase.from as any)("subjects")
+            .select("access_level")
+            .in("id", subjectIds);
+          allFree = (subs ?? []).length > 0 && (subs ?? []).every((s: any) => s.access_level === "free_public" || s.access_level === "free_logged_in");
+        }
+
+        if (!hasPkg && !allFree) {
+          setAccessDenied(accessKey);
+          navigate({ to: "/courses/$courseId/checkout", params: { courseId } });
+          return;
+        }
       }
       setAccessReady(accessKey);
     })().catch((error) => {
@@ -181,7 +227,7 @@ function RunPage() {
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [user, isAdmin, authLoading, courseId, accessKey, navigate, reloadVersion]);
+  }, [user, isAdmin, authLoading, courseId, accessKey, navigate, reloadVersion, subjects]);
 
 
   useEffect(() => {
@@ -237,14 +283,29 @@ function RunPage() {
         ((subjMeta ?? []) as any[]).map((r) => [r.id as string, { sort: Number(r.sort_order) || 0, ordered: Boolean(r.ordered) }]),
       );
 
-      const { data: qs, error: questionError } = await (supabase.from as any)("questions")
-        .select(
-          "id,subject_id,stem,explanation,image_url,answer_mode,sort_order,question_options(id,label,text,is_correct,sort_order)",
-        )
-        .in("subject_id", subjectIds)
-        .order("sort_order")
-        .abortSignal(controller.signal);
-      if (questionError) throw questionError;
+      let qs: any[] = [];
+      try {
+        const res = await loadCourseRunQuestionsServerFn({
+          data: { courseId, subjectIds },
+        });
+        if (res?.ok && Array.isArray(res.questions) && res.questions.length > 0) {
+          qs = res.questions;
+        }
+      } catch (err) {
+        console.warn("[courses.run] Server questions loader error, falling back:", err);
+      }
+
+      if (qs.length === 0) {
+        const { data: clientQs, error: questionError } = await (supabase.from as any)("questions")
+          .select(
+            "id,subject_id,stem,explanation,image_url,answer_mode,sort_order,question_options(id,label,text,is_correct,sort_order)",
+          )
+          .in("subject_id", subjectIds)
+          .order("sort_order")
+          .abortSignal(controller.signal);
+        if (questionError && !qs.length) throw questionError;
+        qs = clientQs ?? [];
+      }
 
       const LETTERS = ["A", "B", "C", "D", "E", "F"];
       const shuffle = <T,>(arr: T[]): T[] => {
@@ -337,18 +398,22 @@ function RunPage() {
       try {
         const saved = JSON.parse(sessionStorage.getItem(sessionKey) ?? "null");
         if (saved && Array.isArray(saved.questionIds) && saved.questionIds.join("|") === list.map((q) => q.id).join("|")) {
-          const restoredAnswers: SelectedAnswers = {};
-          for (const q of list) {
-            const ids = Array.isArray(saved.answerOptionIds?.[q.id]) ? saved.answerOptionIds[q.id] : [];
-            restoredAnswers[q.id] = q.options.filter((option) => ids.includes(option.id)).map((option) => option.label);
+          if (!saved.finished) {
+            const restoredAnswers: SelectedAnswers = {};
+            for (const q of list) {
+              const ids = Array.isArray(saved.answerOptionIds?.[q.id]) ? saved.answerOptionIds[q.id] : [];
+              restoredAnswers[q.id] = q.options.filter((option) => ids.includes(option.id)).map((option) => option.label);
+            }
+            setAnswers(restoredAnswers);
+            setSubmitted(saved.submitted ?? {});
+            setCurrent(Math.max(0, Math.min(Number(saved.current) || 0, list.length - 1)));
+            setFinished(false);
+            setReviewMode(Boolean(saved.reviewMode));
+            setReviewIndex(Math.max(0, Number(saved.reviewIndex) || 0));
+            setSecondsLeft(Math.max(0, Number(saved.secondsLeft) || initialSeconds));
+          } else {
+            sessionStorage.removeItem(sessionKey);
           }
-          setAnswers(restoredAnswers);
-          setSubmitted(saved.submitted ?? {});
-          setCurrent(Math.max(0, Math.min(Number(saved.current) || 0, list.length - 1)));
-          setFinished(Boolean(saved.finished));
-          setReviewMode(Boolean(saved.reviewMode));
-          setReviewIndex(Math.max(0, Number(saved.reviewIndex) || 0));
-          setSecondsLeft(Math.max(0, Number(saved.secondsLeft) || initialSeconds));
         }
       } catch { sessionStorage.removeItem(sessionKey); }
       setSessionReady(true);
@@ -364,7 +429,7 @@ function RunPage() {
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [courseId, subjects, pool, user?.id, hasAccess, accessKey, initialSeconds, mode, reloadVersion, sessionKey]);
+  }, [courseId, subjects, pool, user, hasAccess, accessKey, initialSeconds, mode, reloadVersion, sessionKey, t]);
 
   useEffect(() => {
     if (!sessionReady || !questions.length) return;
@@ -373,9 +438,11 @@ function RunPage() {
       const labels = new Set(answers[q.id] ?? []);
       answerOptionIds[q.id] = q.options.filter((option) => labels.has(option.label)).map((option) => option.id);
     }
-    sessionStorage.setItem(sessionKey, JSON.stringify({
-      questionIds: questions.map((q) => q.id), answerOptionIds, submitted, current, finished, reviewMode, reviewIndex, secondsLeft,
-    }));
+    try {
+      sessionStorage.setItem(sessionKey, JSON.stringify({
+        questionIds: questions.map((q) => q.id), answerOptionIds, submitted, current, finished, reviewMode, reviewIndex, secondsLeft,
+      }));
+    } catch {}
   }, [sessionReady, sessionKey, questions, answers, submitted, current, finished, reviewMode, reviewIndex, secondsLeft]);
 
   useEffect(() => {
@@ -474,7 +541,38 @@ function RunPage() {
   const isFlagShining =
     !!currentQ && timeSpentOnQuestion >= 45 && !isFlaggedCurrent && !submitted[currentQ.id];
 
-  const goToCourse = () => navigate({ to: "/courses/$courseId", params: { courseId } });
+  const resetSession = useCallback(() => {
+    try {
+      sessionStorage.removeItem(sessionKey);
+    } catch {}
+    setCurrent(0);
+    setAnswers({});
+    setSubmitted({});
+    setFinished(false);
+    setReviewMode(false);
+    setReviewIndex(0);
+    setSecondsLeft(initialSeconds);
+  }, [initialSeconds, sessionKey]);
+
+  const restartSession = useCallback(() => {
+    resetSession();
+    if (mode === "study" && questions.length) {
+      const preset: SelectedAnswers = {};
+      for (const q of questions) {
+        const right = q.options.filter((o) => o.is_correct).map((o) => o.label);
+        if (right.length) preset[q.id] = right;
+      }
+      setAnswers(preset);
+    }
+  }, [resetSession, mode, questions]);
+
+  const goToCourse = () => {
+    try {
+      sessionStorage.removeItem(sessionKey);
+    } catch {}
+    resetSession();
+    navigate({ to: "/courses/$courseId", params: { courseId } });
+  };
 
   const refreshQuestion = useCallback(async (questionId: string) => {
     const { data, error } = await (supabase.from as any)("questions")
@@ -715,6 +813,7 @@ function RunPage() {
           setReviewMode(true);
           setReviewIndex(0);
         }}
+        onRestart={restartSession}
         onBack={goToCourse}
         hasWrong={wrongQuestions.length > 0}
       />
@@ -1388,10 +1487,10 @@ function ReviewCard({
 }
 
 function ResultsScreen({
-  stats, mode, onReview, onBack, hasWrong,
+  stats, mode, onReview, onRestart, onBack, hasWrong,
 }: {
   stats: { correct: number; wrong: number; unanswered: number; total: number; score: number };
-  mode: Mode; onReview: () => void; onBack: () => void; hasWrong: boolean;
+  mode: Mode; onReview: () => void; onRestart?: () => void; onBack: () => void; hasWrong: boolean;
 }) {
   const pass = stats.score >= 60;
   return (
@@ -1425,6 +1524,14 @@ function ResultsScreen({
         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          {onRestart && (
+            <button
+              onClick={onRestart}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-border bg-card text-foreground hover:bg-muted font-bold"
+            >
+              <RotateCcw className="w-4 h-4" /> Restart
+            </button>
+          )}
           {hasWrong && (
             <button
               onClick={onReview}
