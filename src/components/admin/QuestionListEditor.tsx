@@ -153,20 +153,56 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
   }
 
   async function rewriteAll() {
-    if (!window.confirm(`Replace ${onlyEmpty ? "missing" : "old"} explanations in this subject using ${model}? Questions and answers will not change.`)) return;
+    setConfirmOpen(false);
+    stopRef.current = false;
     setRewriting(true);
+    setProgress({ done: 0, failed: 0, total: 0, message: "Starting…", error: null });
     try {
+      let done = 0;
+      let failed = 0;
       let total = 0;
       for (;;) {
         const result: any = await rewriteExplanations({ data: { subjectId, provider, model, onlyEmpty, limit: 4 } });
-        total += result.rewritten;
-        if (result.failures?.length) toast.error(result.failures[0]);
-        if (!result.remaining || !result.rewritten) break;
+        done += result.rewritten ?? 0;
+        failed += result.failures?.length ?? 0;
+        if (typeof result.total === "number" && !total) total = result.total;
+        const lastError = result.failures?.length ? String(result.failures[0]) : null;
+        setProgress({
+          done,
+          failed,
+          total,
+          message: total ? `Rewriting… ${done} of ${total} done` : `Rewriting… ${done} done`,
+          error: lastError,
+        });
+        if (!result.rewritten && !result.failures?.length) {
+          setProgress({
+            done,
+            failed,
+            total,
+            message: done ? `Finished. ${done} explanation(s) rewritten.` : onlyEmpty
+              ? "Every question in this subject already has an explanation."
+              : "All explanations in this subject already use the new format.",
+            error: lastError,
+          });
+          break;
+        }
+        if (!result.remaining) {
+          setProgress({ done, failed, total, message: `Finished. ${done} rewritten${failed ? `, ${failed} failed` : ""}.`, error: lastError });
+          break;
+        }
+        if (stopRef.current) {
+          setProgress({ done, failed, total, message: `Stopped. ${done} rewritten${failed ? `, ${failed} failed` : ""}.`, error: lastError });
+          break;
+        }
       }
-      toast.success(`Rewrote ${total} explanation(s).`);
+      if (done) toast.success(`Rewrote ${done} explanation(s).`);
       await load();
-    } catch (e: any) { toast.error(e?.message || "Could not rewrite explanations"); }
-    finally { setRewriting(false); }
+    } catch (e: any) {
+      const message = e?.message || "Could not rewrite explanations";
+      setProgress((prev) => ({ ...(prev ?? { done: 0, failed: 0, total: 0 }), message: "Stopped because of an error.", error: message }));
+      toast.error(message);
+    }
+    finally { setRewriting(false); stopRef.current = false; }
   }
 
   if (!subjectId) return null;
