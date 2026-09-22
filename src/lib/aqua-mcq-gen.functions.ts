@@ -1220,12 +1220,20 @@ export const amgRewriteSubjectExplanations = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureAdmin(context);
-    let query = supabase.from("questions").select("id,stem,explanation,answer_mode,question_options(label,text,is_correct,sort_order)")
-      .eq("subject_id", data.subjectId).order("sort_order").limit(data.limit);
-    if (data.onlyEmpty) query = query.is("explanation", null);
-    else query = query.not("explanation", "like", "%| Option | Correct? | Explanation |%");
-    const { data: questions, error } = await query;
+    const applyFilter = (q: any) => data.onlyEmpty
+      ? q.is("explanation", null)
+      : q.not("explanation", "like", "%| Option | Correct? | Explanation |%");
+
+    const { count: total } = await applyFilter(
+      supabase.from("questions").select("id", { count: "exact", head: true }).eq("subject_id", data.subjectId),
+    );
+
+    const { data: questions, error } = await applyFilter(
+      supabase.from("questions").select("id,stem,explanation,answer_mode,question_options(label,text,is_correct,sort_order)")
+        .eq("subject_id", data.subjectId).order("sort_order").limit(data.limit),
+    );
     if (error) throw new Error(error.message);
+    if (!(questions ?? []).length) return { rewritten: 0, remaining: false, failures: [], total: total ?? 0 };
     const apiKey = await getKey(supabase, data.provider);
     let rewritten = 0;
     const failures: string[] = [];
