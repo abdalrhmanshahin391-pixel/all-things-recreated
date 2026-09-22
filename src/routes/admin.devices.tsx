@@ -64,6 +64,20 @@ type DeviceRow = {
 };
 
 type Filter = "all" | "over" | "locked" | "flagged";
+type LockState = {
+  locked_at: string | null;
+  lock_reason: string | null;
+  lock_kind: string | null;
+  lock_until: string | null;
+};
+
+function lockLabel(lock: LockState | undefined) {
+  if (!lock?.locked_at) return "";
+  if (lock.lock_reason === "device_limit") return "DEVICE LIMIT";
+  if (lock.lock_reason === "content_protection") return "CONTENT PROTECTION";
+  if (lock.lock_kind === "suspend") return "SUSPENDED";
+  return "MANUAL BLOCK";
+}
 
 function platformIcon(p: string | null) {
   const k = (p ?? "").toLowerCase();
@@ -102,7 +116,7 @@ function AdminDevicesPage() {
 
   const [users, setUsers] = useState<UserRow[]>([]);
   const [devices, setDevices] = useState<DeviceRow[]>([]);
-  const [locks, setLocks] = useState<Record<string, string | null>>({});
+  const [locks, setLocks] = useState<Record<string, LockState>>({});
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -133,8 +147,8 @@ function AdminDevicesPage() {
       setSupportUrl(sec.settings.support_url);
       setDefaultLimit(sec.settings.default_device_limit ?? 2);
       setAttempts(sec.attempts);
-      const m: Record<string, string | null> = {};
-      for (const l of lockRes.locks) m[l.id] = l.locked_at;
+      const m: Record<string, LockState> = {};
+      for (const l of lockRes.locks) m[l.id] = l;
       setLocks(m);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load");
@@ -147,6 +161,32 @@ function AdminDevicesPage() {
     if (isAdmin) refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    let alive = true;
+    const refreshLocks = async () => {
+      try {
+        const res = await listLocks();
+        if (!alive) return;
+        const next: Record<string, LockState> = {};
+        for (const lock of res.locks) next[lock.id] = lock;
+        setLocks(next);
+      } catch {
+        // The full-page refresh reports errors; background synchronization stays silent.
+      }
+    };
+    const timer = window.setInterval(() => void refreshLocks(), 15_000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void refreshLocks();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [isAdmin, listLocks]);
 
   const byUser = useMemo(() => {
     const m = new Map<string, DeviceRow[]>();
@@ -171,7 +211,7 @@ function AdminDevicesPage() {
         devices: list,
         admin,
         risk,
-        locked: !!locks[u.id],
+        locked: !!locks[u.id]?.locked_at,
         over: !admin && list.length > u.device_limit,
       };
     });
@@ -228,7 +268,7 @@ function AdminDevicesPage() {
     try {
       await unlockReset({ data: { userId: uid } });
       setDevices((p) => p.filter((d) => d.user_id !== uid));
-      setLocks((p) => ({ ...p, [uid]: null }));
+      setLocks((p) => ({ ...p, [uid]: { locked_at: null, lock_reason: null, lock_kind: null, lock_until: null } }));
       toast.success("Account reactivated and devices cleared");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
@@ -237,7 +277,15 @@ function AdminDevicesPage() {
   async function handleLock(uid: string, locked: boolean) {
     try {
       await setLock({ data: { userId: uid, locked } });
-      setLocks((p) => ({ ...p, [uid]: locked ? new Date().toISOString() : null }));
+      setLocks((p) => ({
+        ...p,
+        [uid]: {
+          locked_at: locked ? new Date().toISOString() : null,
+          lock_reason: locked ? "manual" : null,
+          lock_kind: null,
+          lock_until: null,
+        },
+      }));
       toast.success(locked ? "Account locked" : "Account unlocked");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
@@ -437,7 +485,7 @@ function AdminDevicesPage() {
                           )}
                           {locked && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 text-rose-700 px-2 py-0.5 text-[10px] font-bold">
-                              <Lock size={10} /> LOCKED
+                              <Lock size={10} /> {lockLabel(locks[u.id])}
                             </span>
                           )}
                         </div>
@@ -473,7 +521,7 @@ function AdminDevicesPage() {
                           <input
                             type="number"
                             min={1}
-                            max={20}
+                            max={100}
                             defaultValue={u.device_limit}
                             onBlur={(e) => {
                               const v = parseInt(e.target.value, 10);

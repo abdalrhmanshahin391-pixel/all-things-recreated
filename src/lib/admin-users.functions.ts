@@ -279,9 +279,10 @@ export const adminSetUserBlock = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const patch =
       data.kind === "none"
-        ? { locked_at: null, lock_kind: null, lock_until: null, lock_message: null }
+        ? { locked_at: null, lock_reason: null, lock_kind: null, lock_until: null, lock_message: null }
         : {
             locked_at: new Date().toISOString(),
+            lock_reason: "manual",
             lock_kind: data.kind,
             lock_until: data.kind === "suspend" ? data.until : null,
             lock_message: data.message || null,
