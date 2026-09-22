@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -48,6 +48,9 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
   const [model, setModel] = useState<string>(AMG_MODELS.google[1].id);
   const [onlyEmpty, setOnlyEmpty] = useState(false);
   const [rewriting, setRewriting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; failed: number; total: number; message: string; error: string | null } | null>(null);
+  const stopRef = useRef(false);
 
   const load = useCallback(async () => {
     if (!subjectId) {
@@ -153,20 +156,56 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
   }
 
   async function rewriteAll() {
-    if (!window.confirm(`Replace ${onlyEmpty ? "missing" : "old"} explanations in this subject using ${model}? Questions and answers will not change.`)) return;
+    setConfirmOpen(false);
+    stopRef.current = false;
     setRewriting(true);
+    setProgress({ done: 0, failed: 0, total: 0, message: "Starting…", error: null });
     try {
+      let done = 0;
+      let failed = 0;
       let total = 0;
       for (;;) {
         const result: any = await rewriteExplanations({ data: { subjectId, provider, model, onlyEmpty, limit: 4 } });
-        total += result.rewritten;
-        if (result.failures?.length) toast.error(result.failures[0]);
-        if (!result.remaining || !result.rewritten) break;
+        done += result.rewritten ?? 0;
+        failed += result.failures?.length ?? 0;
+        if (typeof result.total === "number" && !total) total = result.total;
+        const lastError = result.failures?.length ? String(result.failures[0]) : null;
+        setProgress({
+          done,
+          failed,
+          total,
+          message: total ? `Rewriting… ${done} of ${total} done` : `Rewriting… ${done} done`,
+          error: lastError,
+        });
+        if (!result.rewritten && !result.failures?.length) {
+          setProgress({
+            done,
+            failed,
+            total,
+            message: done ? `Finished. ${done} explanation(s) rewritten.` : onlyEmpty
+              ? "Every question in this subject already has an explanation."
+              : "All explanations in this subject already use the new format.",
+            error: lastError,
+          });
+          break;
+        }
+        if (!result.remaining) {
+          setProgress({ done, failed, total, message: `Finished. ${done} rewritten${failed ? `, ${failed} failed` : ""}.`, error: lastError });
+          break;
+        }
+        if (stopRef.current) {
+          setProgress({ done, failed, total, message: `Stopped. ${done} rewritten${failed ? `, ${failed} failed` : ""}.`, error: lastError });
+          break;
+        }
       }
-      toast.success(`Rewrote ${total} explanation(s).`);
+      if (done) toast.success(`Rewrote ${done} explanation(s).`);
       await load();
-    } catch (e: any) { toast.error(e?.message || "Could not rewrite explanations"); }
-    finally { setRewriting(false); }
+    } catch (e: any) {
+      const message = e?.message || "Could not rewrite explanations";
+      setProgress((prev) => ({ ...(prev ?? { done: 0, failed: 0, total: 0 }), message: "Stopped because of an error.", error: message }));
+      toast.error(message);
+    }
+    finally { setRewriting(false); stopRef.current = false; }
   }
 
   if (!subjectId) return null;
@@ -223,11 +262,41 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>{AMG_MODELS[provider].map((item) => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}</SelectContent>
         </Select>
-        <Button onClick={rewriteAll} disabled={rewriting || !rows.length}>{rewriting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Rewrite explanations</Button>
+        <Button onClick={() => { setProgress(null); setConfirmOpen(true); }} disabled={rewriting || !rows.length}>{rewriting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Rewrite explanations</Button>
         <label className="flex items-center gap-2 text-xs text-white/70 md:col-span-3">
           <input type="checkbox" checked={onlyEmpty} onChange={(event) => setOnlyEmpty(event.target.checked)} className="accent-amber-400" />
           Only questions without an explanation
         </label>
+
+        {confirmOpen && !rewriting && (
+          <div className="md:col-span-3 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4 text-sm text-white/80">
+            <p className="font-bold text-white">Replace {onlyEmpty ? "missing" : "old"} explanations in this subject?</p>
+            <p className="mt-1 text-xs text-white/60">
+              Model: {AMG_MODELS[provider].find((m) => m.id === model)?.label ?? model} ({provider === "google" ? "Google AI Studio" : "OpenAI"}).
+              Questions, options and answers will not change.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button onClick={() => void rewriteAll()}><Sparkles className="mr-2 h-4 w-4" />Start rewriting</Button>
+              <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
+            </div>
+          </div>
+        )}
+
+        {(rewriting || progress) && (
+          <div className="md:col-span-3 rounded-xl border border-white/10 bg-black/40 p-4 text-sm text-white/80">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                {rewriting && <Loader2 className="h-4 w-4 animate-spin text-amber-300" />}
+                {progress?.message ?? "Starting…"}
+              </span>
+              {rewriting
+                ? <Button variant="outline" onClick={() => { stopRef.current = true; }}>Stop</Button>
+                : <Button variant="outline" onClick={() => setProgress(null)}>Hide</Button>}
+            </div>
+            {progress?.failed ? <p className="mt-2 text-xs text-amber-300">{progress.failed} question(s) failed.</p> : null}
+            {progress?.error ? <p className="mt-1 text-xs text-rose-300 break-words">{progress.error}</p> : null}
+          </div>
+        )}
       </div>
 
       {!loading && filtered.length === 0 && (
