@@ -369,6 +369,7 @@ export type Database = {
           options: Json
           order_index: number
           orig: Json | null
+          origin_question_id: string | null
           page_id: string | null
           page_no: number
           solve_error: string | null
@@ -394,6 +395,7 @@ export type Database = {
           options?: Json
           order_index?: number
           orig?: Json | null
+          origin_question_id?: string | null
           page_id?: string | null
           page_no?: number
           solve_error?: string | null
@@ -419,6 +421,7 @@ export type Database = {
           options?: Json
           order_index?: number
           orig?: Json | null
+          origin_question_id?: string | null
           page_id?: string | null
           page_no?: number
           solve_error?: string | null
@@ -434,6 +437,13 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "amg_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "amg_items_origin_question_id_fkey"
+            columns: ["origin_question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
             referencedColumns: ["id"]
           },
           {
@@ -497,6 +507,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "amg_pages_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "amg_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      amg_sources: {
+        Row: {
+          chunks: Json
+          created_at: string
+          created_by: string
+          extracted_text: string
+          file_name: string
+          group_id: string
+          id: string
+          storage_path: string
+          updated_at: string
+        }
+        Insert: {
+          chunks?: Json
+          created_at?: string
+          created_by: string
+          extracted_text?: string
+          file_name: string
+          group_id: string
+          id?: string
+          storage_path: string
+          updated_at?: string
+        }
+        Update: {
+          chunks?: Json
+          created_at?: string
+          created_by?: string
+          extracted_text?: string
+          file_name?: string
+          group_id?: string
+          id?: string
+          storage_path?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amg_sources_group_id_fkey"
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "amg_groups"
