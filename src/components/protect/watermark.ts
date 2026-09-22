@@ -25,7 +25,7 @@ export function identityLines(id: WatermarkIdentity) {
  */
 export function tiledWatermark(
   id: WatermarkIdentity,
-  opacity = 0.06,
+  strength = 0.1,
   tick = 0,
   isDark = false,
 ) {
@@ -37,11 +37,12 @@ export function tiledWatermark(
   const jitterX = (tick % 5) * 2;
   const jitterY = (tick % 4) * 2;
 
-  // Adaptive contrast matching the background theme
+  // Treat the saved value as a 0–100% strength control rather than raw alpha.
+  // This keeps the watermark legible at maximum strength while ensuring the
+  // full admin slider has a visible effect instead of silently capping at 7%.
   const textColor = isDark ? "#ffffff" : "#0f172a";
-  const effectiveOpacity = isDark
-    ? Math.min(Math.max(opacity, 0.03), 0.075)
-    : Math.min(Math.max(opacity, 0.03), 0.07);
+  const normalizedStrength = Math.min(Math.max(strength, 0.02), 1);
+  const effectiveOpacity = (isDark ? 0.035 : 0.03) + normalizedStrength * (isDark ? 0.22 : 0.2);
 
   const block = (x: number, y: number) =>
     lines
@@ -52,11 +53,11 @@ export function tiledWatermark(
       .join("");
 
   const svg = `
-<svg xmlns='http://www.w3.org/2000/svg' width='260' height='170' viewBox='0 0 260 170'>
-  <!-- Clean diagonal identity block -->
-  <g transform='rotate(-22 130 85)' fill='${textColor}' fill-opacity='${effectiveOpacity.toFixed(3)}' font-family='Inter, system-ui, sans-serif' font-size='9.5' letter-spacing='0.6'>
-    ${block(-10 + jitterX, 35 + jitterY)}
-    ${block(120 + jitterX, 115 + jitterY)}
+<svg xmlns='http://www.w3.org/2000/svg' width='240' height='130' viewBox='0 0 240 130'>
+  <!-- Dense diagonal blocks begin near the top so question stems are marked too. -->
+  <g transform='rotate(-20 120 65)' fill='${textColor}' fill-opacity='${effectiveOpacity.toFixed(3)}' font-family='Inter, system-ui, sans-serif' font-size='9.5' letter-spacing='0.6'>
+    ${block(-12 + jitterX, 24 + jitterY)}
+    ${block(108 + jitterX, 88 + jitterY)}
   </g>
 </svg>`.trim();
 
