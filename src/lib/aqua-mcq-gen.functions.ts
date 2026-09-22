@@ -868,7 +868,7 @@ Return the same JSON shape with exactly ONE question in "questions". If part of 
 const SOLVE_SYSTEM = `You are a medical exam tutor. You are given ONE multiple-choice question with its options.
 
 Return STRICT JSON only, no markdown fences:
-{"answers":["A"],"title":"short medical topic title","intro":"4-5 sentences","rows":[{"item":"option wording only","correct":true,"reason":"2-3 focused sentences"}],"key_point_title":"optional short heading","key_point":"optional concise paragraph or bullets","memory_aid":"one concise line","answer_line":"answer wording only"}
+{"answers":["A"],"title":"short medical topic title","intro":"4-5 sentences","rows":[{"item":"option wording only","correct":true,"reason":"2-3 focused sentences"}],"key_point_title":"optional short heading","key_point":"optional concise paragraph or bullets","memory_aid":"one concise line","answer_line":"answer wording only","source_found":false,"source_answer":"optional short wording taken from the reference source"}
 
 Rules:
 - "answers" holds the labels of the correct options exactly as given (e.g. ["C"] or ["1","3"]).
