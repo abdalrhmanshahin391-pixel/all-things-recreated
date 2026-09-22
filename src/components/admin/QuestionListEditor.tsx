@@ -12,8 +12,12 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { QuestionImagePicker } from "@/components/admin/QuestionImagePicker";
+import { AMG_MODELS, amgRewriteSubjectExplanations } from "@/lib/aqua-mcq-gen.functions";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Option = { id?: string; label: string; text: string; is_correct: boolean; sort_order: number };
 type Question = {
@@ -38,6 +42,11 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<Question | null>(null);
   const [busy, setBusy] = useState(false);
+  const rewriteExplanations = useServerFn(amgRewriteSubjectExplanations);
+  const [provider, setProvider] = useState<"google" | "openai">("google");
+  const [model, setModel] = useState<string>(AMG_MODELS.google[1].id);
+  const [onlyEmpty, setOnlyEmpty] = useState(false);
+  const [rewriting, setRewriting] = useState(false);
 
   const load = useCallback(async () => {
     if (!subjectId) {
@@ -142,6 +151,23 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
     });
   }
 
+  async function rewriteAll() {
+    if (!window.confirm(`Replace ${onlyEmpty ? "missing" : "old"} explanations in this subject using ${model}? Questions and answers will not change.`)) return;
+    setRewriting(true);
+    try {
+      let total = 0;
+      for (;;) {
+        const result: any = await rewriteExplanations({ data: { subjectId, provider, model, onlyEmpty, limit: 4 } });
+        total += result.rewritten;
+        if (result.failures?.length) toast.error(result.failures[0]);
+        if (!result.remaining || !result.rewritten) break;
+      }
+      toast.success(`Rewrote ${total} explanation(s).`);
+      await load();
+    } catch (e: any) { toast.error(e?.message || "Could not rewrite explanations"); }
+    finally { setRewriting(false); }
+  }
+
   if (!subjectId) return null;
 
   return (
@@ -183,6 +209,24 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
           placeholder="Search questions, options, explanations…"
           className="w-full rounded-lg border border-white/15 bg-black/40 pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-amber-400"
         />
+      </div>
+
+      <div className="mb-4 grid gap-3 rounded-xl border border-white/10 bg-black/30 p-4 md:grid-cols-[1fr_1fr_auto]">
+        <Select value={provider} onValueChange={(value: "google" | "openai") => {
+          setProvider(value); setModel(AMG_MODELS[value][0].id);
+        }}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="google">Google AI Studio</SelectItem><SelectItem value="openai">OpenAI</SelectItem></SelectContent>
+        </Select>
+        <Select value={model} onValueChange={setModel}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>{AMG_MODELS[provider].map((item) => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}</SelectContent>
+        </Select>
+        <Button onClick={rewriteAll} disabled={rewriting || !rows.length}>{rewriting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Rewrite explanations</Button>
+        <label className="flex items-center gap-2 text-xs text-white/70 md:col-span-3">
+          <input type="checkbox" checked={onlyEmpty} onChange={(event) => setOnlyEmpty(event.target.checked)} className="accent-amber-400" />
+          Only questions without an explanation
+        </label>
       </div>
 
       {!loading && filtered.length === 0 && (
