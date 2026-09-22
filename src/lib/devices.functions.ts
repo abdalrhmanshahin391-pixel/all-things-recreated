@@ -48,7 +48,13 @@ function parsePlatform(ua: string | null | undefined): string {
 
 export type DeviceCheck =
   | { ok: true; status: "ok"; limit: number; count: number }
-  | { ok: false; status: "limit" | "locked"; limit: number; count: number };
+  | {
+      ok: false;
+      status: "limit" | "locked";
+      reason: "device_limit" | "content_protection" | "manual" | "account";
+      limit: number;
+      count: number;
+    };
 
 type DeviceRowLite = { id: string; device_id: string; first_seen_at: string };
 
@@ -95,7 +101,7 @@ export const recordDevice = createServerFn({ method: "POST" })
     const [{ data: prof }, { data: existing }, admin, globalLimit] = await Promise.all([
       supabaseAdmin
         .from("profiles")
-        .select("device_limit, locked_at, lock_reason")
+        .select("device_limit, locked_at, lock_reason, lock_kind")
         .eq("id", userId)
         .maybeSingle(),
       supabaseAdmin
@@ -120,7 +126,12 @@ export const recordDevice = createServerFn({ method: "POST" })
     }
 
     let lockedAt = (prof as { locked_at?: string | null } | null)?.locked_at ?? null;
-    const lockReason = (prof as { lock_reason?: string | null } | null)?.lock_reason ?? null;
+    const profileLock = prof as {
+      locked_at?: string | null;
+      lock_reason?: string | null;
+      lock_kind?: string | null;
+    } | null;
+    const lockReason = profileLock?.lock_reason ?? (profileLock?.lock_kind ? "manual" : null);
     const index = list.findIndex((d) => d.device_id === data.deviceId);
     const hasSlot = index > -1 ? index < limit : list.length < limit;
 
@@ -134,14 +145,25 @@ export const recordDevice = createServerFn({ method: "POST" })
       lockedAt = null;
     }
 
-    if (lockedAt || !hasSlot) {
-      if (!lockedAt) {
-        await supabaseAdmin
-          .from("profiles")
-          .update({ locked_at: now, lock_reason: "device_limit" })
-          .eq("id", userId);
-      }
-      return { ok: false, status: "locked", limit, count: list.length };
+    // Keep account/content locks distinct from device-limit enforcement. The
+    // caller may still show the locked screen, but must not describe these as
+    // an excess-device violation.
+    if (lockedAt) {
+      const reason =
+        lockReason === "device_limit" || lockReason === "content_protection" || lockReason === "manual"
+          ? lockReason
+          : "account";
+      return { ok: false, status: "locked", reason, limit, count: list.length };
+    }
+
+    // Existing devices 1..limit retain access. Only a new device after every
+    // slot is occupied is blocked (for a limit of 30, this is device 31).
+    if (!hasSlot) {
+      await supabaseAdmin
+        .from("profiles")
+        .update({ locked_at: now, lock_reason: "device_limit" })
+        .eq("id", userId);
+      return { ok: false, status: "limit", reason: "device_limit", limit, count: list.length };
     }
 
     const { error: upErr } = await supabaseAdmin.from("user_devices").upsert(
@@ -161,7 +183,7 @@ export const getLockInfo = createServerFn({ method: "GET" })
     const [{ data: prof }, { count }, { data: settings }, globalLimit] = await Promise.all([
       supabaseAdmin
         .from("profiles")
-        .select("device_limit, locked_at, lock_reason, username, full_name")
+        .select("device_limit, locked_at, lock_reason, lock_kind, lock_until, lock_message, username, full_name")
         .eq("id", context.userId)
         .maybeSingle(),
       supabaseAdmin
@@ -179,6 +201,10 @@ export const getLockInfo = createServerFn({ method: "GET" })
     return {
       locked: !!p.locked_at,
       lockedAt: (p.locked_at as string | null) ?? null,
+      lockReason: ((p.lock_reason || (p.lock_kind ? "manual" : null)) as string | null) ?? null,
+      lockKind: (p.lock_kind as string | null) ?? null,
+      lockUntil: (p.lock_until as string | null) ?? null,
+      lockMessage: (p.lock_message as string | null) ?? null,
       limit: (p.device_limit as number | null) ?? globalLimit,
       deviceCount: count ?? 0,
       name: (p.full_name || p.username || "") as string,

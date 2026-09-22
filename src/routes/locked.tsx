@@ -33,6 +33,10 @@ function LockedPage() {
 
   const [state, setState] = useState<{
     locked: boolean;
+    lockReason: string | null;
+    lockKind: string | null;
+    lockUntil: string | null;
+    lockMessage: string | null;
     limit: number;
     deviceCount: number;
     name: string;
@@ -41,6 +45,16 @@ function LockedPage() {
   } | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const lockMessage = !state
+    ? "Checking your account…"
+    : state.lockReason === "device_limit"
+      ? `This account has used all ${state.limit} allowed device slots. A new device cannot access the account until it is reactivated.`
+      : state.lockReason === "content_protection"
+        ? "Access was paused by the content-protection system. Contact us so we can review and reactivate the account."
+        : state.lockKind === "suspend" && state.lockUntil
+          ? `This account is temporarily suspended until ${new Date(state.lockUntil).toLocaleString()}. ${state.lockMessage ?? "Contact us if you need help."}`
+          : state.lockMessage || "This account was paused by an administrator. Contact us to restore access.";
 
   useEffect(() => {
     let alive = true;
@@ -92,9 +106,7 @@ function LockedPage() {
               Account temporarily locked
             </h1>
             <p className="mt-3 text-muted-foreground leading-relaxed">
-              {state
-                ? `This account has been opened on ${state.deviceCount} devices, but the plan allows ${state.limit}. To protect the content, access is paused until it is reactivated.`
-                : "Checking your account…"}
+              {lockMessage}
             </p>
           </div>
 
@@ -122,8 +134,9 @@ function LockedPage() {
                 </button>
               </div>
               <p className="text-xs text-muted-foreground">
-                A valid code clears every device on this account and starts you fresh at 0 /{" "}
-                {state?.limit ?? 2} devices — this device becomes device 1.
+                {state?.lockReason === "device_limit"
+                  ? `A valid code clears the saved devices and registers this one as device 1 of ${state.limit}.`
+                  : "Enter the reactivation code provided by the support team."}
               </p>
             </form>
 
