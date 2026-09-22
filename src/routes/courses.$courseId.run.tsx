@@ -11,6 +11,11 @@ import { ProtectedContent } from "@/components/protect/ProtectedContent";
 import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
 import { ArabicToggle } from "@/components/quiz/ArabicToggle";
 import { useQuestionTranslation } from "@/hooks/useQuestionTranslation";
+import { useServerFn } from "@tanstack/react-start";
+import { EditQuestionDialog, type EditableQuestion } from "@/components/admin/QuestionListEditor";
+import { AMG_MODELS, amgResolveCourseQuestion, amgUpdateCourseQuestion } from "@/lib/aqua-mcq-gen.functions";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MoveQuestionControl, type CourseSectionGroup } from "@/components/course/MoveQuestionControl";
 import { moveSingleCourseQuestion } from "@/lib/course-sorter.functions";
 import { ReportQuestionModal } from "@/components/ReportQuestionModal";
@@ -107,6 +112,13 @@ function RunPage() {
   const hasAccess = accessReady === accessKey;
   const [courseSections, setCourseSections] = useState<CourseSectionGroup[]>([]);
   const [sessionReady, setSessionReady] = useState(false);
+  const [adminEditing, setAdminEditing] = useState<Question | null>(null);
+  const [resolveQuestion, setResolveQuestion] = useState<Question | null>(null);
+  const [resolveProvider, setResolveProvider] = useState<"google" | "openai">("google");
+  const [resolveModel, setResolveModel] = useState(AMG_MODELS.google[0]);
+  const [resolving, setResolving] = useState(false);
+  const resolveCourseQuestion = useServerFn(amgResolveCourseQuestion);
+  const updateCourseQuestion = useServerFn(amgUpdateCourseQuestion);
   const sessionKey = `aqua-quiz:${user?.id ?? "guest"}:${courseId}:${mode}:${subjects}:${pool}:${timed}:${duration}`;
 
   // Access gate: paid course requires admin OR an enrollment row.
@@ -464,6 +476,36 @@ function RunPage() {
 
   const goToCourse = () => navigate({ to: "/courses/$courseId", params: { courseId } });
 
+  const refreshQuestion = useCallback(async (questionId: string) => {
+    const { data, error } = await (supabase.from as any)("questions")
+      .select("id,subject_id,stem,explanation,image_url,answer_mode,sort_order,question_options(id,label,text,is_correct,sort_order)")
+      .eq("id", questionId).single();
+    if (error) throw error;
+    const refreshed: Question = {
+      id: data.id, subject_id: data.subject_id, stem: data.stem, explanation: data.explanation,
+      image_url: data.image_url ?? null, answer_mode: data.answer_mode === "multiple" ? "multiple" : "single",
+      sort_order: Number(data.sort_order) || 0,
+      options: [...(data.question_options ?? [])].sort((a: Option, b: Option) => a.sort_order - b.sort_order),
+    };
+    setQuestions((previous) => previous.map((question) => question.id === questionId ? refreshed : question));
+    setAnswers((previous) => ({ ...previous, [questionId]: mode === "study" ? refreshed.options.filter((option) => option.is_correct).map((option) => option.label) : [] }));
+  }, [mode]);
+
+  async function runAdminResolve() {
+    if (!resolveQuestion) return;
+    setResolving(true);
+    try {
+      await resolveCourseQuestion({ data: { questionId: resolveQuestion.id, provider: resolveProvider, model: resolveModel } });
+      await refreshQuestion(resolveQuestion.id);
+      setResolveQuestion(null);
+      toast.success("The answer and explanation were regenerated.");
+    } catch (error: any) {
+      toast.error(error?.message || "The question was not changed.");
+    } finally {
+      setResolving(false);
+    }
+  }
+
   async function setCorrectOption(questionId: string, optionId: string) {
     const q = questions.find((x) => x.id === questionId);
     if (!q) return;
@@ -815,6 +857,8 @@ function RunPage() {
                 isLast={current === questions.length - 1}
                 onSetCorrect={(optionId) => setCorrectOption(currentQ.id, optionId)}
                 onDelete={() => deleteQuestion(currentQ.id)}
+                onEdit={() => setAdminEditing(currentQ)}
+                onResolve={() => setResolveQuestion(currentQ)}
                 onCapture={(cap: CapturePayload) =>
                   setPendingNote({
                     courseId,
@@ -897,6 +941,45 @@ function RunPage() {
           onSaved={() => setPendingNote(null)}
         />
       )}
+      {isAdmin && adminEditing && (
+        <EditQuestionDialog
+          question={adminEditing as EditableQuestion}
+          onClose={() => setAdminEditing(null)}
+          onPersist={async (value) => {
+            await updateCourseQuestion({ data: { questionId: adminEditing.id, ...value } });
+          }}
+          onSaved={() => {
+            void refreshQuestion(adminEditing.id);
+            setAdminEditing(null);
+          }}
+        />
+      )}
+      {isAdmin && resolveQuestion && (
+        <div className="fixed inset-0 z-[85] grid place-items-center bg-background/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md space-y-4 rounded-lg border bg-card p-5 shadow-xl">
+            <div>
+              <h2 className="font-bold">Re-solve and explain</h2>
+              <p className="mt-1 text-sm text-muted-foreground">This replaces only this question’s correct answer and explanation after a valid result.</p>
+            </div>
+            <Select value={resolveProvider} onValueChange={(value) => {
+              const provider = value as "google" | "openai";
+              setResolveProvider(provider);
+              setResolveModel(AMG_MODELS[provider][0]);
+            }}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="google">Google</SelectItem><SelectItem value="openai">OpenAI</SelectItem></SelectContent>
+            </Select>
+            <Select value={resolveModel} onValueChange={setResolveModel}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{AMG_MODELS[resolveProvider].map((model) => <SelectItem key={model} value={model}>{model}</SelectItem>)}</SelectContent>
+            </Select>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setResolveQuestion(null)} disabled={resolving}>Cancel</Button>
+              <Button onClick={runAdminResolve} disabled={resolving}>{resolving ? "Working…" : "Re-solve & explain"}</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -910,7 +993,7 @@ function fmtTime(s: number) {
 function QuestionCard({
   q, mode, isAdmin, selected, submitted, isFlagged, isShining = false,
   courseId, courseSections, onMoveQuestion,
-  onToggleFlag, onSelect, onSubmit, onNext, isLast, onSetCorrect, onDelete, onCapture,
+  onToggleFlag, onSelect, onSubmit, onNext, isLast, onSetCorrect, onDelete, onEdit, onResolve, onCapture,
 }: {
   q: Question; mode: Mode; isAdmin: boolean;
   courseId?: string;
@@ -924,6 +1007,7 @@ function QuestionCard({
   onToggleFlag: () => void; onSelect: (label: string) => void;
   onSubmit: () => void; onNext: () => void; isLast: boolean;
   onSetCorrect: (optionId: string) => void; onDelete: () => void;
+  onEdit: () => void; onResolve: () => void;
   onCapture: (cap: CapturePayload) => void;
 }) {
   const isStudy = mode === "study";
@@ -987,6 +1071,12 @@ function QuestionCard({
             >
               <Trash2 className="w-3.5 h-3.5" /> Delete question
             </button>
+          )}
+          {isAdmin && (
+            <>
+              <Button type="button" size="sm" variant="outline" onClick={onEdit}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>
+              <Button type="button" size="sm" variant="outline" onClick={onResolve}><Sparkles className="mr-1 h-3.5 w-3.5" />Re-solve</Button>
+            </>
           )}
         </div>
       </div>

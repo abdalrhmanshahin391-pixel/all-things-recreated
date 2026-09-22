@@ -432,10 +432,12 @@ export function EditQuestionDialog({
   question,
   onClose,
   onSaved,
+  onPersist,
 }: {
   question: EditableQuestion;
   onClose: () => void;
   onSaved: () => void;
+  onPersist?: (value: { stem: string; explanation: string | null; imageUrl: string | null; answerMode: "single" | "multiple"; options: Array<{ text: string; isCorrect: boolean }> }) => Promise<void>;
 }) {
   const [stem, setStem] = useState(question.stem);
   const [explanation, setExplanation] = useState(question.explanation ?? "");
@@ -475,6 +477,16 @@ export function EditQuestionDialog({
     }
     setSaving(true);
     try {
+      if (onPersist) {
+        await onPersist({
+          stem: stem.trim(), explanation: explanation.trim() || null, imageUrl: imagePath,
+          answerMode: multi ? "multiple" : "single",
+          options: clean.map((option) => ({ text: option.text.trim(), isCorrect: !!option.is_correct })),
+        });
+        toast.success("Question updated.");
+        onSaved();
+        return;
+      }
       const { error: qErr } = await (supabase.from as any)("questions")
         .update({
           stem: stem.trim(),

@@ -1354,3 +1354,38 @@ export const amgResolveCourseQuestion = createServerFn({ method: "POST" })
       options: opts.map((option: any) => ({ ...option, is_correct: valid.includes(String(option.label).toUpperCase()) })),
     };
   });
+
+export const amgUpdateCourseQuestion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    questionId: z.string().uuid(),
+    stem: z.string().max(12000),
+    explanation: z.string().max(18000).nullable(),
+    imageUrl: z.string().max(1000).nullable(),
+    answerMode: z.enum(["single", "multiple"]),
+    options: z.array(z.object({ text: z.string().min(1).max(5000), isCorrect: z.boolean() })).min(2).max(10),
+  }).superRefine((value, ctx) => {
+    const count = value.options.filter((option) => option.isCorrect).length;
+    if (!count || (value.answerMode === "single" && count !== 1) || (value.answerMode === "multiple" && count < 2)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "The selected correct answers do not match the answer mode." });
+    }
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = await ensureAdmin(context);
+    const { data: existing, error: findError } = await supabase.from("questions").select("id").eq("id", data.questionId).maybeSingle();
+    if (findError || !existing) throw new Error(findError?.message || "Question not found.");
+    const { error: updateError } = await supabase.from("questions").update({
+      stem: data.stem.trim(), explanation: data.explanation?.trim() || null,
+      image_url: data.imageUrl, answer_mode: data.answerMode,
+    }).eq("id", data.questionId);
+    if (updateError) throw new Error(updateError.message);
+    const { error: deleteError } = await supabase.from("question_options").delete().eq("question_id", data.questionId);
+    if (deleteError) throw new Error(deleteError.message);
+    const rows = data.options.map((option, index) => ({
+      question_id: data.questionId, label: "ABCDEFGHIJ"[index], text: option.text.trim(),
+      is_correct: option.isCorrect, sort_order: index,
+    }));
+    const { error: insertError } = await supabase.from("question_options").insert(rows);
+    if (insertError) throw new Error(insertError.message);
+    return { ok: true };
+  });
