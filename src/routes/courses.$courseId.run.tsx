@@ -21,6 +21,7 @@ import { moveSingleCourseQuestion } from "@/lib/course-sorter.functions";
 import { ReportQuestionModal } from "@/components/ReportQuestionModal";
 import { loadCourseRunQuestionsServerFn } from "@/lib/course-enrollment.functions";
 import { ensureFreeEnrollment } from "@/lib/course-access";
+import { formatQuestionStem } from "@/lib/question-format";
 import {
   Flag,
   CheckCircle2,
@@ -1184,9 +1185,9 @@ function QuestionCard({
       {(q.stem?.trim() || !q.image_url) && (
         <div
           dir={show ? "rtl" : undefined}
-          className="px-6 py-6 text-lg leading-relaxed text-foreground font-medium"
+          className="px-6 py-6 text-lg leading-relaxed text-foreground font-medium whitespace-pre-line"
         >
-          {show ? show.stem : q.stem}
+          {formatQuestionStem(show ? show.stem : q.stem)}
         </div>
       )}
       {q.answer_mode === "multiple" && (
@@ -1343,8 +1344,8 @@ function ExamCard({
       <div className="px-5 py-5">
         {q.image_url && <div className="mb-4"><QuestionImage path={q.image_url} /></div>}
         {(q.stem?.trim() || !q.image_url) && (
-          <div dir={show ? "rtl" : undefined} className="text-base leading-relaxed mb-4 text-foreground">
-            {show ? show.stem : q.stem}
+          <div dir={show ? "rtl" : undefined} className="text-base leading-relaxed mb-4 text-foreground whitespace-pre-line">
+            {formatQuestionStem(show ? show.stem : q.stem)}
           </div>
         )}
          <div className="text-xs italic text-muted-foreground mb-3">
@@ -1430,8 +1431,8 @@ function ReviewCard({
       </div>
       {q.image_url && <div className="px-6 pt-6"><QuestionImage path={q.image_url} /></div>}
       {(q.stem?.trim() || !q.image_url) && (
-        <div dir={show ? "rtl" : undefined} className="px-6 py-6 text-base leading-relaxed text-foreground">
-          {show ? show.stem : q.stem}
+        <div dir={show ? "rtl" : undefined} className="px-6 py-6 text-base leading-relaxed text-foreground whitespace-pre-line">
+          {formatQuestionStem(show ? show.stem : q.stem)}
         </div>
       )}
       <div className="px-6 pb-6 space-y-3">

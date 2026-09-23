@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
+import { formatQuestionStem } from "@/lib/question-format";
 
 export const Route = createFileRoute("/lectures/$courseId/quiz/$quizId")({
   head: () => ({ meta: [{ title: "Lecture quiz — AquaQBank" }] }),
@@ -421,7 +422,7 @@ function LectureQuizPage() {
             </div>
           ) : (
             <>
-              <div className="text-base md:text-lg font-medium text-foreground whitespace-pre-wrap">{q.prompt}</div>
+              <div className="text-base md:text-lg font-medium text-foreground whitespace-pre-wrap">{formatQuestionStem(q.prompt)}</div>
               <div className="mt-6 space-y-2">
                 {q.options.map((o) => {
                   const isPicked = selected === o.id;

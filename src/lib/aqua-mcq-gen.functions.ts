@@ -11,6 +11,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { formatQuestionStem } from "@/lib/question-format";
 
 const GROUPS = "amg_groups";
 const PAGES = "amg_pages";
@@ -121,7 +122,8 @@ function parseJson(text: string): any {
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
   if (start >= 0 && end > start) raw = raw.slice(start, end + 1);
-  raw = raw.replace(/[\u0000-\u001f]+/g, " ").replace(/,\s*([}\]])/g, "$1");
+  // Strip control characters except newline (\u000a), carriage return (\u000d), and tab (\u0009)
+  raw = raw.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]+/g, " ").replace(/,\s*([}\]])/g, "$1");
   return JSON.parse(raw);
 }
 
@@ -141,7 +143,7 @@ function normaliseQuestions(json: any): any[] {
     const options = Array.isArray(q?.options)
       ? q.options.map((o: any) => ({ label: String(o?.label ?? "").slice(0, 8), text: String(o?.text ?? "").slice(0, 2000) })).filter((o: any) => o.text)
       : [];
-    const stem = String(q?.stem ?? "").slice(0, 8000);
+    const stem = formatQuestionStem(String(q?.stem ?? "").slice(0, 8000));
     const form = String(q?.form ?? "A").toUpperCase() === "B" ? "B" : "A";
     let flagged = Boolean(q?.flagged);
     let reason = String(q?.flag_reason ?? "").slice(0, 300);
@@ -1375,7 +1377,7 @@ export const amgUpdateCourseQuestion = createServerFn({ method: "POST" })
     const { data: existing, error: findError } = await supabase.from("questions").select("id").eq("id", data.questionId).maybeSingle();
     if (findError || !existing) throw new Error(findError?.message || "Question not found.");
     const { error: updateError } = await supabase.from("questions").update({
-      stem: data.stem.trim(), explanation: data.explanation?.trim() || null,
+      stem: formatQuestionStem(data.stem.trim()), explanation: data.explanation?.trim() || null,
       image_url: data.imageUrl, answer_mode: data.answerMode,
     }).eq("id", data.questionId);
     if (updateError) throw new Error(updateError.message);

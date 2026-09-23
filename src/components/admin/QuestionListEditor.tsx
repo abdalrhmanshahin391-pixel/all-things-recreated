@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { QuestionImagePicker } from "@/components/admin/QuestionImagePicker";
 import { AMG_MODELS, amgRewriteSubjectExplanations } from "@/lib/aqua-mcq-gen.functions";
 import { Button } from "@/components/ui/button";
+import { formatQuestionStem } from "@/lib/question-format";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export type EditableQuestionOption = { id?: string; label: string; text: string; is_correct: boolean; sort_order: number };
@@ -354,7 +355,7 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-bold text-white/40">#{index + 1}</div>
-                  <div className="text-sm text-white whitespace-pre-wrap break-words">{q.stem}</div>
+                  <div className="text-sm text-white whitespace-pre-wrap break-words">{formatQuestionStem(q.stem)}</div>
                   <ul className="mt-2 space-y-1">
                     {q.options.map((o) => (
                       <li
@@ -479,7 +480,7 @@ export function EditQuestionDialog({
     try {
       if (onPersist) {
         await onPersist({
-          stem: stem.trim(), explanation: explanation.trim() || null, imageUrl: imagePath,
+          stem: formatQuestionStem(stem.trim()), explanation: explanation.trim() || null, imageUrl: imagePath,
           answerMode: multi ? "multiple" : "single",
           options: clean.map((option) => ({ text: option.text.trim(), isCorrect: !!option.is_correct })),
         });
@@ -489,7 +490,7 @@ export function EditQuestionDialog({
       }
       const { error: qErr } = await (supabase.from as any)("questions")
         .update({
-          stem: stem.trim(),
+          stem: formatQuestionStem(stem.trim()),
           explanation: explanation.trim() || null,
           answer_mode: multi ? "multiple" : "single",
           image_url: imagePath,
