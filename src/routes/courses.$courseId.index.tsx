@@ -29,6 +29,8 @@ import { useLang } from "@/components/LanguageProvider";
 import { ensureFreeEnrollment } from "@/lib/course-access";
 import { toast } from "sonner";
 import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
+import { exportSectionQuestionsForNotebookLmServerFn } from "@/lib/course-export.functions";
+import { NotebookLmExportModal } from "@/components/course/NotebookLmExportModal";
 
 export const Route = createFileRoute("/courses/$courseId/")({
   loader: async ({ params }) => {
@@ -134,6 +136,50 @@ function CourseDetailPage() {
   const [pool, setPool] = useState<"all" | "flagged" | "incorrect">("all");
   const [adminSelected, setAdminSelected] = useState<Set<string>>(new Set());
   const [adminBusy, setAdminBusy] = useState(false);
+
+  const exportForNotebookLm = useServerFn(exportSectionQuestionsForNotebookLmServerFn);
+  const [notebookModalOpen, setNotebookModalOpen] = useState(false);
+  const [notebookExportData, setNotebookExportData] = useState<{
+    groupName: string;
+    text: string;
+    questionCount: number;
+    loading: boolean;
+  }>({
+    groupName: "",
+    text: "",
+    questionCount: 0,
+    loading: false,
+  });
+
+  async function handleOpenNotebookLm(group: Group) {
+    setNotebookExportData({
+      groupName: group.name,
+      text: "",
+      questionCount: 0,
+      loading: true,
+    });
+    setNotebookModalOpen(true);
+
+    try {
+      const res = await exportForNotebookLm({
+        data: {
+          courseId,
+          groupId: group.id,
+        },
+      });
+
+      setNotebookExportData({
+        groupName: res.groupName,
+        text: res.text,
+        questionCount: res.questionCount,
+        loading: false,
+      });
+    } catch (err: any) {
+      console.error("Failed to export questions for NotebookLM:", err);
+      toast.error(err?.message || "Failed to load questions for this section.");
+      setNotebookExportData((prev) => ({ ...prev, loading: false }));
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -678,7 +724,19 @@ function CourseDetailPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <button
+                          type="button"
+                          title="Copy section questions for NotebookLM (without answers)"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenNotebookLm(group);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300 transition-colors shrink-0 shadow-sm"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>NotebookLM</span>
+                        </button>
                         <span className="hidden sm:inline-flex text-[11px] font-bold uppercase tracking-wider text-muted-foreground bg-muted rounded-full px-2.5 py-1">
                           {items.length} {items.length === 1 ? "subject" : "subjects"}
                         </span>
@@ -983,6 +1041,16 @@ function CourseDetailPage() {
               setSelected(new Set([firstFreeSubject.id]));
             }
           }}
+        />
+
+        <NotebookLmExportModal
+          open={notebookModalOpen}
+          onOpenChange={setNotebookModalOpen}
+          courseTitle={course?.title ?? "Course"}
+          groupName={notebookExportData.groupName}
+          text={notebookExportData.text}
+          questionCount={notebookExportData.questionCount}
+          loading={notebookExportData.loading}
         />
       </main>
     </div>
