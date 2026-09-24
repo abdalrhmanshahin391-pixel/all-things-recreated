@@ -16,17 +16,22 @@ export const CONTENT_EVENT_KINDS = [
 
 export type ContentEventKind = (typeof CONTENT_EVENT_KINDS)[number];
 
-/** Weight each signal carries in the leak-risk score. */
+/**
+ * Weight each signal carries in the leak-risk score.
+ * Policy: ONLY recording, screenshots, and copying carry risk points.
+ * Leaving the page, zooming on iPad/tablets, or window resizing are NOT risky.
+ */
 const WEIGHTS: Record<string, number> = {
+  // 1. Recording
+  screen_share: 12,
+  // 2. Screenshots & Printing
   screenshot_attempt: 10,
   print_attempt: 6,
+  // 3. Copying
   copy_attempt: 3,
-  devtools: 8,
-  screen_share: 12,
-  rapid_flip: 4,
-  // Switching apps, changing tabs, locking a phone, and browser UI on iPad
-  // all produce this signal during normal use. Keep logging it for context,
-  // but never let it contribute to an automatic account lock.
+  // Non-risky (leaving page, zooming/resizing, etc. are NOT risky)
+  devtools: 0,
+  rapid_flip: 0,
   focus_loss: 0,
   consent_accepted: 0,
 };
@@ -156,7 +161,14 @@ export const adminContentProtectionOverview = createServerFn({ method: "POST" })
     const profMap = new Map<string, any>((profiles ?? []).map((p: any) => [p.id, p]));
 
     for (const e of events ?? []) {
-      if (e.kind === "consent_accepted") continue;
+      if (
+        e.kind === "consent_accepted" ||
+        e.kind === "focus_loss" ||
+        e.kind === "devtools" ||
+        e.kind === "rapid_flip"
+      ) {
+        continue;
+      }
       let row = byUser.get(e.user_id);
       if (!row) {
         const p = profMap.get(e.user_id) ?? {};
@@ -176,7 +188,7 @@ export const adminContentProtectionOverview = createServerFn({ method: "POST" })
         byUser.set(e.user_id, row);
       }
       row.events += 1;
-      row.score += WEIGHTS[e.kind] ?? 1;
+      row.score += WEIGHTS[e.kind] ?? 0;
       row.breakdown[e.kind] = (row.breakdown[e.kind] ?? 0) + 1;
     }
 
@@ -201,12 +213,20 @@ export const adminContentProtectionOverview = createServerFn({ method: "POST" })
       .map((r) => ({ ...r, level: levelFor(r.score) }))
       .sort((a, b) => b.score - a.score);
 
+    const captureEvents = (events ?? []).filter(
+      (e: any) =>
+        e.kind !== "consent_accepted" &&
+        e.kind !== "focus_loss" &&
+        e.kind !== "devtools" &&
+        e.kind !== "rapid_flip",
+    );
+
     return {
       rows,
-      recent: (events ?? []).slice(0, 200),
+      recent: captureEvents.slice(0, 200),
       totals: {
         users: rows.length,
-        events: (events ?? []).length,
+        events: captureEvents.length,
         high: rows.filter((r) => r.level === "high").length,
         locked: rows.filter((r) => r.locked).length,
       },

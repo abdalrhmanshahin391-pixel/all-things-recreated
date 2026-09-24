@@ -63,7 +63,7 @@ const DEFAULTS: SiteSettings = {
   protect_lectures: true,
   protect_qbank: true,
   protect_watermark_opacity: 0.1,
-  protect_blur_on_blur: true,
+  protect_blur_on_blur: false,
   protect_block_print: true,
   protect_block_copy: true,
   protect_consent_required: true,

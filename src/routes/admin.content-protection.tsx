@@ -59,11 +59,11 @@ const DEFAULT_TOGGLES: Toggles = {
   protect_enabled: true,
   protect_lectures: true,
   protect_qbank: true,
-  protect_blur_on_blur: true,
+  protect_blur_on_blur: false,
   protect_block_print: true,
   protect_block_copy: true,
   protect_consent_required: true,
-  protect_devtools_guard: true,
+  protect_devtools_guard: false,
   protect_watermark_opacity: 0.06,
   protect_auto_lock_threshold: 12,
   protect_terms_en: "",
@@ -112,11 +112,11 @@ function AdminContentProtection() {
           protect_enabled: data.protect_enabled ?? true,
           protect_lectures: data.protect_lectures ?? true,
           protect_qbank: data.protect_qbank ?? true,
-          protect_blur_on_blur: data.protect_blur_on_blur ?? true,
+          protect_blur_on_blur: data.protect_blur_on_blur ?? false,
           protect_block_print: data.protect_block_print ?? true,
           protect_block_copy: data.protect_block_copy ?? true,
           protect_consent_required: data.protect_consent_required ?? true,
-          protect_devtools_guard: data.protect_devtools_guard ?? true,
+          protect_devtools_guard: data.protect_devtools_guard ?? false,
           protect_watermark_opacity: Number(data.protect_watermark_opacity ?? 0.06),
           protect_auto_lock_threshold: Number(data.protect_auto_lock_threshold ?? 12),
           protect_terms_en: data.protect_terms_en ?? "",
@@ -218,10 +218,10 @@ function AdminContentProtection() {
             <Toggle label="Protect lectures" desc="Watermarks and capture detection on lecture pages" checked={toggles.protect_lectures} onChange={(v) => patch({ protect_lectures: v })} />
             <Toggle label="Protect question bank" desc="Watermarks and capture detection while solving questions" checked={toggles.protect_qbank} onChange={(v) => patch({ protect_qbank: v })} />
             <Toggle label="Warning gate" desc="Users must accept the anti-sharing terms once" checked={toggles.protect_consent_required} onChange={(v) => patch({ protect_consent_required: v })} />
-            <Toggle label="Hide when they leave" desc="Blur content when the tab loses focus" checked={toggles.protect_blur_on_blur} onChange={(v) => patch({ protect_blur_on_blur: v })} />
+            <Toggle label="Hide when they leave" desc="Blur content when tab loses focus (leaving page is never logged or counted as risk)" checked={toggles.protect_blur_on_blur} onChange={(v) => patch({ protect_blur_on_blur: v })} />
             <Toggle label="Block printing" desc="Ctrl/Cmd+P and print output disabled" checked={toggles.protect_block_print} onChange={(v) => patch({ protect_block_print: v })} />
             <Toggle label="Block copying" desc="Copy is replaced with a traced warning" checked={toggles.protect_block_copy} onChange={(v) => patch({ protect_block_copy: v })} />
-            <Toggle label="Developer tools guard" desc="Blur and log when devtools open" checked={toggles.protect_devtools_guard} onChange={(v) => patch({ protect_devtools_guard: v })} />
+            <Toggle label="Developer tools shortcut block" desc="Block F12 keyboard shortcut (zoom-safe, never blocks students)" checked={toggles.protect_devtools_guard} onChange={(v) => patch({ protect_devtools_guard: v })} />
             <Toggle label="Admin test mode (this device)" desc="Activate blur & alarms for your admin account so you can test mobile protections directly" checked={adminTestMode} onChange={toggleAdminTestMode} />
           </div>
 

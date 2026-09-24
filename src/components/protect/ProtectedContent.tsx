@@ -158,15 +158,14 @@ export function ProtectedContent({
       if ((e.metaKey || e.ctrlKey) && (k === "c" || k === "C") && settings.protect_block_copy) {
         log("copy_attempt");
       }
-      if (k === "F12") {
-        raiseAlarm("Developer tools are not allowed here", "devtools");
+      if (k === "F12" && settings.protect_devtools_guard) {
+        e.preventDefault();
       }
     };
 
     const onVisibility = () => {
       if (document.hidden) {
         if (settings.protect_blur_on_blur) setBlurred(true);
-        log("focus_loss", { reason: "hidden" });
       } else if (settings.protect_blur_on_blur) {
         setBlurred(false);
       }
@@ -220,22 +219,6 @@ export function ProtectedContent({
       if (alarmTimer.current) clearTimeout(alarmTimer.current);
     };
   }, [active, settings, identity, log, raiseAlarm]);
-
-  // Devtools heuristic
-  useEffect(() => {
-    if (!active || !settings.protect_devtools_guard) return;
-    let flagged = false;
-    const t = setInterval(() => {
-      const wide = window.outerWidth - window.innerWidth > 220;
-      const tall = window.outerHeight - window.innerHeight > 260;
-      if ((wide || tall) && !flagged) {
-        flagged = true;
-        raiseAlarm("Developer tools detected — this session is being recorded", "devtools");
-      }
-      if (!wide && !tall) flagged = false;
-    }, 2000);
-    return () => clearInterval(t);
-  }, [active, settings.protect_devtools_guard, raiseAlarm]);
 
   // Screen sharing / recording detection
   useEffect(() => {
