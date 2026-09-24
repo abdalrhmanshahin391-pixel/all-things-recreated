@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   KeyRound, Upload, Loader2, Sparkles, Save, Trash2, Copy, CheckCircle2, FileText, BookOpen, Images,
+  ClipboardPaste, Check,
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,15 +15,17 @@ import { renderPageToCanvas, canvasToJpegBase64 } from "@/lib/pdf-page-image";
 import {
   saveApiKey, getApiKeyStatus, testApiKey, runQuestionJob,
 } from "@/lib/question-generator.functions";
+import { formatQuestionStem } from "@/lib/question-format";
+import { parseNotebookLmQuestions, NOTEBOOKLM_MASTER_PROMPT } from "@/lib/notebooklm-parser";
 
 export const Route = createFileRoute("/admin/question-generator")({
   head: () => ({
     meta: [
       { title: "Questions Generator — AquaQBank" },
-      { name: "description", content: "Turn PDFs into reviewed exam questions with your own OpenAI account." },
+      { name: "description", content: "Turn PDFs or NotebookLM results into reviewed exam questions." },
       { name: "robots", content: "noindex" },
       { property: "og:title", content: "Questions Generator — AquaQBank" },
-      { property: "og:description", content: "Upload PDFs, generate or solve questions, review, then save to a course." },
+      { property: "og:description", content: "Solve with NotebookLM or AI, review, then save to a course." },
     ],
   }),
   component: QuestionGeneratorPage,
@@ -43,6 +46,7 @@ type Item = {
   reference_note: string;
   selected: boolean;
   status?: ItemStatus;
+  is_combined?: boolean;
 };
 
 /** Same normalization the database uses for its duplicate rule. */
@@ -222,6 +226,53 @@ function QuestionGeneratorPage() {
   const [items, setItems] = useState<Item[]>([]);
 
   const batchId = useRef<string | null>(null);
+
+  // ── notebooklm workflow
+  const [activeWorkflow, setActiveWorkflow] = useState<"notebooklm" | "ai_run">("notebooklm");
+  const [notebooklmInputText, setNotebooklmInputText] = useState("");
+  const [notebookPromptCopied, setNotebookPromptCopied] = useState(false);
+  const [showPromptPreview, setShowPromptPreview] = useState(false);
+
+  async function handleCopyNotebookPrompt() {
+    try {
+      await navigator.clipboard.writeText(NOTEBOOKLM_MASTER_PROMPT);
+      setNotebookPromptCopied(true);
+      toast.success("Master NotebookLM Prompt copied!", {
+        description: "Paste it into NotebookLM with your questions to solve them.",
+      });
+      setTimeout(() => setNotebookPromptCopied(false), 2500);
+    } catch {
+      toast.error("Could not copy prompt to clipboard.");
+    }
+  }
+
+  function handleParseNotebookLm() {
+    if (!notebooklmInputText.trim()) {
+      toast.error("Please paste the NotebookLM output first.");
+      return;
+    }
+
+    const parsed = parseNotebookLmQuestions(notebooklmInputText);
+    if (!parsed.length) {
+      toast.error("No valid questions found in pasted text. Ensure each question has options (A, B, C, D) and an answer.");
+      return;
+    }
+
+    const combinedCount = parsed.filter((p) => p.is_combined).length;
+    setItems(parsed);
+    void persistDraft(parsed);
+
+    toast.success(`Loaded ${parsed.length} question(s) successfully!`, {
+      description: combinedCount > 0
+        ? `Found ${combinedCount} combined question(s) with statement-by-statement tables.`
+        : `Ready for review below.`,
+    });
+
+    setTimeout(() => {
+      const el = document.getElementById("review-section");
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+    }, 150);
+  }
 
   // ── course pickers
   const [universities, setUniversities] = useState<University[]>([]);
@@ -823,9 +874,10 @@ function QuestionGeneratorPage() {
       lines.push("Why the other options are wrong:");
       for (const w of wrongs) lines.push(`${w.letter}. ${w.wrong_reason.trim()}`);
     }
-    if (item.reference_note.trim()) {
+    const ref = item.reference_note?.trim();
+    if (ref && !item.correct_explanation?.toLowerCase().includes("reference:")) {
       lines.push("");
-      lines.push(`Reference: ${item.reference_note.trim()}`);
+      lines.push(`Reference: ${ref}`);
     }
     return lines.join("\n");
   }
@@ -866,7 +918,7 @@ function QuestionGeneratorPage() {
           const { data: q, error: qErr } = await (supabase.from as any)("questions")
             .insert({
               subject_id: subjectId,
-              stem: item.stem.trim(),
+              stem: formatQuestionStem(item.stem.trim()),
               explanation: buildExplanation(item) || null,
               sort_order: order++,
             })
@@ -933,24 +985,201 @@ function QuestionGeneratorPage() {
           <p className="text-xs font-black uppercase tracking-[0.28em] text-primary">Admin</p>
           <h1 className="mt-2 text-3xl md:text-4xl font-black tracking-tight text-foreground">Questions Generator</h1>
           <p className="mt-2 text-muted-foreground">
-            Upload a PDF (text or scanned pictures), let OpenAI or Gemini extract, write or solve the questions, review everything, then save it into a course.
+            Solve questions with Google NotebookLM or run in-app AI, review answers & explanations, then save directly into any course.
           </p>
         </header>
 
-        {/* ── API keys ───────────────────────────── */}
-        <section className="grid gap-4 md:grid-cols-2">
-          {(["openai", "gemini"] as Provider[]).map((p) => {
-            const st = statusMap[p];
-            return (
-              <div key={p} className="rounded-2xl border-2 border-border bg-card p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <KeyRound size={18} className="text-primary" />
-                  <h2 className="font-bold">{PROVIDER_LABEL[p]} key</h2>
-                  {st?.saved && (
-                    <span className="ml-auto text-xs font-bold text-emerald-600">Saved · {st.masked}</span>
-                  )}
+        {/* ── Workflow Mode Tabs ──────────────────── */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border pb-4 mb-6">
+          <button
+            type="button"
+            onClick={() => setActiveWorkflow("notebooklm")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm ${
+              activeWorkflow === "notebooklm"
+                ? "bg-indigo-600 text-white shadow-indigo-100"
+                : "bg-card border-2 border-border text-foreground hover:bg-muted"
+            }`}
+          >
+            <ClipboardPaste className="w-4 h-4" />
+            <span>Paste from NotebookLM</span>
+            <span className="text-[10px] uppercase font-black tracking-wider bg-white/20 text-white px-2 py-0.5 rounded-full ml-1">
+              Recommended
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveWorkflow("ai_run")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm ${
+              activeWorkflow === "ai_run"
+                ? "bg-primary text-primary-foreground"
+                : "bg-card border-2 border-border text-foreground hover:bg-muted"
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>In-App AI (PDF & API Keys)</span>
+          </button>
+        </div>
+
+        {activeWorkflow === "notebooklm" ? (
+          <div className="space-y-6">
+            {/* 1. Destination Section */}
+            <section className="rounded-2xl border-2 border-border bg-card p-5">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-indigo-600" />
+                  <h2 className="font-bold text-base">1. Destination (Course, Section & Subject)</h2>
                 </div>
-                <div className="grid gap-3">
+                {subjectId && (
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    ✓ Target Selected
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Choose the exact course, section, and subject where parsed questions will be added.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-4">
+                <Select label="University" value={universityId} onChange={setUniversityId}
+                  options={universities.map((u) => ({ value: u.id, label: u.name }))} />
+                <Select label="Course" value={courseId} onChange={setCourseId}
+                  options={filteredCourses.map((c) => ({ value: c.id, label: `Y${c.year} · ${c.title}` }))} />
+                <Select label="Section" value={groupId} onChange={setGroupId}
+                  options={groups.map((g) => ({ value: g.id, label: g.name }))} />
+                <Select label="Subject" value={subjectId} onChange={setSubjectId}
+                  options={subjects.map((s) => ({ value: s.id, label: s.name }))} />
+              </div>
+            </section>
+
+            {/* 2. Prompt for NotebookLM */}
+            <section className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/50 p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+                <div>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700 mb-1">
+                    <Sparkles className="w-3 h-3 text-indigo-600" />
+                    Step 2: Prompt for Google NotebookLM
+                  </span>
+                  <h3 className="font-bold text-sm text-foreground">
+                    Copy the Medical Validator Prompt
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Instructs NotebookLM to ground answers in your book, cite page references, and create statement tables for combined questions.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowPromptPreview((v) => !v)}
+                    className="px-3 py-1.5 rounded-xl border border-indigo-300 text-xs font-bold text-indigo-700 hover:bg-indigo-100 bg-white"
+                  >
+                    {showPromptPreview ? "Hide Prompt" : "View Prompt"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyNotebookPrompt}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold shadow-sm"
+                  >
+                    {notebookPromptCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {notebookPromptCopied ? "Copied!" : "Copy Prompt"}
+                  </button>
+                </div>
+              </div>
+              {showPromptPreview && (
+                <div className="mt-3">
+                  <p className="text-[11px] font-semibold text-indigo-900 mb-1">
+                    Copy this prompt into NotebookLM together with the questions you copied from your course section:
+                  </p>
+                  <pre className="p-3.5 rounded-xl bg-background border border-indigo-200 text-[11px] font-mono whitespace-pre-wrap max-h-64 overflow-y-auto leading-relaxed text-foreground select-all">
+                    {NOTEBOOKLM_MASTER_PROMPT}
+                  </pre>
+                </div>
+              )}
+            </section>
+
+            {/* 3. Paste and Parse */}
+            <section className="rounded-2xl border-2 border-border bg-card p-5">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div>
+                  <h2 className="font-bold text-base">3. Paste NotebookLM Results</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Paste the solved answers, explanations, and statement breakdown tables directly from NotebookLM below.
+                  </p>
+                </div>
+                {notebooklmInputText.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => setNotebooklmInputText("")}
+                    className="text-xs font-bold text-muted-foreground hover:text-destructive underline"
+                  >
+                    Clear Text
+                  </button>
+                )}
+              </div>
+
+              <textarea
+                value={notebooklmInputText}
+                onChange={(e) => setNotebooklmInputText(e.target.value)}
+                rows={10}
+                placeholder={`Paste the solved questions from NotebookLM here...
+
+Format example:
+### Question 1
+Regarding acute pancreatitis:
+1. Serum amylase rises earlier than lipase.
+2. Gallstones are the most common etiology.
+A. 1 only
+B. 2 only
+C. Both 1 and 2
+D. Neither
+
+- Correct Answer: C
+- Book Reference: Schwartz Surgery, 11th ed., Chapter 33, p. 1412
+- Explanation:
+Serum amylase rises early. Gallstones account for ~50% of cases.
+
+| Statement | Verdict | Explanation from Book |
+| :--- | :--- | :--- |
+| **1** | **Correct (True)** | Serum amylase rises within 6-12 hours... |
+| **2** | **Correct (True)** | Gallstones are the leading cause worldwide... |
+
+- Why other options are incorrect:
+• A. Incomplete
+• B. Incomplete`}
+                className="w-full rounded-xl border-2 border-border bg-background p-3 text-xs font-mono leading-relaxed"
+              />
+
+              <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  Supports both structured Markdown text and JSON. Combined questions with statement tables are automatically detected.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleParseNotebookLm}
+                  disabled={!notebooklmInputText.trim()}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 text-sm font-bold disabled:opacity-50 shadow-sm shrink-0"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Parse & Load Questions
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : (
+          <>
+            {/* ── API keys ───────────────────────────── */}
+            <section className="grid gap-4 md:grid-cols-2">
+              {(["openai", "gemini"] as Provider[]).map((p) => {
+                const st = statusMap[p];
+                return (
+                  <div key={p} className="rounded-2xl border-2 border-border bg-card p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <KeyRound size={18} className="text-primary" />
+                      <h2 className="font-bold">{PROVIDER_LABEL[p]} key</h2>
+                      {st?.saved && (
+                        <span className="ml-auto text-xs font-bold text-emerald-600">Saved · {st.masked}</span>
+                      )}
+                    </div>
+                    <div className="grid gap-3">
                   <input
                     type="password"
                     value={keyInput[p]}
@@ -1281,9 +1510,11 @@ function QuestionGeneratorPage() {
           )}
 
         </section>
+        </>
+        )}
 
         {/* ── Review ───────────────────────────── */}
-        <section className="mt-6 rounded-2xl border-2 border-border bg-card p-5">
+        <section id="review-section" className="mt-6 rounded-2xl border-2 border-border bg-card p-5">
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <h2 className="font-bold">Review ({items.length})</h2>
             {items.length > 0 && (
@@ -1319,7 +1550,7 @@ function QuestionGeneratorPage() {
           </div>
 
           {items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nothing to review yet — run the AI above.</p>
+            <p className="text-sm text-muted-foreground">Nothing to review yet — paste NotebookLM questions above or run the in-app AI.</p>
           ) : (
             <div className="space-y-4">
               {items.map((item, qi) => (
@@ -1331,6 +1562,11 @@ function QuestionGeneratorPage() {
                       className="mt-1 h-4 w-4"
                     />
                     <span className="text-xs font-black text-muted-foreground mt-1">#{qi + 1}</span>
+                    {item.is_combined && (
+                      <span className="mt-1 shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        Combined
+                      </span>
+                    )}
                     {item.status && (
                       <span
                         className={`mt-1 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
@@ -1346,7 +1582,7 @@ function QuestionGeneratorPage() {
                     <textarea
                       value={item.stem}
                       onChange={(e) => patchItem(item.key, { stem: e.target.value })}
-                      rows={2}
+                      rows={Math.min(6, Math.max(2, (item.stem || "").split("\n").length))}
                       className="flex-1 rounded-lg border-2 border-border bg-background px-3 py-2 text-sm font-medium"
                     />
                     <div className="flex flex-col gap-1">
@@ -1394,9 +1630,9 @@ function QuestionGeneratorPage() {
                     <textarea
                       value={item.correct_explanation}
                       onChange={(e) => patchItem(item.key, { correct_explanation: e.target.value })}
-                      rows={2}
-                      placeholder="Why the correct answer is correct"
-                      className="w-full rounded-lg border-2 border-border bg-background px-3 py-2 text-xs"
+                      rows={Math.min(8, Math.max(3, (item.correct_explanation || "").split("\n").length))}
+                      placeholder="Why the correct answer is correct (and statement breakdown table for combined questions)"
+                      className="w-full rounded-lg border-2 border-border bg-background px-3 py-2 text-xs font-mono"
                     />
                     <input
                       value={item.reference_note}
