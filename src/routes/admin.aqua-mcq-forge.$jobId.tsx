@@ -128,9 +128,12 @@ function AquaMcqForgeStudio() {
       }
 
       toast.info("Uploading PDF to private storage...");
-      const { error: uploadError } = await supabase.storage.from(SOURCE_BUCKET).upload(storagePath, file, {
-        contentType: "application/pdf",
-      });
+      let uploadError: any = null;
+      const res1 = await supabase.storage.from("amf-sources").upload(storagePath, file, { contentType: "application/pdf" });
+      if (res1.error) {
+        const res2 = await supabase.storage.from("amg-sources").upload(storagePath, file, { contentType: "application/pdf" });
+        if (res2.error) uploadError = res2.error;
+      }
       if (uploadError) throw uploadError;
 
       await addPdfSource({
@@ -146,7 +149,10 @@ function AquaMcqForgeStudio() {
       await refresh();
       setActiveTab("topics");
     } catch (err: any) {
-      await supabase.storage.from(SOURCE_BUCKET).remove([storagePath]);
+      await Promise.allSettled([
+        supabase.storage.from("amf-sources").remove([storagePath]),
+        supabase.storage.from("amg-sources").remove([storagePath]),
+      ]);
       toast.error(err?.message || "Failed to extract PDF.");
     } finally {
       setBusy(false);

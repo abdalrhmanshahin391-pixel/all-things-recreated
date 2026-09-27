@@ -4,14 +4,14 @@
 
 export const AMF_MODELS = {
   google: [
-    { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite (Fastest & Economical)" },
-    { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash (Recommended Balanced)" },
-    { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro (Deepest Reasoning & Clinical Precision)" },
+    { id: "gemini-3.5-flash", label: "Gemini Flash 3.5 (Recommended Balanced)" },
+    { id: "gemini-3.5-flash-lite", label: "Gemini Flash-Lite 3.5 (Fastest & Economical)" },
+    { id: "gemini-2.5-pro", label: "Gemini Pro 2.5 (Deepest Reasoning & Clinical Precision)" },
   ],
   openai: [
-    { id: "gpt-4.1-mini", label: "GPT-4.1 mini (Fast & Low Cost)" },
-    { id: "gpt-4.1", label: "GPT-4.1 (Standard High Accuracy)" },
     { id: "gpt-5.4", label: "GPT-5.4 (Advanced Flagship)" },
+    { id: "gpt-4.1", label: "GPT 4.1 (Standard High Accuracy)" },
+    { id: "gpt-4.1-mini", label: "GPT 4.1 Mini (Fast & Low Cost)" },
     { id: "gpt-5.6-luna", label: "GPT Luna (Creative & Analytical)" },
   ],
 } as const;

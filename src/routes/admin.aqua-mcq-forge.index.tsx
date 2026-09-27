@@ -17,6 +17,7 @@ import {
   Sliders,
   Play,
   UploadCloud,
+  KeyRound,
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
@@ -43,6 +44,8 @@ import {
   amfListJobs,
   amfCreateJob,
   amfDeleteJob,
+  amfListKeys,
+  amfSaveKey,
 } from "@/lib/aqua-mcq-forge.functions";
 import { AMF_MODELS } from "@/lib/aqua-mcq-forge.prompts";
 
@@ -66,17 +69,22 @@ function AquaMcqForgeDashboard() {
   const listJobs = useServerFn(amfListJobs);
   const createJob = useServerFn(amfCreateJob);
   const deleteJob = useServerFn(amfDeleteJob);
+  const listKeys = useServerFn(amfListKeys);
+  const saveKey = useServerFn(amfSaveKey);
 
   const [jobs, setJobs] = useState<any[]>([]);
   const [fetching, setFetching] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [keyModalOpen, setKeyModalOpen] = useState(false);
+  const [keyInput, setKeyInput] = useState({ google: "", openai: "" });
+  const [keyStatus, setKeyStatus] = useState<Record<string, string | null>>({});
 
   // New Job Form State
   const [form, setForm] = useState({
     name: "",
     provider: "google" as "google" | "openai",
-    model: "gemini-2.5-flash",
+    model: "gemini-3.5-flash",
     sourceMode: "strict" as "strict" | "reasoning",
     styleMode: "ai" as "ai" | "course" | "pdf",
     difficultyEasy: 34,
@@ -96,29 +104,27 @@ function AquaMcqForgeDashboard() {
   const refresh = useCallback(async () => {
     try {
       setFetching(true);
-      const res = await listJobs();
-      setJobs(res as any[]);
+      const [jobsRes, keysRes]: any = await Promise.all([listJobs(), listKeys()]);
+      setJobs(jobsRes as any[]);
+      setKeyStatus(keysRes ?? {});
     } catch (e: any) {
       toast.error(e?.message || "Failed to load jobs");
     } finally {
       setFetching(false);
     }
-  }, [listJobs]);
+  }, [listJobs, listKeys]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   async function handleCreate() {
-    if (!form.name.trim()) {
-      toast.error("Please provide a name for this generation job.");
-      return;
-    }
+    const jobTitle = form.name.trim() || "Cell Injury — Pathophysiology Generation";
     try {
       setSaving(true);
-      const newJob = await createJob({
+      const newJob: any = await createJob({
         data: {
-          name: form.name,
+          name: jobTitle,
           provider: form.provider,
           model: form.model,
           sourceMode: form.sourceMode,
@@ -139,12 +145,30 @@ function AquaMcqForgeDashboard() {
       });
       toast.success("Generation job created!");
       setModalOpen(false);
-      void refresh();
-      navigate({ to: `/admin/aqua-mcq-forge/${(newJob as any).id}` });
+      await refresh();
+      if (newJob?.id) {
+        navigate({ to: "/admin/aqua-mcq-forge/$jobId", params: { jobId: String(newJob.id) } });
+      }
     } catch (e: any) {
       toast.error(e?.message || "Could not create job.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveKey(provider: "google" | "openai") {
+    const val = keyInput[provider]?.trim();
+    if (!val) {
+      toast.error("Please enter a valid key.");
+      return;
+    }
+    try {
+      await saveKey({ data: { provider, apiKey: val } });
+      toast.success(`${provider === "google" ? "Google AI Studio" : "OpenAI"} API Key saved!`);
+      setKeyInput({ ...keyInput, [provider]: "" });
+      await refresh();
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to save key.");
     }
   }
 
@@ -197,6 +221,75 @@ function AquaMcqForgeDashboard() {
                 <ArrowLeft size={16} /> Back
               </Button>
             </Link>
+
+            <Dialog open={keyModalOpen} onOpenChange={setKeyModalOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2 border-slate-300">
+                  <KeyRound size={15} className="text-amber-600" />
+                  API Keys
+                  {keyStatus.google && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+                    <KeyRound className="text-amber-600" size={20} />
+                    AI Studio API Keys
+                  </DialogTitle>
+                  <DialogDescription>
+                    Saved keys power Aqua MCQ Forge and Aqua MCQ Gen Pro automatically.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 py-3">
+                  <div className="space-y-2 p-3 rounded-xl border border-slate-200 bg-slate-50">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-800">Google AI Studio API Key</span>
+                      {keyStatus.google ? (
+                        <Badge className="bg-emerald-100 text-emerald-800 text-[10px] font-bold">Active</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-slate-400 text-[10px]">Not Saved</Badge>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        type="password"
+                        placeholder="Paste AIzaSy... key"
+                        value={keyInput.google}
+                        onChange={(e) => setKeyInput({ ...keyInput, google: e.target.value })}
+                        className="text-xs font-mono h-8 bg-white"
+                      />
+                      <Button size="sm" onClick={() => handleSaveKey("google")} className="h-8 text-xs bg-slate-900 hover:bg-slate-800 text-white">
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 p-3 rounded-xl border border-slate-200 bg-slate-50">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-800">OpenAI API Key</span>
+                      {keyStatus.openai ? (
+                        <Badge className="bg-emerald-100 text-emerald-800 text-[10px] font-bold">Active</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-slate-400 text-[10px]">Not Saved</Badge>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        type="password"
+                        placeholder="Paste sk-... key"
+                        value={keyInput.openai}
+                        onChange={(e) => setKeyInput({ ...keyInput, openai: e.target.value })}
+                        className="text-xs font-mono h-8 bg-white"
+                      />
+                      <Button size="sm" onClick={() => handleSaveKey("openai")} className="h-8 text-xs bg-slate-900 hover:bg-slate-800 text-white">
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <Dialog open={modalOpen} onOpenChange={setModalOpen}>
               <DialogTrigger asChild>
