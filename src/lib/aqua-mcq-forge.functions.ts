@@ -86,13 +86,31 @@ function parseJson(text: string): any {
 function normalizeGoogleModel(model: string): string[] {
   const m = String(model || "").toLowerCase();
   if (m.includes("flash-lite") || m.includes("lite")) {
-    return ["gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-2.0-flash"];
+    return [
+      "gemini-2.5-flash-lite",
+      "gemini-flash-lite-latest",
+      "gemini-1.5-flash-latest",
+      "gemini-1.5-flash",
+      "gemini-2.5-flash",
+    ];
   }
   if (m.includes("pro")) {
-    return ["gemini-1.5-pro", "gemini-2.0-flash", "gemini-1.5-flash"];
+    return [
+      "gemini-2.5-pro",
+      "gemini-1.5-pro-latest",
+      "gemini-1.5-pro",
+      "gemini-2.5-flash",
+    ];
   }
-  // Standard Flash models: gemini-3.5-flash, gemini-2.5-flash, gemini-2.0-flash
-  return ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"];
+  // Standard Flash models: gemini-3.5-flash, gemini-2.5-flash, gemini-flash
+  return [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash-001",
+    "gemini-2.0-flash",
+    "gemini-flash-latest",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-flash",
+  ];
 }
 
 /** Deterministic structural topic extractor from textbook headings as instant reliable fallback */
@@ -153,7 +171,8 @@ async function callGoogleText(apiKey: string, requestedModel: string, system: st
 
   for (const model of modelsToTry) {
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
@@ -166,15 +185,21 @@ async function callGoogleText(apiKey: string, requestedModel: string, system: st
       if (res.ok) {
         return json?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text ?? "").join("") ?? "";
       }
-      lastError = new Error(`Google API error (${res.status} for ${model}): ${JSON.stringify(json).slice(0, 300)}`);
-      // If 404 model not found, try next model in fallback list
-      if (res.status !== 404 && res.status !== 400) break;
+      const errMsg = json?.error?.message || JSON.stringify(json);
+      console.warn(`[Google AI] Model ${model} returned ${res.status}: ${errMsg.slice(0, 150)}`);
+      lastError = new Error(`Google API (${requestedModel} [endpoint: ${model}], status ${res.status}): ${errMsg.slice(0, 250)}`);
+
+      // If 404 or 400 (model not found/invalid), try next candidate
+      if (res.status === 404 || res.status === 400) continue;
+
+      // For quota or auth issues (429, 403, 401), stop immediately
+      break;
     } catch (e) {
       lastError = e;
     }
   }
 
-  throw lastError || new Error("Failed to call Google AI Studio API");
+  throw lastError || new Error(`Failed to call Google AI Studio API for ${requestedModel}`);
 }
 
 async function callOpenAiText(apiKey: string, model: string, system: string, prompt: string): Promise<string> {
