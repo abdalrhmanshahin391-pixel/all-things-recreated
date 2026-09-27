@@ -8,6 +8,7 @@ import "katex/dist/katex.min.css";
 // mhchem adds \ce{} so chemistry (structures, ions, reaction arrows) renders properly.
 import "katex/contrib/mhchem";
 import DOMPurify from "dompurify";
+import { cleanEducationalExplanation } from "@/lib/aqua-mcq-forge.explanation";
 
 
 type Section = {
@@ -53,7 +54,7 @@ function stripOptionLetters(body: string, kind: Section["kind"]): string {
 
 function cleanSourceCitation(raw: string): string {
   if (!raw) return "";
-  return raw.replace(/\n*(?:###?\s*)?Source Citation[\s\S]*$/i, "").trim();
+  return cleanEducationalExplanation(raw);
 }
 
 function parseExplanation(raw: string): Section[] {

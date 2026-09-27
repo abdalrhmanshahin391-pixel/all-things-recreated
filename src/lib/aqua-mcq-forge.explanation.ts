@@ -109,7 +109,8 @@ export function buildForgeExplanation(
     const isCorrect = rowInfo?.correct !== undefined ? rowInfo.correct : isMarkedCorrect;
     const verdict = isCorrect ? "✓ Yes" : "✗ No";
 
-    const reason = cleanMarkdownCell(rowInfo?.reason || "See detailed concept above.");
+    const rawReason = cleanMarkdownCell(rowInfo?.reason || "See detailed concept above.");
+    const reason = cleanEducationalExplanation(rawReason);
     tableLines.push(`| ${cleanText} | ${verdict} | ${reason} |`);
   }
 
@@ -117,28 +118,78 @@ export function buildForgeExplanation(
 
   // 5. Clinical distinction (2-3 lines)
   if (data.clinical_distinction?.trim()) {
-    parts.push(`### Clinical distinction\n${data.clinical_distinction.trim()}`);
+    parts.push(`### Clinical distinction\n${cleanEducationalExplanation(data.clinical_distinction.trim())}`);
   }
 
   // 6. Easy way to remember
   if (data.memory_aid?.trim()) {
-    parts.push(`### Easy way to remember\n${data.memory_aid.trim()}`);
+    parts.push(`### Easy way to remember\n${cleanEducationalExplanation(data.memory_aid.trim())}`);
   }
 
   // NOTE: Source Fidelity citations are kept strictly in admin metadata (item.source_fidelity)
   // and are intentionally NOT appended to the student/course explanation markdown.
 
-  return parts.join("\n\n").trim();
+  return cleanEducationalExplanation(parts.join("\n\n").trim());
+}
+
+/**
+ * Cleans an explanation text to ensure:
+ * 1. Textbook section numbers ("under section 3.1 as", "(Section 4)", "in Chapter 2", etc.) are removed.
+ * 2. Textbook page numbers ("on page 45", "page 45") are removed.
+ * 3. Meta-attributions to the source/book/author ("according to the provided text", "as stated in the source") are removed.
+ * 4. Legacy "### Source Citation" blocks are removed.
+ * 5. Explanations remain 100% focused on pure clinical & physiological science.
+ */
+export function cleanEducationalExplanation(explanation: string | null | undefined): string {
+  if (!explanation || typeof explanation !== "string") return "";
+  let s = explanation;
+
+  // 1. Remove Source Citation block at bottom if present
+  s = s.replace(/\n*(?:###?\s*)?Source Citation[\s\S]*$/i, "");
+
+  // 2. 'under section X.Y as' -> 'as'
+  s = s.replace(/\bunder\s+(?:section|chapter|part)\s+\d+(?:\.\d+)*\s+as\b/gi, "as");
+
+  // 3. 'in / per / from / under section X.Y' -> ''
+  s = s.replace(/\b(?:in|per|from|under|by)\s+(?:section|chapter|part)\s+\d+(?:\.\d+)*\b/gi, "");
+
+  // 4. '(Section X)', '(Chapter Y)', '(Part Z)', '(page N)'
+  s = s.replace(/\s*\((?:section|chapter|part|table|figure|page)\s+\d+(?:\.\d+)*\)/gi, "");
+  s = s.replace(/\s*\[(?:section|chapter|part|table|figure|page)\s+\d+(?:\.\d+)*\]/gi, "");
+
+  // 5. 'section X.Y' standalone references (e.g. 'distinct from Section 3')
+  s = s.replace(/\b(?:section|chapter|part)\s+\d+(?:\.\d+)*\b/gi, "");
+
+  // 6. Page references: 'on page X', 'page X'
+  s = s.replace(/\b(?:on\s+)?page\s+\d+\b/gi, "");
+
+  // 7. Source attribution phrases: 'according to the textbook/source/author', 'as described in the textbook'
+  s = s.replace(/\b(?:according to|as described in|as stated in|based on|per)\s+(?:the\s+)?(?:provided\s+)?(?:source(?:\s+textbook|\s+material)?|textbook|text|chapter|author|syllabus|book)[,\s]*/gi, "");
+
+  // 8. Clean leftover 'in the source textbook', 'from the source textbook'
+  s = s.replace(/\b(?:in|from|per)\s+(?:the\s+)?(?:source\s+)?(?:textbook|text|book)[,\s]*/gi, "");
+
+  // 9. Clean duplicate horizontal spaces or awkward punctuation left over
+  s = s
+    .replace(/[^\S\r\n]{2,}/g, " ")
+    .replace(/\s+,/g, ",")
+    .replace(/\s+\./g, ".")
+    .replace(/\(\s*\)/g, "")
+    .replace(/\[\s*\]/g, "")
+    .trim();
+
+  // 10. Capitalize sentence beginnings if they became lowercase
+  s = s.replace(/(?:^|[.!?]\s+)([a-z])/g, (m, c) => m.slice(0, -1) + c.toUpperCase());
+
+  return s;
 }
 
 /**
  * Strips any legacy or accidental "### Source Citation" or "Source Citation\nSource: ..."
- * blocks from explanation text.
+ * blocks and cleans internal section/source references from explanation text.
  */
 export function stripSourceCitation(explanation: string | null | undefined): string {
-  if (!explanation || typeof explanation !== "string") return "";
-  return explanation
-    .replace(/\n*(?:###?\s*)?Source Citation[\s\S]*$/i, "")
-    .trim();
+  return cleanEducationalExplanation(explanation);
 }
+
 

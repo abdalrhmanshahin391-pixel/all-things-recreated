@@ -128,6 +128,9 @@ CRITICAL RULES FOR "stem":
 
 EXPLANATION STRUCTURE RULES (Crucial):
 You must supply a structured explanation object with these exact keys:
+- ABSOLUTELY NEVER mention section numbers, chapter numbers, or page numbers in ANY explanation field or table row!
+  * FORBIDDEN: "under section 3.1 as", "(Section 4)", "(Section 3)", "in Chapter 2", "according to Section 3", "on page 45", "classified under section X".
+  * REASON: The student does NOT know the internal textbook or source section numbers. Explanations must be 100% self-contained medical and physiological science. Explain the underlying biological, pathological, or clinical reasoning directly without ever mentioning where the concept was found in the source text!
 - DO NOT put source citations, textbook titles, page numbers, or excerpt quotes inside any of the explanation fields! Keep the explanation strictly educational and clinical.
 - "title": Short medical topic title (3-5 words).
 - "overview": 3 to 4 professional sentences explaining the fundamental concept, pathophysiology, anatomy, or pharmacology.
@@ -204,7 +207,7 @@ RULES:
 - Author both Standard MCQs (stem + options A,B,C,D) and Combined MCQs (stem + statements 1,2,3,4 + options A,B,C,D).
 - For Combined questions, the explanation table_rows MUST explain why each individual statement 1, 2, 3, 4 is true or false.
 - For Standard questions, the explanation table_rows MUST explain why each individual option A, B, C, D is true or false.
-- NEVER include source citations, book titles, or page numbers inside any of the explanation fields. Keep them exclusively in "source_fidelity".
+- NEVER include section numbers, chapter numbers, book titles, or page numbers inside any of the explanation fields (e.g. NEVER write "under section 3.1 as", "(Section 4)", "(Section 3)", "in Chapter 2"). The student does not know the internal source sections. Keep explanations 100% focused on pure medical science and clinical concepts. Source metadata belongs exclusively in "source_fidelity".
 - Source Fidelity: ${isStrict ? "STRICT SOURCE MODE (No factual claims outside the supplied text)" : "SOURCE + AI REASONING"}.
 ${config.includeImages ? `- Set "image_needed": true and provide a descriptive "image_prompt" for questions that benefit from diagrams.` : `- Set "image_needed": false.`}
 
