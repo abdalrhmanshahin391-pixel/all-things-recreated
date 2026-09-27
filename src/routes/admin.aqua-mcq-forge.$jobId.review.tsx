@@ -47,7 +47,7 @@ import {
   amfUpdateItem,
   amfSetItemsStatus,
 } from "@/lib/aqua-mcq-forge.functions";
-import { formatQuestionStem } from "@/lib/question-format";
+import { formatQuestionStem, ensureCombinedStemWithStatements } from "@/lib/question-format";
 import { stripSourceCitation } from "@/lib/aqua-mcq-forge.explanation";
 
 export const Route = createFileRoute("/admin/aqua-mcq-forge/$jobId/review")({
@@ -448,11 +448,14 @@ function AquaMcqForgeReview() {
 
                     {/* Question Stem */}
                     <div className="text-base font-semibold text-slate-900 leading-relaxed whitespace-pre-wrap">
-                      {formatQuestionStem(item.stem)}
+                      {ensureCombinedStemWithStatements(item.stem, item.explanation, item.options)}
                     </div>
 
-                    {/* Form B Statements if applicable */}
-                    {isCombined && Array.isArray(item.statements) && item.statements.length > 0 && (
+                    {/* Form B Statements if applicable and not already in stem */}
+                    {isCombined &&
+                      !/(?:^|\n)\s*(?:1[\.\)]|\(1\)|\bI[\.\)]|\(I\))\s+/i.test(item.stem) &&
+                      Array.isArray(item.statements) &&
+                      item.statements.length > 0 && (
                       <div className="space-y-1.5 pl-4 border-l-2 border-purple-200 py-1">
                         {item.statements.map((s: any, sIdx: number) => (
                           <div key={sIdx} className="text-sm text-slate-800">

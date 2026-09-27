@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import { formatQuestionStem, cleanQuestionPreamble, buildCombinedStem } from "@/lib/question-format";
+import { formatQuestionStem, cleanQuestionPreamble, buildCombinedStem, ensureCombinedStemWithStatements } from "@/lib/question-format";
 import {
   AMF_MODELS,
   buildTopicDiscoveryPrompt,
@@ -1029,11 +1029,36 @@ Return STRICT JSON.`;
           validationPassed = validationReport?.pass === true;
         }
 
-        // Deduplication check
+        // Check if question is combination (Form B, questionJson.form B, or has combo options)
+        const isCombo =
+          form === "B" ||
+          questionJson.form === "B" ||
+          (Array.isArray(questionJson.options) &&
+            questionJson.options.filter((o: any) =>
+              /\b(?:1\s*,\s*2|1\s+and\s+2|2\s+and\s+4|1\s*,\s*3|2\s*,\s*3|3\s+and\s+4|1\s+only|2\s+only|3\s+only|4\s+only|all of the above)\b/i.test(
+                o?.text || "",
+              ),
+            ).length >= 2);
+
+        // If statements array is missing or empty, extract from explanation table_rows
+        if (isCombo && (!Array.isArray(questionJson.statements) || questionJson.statements.length === 0)) {
+          const rows = questionJson.explanation?.table_rows;
+          if (Array.isArray(rows) && rows.length >= 2) {
+            questionJson.statements = rows.map((r: any, idx: number) => ({
+              n: String(idx + 1),
+              text: String(r.item || "").replace(/^\s*(?:\d+|[A-Za-z])[\.\)\-:]\s*/, "").trim(),
+            }));
+          }
+        }
+
         const combinedStem =
-          form === "B" && Array.isArray(questionJson.statements) && questionJson.statements.length > 0
+          isCombo && Array.isArray(questionJson.statements) && questionJson.statements.length > 0
             ? buildCombinedStem(String(questionJson.stem ?? ""), questionJson.statements)
-            : formatQuestionStem(cleanQuestionPreamble(String(questionJson.stem ?? "")));
+            : ensureCombinedStemWithStatements(
+                cleanQuestionPreamble(String(questionJson.stem ?? "")),
+                typeof questionJson.explanation === "string" ? questionJson.explanation : null,
+                questionJson.options,
+              );
         const stemFormatted = formatQuestionStem(combinedStem);
         const { maxScore } = checkDuplicate(stemFormatted, existingStems);
 
@@ -1056,7 +1081,7 @@ Return STRICT JSON.`;
         // Build structured explanation markdown
         const explanationData: ExplanationData = questionJson.explanation ?? {};
         const displayItems =
-          form === "B"
+          isCombo
             ? (Array.isArray(questionJson.statements) ? questionJson.statements : []).map((s: any) => ({
                 label: String(s.n),
                 text: String(s.text),
@@ -1068,7 +1093,7 @@ Return STRICT JSON.`;
 
         const explanationMarkdown = stripSourceCitation(
           buildForgeExplanation(
-            form,
+            isCombo ? "B" : "A",
             explanationData,
             displayItems,
             Array.isArray(questionJson.answer_labels) ? questionJson.answer_labels : [],
@@ -1337,9 +1362,12 @@ export const amfImportJob = createServerFn({ method: "POST" })
 
     for (const item of approvedItems) {
       try {
-        const fullStem = buildCombinedStem(item.stem, item.statements);
-        const cleanStem = formatQuestionStem(fullStem);
         const cleanExp = stripSourceCitation(item.explanation);
+        const fullStem =
+          Array.isArray(item.statements) && item.statements.length > 0
+            ? buildCombinedStem(item.stem, item.statements)
+            : ensureCombinedStemWithStatements(item.stem, cleanExp, item.options);
+        const cleanStem = formatQuestionStem(fullStem);
         const questionPayload = {
           subject_id: data.subjectId,
           stem: cleanStem,
@@ -1397,11 +1425,11 @@ export const amfImportJob = createServerFn({ method: "POST" })
             ai.statements.length > 0 &&
             cleanQuestionPreamble(eq.stem).startsWith(cleanQuestionPreamble(ai.stem).slice(0, 30)),
         );
+        const cleanExp = stripSourceCitation(eq.explanation);
         const targetStem = matchedItem
           ? buildCombinedStem(eq.stem, matchedItem.statements)
-          : eq.stem;
+          : ensureCombinedStemWithStatements(eq.stem, cleanExp);
         const cleanStem = formatQuestionStem(targetStem);
-        const cleanExp = stripSourceCitation(eq.explanation);
         if (cleanStem !== eq.stem || cleanExp !== eq.explanation) {
           await supabase
             .from("questions")

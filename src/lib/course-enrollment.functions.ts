@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
+import { ensureCombinedStemWithStatements } from "@/lib/question-format";
+import { stripSourceCitation } from "@/lib/aqua-mcq-forge.explanation";
 
 export type OptionData = {
   id: string;
@@ -221,8 +223,33 @@ export const loadCourseRunQuestionsServerFn = createServerFn({ method: "POST" })
       throw qErr;
     }
 
+    const processedQuestions = (qs ?? []).map((q: any) => {
+      const options = q.question_options ?? [];
+      const cleanExp = stripSourceCitation(q.explanation);
+      const completeStem = ensureCombinedStemWithStatements(q.stem, cleanExp, options);
+      return {
+        ...q,
+        stem: completeStem,
+        explanation: cleanExp,
+      };
+    });
+
+    // Opportunistically persist healed stems in the background
+    try {
+      for (const pq of processedQuestions) {
+        const orig = (qs ?? []).find((q: any) => q.id === pq.id);
+        if (orig && (pq.stem !== orig.stem || pq.explanation !== orig.explanation)) {
+          void (supabaseAdmin.from("questions") as any)
+            .update({ stem: pq.stem, explanation: pq.explanation || null })
+            .eq("id", pq.id);
+        }
+      }
+    } catch {
+      // non-blocking
+    }
+
     return {
       ok: true,
-      questions: (qs ?? []) as QuestionData[],
+      questions: processedQuestions as QuestionData[],
     };
   });

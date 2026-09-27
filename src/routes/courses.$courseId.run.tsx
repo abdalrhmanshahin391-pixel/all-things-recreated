@@ -1187,7 +1187,7 @@ function QuestionCard({
           dir={show ? "rtl" : undefined}
           className="px-6 py-6 text-lg leading-relaxed text-foreground font-medium whitespace-pre-line"
         >
-          {ensureCombinedStemWithStatements(show ? show.stem : q.stem, (show?.explanation ?? q.explanation) as string)}
+          {ensureCombinedStemWithStatements(show ? show.stem : q.stem, (show?.explanation ?? q.explanation) as string, q.options)}
         </div>
       )}
       {q.answer_mode === "multiple" && (
@@ -1345,7 +1345,7 @@ function ExamCard({
         {q.image_url && <div className="mb-4"><QuestionImage path={q.image_url} /></div>}
         {(q.stem?.trim() || !q.image_url) && (
           <div dir={show ? "rtl" : undefined} className="text-base leading-relaxed mb-4 text-foreground whitespace-pre-line">
-            {formatQuestionStem(show ? show.stem : q.stem)}
+            {ensureCombinedStemWithStatements(show ? show.stem : q.stem, (show?.explanation ?? q.explanation) as string, q.options)}
           </div>
         )}
          <div className="text-xs italic text-muted-foreground mb-3">
@@ -1432,7 +1432,7 @@ function ReviewCard({
       {q.image_url && <div className="px-6 pt-6"><QuestionImage path={q.image_url} /></div>}
       {(q.stem?.trim() || !q.image_url) && (
         <div dir={show ? "rtl" : undefined} className="px-6 py-6 text-base leading-relaxed text-foreground whitespace-pre-line">
-          {formatQuestionStem(show ? show.stem : q.stem)}
+          {ensureCombinedStemWithStatements(show ? show.stem : q.stem, (show?.explanation ?? q.explanation) as string, q.options)}
         </div>
       )}
       <div className="px-6 pb-6 space-y-3">

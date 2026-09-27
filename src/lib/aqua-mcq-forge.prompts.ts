@@ -109,8 +109,8 @@ ${config.styleContext ? `\nSTYLE GUIDE & COURSE CLONING REFERENCE (Match this to
 
 QUESTION STRUCTURE RULES:
 ${isFormB ? `FORM B (COMBINED QUESTION):
-1. The "stem" contains the clinical vignette or introductory question statement.
-2. The "statements" array MUST contain 3 to 5 numbered statements (e.g. 1, 2, 3, 4). Each statement is a distinct medical assertion that can be evaluated as true or false.
+1. The "stem" contains the clinical vignette or introductory question sentence (e.g. "Which of the following are classified directly under general mechanisms of cell injury?").
+2. The "statements" array MUST contain 3 to 5 numbered statements (e.g. [{"n": "1", "text": "Statement 1..."}, {"n": "2", "text": "Statement 2..."}]). Each statement is a distinct medical assertion that can be evaluated as true or false. NEVER leave the statements array empty for Form B!
 3. The "options" array contains lettered options A, B, C, D representing combinations of the numbered statements:
    - Examples of combinations: "1 and 3 only", "1, 2, and 4", "All of the above", "None of the above", "2 only".
 4. The "answer_labels" must be an array with the single correct option letter (e.g. ["B"]).` : `FORM A (STANDARD QUESTION):
@@ -123,7 +123,7 @@ ${isFormB ? `FORM B (COMBINED QUESTION):
 CRITICAL RULES FOR "stem":
 - The "stem" must contain ONLY the actual question or clinical scenario itself.
 - ABSOLUTELY NEVER begin the stem with filler topic echoes, chapter headers, or meta-introductions!
-  * FORBIDDEN OPENINGS: "In the classification of...", "In the context of...", "In the study of...", "According to the provided text...", "Regarding the pathogenesis/etiology/mechanisms of...", "Based on the excerpt...".
+  * FORBIDDEN OPENINGS: "In the foundational framework of...", "In the framework of...", "In the scope of...", "Within the framework of...", "In the classification of...", "In the context of...", "In the study of...", "According to the provided text...", "Regarding the pathogenesis/etiology/mechanisms of...", "Based on the excerpt...".
   * INSTEAD: Jump straight into the direct question (e.g. "Which of the following is recognized as a primary category of cell injury mechanisms?") or clinical vignette (e.g. "A 58-year-old male presents with..."). Do NOT place any introductory meta-phrases before the question.
 
 EXPLANATION STRUCTURE RULES (Crucial):
@@ -213,7 +213,8 @@ Return STRICT JSON only, matching this structure:
   "questions": [
     {
       "form": "A",
-      "stem": "...",
+      "stem": "What is the primary cellular mechanism...",
+      "statements": [],
       "options": [{"label":"A","text":"..."},{"label":"B","text":"..."},{"label":"C","text":"..."},{"label":"D","text":"..."}],
       "answer_labels": ["B"],
       "difficulty": "${config.difficulty}",
@@ -224,6 +225,42 @@ Return STRICT JSON only, matching this structure:
         "why_correct": "...",
         "why_wrong": "...",
         "table_rows": [{"item":"...","correct":true,"reason":"..."}],
+        "clinical_distinction": "...",
+        "memory_aid": "..."
+      },
+      "source_fidelity": {
+        "source": "...",
+        "page": "...",
+        "section": "...",
+        "evidence": "..."
+      },
+      "image_needed": false,
+      "image_prompt": ""
+    },
+    {
+      "form": "B",
+      "stem": "Which of the following statements are correct?",
+      "statements": [
+        {"n": "1", "text": "Statement 1..."},
+        {"n": "2", "text": "Statement 2..."},
+        {"n": "3", "text": "Statement 3..."},
+        {"n": "4", "text": "Statement 4..."}
+      ],
+      "options": [
+        {"label":"A","text":"1, 2, and 3 only"},
+        {"label":"B","text":"2 and 4 only"},
+        {"label":"C","text":"1, 2, 3, and 4"},
+        {"label":"D","text":"1 and 4 only"}
+      ],
+      "answer_labels": ["B"],
+      "difficulty": "${config.difficulty}",
+      "objective": "application",
+      "explanation": {
+        "title": "...",
+        "overview": "...",
+        "why_correct": "...",
+        "why_wrong": "...",
+        "table_rows": [{"item":"Statement 1...","correct":true,"reason":"..."},{"item":"Statement 2...","correct":true,"reason":"..."}],
         "clinical_distinction": "...",
         "memory_aid": "..."
       },
