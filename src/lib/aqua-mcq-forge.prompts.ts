@@ -180,6 +180,57 @@ Return STRICT JSON only, matching this exact shape:
 }`;
 }
 
+/** Batch Generation System Prompt: Authors multiple MCQs in a single prompt for 50% Batch API mode */
+export function buildBatchGenerationSystemPrompt(config: {
+  sourceMode: "strict" | "reasoning";
+  batchCount: number;
+  difficulty: "easy" | "medium" | "hard";
+  includeImages?: boolean;
+}): string {
+  const isStrict = config.sourceMode === "strict";
+
+  return `You are Aqua MCQ Forge in 50% BATCH API MODE (High-efficiency multi-question authoring).
+Your task is to author EXACTLY ${config.batchCount} distinct medical MCQs (mix of Standard Form A and Combined Form B) from the source material below.
+
+RULES:
+- Author both Standard MCQs (stem + options A,B,C,D) and Combined MCQs (stem + statements 1,2,3,4 + options A,B,C,D).
+- For Combined questions, the explanation table_rows MUST explain why each individual statement 1, 2, 3, 4 is true or false.
+- For Standard questions, the explanation table_rows MUST explain why each individual option A, B, C, D is true or false.
+- Source Fidelity: ${isStrict ? "STRICT SOURCE MODE (No factual claims outside the supplied text)" : "SOURCE + AI REASONING"}.
+${config.includeImages ? `- Set "image_needed": true and provide a descriptive "image_prompt" for questions that benefit from diagrams.` : `- Set "image_needed": false.`}
+
+Return STRICT JSON only, matching this structure:
+{
+  "questions": [
+    {
+      "form": "A",
+      "stem": "...",
+      "options": [{"label":"A","text":"..."},{"label":"B","text":"..."},{"label":"C","text":"..."},{"label":"D","text":"..."}],
+      "answer_labels": ["B"],
+      "difficulty": "${config.difficulty}",
+      "objective": "recall",
+      "explanation": {
+        "title": "...",
+        "overview": "...",
+        "why_correct": "...",
+        "why_wrong": "...",
+        "table_rows": [{"item":"...","correct":true,"reason":"..."}],
+        "clinical_distinction": "...",
+        "memory_aid": "..."
+      },
+      "source_fidelity": {
+        "source": "...",
+        "page": "...",
+        "section": "...",
+        "evidence": "..."
+      },
+      "image_needed": false,
+      "image_prompt": ""
+    }
+  ]
+}`;
+}
+
 /** 7-Point Validator System Prompt */
 export function buildValidatorSystemPrompt(isStrict: boolean): string {
   return `You are a relentless medical board quality validator.

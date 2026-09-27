@@ -7,6 +7,7 @@ import {
   buildTopicDiscoveryPrompt,
   buildFactExtractionPrompt,
   buildGenerationSystemPrompt,
+  buildBatchGenerationSystemPrompt,
   buildValidatorSystemPrompt,
   QUESTION_OBJECTIVES,
 } from "@/lib/aqua-mcq-forge.prompts";
@@ -83,18 +84,66 @@ function parseJson(text: string): any {
 }
 
 function normalizeGoogleModel(model: string): string[] {
-  // Support user's requested names and fallback aliases
-  if (model === "gemini-3.5-flash-lite" || model === "gemini-2.5-flash-lite") {
-    return ["gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"];
+  const m = String(model || "").toLowerCase();
+  if (m.includes("flash-lite") || m.includes("lite")) {
+    return ["gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-2.0-flash"];
   }
-  if (model === "gemini-3.5-flash" || model === "gemini-2.5-flash") {
-    return ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+  if (m.includes("pro")) {
+    return ["gemini-1.5-pro", "gemini-2.0-flash", "gemini-1.5-flash"];
   }
-  if (model === "gemini-2.5-pro") {
-    return ["gemini-2.5-pro", "gemini-1.5-pro", "gemini-2.5-flash"];
-  }
-  return [model, "gemini-2.5-flash", "gemini-1.5-flash"];
+  // Standard Flash models: gemini-3.5-flash, gemini-2.5-flash, gemini-2.0-flash
+  return ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"];
 }
+
+/** Deterministic structural topic extractor from textbook headings as instant reliable fallback */
+export function extractTopicsFromText(fullText: string): { name: string; description: string; estimated_weight: number }[] {
+  const topics: { name: string; description: string; estimated_weight: number }[] = [];
+  const lines = fullText.split("\n");
+  const regexes = [
+    /^(?:(?:Chapter|Section|Part|Topic)\s+\d+[:.]?\s*)([A-Z][^\n]{3,60})/i,
+    /^(\d+\.\s+[A-Z][^\n]{3,60})/,
+    /^([I|V|X]+\.\s+[A-Z][^\n]{3,60})/,
+  ];
+
+  const seen = new Set<string>();
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line || line.length > 80 || line.length < 5) continue;
+    if (line.includes("http") || line.includes("CELL INJURY") || line.includes("Page ") || /^\d+\/\d+$/.test(line)) continue;
+
+    for (const rx of regexes) {
+      const match = line.match(rx);
+      if (match) {
+        const cleanName = (match[1] || match[0])
+          .replace(/^\d+\.\s*/, "")
+          .replace(/^[I|V|X]+\.\s*/, "")
+          .trim();
+        const key = cleanName.toLowerCase();
+        if (cleanName.length >= 4 && !seen.has(key) && !key.includes("table") && !key.includes("figure") && !key.includes("reference")) {
+          seen.add(key);
+          let desc = "";
+          for (let j = i + 1; j < Math.min(lines.length, i + 5); j++) {
+            const nextL = lines[j].trim();
+            if (nextL && nextL.length > 20 && !nextL.includes("http")) {
+              desc = nextL.slice(0, 140);
+              break;
+            }
+          }
+          topics.push({
+            name: cleanName,
+            description: desc || `Key pathophysiology concepts and principles of ${cleanName}.`,
+            estimated_weight: 5,
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  return topics.slice(0, 10);
+}
+
 
 // ------------------------------------------------------------- AI Callers ---
 
@@ -317,6 +366,8 @@ export const amfCreateJob = createServerFn({ method: "POST" })
       dupThreshold: z.number().int().min(10).max(100).default(87),
       includeImages: z.boolean().default(false),
       imageCount: z.number().int().min(0).max(100).default(0),
+      imageFrequency: z.string().default("auto").optional(),
+      apiMode: z.enum(["standard", "batch"]).default("standard").optional(),
       sourceFidelityEnabled: z.boolean().default(true),
     }),
   )
@@ -360,6 +411,8 @@ export const amfCreateJob = createServerFn({ method: "POST" })
 
     // 2. Resilient fallback to amg_groups
     const metaPayload = {
+      api_mode: data.apiMode || "standard",
+      topics_optional: true,
       source_mode: data.sourceMode,
       style_mode: data.styleMode,
       style_course_id: data.styleCourseId ?? null,
@@ -373,6 +426,7 @@ export const amfCreateJob = createServerFn({ method: "POST" })
       coverage_mode: data.coverageMode,
       dup_threshold: data.dupThreshold,
       include_images: data.includeImages,
+      image_frequency: data.imageFrequency || "auto",
       image_count: data.imageCount,
       source_fidelity_enabled: data.sourceFidelityEnabled,
       topics: [],
@@ -400,105 +454,114 @@ export const amfCreateJob = createServerFn({ method: "POST" })
     };
   });
 
+export async function fetchJobData(supabase: any, jobId: string) {
+  let job: any = null;
+  let sources: any[] = [];
+  let topics: any[] = [];
+  let items: any[] = [];
+
+  // 1. Check amf_jobs
+  const { data: jRow } = await supabase.from(JOBS).select("*").eq("id", jobId).maybeSingle();
+  if (jRow) {
+    job = jRow;
+    const [{ data: s }, { data: t }, { data: i }] = await Promise.all([
+      supabase.from(SOURCES).select("*").eq("job_id", jobId).order("created_at"),
+      supabase.from(TOPICS).select("*").eq("job_id", jobId).order("created_at"),
+      supabase.from(ITEMS).select("*").eq("job_id", jobId),
+    ]);
+    sources = s ?? [];
+    topics = t ?? [];
+    items = i ?? [];
+  } else {
+    // 2. Check amg_groups fallback
+    const { data: gRow } = await supabase.from(AMG_GROUPS).select("*").eq("id", jobId).maybeSingle();
+    if (!gRow) throw new Error("This generation job no longer exists.");
+
+    let meta: any = {};
+    try {
+      meta = JSON.parse(gRow.instructions || "{}");
+    } catch {}
+
+    job = {
+      ...gRow,
+      api_mode: meta.api_mode || "standard",
+      topics_optional: meta.topics_optional ?? true,
+      source_mode: meta.source_mode || "strict",
+      style_mode: meta.style_mode || "ai",
+      style_course_id: meta.style_course_id ?? null,
+      difficulty_easy: meta.difficulty_easy ?? 34,
+      difficulty_medium: meta.difficulty_medium ?? 33,
+      difficulty_hard: meta.difficulty_hard ?? 33,
+      type_standard: meta.type_standard ?? 50,
+      type_combined: meta.type_combined ?? 50,
+      ai_decides_type: meta.ai_decides_type ?? false,
+      total_questions: meta.total_questions ?? 20,
+      coverage_mode: meta.coverage_mode ?? false,
+      dup_threshold: meta.dup_threshold ?? 87,
+      include_images: meta.include_images ?? false,
+      image_frequency: meta.image_frequency ?? "auto",
+      image_count: meta.image_count ?? 0,
+      source_fidelity_enabled: meta.source_fidelity_enabled ?? true,
+    };
+
+    topics = Array.isArray(meta.topics) ? meta.topics : [];
+
+    const [{ data: sRows }, { data: iRows }] = await Promise.all([
+      supabase.from(AMG_SOURCES).select("*").eq("group_id", jobId),
+      supabase.from(AMG_ITEMS).select("*").eq("group_id", jobId).eq("archived", false),
+    ]);
+
+    sources = (sRows ?? []).map((s: any) => ({
+      id: s.id,
+      file_name: s.file_name,
+      storage_path: s.storage_path,
+      page_count: gRow.page_count || 1,
+      created_at: s.created_at,
+      extracted_text: s.extracted_text,
+      chunks: s.chunks,
+    }));
+
+    items = (iRows ?? []).map((i: any) => {
+      const exp = (i.explanation ?? {}) as any;
+      return {
+        ...i,
+        job_id: i.group_id,
+        explanation: typeof exp.explanation === "string" ? exp.explanation : String(i.explanation ?? ""),
+        validation_report: exp.validation_report ?? {},
+        validation_passed: exp.validation_passed ?? true,
+        difficulty: exp.difficulty ?? "medium",
+        objective: exp.objective ?? "recall",
+        source_fidelity: exp.source_fidelity ?? null,
+        image_url: exp.image_url ?? null,
+        has_image: !!exp.image_url,
+        dup_score: exp.dup_score ?? 0,
+        topic_name: exp.topic_name || "Cell Injury",
+      };
+    });
+  }
+
+  return {
+    job,
+    sources,
+    topics,
+    stats: {
+      total: items.length,
+      pending: items.filter((i: any) => i.status === "pending").length,
+      approved: items.filter((i: any) => i.status === "approved").length,
+      rejected: items.filter((i: any) => i.status === "rejected").length,
+      needsReview: items.filter((i: any) => i.status === "needs_review").length,
+      imported: items.filter((i: any) => i.status === "imported").length,
+    },
+    items,
+  };
+}
+
 export const amfGetJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ jobId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureStaff(context);
-
-    let job: any = null;
-    let sources: any[] = [];
-    let topics: any[] = [];
-    let items: any[] = [];
-
-    // 1. Check amf_jobs
-    const { data: jRow } = await supabase.from(JOBS).select("*").eq("id", data.jobId).maybeSingle();
-    if (jRow) {
-      job = jRow;
-      const [{ data: s }, { data: t }, { data: i }] = await Promise.all([
-        supabase.from(SOURCES).select("*").eq("job_id", data.jobId).order("created_at"),
-        supabase.from(TOPICS).select("*").eq("job_id", data.jobId).order("created_at"),
-        supabase.from(ITEMS).select("*").eq("job_id", data.jobId),
-      ]);
-      sources = s ?? [];
-      topics = t ?? [];
-      items = i ?? [];
-    } else {
-      // 2. Check amg_groups fallback
-      const { data: gRow } = await supabase.from(AMG_GROUPS).select("*").eq("id", data.jobId).maybeSingle();
-      if (!gRow) throw new Error("This generation job no longer exists.");
-
-      let meta: any = {};
-      try {
-        meta = JSON.parse(gRow.instructions || "{}");
-      } catch {}
-
-      job = {
-        ...gRow,
-        source_mode: meta.source_mode || "strict",
-        style_mode: meta.style_mode || "ai",
-        style_course_id: meta.style_course_id ?? null,
-        difficulty_easy: meta.difficulty_easy ?? 34,
-        difficulty_medium: meta.difficulty_medium ?? 33,
-        difficulty_hard: meta.difficulty_hard ?? 33,
-        type_standard: meta.type_standard ?? 50,
-        type_combined: meta.type_combined ?? 50,
-        ai_decides_type: meta.ai_decides_type ?? false,
-        total_questions: meta.total_questions ?? 20,
-        coverage_mode: meta.coverage_mode ?? false,
-        dup_threshold: meta.dup_threshold ?? 87,
-        include_images: meta.include_images ?? false,
-        image_count: meta.image_count ?? 0,
-        source_fidelity_enabled: meta.source_fidelity_enabled ?? true,
-      };
-
-      topics = Array.isArray(meta.topics) ? meta.topics : [];
-
-      const [{ data: sRows }, { data: iRows }] = await Promise.all([
-        supabase.from(AMG_SOURCES).select("*").eq("group_id", data.jobId),
-        supabase.from(AMG_ITEMS).select("*").eq("group_id", data.jobId).eq("archived", false),
-      ]);
-
-      sources = (sRows ?? []).map((s: any) => ({
-        id: s.id,
-        file_name: s.file_name,
-        storage_path: s.storage_path,
-        page_count: gRow.page_count || 1,
-        created_at: s.created_at,
-        extracted_text: s.extracted_text,
-        chunks: s.chunks,
-      }));
-
-      items = (iRows ?? []).map((i: any) => {
-        const exp = (i.explanation ?? {}) as any;
-        return {
-          ...i,
-          job_id: i.group_id,
-          explanation: typeof exp.explanation === "string" ? exp.explanation : String(i.explanation ?? ""),
-          validation_report: exp.validation_report ?? {},
-          validation_passed: exp.validation_passed ?? true,
-          difficulty: exp.difficulty ?? "medium",
-          objective: exp.objective ?? "recall",
-          source_fidelity: exp.source_fidelity ?? null,
-          image_url: exp.image_url ?? null,
-          dup_score: exp.dup_score ?? 0,
-        };
-      });
-    }
-
-    return {
-      job,
-      sources,
-      topics,
-      stats: {
-        total: items.length,
-        pending: items.filter((i: any) => i.status === "pending").length,
-        approved: items.filter((i: any) => i.status === "approved").length,
-        rejected: items.filter((i: any) => i.status === "rejected").length,
-        needsReview: items.filter((i: any) => i.status === "needs_review").length,
-        imported: items.filter((i: any) => i.status === "imported").length,
-      },
-    };
+    return fetchJobData(supabase, data.jobId);
   });
 
 export const amfUpdateJob = createServerFn({ method: "POST" })
@@ -624,30 +687,51 @@ export const amfDiscoverTopics = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureStaff(context);
 
-    // 1. Get job provider and model
-    const jobRes: any = await amfGetJob({ data: { jobId: data.jobId } });
-    const job = jobRes.job;
-    const sources = jobRes.sources;
+    // 1. Get job and sources without nested createServerFn
+    const jobData = await fetchJobData(supabase, data.jobId);
+    const job = jobData.job;
+    const sources = jobData.sources;
 
     if (!sources?.length) throw new Error("No textbook PDF uploaded yet. Upload a source PDF first.");
 
-    const apiKey = await getKey(supabase, job.provider);
     const sampleText = sources
-      .map((s: any) => (Array.isArray(s.chunks) ? s.chunks.slice(0, 6).join("\n\n") : String(s.extracted_text || "").slice(0, 30000)))
+      .map((s: any) => (Array.isArray(s.chunks) ? s.chunks.slice(0, 8).join("\n\n") : String(s.extracted_text || "").slice(0, 35000)))
       .join("\n\n")
-      .slice(0, 35000);
+      .slice(0, 40000);
 
-    const prompt = buildTopicDiscoveryPrompt(sampleText);
-    const responseText =
-      job.provider === "google"
-        ? await callGoogleText(apiKey, job.model, "You extract medical topics from textbooks.", prompt)
-        : await callOpenAiText(apiKey, job.model, "You extract medical topics from textbooks.", prompt);
+    let rawTopics: any[] = [];
 
-    const json = parseJson(responseText);
-    const rawTopics = Array.isArray(json?.topics) ? json.topics : [];
+    // Try AI auto-discovery first
+    try {
+      const apiKey = await getKey(supabase, job.provider);
+      const prompt = buildTopicDiscoveryPrompt(sampleText);
+      const responseText =
+        job.provider === "google"
+          ? await callGoogleText(apiKey, job.model, "You extract medical topics from textbooks.", prompt)
+          : await callOpenAiText(apiKey, job.model, "You extract medical topics from textbooks.", prompt);
 
+      const json = parseJson(responseText);
+      if (Array.isArray(json?.topics) && json.topics.length > 0) {
+        rawTopics = json.topics;
+      }
+    } catch (aiErr: any) {
+      console.warn("AI topic auto-detection encountered an error, falling back to structural extraction:", aiErr?.message || aiErr);
+    }
+
+    // 2. Deterministic structural fallback if AI failed or returned empty
     if (!rawTopics.length) {
-      throw new Error("The AI could not identify clear medical topics from this text excerpt.");
+      rawTopics = extractTopicsFromText(sampleText);
+    }
+
+    // 3. Document-level single topic fallback if no section headings detected
+    if (!rawTopics.length) {
+      rawTopics = [
+        {
+          name: job.name || "General Pathophysiology & Mechanisms",
+          description: "Comprehensive coverage across all chapters of the uploaded textbook.",
+          estimated_weight: 10,
+        },
+      ];
     }
 
     const rows = rawTopics.map((t: any, idx: number) => ({
@@ -734,13 +818,24 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureStaff(context);
-    const jobRes: any = await amfGetJob({ data: { jobId: data.jobId } });
-    const job = jobRes.job;
-    const sources = jobRes.sources;
-    const topics = (jobRes.topics ?? []).filter((t: any) => t.enabled !== false);
+    const jobData = await fetchJobData(supabase, data.jobId);
+    const job = jobData.job;
+    const sources = jobData.sources;
 
-    if (!topics?.length) throw new Error("No active topics found. Run topic discovery or enable topics first.");
-    if (!sources?.length) throw new Error("No source PDFs found.");
+    if (!sources?.length) throw new Error("No source PDFs found. Upload a textbook PDF first.");
+
+    // Topics are 100% OPTIONAL: author across the full document if none configured
+    let activeTopics = (jobData.topics ?? []).filter((t: any) => t.enabled !== false);
+    if (!activeTopics.length) {
+      activeTopics = [
+        {
+          id: "full-doc",
+          name: job.name || "Textbook Core Concepts",
+          description: "Full textbook single-topic generation",
+          enabled: true,
+        },
+      ];
+    }
 
     const apiKey = await getKey(supabase, job.provider);
 
@@ -758,23 +853,37 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
 
     let generatedCount = 0;
     const failures: string[] = [];
+    const authoredItems: any[] = [];
+
+    const allChunks = sources.flatMap((s: any) => (Array.isArray(s.chunks) ? s.chunks : []));
+    if (!allChunks.length) {
+      allChunks.push(String(sources[0]?.extracted_text || "").slice(0, 30000));
+    }
 
     for (let step = 0; step < data.batchSize; step++) {
-      const selectedTopic = topics[step % topics.length];
+      const selectedTopic = activeTopics[step % activeTopics.length];
 
-      // Relevant text chunk for this topic
-      const allChunks = sources.flatMap((s: any) => (Array.isArray(s.chunks) ? s.chunks : []));
+      // Relevant text chunk for this topic or sequential chunk across the whole book
       const topicKeywords = selectedTopic.name.toLowerCase().split(" ").filter((w: string) => w.length > 3);
       const matchingChunks = allChunks.filter((chunk: string) =>
         topicKeywords.some((kw: string) => chunk.toLowerCase().includes(kw)),
       );
-      const textToUse = (matchingChunks.length ? matchingChunks.slice(0, 3) : allChunks.slice(0, 3)).join("\n\n").slice(0, 24000);
+      const chunkIdx = (existingStems.length + step) % Math.max(1, allChunks.length);
+      const textToUse = (matchingChunks.length ? matchingChunks.slice(0, 3) : [allChunks[chunkIdx] || allChunks[0]])
+        .join("\n\n")
+        .slice(0, 24000);
 
       // Determine parameters for this question
       const difficulty = selectWeightedDifficulty(job.difficulty_easy, job.difficulty_medium, job.difficulty_hard);
       const form = selectQuestionForm(job.type_standard, job.type_combined, job.ai_decides_type);
       const objective = selectRandomObjective();
-      const includeImage = job.include_images && (job.image_count ?? 0) > 0;
+
+      // Check whether this question should have a pure AI medical diagram
+      const shouldIncludeImage =
+        job.include_images &&
+        (job.image_frequency === "every" ||
+          (job.image_frequency === "half" && (step + existingStems.length) % 2 === 0) ||
+          (step + existingStems.length) % 3 === 0);
 
       // Build generation prompt
       const systemPrompt = buildGenerationSystemPrompt({
@@ -783,14 +892,14 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
         difficulty,
         objective,
         styleContext: job.style_sample_text,
-        includeImage,
+        includeImage: shouldIncludeImage,
       });
 
       const userPrompt = `TOPIC: ${selectedTopic.name}
 SOURCE MATERIAL EXCERPT:
 ${textToUse}
 
-Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Combined" : "Standard"} medical MCQ based on this source text. Return STRICT JSON.`;
+Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Combined" : "Standard"} medical MCQ based on this source text.${shouldIncludeImage ? " IMPORTANT: Include an image_prompt describing a clean educational medical schematic/diagram for this question." : ""} Return STRICT JSON.`;
 
       try {
         let questionJson: any = null;
@@ -830,10 +939,15 @@ Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Com
           continue;
         }
 
-        // Pure AI image generation if needed
+        // Pure AI image generation if needed (Flux / SDXL pure synthetic diagram)
         let imageUrl: string | null = null;
-        if (questionJson.image_needed && questionJson.image_prompt) {
-          imageUrl = await generateMedicalDiagram(supabase, job.provider, apiKey, questionJson.image_prompt, job.id);
+        if (shouldIncludeImage || (questionJson.image_needed && questionJson.image_prompt)) {
+          const diagramPrompt = questionJson.image_prompt || `${selectedTopic.name} medical pathophysiological diagram`;
+          try {
+            imageUrl = await generateMedicalDiagram(supabase, job.provider, apiKey, diagramPrompt, job.id);
+          } catch (imgErr) {
+            console.warn("Medical diagram generation error:", imgErr);
+          }
         }
 
         // Build structured explanation markdown
@@ -931,12 +1045,21 @@ Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Com
 
         existingStems.push(stemFormatted);
         generatedCount++;
+        authoredItems.push({
+          order: nextOrder,
+          stem: stemFormatted.slice(0, 100),
+          form,
+          difficulty,
+          imageUrl,
+          hasImage: !!imageUrl,
+          topicName: selectedTopic.name,
+        });
       } catch (err: any) {
         failures.push(`Generation attempt error: ${String(err?.message ?? err).slice(0, 160)}`);
       }
     }
 
-    return { generatedCount, failures, totalItems: existingStems.length };
+    return { generatedCount, failures, totalItems: existingStems.length, newItems: authoredItems };
   });
 
 // ================================================================= REVIEW ===

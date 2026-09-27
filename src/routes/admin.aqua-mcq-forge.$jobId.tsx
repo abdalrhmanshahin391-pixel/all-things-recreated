@@ -21,6 +21,8 @@ import {
   Compass,
   FileText,
   ExternalLink,
+  Zap,
+  Image as ImageIcon,
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
@@ -190,20 +192,26 @@ function AquaMcqForgeStudio() {
 
   // Live Generator Runner
   async function startGeneration() {
-    if (!topics.some((t) => t.enabled)) {
-      toast.error("Please enable at least one topic for generation.");
+    if (!sources || sources.length === 0) {
+      toast.error("Please upload at least one textbook PDF before starting generation.");
       return;
     }
     stopRunnerRef.current = false;
     setRunning(true);
-    setRunnerLog((prev) => [`[${new Date().toLocaleTimeString()}] Generation started...`, ...prev]);
+    const modeLabel = topics.length === 0 ? "Full Document Mode (Single Topic)" : `${topics.length} Sub-Topic Mode`;
+    const apiLabel = job?.api_mode === "batch" ? "💰 50% Batch API (Cost Saver)" : "⚡ Standard Realtime API";
+    setRunnerLog((prev) => [
+      `[${new Date().toLocaleTimeString()}] Generation started [${modeLabel} • ${apiLabel}]...`,
+      ...prev,
+    ]);
 
     try {
       const targetCount = job.coverageMode ? 50 : (job.total_questions ?? 20);
+      const batchSize = job?.api_mode === "batch" ? 3 : 2;
 
       while (!stopRunnerRef.current) {
         setRunnerLog((prev) => [`[${new Date().toLocaleTimeString()}] Authoring next question batch...`, ...prev.slice(0, 50)]);
-        const res: any = await generateBatch({ data: { jobId, batchSize: 2 } });
+        const res: any = await generateBatch({ data: { jobId, batchSize } });
 
         if (res.failures?.length) {
           for (const f of res.failures) {
@@ -211,7 +219,16 @@ function AquaMcqForgeStudio() {
           }
         }
 
-        if (res.generatedCount > 0) {
+        if (res.newItems?.length) {
+          for (const item of res.newItems) {
+            const imgBadge = item.hasImage ? " 🎨 [Pure AI Medical Diagram]" : "";
+            setRunnerLog((prev) => [
+              `✅ Authored #${item.order}: [${item.form === "B" ? "Combined" : "Standard"}] ${item.difficulty.toUpperCase()} — "${item.stem.slice(0, 60)}..."${imgBadge}`,
+              ...prev.slice(0, 50),
+            ]);
+          }
+          await refresh();
+        } else if (res.generatedCount > 0) {
           setRunnerLog((prev) => [`✅ Authored ${res.generatedCount} question(s) — Total in job: ${res.totalItems}`, ...prev.slice(0, 50)]);
           await refresh();
         }
@@ -267,8 +284,8 @@ function AquaMcqForgeStudio() {
               <span>/</span>
               <span>Studio</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-              {job.name}
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex flex-wrap items-center gap-2.5">
+              <span>{job.name}</span>
               <Badge
                 variant="secondary"
                 className={
@@ -279,8 +296,26 @@ function AquaMcqForgeStudio() {
               >
                 {job.source_mode === "strict" ? "🔒 Strict Source" : "🧠 Source + Reasoning"}
               </Badge>
+              <Badge
+                variant="outline"
+                className={
+                  job.api_mode === "batch"
+                    ? "bg-amber-50 text-amber-700 border-amber-300 font-bold"
+                    : "bg-slate-50 text-slate-700 border-slate-300 font-medium"
+                }
+              >
+                {job.api_mode === "batch" ? "💰 50% Batch API (Cost Saver)" : "⚡ Standard Realtime API"}
+              </Badge>
+              <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                {topics.length === 0 ? "📄 Full Document Mode (Single Topic)" : `📑 ${topics.length} Sub-Topics`}
+              </Badge>
+              {job.include_images && (
+                <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                  🎨 Pure AI Diagrams
+                </Badge>
+              )}
             </h1>
-            <p className="text-xs text-slate-500 mt-1 flex items-center gap-3">
+            <p className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-3">
               <span>
                 Model: <strong className="text-slate-700">{job.model}</strong>
               </span>
@@ -446,34 +481,62 @@ function AquaMcqForgeStudio() {
             {/* TAB 2: TOPICS & DISTRIBUTION */}
             <TabsContent value="topics" className="space-y-6">
               <Card className="bg-white border-slate-200 shadow-sm">
-                <CardHeader className="flex flex-row items-center justify-between pb-4">
+                <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
                   <div>
                     <CardTitle className="text-lg font-bold flex items-center gap-2">
                       <Compass className="text-indigo-600" size={20} />
-                      Topic & Chapter Distribution
+                      Topic & Chapter Distribution <span className="text-xs font-semibold text-slate-400 font-normal">(Optional)</span>
                     </CardTitle>
                     <CardDescription>
-                      Control how many questions are authored per topic or anatomical sub-unit.
+                      Control quotas per topic, or skip to author across the whole document directly.
                     </CardDescription>
                   </div>
-                  <Button
-                    onClick={handleDiscoverTopics}
-                    disabled={busy || sources.length === 0}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 text-xs"
-                  >
-                    {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                    AI Auto-Detect Topics
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActiveTab("generator")}
+                      className="text-xs border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                    >
+                      Skip to Generator →
+                    </Button>
+                    <Button
+                      onClick={handleDiscoverTopics}
+                      disabled={busy || sources.length === 0}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 text-xs"
+                    >
+                      {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                      AI Auto-Detect Topics
+                    </Button>
+                  </div>
                 </CardHeader>
 
                 <CardContent className="space-y-4">
                   {topics.length === 0 ? (
-                    <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl p-6">
-                      <Compass className="mx-auto text-slate-300 mb-2" size={32} />
-                      <p className="text-sm font-semibold text-slate-700">No topics configured yet</p>
-                      <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
-                        Click "AI Auto-Detect Topics" to analyze your uploaded textbook and organize sections automatically.
+                    <div className="text-center py-10 border-2 border-dashed border-slate-200 rounded-xl p-6 bg-slate-50/50">
+                      <div className="inline-flex p-3 rounded-full bg-indigo-50 text-indigo-600 mb-3">
+                        <Compass size={28} />
+                      </div>
+                      <p className="text-sm font-bold text-slate-800">Single Topic or Entire Textbook Mode</p>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 leading-relaxed">
+                        Topic division is <strong>completely optional</strong>. If your PDF is for a single topic (e.g. <em>Cell Injury</em>), you can proceed directly to the generator to author questions across the entire document.
                       </p>
+                      <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                        <Button
+                          onClick={() => setActiveTab("generator")}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs gap-1.5 font-bold"
+                        >
+                          <Play size={14} /> Proceed in Single-Topic Mode
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={handleDiscoverTopics}
+                          disabled={busy || sources.length === 0}
+                          className="text-xs gap-1.5 border-slate-300"
+                        >
+                          <Sparkles size={14} /> Detect Topics Anyway
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -555,6 +618,120 @@ function AquaMcqForgeStudio() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  {/* API Mode Selector: Standard vs 50% Batch */}
+                  <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-3">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <Label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                          <Zap size={14} className="text-indigo-600" /> API Generation Mode
+                        </Label>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Choose between interactive real-time generation or 50% discounted batch processing.
+                        </p>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={
+                          job.api_mode === "batch"
+                            ? "bg-amber-50 text-amber-700 border-amber-300 font-bold"
+                            : "bg-slate-50 text-slate-700"
+                        }
+                      >
+                        {job.api_mode === "batch" ? "💰 50% Batch Active" : "⚡ Standard Realtime"}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await updateJob({ data: { jobId, patch: { api_mode: "standard" } } });
+                          await refresh();
+                        }}
+                        className={`p-3.5 rounded-xl border text-left transition ${
+                          job.api_mode !== "batch"
+                            ? "border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/20"
+                            : "border-slate-200 hover:border-slate-300 bg-white"
+                        }`}
+                      >
+                        <div className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                          <Zap size={16} className="text-indigo-600" /> Standard API
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Interactive real-time execution with live terminal logs. Ideal for rapid testing.
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await updateJob({ data: { jobId, patch: { api_mode: "batch" } } });
+                          await refresh();
+                        }}
+                        className={`p-3.5 rounded-xl border text-left transition ${
+                          job.api_mode === "batch"
+                            ? "border-amber-600 bg-amber-50/50 ring-2 ring-amber-500/20"
+                            : "border-slate-200 hover:border-slate-300 bg-white"
+                        }`}
+                      >
+                        <div className="font-bold text-sm text-amber-900 flex items-center gap-2">
+                          <span className="text-base">💰</span> 50% Batch API Mode
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Token-efficient batch authoring with multi-question sharing to save 50% on API costs.
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Pure AI Medical Diagrams */}
+                  <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-3">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <Label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                          <ImageIcon size={14} className="text-indigo-600" /> Pure AI Medical Diagrams
+                        </Label>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Synthesizes original anatomical diagrams and clinical pathways from scratch using Flux / SDXL.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={job.include_images}
+                        onCheckedChange={async (val) => {
+                          await updateJob({ data: { jobId, patch: { include_images: val } } });
+                          await refresh();
+                        }}
+                      />
+                    </div>
+
+                    {job.include_images && (
+                      <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+                        <span className="text-slate-600 font-medium">Diagram Frequency:</span>
+                        <div className="flex items-center gap-2">
+                          {(["every", "half", "auto"] as const).map((mode) => (
+                            <Button
+                              key={mode}
+                              type="button"
+                              size="sm"
+                              variant={job.image_frequency === mode ? "default" : "outline"}
+                              className={
+                                job.image_frequency === mode
+                                  ? "bg-indigo-600 text-white text-xs h-7 font-bold"
+                                  : "text-xs h-7 border-slate-300"
+                              }
+                              onClick={async () => {
+                                await updateJob({ data: { jobId, patch: { image_frequency: mode } } });
+                                await refresh();
+                              }}
+                            >
+                              {mode === "every" ? "Every Question" : mode === "half" ? "Every 2nd Question" : "AI Decides"}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Difficulty Ratios */}
                   <div className="space-y-4 p-4 rounded-xl border border-slate-200 bg-slate-50">
                     <div className="flex justify-between items-center">
@@ -662,13 +839,72 @@ function AquaMcqForgeStudio() {
                     <Progress value={progressPct} className="h-3 rounded-full" />
                   </div>
 
+                  {/* Generator Quick Configuration Bar */}
+                  <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-slate-700">Generation Setup:</span>
+                      <Badge variant="outline" className="bg-white border-slate-300 font-semibold text-slate-800">
+                        {topics.length === 0 ? "📄 Full Document (Single Topic)" : `📑 ${topics.length} Sub-Topics`}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className={
+                          job.api_mode === "batch"
+                            ? "bg-amber-50 text-amber-800 border-amber-300 font-bold"
+                            : "bg-indigo-50 text-indigo-700 border-indigo-200 font-medium"
+                        }
+                      >
+                        {job.api_mode === "batch" ? "💰 50% Batch API" : "⚡ Standard Realtime"}
+                      </Badge>
+                      {job.include_images && (
+                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-bold">
+                          🎨 AI Diagrams Active
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className={`text-xs h-7 gap-1 font-semibold ${
+                          job.api_mode === "batch" ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-white text-slate-700"
+                        }`}
+                        onClick={async () => {
+                          const next = job.api_mode === "batch" ? "standard" : "batch";
+                          await updateJob({ data: { jobId, patch: { api_mode: next } } });
+                          await refresh();
+                        }}
+                      >
+                        {job.api_mode === "batch" ? "💰 Mode: 50% Batch" : "⚡ Mode: Standard"}
+                      </Button>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className={`text-xs h-7 gap-1 font-semibold ${
+                          job.include_images ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-white text-slate-700"
+                        }`}
+                        onClick={async () => {
+                          await updateJob({ data: { jobId, patch: { include_images: !job.include_images } } });
+                          await refresh();
+                        }}
+                      >
+                        <ImageIcon size={13} />
+                        {job.include_images ? "AI Diagrams: ON" : "AI Diagrams: OFF"}
+                      </Button>
+                    </div>
+                  </div>
+
                   {/* Actions */}
                   <div className="flex flex-wrap items-center gap-3">
                     {!running ? (
                       <Button
                         onClick={startGeneration}
-                        disabled={busy || topics.length === 0}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 font-bold px-6"
+                        disabled={busy || sources.length === 0}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 font-bold px-6 shadow-sm"
                       >
                         <Play size={16} /> Start Generation
                       </Button>
