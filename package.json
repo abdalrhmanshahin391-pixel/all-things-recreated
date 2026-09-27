@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "node --stack-size=20000 node_modules/vite/bin/vite.js build",
-    "build:dev": "node --stack-size=20000 node_modules/vite/bin/vite.js build --mode development",
+    "build": "node --stack-size=20000 --max-old-space-size=6144 node_modules/vite/bin/vite.js build",
+    "build:dev": "node --stack-size=20000 --max-old-space-size=6144 node_modules/vite/bin/vite.js build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write ."
