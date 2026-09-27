@@ -51,8 +51,13 @@ function stripOptionLetters(body: string, kind: Section["kind"]): string {
   return out;
 }
 
+function cleanSourceCitation(raw: string): string {
+  if (!raw) return "";
+  return raw.replace(/\n*(?:###?\s*)?Source Citation[\s\S]*$/i, "").trim();
+}
+
 function parseExplanation(raw: string): Section[] {
-  const text = normalizeMarkdownTables(raw.trim());
+  const text = normalizeMarkdownTables(cleanSourceCitation(raw).trim());
   if (!text) return [];
   const correctRe = /(?:^|\n)\s*\**\s*why\s+the\s+correct\s+answer\s+is\s+right\**\s*[:\s]*/i;
   const wrongRe = /(?:^|\n)\s*\**\s*why\s+the\s+other\s+options?\s+(?:are|is)\s+wrong\**\s*[:\s]*/i;
@@ -98,6 +103,7 @@ function parseExplanation(raw: string): Section[] {
     // Strip A./B./C./D. letter prefixes from wrong-option bullets and
     // summary table cells (only for wrong + summary sections).
     body = stripOptionLetters(body, m.kind);
+    body = cleanSourceCitation(body);
     // Peel off a trailing markdown table from non-summary sections so it
     // becomes its own Summary block at the bottom.
     if (m.kind !== "summary") {

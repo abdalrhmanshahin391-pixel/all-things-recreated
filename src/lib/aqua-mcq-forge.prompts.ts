@@ -120,8 +120,15 @@ ${isFormB ? `FORM B (COMBINED QUESTION):
 4. Distractors must be plausible, sophisticated, and reflect common medical misconceptions, but definitively incorrect.
 5. The "answer_labels" must be an array with the single correct option letter (e.g. ["C"]).`}
 
+CRITICAL RULES FOR "stem":
+- The "stem" must contain ONLY the actual question or clinical scenario itself.
+- ABSOLUTELY NEVER begin the stem with filler topic echoes, chapter headers, or meta-introductions!
+  * FORBIDDEN OPENINGS: "In the classification of...", "In the context of...", "In the study of...", "According to the provided text...", "Regarding the pathogenesis/etiology/mechanisms of...", "Based on the excerpt...".
+  * INSTEAD: Jump straight into the direct question (e.g. "Which of the following is recognized as a primary category of cell injury mechanisms?") or clinical vignette (e.g. "A 58-year-old male presents with..."). Do NOT place any introductory meta-phrases before the question.
+
 EXPLANATION STRUCTURE RULES (Crucial):
 You must supply a structured explanation object with these exact keys:
+- DO NOT put source citations, textbook titles, page numbers, or excerpt quotes inside any of the explanation fields! Keep the explanation strictly educational and clinical.
 - "title": Short medical topic title (3-5 words).
 - "overview": 3 to 4 professional sentences explaining the fundamental concept, pathophysiology, anatomy, or pharmacology.
 - "why_correct": 2 to 3 sentences explaining why the correct answer is right. (Omit/leave empty if all options are correct).
@@ -193,9 +200,11 @@ export function buildBatchGenerationSystemPrompt(config: {
 Your task is to author EXACTLY ${config.batchCount} distinct medical MCQs (mix of Standard Form A and Combined Form B) from the source material below.
 
 RULES:
+- The "stem" must contain ONLY the actual question itself. ABSOLUTELY NEVER begin stems with filler topic preambles or chapter echoes (e.g. NEVER write "In the classification of...", "In the context of...", "According to the text...", "Regarding the pathogenesis of..."). Jump straight to the question or clinical vignette.
 - Author both Standard MCQs (stem + options A,B,C,D) and Combined MCQs (stem + statements 1,2,3,4 + options A,B,C,D).
 - For Combined questions, the explanation table_rows MUST explain why each individual statement 1, 2, 3, 4 is true or false.
 - For Standard questions, the explanation table_rows MUST explain why each individual option A, B, C, D is true or false.
+- NEVER include source citations, book titles, or page numbers inside any of the explanation fields. Keep them exclusively in "source_fidelity".
 - Source Fidelity: ${isStrict ? "STRICT SOURCE MODE (No factual claims outside the supplied text)" : "SOURCE + AI REASONING"}.
 ${config.includeImages ? `- Set "image_needed": true and provide a descriptive "image_prompt" for questions that benefit from diagrams.` : `- Set "image_needed": false.`}
 

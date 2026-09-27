@@ -125,15 +125,20 @@ export function buildForgeExplanation(
     parts.push(`### Easy way to remember\n${data.memory_aid.trim()}`);
   }
 
-  // 7. Source Fidelity Citation Block
-  if (sourceFidelity && (sourceFidelity.source || sourceFidelity.evidence)) {
-    const citationLines: string[] = ["### Source Citation"];
-    if (sourceFidelity.source) citationLines.push(`**Source:** ${sourceFidelity.source}`);
-    if (sourceFidelity.page) citationLines.push(`**Page:** ${sourceFidelity.page}`);
-    if (sourceFidelity.section) citationLines.push(`**Section:** ${sourceFidelity.section}`);
-    if (sourceFidelity.evidence) citationLines.push(`> "${cleanMarkdownCell(sourceFidelity.evidence)}"`);
-    parts.push(citationLines.join("\n\n"));
-  }
+  // NOTE: Source Fidelity citations are kept strictly in admin metadata (item.source_fidelity)
+  // and are intentionally NOT appended to the student/course explanation markdown.
 
   return parts.join("\n\n").trim();
 }
+
+/**
+ * Strips any legacy or accidental "### Source Citation" or "Source Citation\nSource: ..."
+ * blocks from explanation text.
+ */
+export function stripSourceCitation(explanation: string | null | undefined): string {
+  if (!explanation || typeof explanation !== "string") return "";
+  return explanation
+    .replace(/\n*(?:###?\s*)?Source Citation[\s\S]*$/i, "")
+    .trim();
+}
+

@@ -47,6 +47,8 @@ import {
   amfUpdateItem,
   amfSetItemsStatus,
 } from "@/lib/aqua-mcq-forge.functions";
+import { formatQuestionStem } from "@/lib/question-format";
+import { stripSourceCitation } from "@/lib/aqua-mcq-forge.explanation";
 
 export const Route = createFileRoute("/admin/aqua-mcq-forge/$jobId/review")({
   head: () => ({
@@ -446,7 +448,7 @@ function AquaMcqForgeReview() {
 
                     {/* Question Stem */}
                     <div className="text-base font-semibold text-slate-900 leading-relaxed whitespace-pre-wrap">
-                      {item.stem}
+                      {formatQuestionStem(item.stem)}
                     </div>
 
                     {/* Form B Statements if applicable */}
@@ -512,7 +514,7 @@ function AquaMcqForgeReview() {
                     {/* Rendered Structured Explanation */}
                     {item.explanation && (
                       <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 text-sm prose prose-slate max-w-none prose-table:border prose-th:bg-slate-900 prose-th:text-white prose-th:p-2 prose-td:p-2 prose-td:border">
-                        <ReactMarkdown>{item.explanation}</ReactMarkdown>
+                        <ReactMarkdown>{stripSourceCitation(item.explanation)}</ReactMarkdown>
                       </div>
                     )}
 

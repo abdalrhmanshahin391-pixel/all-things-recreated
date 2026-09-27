@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import { formatQuestionStem } from "@/lib/question-format";
+import { formatQuestionStem, cleanQuestionPreamble } from "@/lib/question-format";
 import {
   AMF_MODELS,
   buildTopicDiscoveryPrompt,
@@ -13,6 +13,7 @@ import {
 } from "@/lib/aqua-mcq-forge.prompts";
 import {
   buildForgeExplanation,
+  stripSourceCitation,
   type ExplanationData,
   type SourceFidelityData,
 } from "@/lib/aqua-mcq-forge.explanation";
@@ -496,7 +497,18 @@ export async function fetchJobData(supabase: any, jobId: string) {
     ]);
     sources = s ?? [];
     topics = t ?? [];
-    items = i ?? [];
+    items = (i ?? []).map((item: any) => {
+      const cleanStem = formatQuestionStem(item.stem);
+      const cleanExp = stripSourceCitation(item.explanation);
+      if (cleanStem !== item.stem || cleanExp !== item.explanation) {
+        supabase.from(ITEMS).update({ stem: cleanStem, explanation: cleanExp }).eq("id", item.id).then?.(() => {});
+      }
+      return {
+        ...item,
+        stem: cleanStem,
+        explanation: cleanExp,
+      };
+    });
   } else {
     // 2. Check amg_groups fallback
     const { data: gRow } = await supabase.from(AMG_GROUPS).select("*").eq("id", jobId).maybeSingle();
@@ -548,10 +560,17 @@ export async function fetchJobData(supabase: any, jobId: string) {
 
     items = (iRows ?? []).map((i: any) => {
       const exp = (i.explanation ?? {}) as any;
+      const rawExp = typeof exp.explanation === "string" ? exp.explanation : String(i.explanation ?? "");
+      const cleanStem = formatQuestionStem(i.stem);
+      const cleanExp = stripSourceCitation(rawExp);
+      if (cleanStem !== i.stem) {
+        supabase.from(AMG_ITEMS).update({ stem: cleanStem }).eq("id", i.id).then?.(() => {});
+      }
       return {
         ...i,
         job_id: i.group_id,
-        explanation: typeof exp.explanation === "string" ? exp.explanation : String(i.explanation ?? ""),
+        stem: cleanStem,
+        explanation: cleanExp,
         validation_report: exp.validation_report ?? {},
         validation_passed: exp.validation_passed ?? true,
         difficulty: exp.difficulty ?? "medium",
@@ -563,6 +582,32 @@ export async function fetchJobData(supabase: any, jobId: string) {
         topic_name: exp.topic_name || "Cell Injury",
       };
     });
+  }
+
+  // Opportunistically clean any existing questions in questions table matching preambles or source citations
+  try {
+    const { data: badStems } = await supabase
+      .from("questions")
+      .select("id, stem, explanation")
+      .ilike("stem", "In the classification of%")
+      .limit(50);
+    for (const b of badStems ?? []) {
+      const cleanStem = formatQuestionStem(b.stem);
+      const cleanExp = stripSourceCitation(b.explanation);
+      await supabase.from("questions").update({ stem: cleanStem, explanation: cleanExp || null }).eq("id", b.id);
+    }
+    const { data: badExp } = await supabase
+      .from("questions")
+      .select("id, stem, explanation")
+      .ilike("explanation", "%Source Citation%")
+      .limit(50);
+    for (const b of badExp ?? []) {
+      const cleanStem = formatQuestionStem(b.stem);
+      const cleanExp = stripSourceCitation(b.explanation);
+      await supabase.from("questions").update({ stem: cleanStem, explanation: cleanExp || null }).eq("id", b.id);
+    }
+  } catch {
+    // non-blocking
   }
 
   return {
@@ -924,7 +969,12 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
 SOURCE MATERIAL EXCERPT:
 ${textToUse}
 
-Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Combined" : "Standard"} medical MCQ based on this source text.${shouldIncludeImage ? " IMPORTANT: Include an image_prompt describing a clean educational medical schematic/diagram for this question." : ""} Return STRICT JSON.`;
+Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Combined" : "Standard"} medical MCQ based on this source text.
+MANDATORY CONSTRAINTS:
+1. Start the question directly with the core question (e.g. "Which of the following...", "What is...") or clinical case. Do NOT write "In the classification of...", "According to...", or echo the topic title in the stem!
+2. Do NOT include source citations, book titles, or page numbers in the explanation text.
+${shouldIncludeImage ? "3. Include an image_prompt describing a clean educational medical schematic/diagram for this question." : ""}
+Return STRICT JSON.`;
 
       try {
         let questionJson: any = null;
@@ -956,7 +1006,7 @@ Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Com
         }
 
         // Deduplication check
-        const stemFormatted = formatQuestionStem(String(questionJson.stem ?? ""));
+        const stemFormatted = formatQuestionStem(cleanQuestionPreamble(String(questionJson.stem ?? "")));
         const { maxScore } = checkDuplicate(stemFormatted, existingStems);
 
         if (maxScore >= job.dup_threshold) {
@@ -988,12 +1038,14 @@ Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Com
                 text: String(o.text),
               }));
 
-        const explanationMarkdown = buildForgeExplanation(
-          form,
-          explanationData,
-          displayItems,
-          Array.isArray(questionJson.answer_labels) ? questionJson.answer_labels : [],
-          job.source_fidelity_enabled ? questionJson.source_fidelity : null,
+        const explanationMarkdown = stripSourceCitation(
+          buildForgeExplanation(
+            form,
+            explanationData,
+            displayItems,
+            Array.isArray(questionJson.answer_labels) ? questionJson.answer_labels : [],
+            null, // Do NOT append source citations to student explanation markdown
+          ),
         );
 
         const nextOrder = existingStems.length + 1;
@@ -1107,7 +1159,13 @@ export const amfListItems = createServerFn({ method: "POST" })
       if (data.statusFilter !== "all") q = q.eq("status", data.statusFilter);
       if (data.topicId) q = q.eq("topic_id", data.topicId);
       const { data: rows, error } = await q;
-      if (!error && rows) return rows;
+      if (!error && rows) {
+        return rows.map((r: any) => ({
+          ...r,
+          stem: formatQuestionStem(r.stem),
+          explanation: stripSourceCitation(r.explanation),
+        }));
+      }
     } catch {
       // fallback
     }
@@ -1120,10 +1178,12 @@ export const amfListItems = createServerFn({ method: "POST" })
 
     return (gRows ?? []).map((i: any) => {
       const exp = (i.explanation ?? {}) as any;
+      const rawExp = typeof exp.explanation === "string" ? exp.explanation : String(i.explanation ?? "");
       return {
         ...i,
         job_id: i.group_id,
-        explanation: typeof exp.explanation === "string" ? exp.explanation : String(i.explanation ?? ""),
+        stem: formatQuestionStem(i.stem),
+        explanation: stripSourceCitation(rawExp),
         validation_report: exp.validation_report ?? {},
         validation_passed: exp.validation_passed ?? true,
         difficulty: exp.difficulty ?? "medium",
@@ -1150,23 +1210,27 @@ export const amfUpdateItem = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureStaff(context);
 
+    const patch = { ...data.patch };
+    if (patch.stem) patch.stem = formatQuestionStem(patch.stem);
+    if (patch.explanation) patch.explanation = stripSourceCitation(patch.explanation);
+
     // Try amf_items
-    const { data: row } = await supabase.from(ITEMS).update(data.patch).eq("id", data.itemId).select("*").maybeSingle();
+    const { data: row } = await supabase.from(ITEMS).update(patch).eq("id", data.itemId).select("*").maybeSingle();
     if (row) return row;
 
     // Fallback: amg_items
     const { data: gItem } = await supabase.from(AMG_ITEMS).select("*").eq("id", data.itemId).maybeSingle();
     if (gItem) {
       const exp = (gItem.explanation ?? {}) as any;
-      if (data.patch.explanation) exp.explanation = data.patch.explanation;
+      if (patch.explanation) exp.explanation = patch.explanation;
       const amgPatch: any = {
         updated_at: new Date().toISOString(),
       };
-      if (data.patch.stem) amgPatch.stem = data.patch.stem;
-      if (data.patch.status) amgPatch.status = data.patch.status;
-      if (data.patch.explanation) amgPatch.explanation = exp;
+      if (patch.stem) amgPatch.stem = patch.stem;
+      if (patch.status) amgPatch.status = patch.status;
+      if (patch.explanation) amgPatch.explanation = exp;
       await supabase.from(AMG_ITEMS).update(amgPatch).eq("id", data.itemId);
-      return { ...gItem, ...data.patch };
+      return { ...gItem, ...patch };
     }
 
     return { ok: true };
@@ -1222,9 +1286,11 @@ export const amfImportJob = createServerFn({ method: "POST" })
 
       approvedItems = (amgApproved ?? []).map((i: any) => {
         const exp = (i.explanation ?? {}) as any;
+        const rawExp = typeof exp.explanation === "string" ? exp.explanation : String(i.explanation ?? "");
         return {
           ...i,
-          explanation: typeof exp.explanation === "string" ? exp.explanation : String(i.explanation ?? ""),
+          stem: formatQuestionStem(i.stem),
+          explanation: stripSourceCitation(rawExp),
         };
       });
     }
@@ -1243,10 +1309,12 @@ export const amfImportJob = createServerFn({ method: "POST" })
 
     for (const item of approvedItems) {
       try {
+        const cleanStem = formatQuestionStem(item.stem);
+        const cleanExp = stripSourceCitation(item.explanation);
         const questionPayload = {
           subject_id: data.subjectId,
-          stem: item.stem,
-          explanation: item.explanation || null,
+          stem: cleanStem,
+          explanation: cleanExp || null,
           answer_mode: item.answer_mode ?? "single",
           sort_order: sort,
         };
@@ -1284,6 +1352,26 @@ export const amfImportJob = createServerFn({ method: "POST" })
         failed++;
         errors.push(String(err?.message ?? err).slice(0, 160));
       }
+    }
+
+    // Clean any existing questions in this subject that have source citation or preambles
+    try {
+      const { data: existingQ } = await supabase
+        .from("questions")
+        .select("id, stem, explanation")
+        .eq("subject_id", data.subjectId);
+      for (const eq of existingQ ?? []) {
+        const cleanStem = formatQuestionStem(eq.stem);
+        const cleanExp = stripSourceCitation(eq.explanation);
+        if (cleanStem !== eq.stem || cleanExp !== eq.explanation) {
+          await supabase
+            .from("questions")
+            .update({ stem: cleanStem, explanation: cleanExp || null })
+            .eq("id", eq.id);
+        }
+      }
+    } catch {
+      // non-blocking
     }
 
     return { inserted, skipped, failed, errors: errors.slice(0, 5) };
