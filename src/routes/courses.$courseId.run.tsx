@@ -21,7 +21,7 @@ import { moveSingleCourseQuestion } from "@/lib/course-sorter.functions";
 import { ReportQuestionModal } from "@/components/ReportQuestionModal";
 import { loadCourseRunQuestionsServerFn } from "@/lib/course-enrollment.functions";
 import { ensureFreeEnrollment } from "@/lib/course-access";
-import { formatQuestionStem } from "@/lib/question-format";
+import { formatQuestionStem, ensureCombinedStemWithStatements } from "@/lib/question-format";
 import {
   Flag,
   CheckCircle2,
@@ -1187,7 +1187,7 @@ function QuestionCard({
           dir={show ? "rtl" : undefined}
           className="px-6 py-6 text-lg leading-relaxed text-foreground font-medium whitespace-pre-line"
         >
-          {formatQuestionStem(show ? show.stem : q.stem)}
+          {ensureCombinedStemWithStatements(show ? show.stem : q.stem, (show?.explanation ?? q.explanation) as string)}
         </div>
       )}
       {q.answer_mode === "multiple" && (

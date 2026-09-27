@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import { formatQuestionStem, cleanQuestionPreamble } from "@/lib/question-format";
+import { formatQuestionStem, cleanQuestionPreamble, buildCombinedStem } from "@/lib/question-format";
 import {
   AMF_MODELS,
   buildTopicDiscoveryPrompt,
@@ -584,17 +584,19 @@ export async function fetchJobData(supabase: any, jobId: string) {
     });
   }
 
-  // Opportunistically clean any existing questions in questions table matching preambles or source citations
+  // Opportunistically clean any existing questions in questions table matching preambles, source citations, or missing statements
   try {
     const { data: badStems } = await supabase
       .from("questions")
       .select("id, stem, explanation")
-      .ilike("stem", "In the classification of%")
+      .or("stem.ilike.In the classification of%,stem.ilike.According to the%")
       .limit(50);
     for (const b of badStems ?? []) {
       const cleanStem = formatQuestionStem(b.stem);
       const cleanExp = stripSourceCitation(b.explanation);
-      await supabase.from("questions").update({ stem: cleanStem, explanation: cleanExp || null }).eq("id", b.id);
+      if (cleanStem !== b.stem || cleanExp !== b.explanation) {
+        await supabase.from("questions").update({ stem: cleanStem, explanation: cleanExp || null }).eq("id", b.id);
+      }
     }
     const { data: badExp } = await supabase
       .from("questions")
@@ -605,6 +607,28 @@ export async function fetchJobData(supabase: any, jobId: string) {
       const cleanStem = formatQuestionStem(b.stem);
       const cleanExp = stripSourceCitation(b.explanation);
       await supabase.from("questions").update({ stem: cleanStem, explanation: cleanExp || null }).eq("id", b.id);
+    }
+
+    // Also sync statements for any combined question missing them
+    for (const item of items) {
+      if (Array.isArray(item.statements) && item.statements.length > 0) {
+        const fullStem = buildCombinedStem(item.stem, item.statements);
+        const lead30 = cleanQuestionPreamble(item.stem).slice(0, 30);
+        if (lead30.length > 8) {
+          const { data: qMatches } = await supabase
+            .from("questions")
+            .select("id, stem, explanation")
+            .ilike("stem", `%${lead30}%`);
+          for (const qm of qMatches ?? []) {
+            if (!qm.stem.includes("1.")) {
+              await supabase
+                .from("questions")
+                .update({ stem: fullStem, explanation: stripSourceCitation(qm.explanation) || null })
+                .eq("id", qm.id);
+            }
+          }
+        }
+      }
     }
   } catch {
     // non-blocking
@@ -1006,7 +1030,11 @@ Return STRICT JSON.`;
         }
 
         // Deduplication check
-        const stemFormatted = formatQuestionStem(cleanQuestionPreamble(String(questionJson.stem ?? "")));
+        const combinedStem =
+          form === "B" && Array.isArray(questionJson.statements) && questionJson.statements.length > 0
+            ? buildCombinedStem(String(questionJson.stem ?? ""), questionJson.statements)
+            : formatQuestionStem(cleanQuestionPreamble(String(questionJson.stem ?? "")));
+        const stemFormatted = formatQuestionStem(combinedStem);
         const { maxScore } = checkDuplicate(stemFormatted, existingStems);
 
         if (maxScore >= job.dup_threshold) {
@@ -1309,7 +1337,8 @@ export const amfImportJob = createServerFn({ method: "POST" })
 
     for (const item of approvedItems) {
       try {
-        const cleanStem = formatQuestionStem(item.stem);
+        const fullStem = buildCombinedStem(item.stem, item.statements);
+        const cleanStem = formatQuestionStem(fullStem);
         const cleanExp = stripSourceCitation(item.explanation);
         const questionPayload = {
           subject_id: data.subjectId,
@@ -1354,14 +1383,24 @@ export const amfImportJob = createServerFn({ method: "POST" })
       }
     }
 
-    // Clean any existing questions in this subject that have source citation or preambles
+    // Clean any existing questions in this subject that have source citation or preambles, and restore missing statements
     try {
       const { data: existingQ } = await supabase
         .from("questions")
         .select("id, stem, explanation")
         .eq("subject_id", data.subjectId);
       for (const eq of existingQ ?? []) {
-        const cleanStem = formatQuestionStem(eq.stem);
+        // If question matches an approved item with statements, ensure statements are present
+        const matchedItem = approvedItems.find(
+          (ai) =>
+            Array.isArray(ai.statements) &&
+            ai.statements.length > 0 &&
+            cleanQuestionPreamble(eq.stem).startsWith(cleanQuestionPreamble(ai.stem).slice(0, 30)),
+        );
+        const targetStem = matchedItem
+          ? buildCombinedStem(eq.stem, matchedItem.statements)
+          : eq.stem;
+        const cleanStem = formatQuestionStem(targetStem);
         const cleanExp = stripSourceCitation(eq.explanation);
         if (cleanStem !== eq.stem || cleanExp !== eq.explanation) {
           await supabase
