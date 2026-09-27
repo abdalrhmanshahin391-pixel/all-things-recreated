@@ -142,6 +142,7 @@ import { Route as HyGuidesSlugRouteImport } from './routes/hy.guides.$slug'
 import { Route as LecturesCourseIdIndexRouteImport } from './routes/lectures.$courseId.index'
 import { Route as RuGuidesIndexRouteImport } from './routes/ru.guides.index'
 import { Route as RuGuidesSlugRouteImport } from './routes/ru.guides.$slug'
+import { Route as AdminAquaMcqForgeJobIdIndexRouteImport } from './routes/admin.aqua-mcq-forge.$jobId.index'
 import { Route as AdminAquaMcqForgeJobIdImportRouteImport } from './routes/admin.aqua-mcq-forge.$jobId.import'
 import { Route as AdminAquaMcqForgeJobIdReviewRouteImport } from './routes/admin.aqua-mcq-forge.$jobId.review'
 import { Route as AdminAquaMcqGenGroupIdApprovalRouteImport } from './routes/admin.aqua-mcq-gen.$groupId.approval'
@@ -824,6 +825,12 @@ const RuGuidesSlugRoute = RuGuidesSlugRouteImport.update({
   path: '/ru/guides/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminAquaMcqForgeJobIdIndexRoute =
+  AdminAquaMcqForgeJobIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AdminAquaMcqForgeJobIdRoute,
+  } as any)
 const AdminAquaMcqForgeJobIdImportRoute =
   AdminAquaMcqForgeJobIdImportRouteImport.update({
     id: '/import',
@@ -1032,6 +1039,7 @@ export interface FileRoutesByFullPath {
   '/lectures/$courseId/quiz/$quizId': typeof LecturesCourseIdQuizQuizIdRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
+  '/admin/aqua-mcq-forge/$jobId/': typeof AdminAquaMcqForgeJobIdIndexRoute
   '/german/$courseId/review/': typeof GermanCourseIdReviewIndexRoute
 }
 export interface FileRoutesByTo {
@@ -1128,7 +1136,6 @@ export interface FileRoutesByTo {
   '/summaries': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
-  '/admin/aqua-mcq-forge/$jobId': typeof AdminAquaMcqForgeJobIdRouteWithChildren
   '/admin/aqua-mcq-gen/approval': typeof AdminAquaMcqGenApprovalRoute
   '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
@@ -1167,6 +1174,7 @@ export interface FileRoutesByTo {
   '/lectures/$courseId/quiz/$quizId': typeof LecturesCourseIdQuizQuizIdRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
+  '/admin/aqua-mcq-forge/$jobId': typeof AdminAquaMcqForgeJobIdIndexRoute
   '/german/$courseId/review': typeof GermanCourseIdReviewIndexRoute
 }
 export interface FileRoutesById {
@@ -1314,6 +1322,7 @@ export interface FileRoutesById {
   '/lectures/$courseId/quiz/$quizId': typeof LecturesCourseIdQuizQuizIdRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
+  '/admin/aqua-mcq-forge/$jobId/': typeof AdminAquaMcqForgeJobIdIndexRoute
   '/german/$courseId/review/': typeof GermanCourseIdReviewIndexRoute
 }
 export interface FileRouteTypes {
@@ -1462,6 +1471,7 @@ export interface FileRouteTypes {
     | '/lectures/$courseId/quiz/$quizId'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
+    | '/admin/aqua-mcq-forge/$jobId/'
     | '/german/$courseId/review/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -1558,7 +1568,6 @@ export interface FileRouteTypes {
     | '/summaries'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
-    | '/admin/aqua-mcq-forge/$jobId'
     | '/admin/aqua-mcq-gen/approval'
     | '/admin/events/$eventId'
     | '/admin/german/$courseId'
@@ -1597,6 +1606,7 @@ export interface FileRouteTypes {
     | '/lectures/$courseId/quiz/$quizId'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
+    | '/admin/aqua-mcq-forge/$jobId'
     | '/german/$courseId/review'
   id:
     | '__root__'
@@ -1743,6 +1753,7 @@ export interface FileRouteTypes {
     | '/lectures/$courseId/quiz/$quizId'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
+    | '/admin/aqua-mcq-forge/$jobId/'
     | '/german/$courseId/review/'
   fileRoutesById: FileRoutesById
 }
@@ -2793,6 +2804,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RuGuidesSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/aqua-mcq-forge/$jobId/': {
+      id: '/admin/aqua-mcq-forge/$jobId/'
+      path: '/'
+      fullPath: '/admin/aqua-mcq-forge/$jobId/'
+      preLoaderRoute: typeof AdminAquaMcqForgeJobIdIndexRouteImport
+      parentRoute: typeof AdminAquaMcqForgeJobIdRoute
+    }
     '/admin/aqua-mcq-forge/$jobId/import': {
       id: '/admin/aqua-mcq-forge/$jobId/import'
       path: '/import'
@@ -2984,12 +3002,14 @@ const StudyHubRouteWithChildren = StudyHubRoute._addFileChildren(
 interface AdminAquaMcqForgeJobIdRouteChildren {
   AdminAquaMcqForgeJobIdImportRoute: typeof AdminAquaMcqForgeJobIdImportRoute
   AdminAquaMcqForgeJobIdReviewRoute: typeof AdminAquaMcqForgeJobIdReviewRoute
+  AdminAquaMcqForgeJobIdIndexRoute: typeof AdminAquaMcqForgeJobIdIndexRoute
 }
 
 const AdminAquaMcqForgeJobIdRouteChildren: AdminAquaMcqForgeJobIdRouteChildren =
   {
     AdminAquaMcqForgeJobIdImportRoute: AdminAquaMcqForgeJobIdImportRoute,
     AdminAquaMcqForgeJobIdReviewRoute: AdminAquaMcqForgeJobIdReviewRoute,
+    AdminAquaMcqForgeJobIdIndexRoute: AdminAquaMcqForgeJobIdIndexRoute,
   }
 
 const AdminAquaMcqForgeJobIdRouteWithChildren =
