@@ -122,9 +122,26 @@ function parseJson(text: string): any {
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
   if (start >= 0 && end > start) raw = raw.slice(start, end + 1);
-  // Strip control characters except newline (\u000a), carriage return (\u000d), and tab (\u0009)
-  raw = raw.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]+/g, " ").replace(/,\s*([}\]])/g, "$1");
-  return JSON.parse(raw);
+  // Escape raw line breaks/tabs inside string values (keeps multi-line statements), drop other control chars.
+  let out = "";
+  let inStr = false;
+  let esc = false;
+  for (const ch of raw) {
+    if (inStr) {
+      if (esc) { out += ch; esc = false; continue; }
+      if (ch === "\\") { out += ch; esc = true; continue; }
+      if (ch === '"') { inStr = false; out += ch; continue; }
+      if (ch === "\n") { out += "\\n"; continue; }
+      if (ch === "\r") continue;
+      if (ch === "\t") { out += "\\t"; continue; }
+      if (ch < " ") { out += " "; continue; }
+      out += ch;
+    } else {
+      if (ch === '"') inStr = true;
+      out += ch < " " && ch !== "\n" && ch !== "\r" && ch !== "\t" ? " " : ch;
+    }
+  }
+  return JSON.parse(out.replace(/,\s*([}\]])/g, "$1"));
 }
 
 function dupHash(stem: string): string {
