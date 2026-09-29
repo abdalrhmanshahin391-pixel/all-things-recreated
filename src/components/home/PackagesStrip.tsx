@@ -47,7 +47,8 @@ export const homePackagesQuery = queryOptions({
 });
 
 export function PackagesStrip() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isAr = (i18n.language || "").startsWith("ar");
   const { data } = useQuery(homePackagesQuery);
   const packages = data?.packages ?? [];
   const courseCounts = data?.courseCounts ?? {};
