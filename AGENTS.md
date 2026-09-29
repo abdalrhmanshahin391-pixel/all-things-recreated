@@ -103,12 +103,13 @@ First inspect the existing codebase and determine:
 
 ### PHASE 2 — CLARIFY
 If important requirements are ambiguous, ask questions BEFORE creating the implementation plan.
-- Prefer structured questions.
-- Use multiple-choice questions when possible.
-- For requirements that cannot reasonably be represented as multiple choice, ask an open-ended question.
-- Do not ask questions whose answers can be determined reliably by inspecting the existing codebase.
-- Do not ask unnecessary questions.
-- Ask only questions that could materially change the implementation.
+**Question Style Guidelines:**
+- **Batch Concisely**: Prefer 2–5 concise questions grouped together rather than asking one question at a time.
+- **Multiple-Choice**: Use for decisions with predictable options. Provide clear options, include "Other" when appropriate, and explain briefly why the decision matters when it is not obvious.
+- **Open-Ended**: Use when the user needs to describe a custom requirement.
+- **Product-Level Framing**: Do not overwhelm the user with technical questions. Translate technical decisions into product-level choices whenever possible.
+- **Only Essential Questions**: Do not ask questions whose answers can be determined reliably by inspecting the existing codebase. Ask only questions that could materially change the implementation.
+
 
 ### PHASE 3 — PROPOSE
 After all important requirements are clear, create an implementation plan.
