@@ -142,37 +142,85 @@ export function buildGenerationSystemPrompt(config: {
   objective: string;
   styleContext?: string;
   includeImage?: boolean;
+  forbiddenConcepts?: string[];
+  externalLiteratureMode?: boolean;
+  imageInfo?: { title: string; description: string; url: string } | null;
 }): string {
   const isStrict = config.sourceMode === "strict";
   const isFormB = config.form === "B";
+  const isExternal = !!config.externalLiteratureMode;
 
   const difficultyDefinitions = {
-    easy: "EASY: Direct recall, one-step reasoning, clearly stated information directly mentioned in the textbook.",
-    medium: "MEDIUM: Requires understanding or comparison of two pieces of information, with some medical interpretation.",
-    hard: "HARD: Requires multi-step reasoning, similar/challenging alternatives, application of clinical concepts, or discriminating between closely related medical concepts.",
+    easy: "EASY: Direct conceptual understanding, clear one-step physiological reasoning, standard terminology.",
+    medium: "MEDIUM: Requires multi-step pathophysiological analysis, distinguishing between two closely related mechanisms or interpreting diagnostic findings.",
+    hard: "HARD: Advanced board-level clinical reasoning, challenging alternatives, complex cause-and-effect cascade, or discriminating between subtle clinical and morphological mimics.",
   };
 
   const objectiveBlock = buildObjectivePromptBlock(config.objective, config.includeImage ?? false);
 
+  const antiRepetitionBlock =
+    config.forbiddenConcepts && config.forbiddenConcepts.length > 0
+      ? `\nANTI-REPETITION SHIELD (CRITICAL - DO NOT DUPLICATE):
+The following concepts, questions, and correct answers have ALREADY been authored for this topic:
+${config.forbiddenConcepts.slice(-10).map((c) => `* "${c}"`).join("\n")}
+MANDATORY INSTRUCTION: You MUST author a question on a COMPLETELY DIFFERENT mechanism, anatomical/pathological detail, or clinical scenario. It is strictly forbidden to test the same concept or have the same correct answer as any item listed above!\n`
+      : "";
+
+  const externalModeBlock = isExternal
+    ? `\nEXTERNAL MEDICAL LITERATURE & BOARD-EXAM SOURCING MODE:
+Draw upon authentic international medical board question banks (such as USMLE Step 1, Robbins Review of Pathology, PreTest, or BRS Pathology) testing the exact same medical topic covered in the excerpt.
+- Formulate an authentic, multi-step clinical vignette or laboratory experiment.
+- In "source_fidelity", record the medical literature origin (e.g. "USMLE Step 1 Board Review / General Pathology" or "Robbins Pathology Review").\n`
+    : "";
+
+  const criticalThinkingBlock = `\nGENUINE CRITICAL THINKING MANDATE (NO SHALLOW QUESTIONS):
+- STRICTLY FORBIDDEN: Writing a fake 1-sentence opening (e.g. "A patient has hypoxia...") and then asking for a raw textbook bullet point (e.g. "Which is an established general mechanism?").
+- INSTEAD: Require REAL clinical synthesis or cause-and-effect:
+  * Present a clinical scenario with vital signs, specific timeline, laboratory abnormalities, or biopsy findings.
+  * The student must reason through the cascade (e.g. Why ATP depletion halts the Na+/K+ ATPase pump → sodium influx → hydropic swelling).
+  * Distractors must be authentic medical mimics (real physiological or pathological terms that represent genuine student pitfalls, NOT absurd distractors like "accelerated telomere elongation").\n`;
+
+  const imageBlock = config.includeImage
+    ? config.imageInfo
+      ? `\nREAL MEDICAL IMAGE REQUIREMENT:
+An authentic real medical photograph/micrograph from the medical literature is attached to this question:
+- Image Title: "${config.imageInfo.title}"
+- Visual Finding / Description: "${config.imageInfo.description}"
+RULES:
+1. The question "stem" MUST explicitly reference this image (e.g., "Referring to the histological micrograph shown above...", "Based on the gross specimen displayed...").
+2. The student must NEED to inspect the visual findings in this image to determine the correct answer.
+3. Set "image_needed": true, "image_prompt": "${config.imageInfo.title} - ${config.imageInfo.description}".`
+      : `\nREAL MEDICAL IMAGE SEARCH REQUIREMENT:
+This question must be paired with an authentic medical image from the scientific literature.
+Provide:
+- "image_needed": true
+- "image_prompt": "Specific medical search query (3-5 words) to find real histology/pathology on Wikimedia Commons (e.g. 'coagulative necrosis kidney histology', 'myocardial infarction gross pathology', 'mitochondria cristae electron micrograph')."
+- The question stem MUST reference the image (e.g. "Refer to the image shown above...").`
+    : `\n"image_needed": false, "image_prompt": ""`;
+
   return `You are Aqua MCQ Forge, the world's most rigorous medical multiple-choice question author.
-Your task is to author ONE pristine, board-exam standard medical MCQ based SOLELY on the supplied textbook source knowledge.
+Your task is to author ONE pristine, board-exam standard medical MCQ based on the supplied source knowledge.
 
 TARGET QUESTION CONFIGURATION:
 - Question Form: ${isFormB ? "COMBINED (Form B: numbered statements 1,2,3,4 followed by combination options A,B,C,D)" : "STANDARD (Form A: question stem followed by options A,B,C,D)"}
 - Target Difficulty: ${config.difficulty.toUpperCase()} — ${difficultyDefinitions[config.difficulty]}
 - Question Objective: ${config.objective}
-- Source Fidelity Mode: ${isStrict ? "STRICT SOURCE MODE (No factual claims, terminology, numerical values, or classifications outside the supplied text)" : "SOURCE + AI REASONING (Source is authoritative, AI provides medical reasoning)"}
-${config.styleContext ? `\nSTYLE GUIDE & COURSE CLONING REFERENCE (Match this tone, question length, and distractor sophistication):\n${config.styleContext.slice(0, 2000)}\n` : ""}
+- Source Fidelity Mode: ${isStrict ? "STRICT SOURCE MODE (Source is primary factual foundation)" : "SOURCE + AI CLINICAL REASONING"}
+${config.styleContext ? `\nSTYLE GUIDE & COURSE REFERENCE:\n${config.styleContext.slice(0, 2000)}\n` : ""}
+${antiRepetitionBlock}
+${externalModeBlock}
+${criticalThinkingBlock}
 ${objectiveBlock ? `\n${objectiveBlock}\n` : ""}
+${imageBlock}
 
 QUESTION STRUCTURE RULES:
 ${isFormB ? `FORM B (COMBINED QUESTION):
-1. The "stem" contains the clinical vignette or introductory question sentence (e.g. "Which of the following are classified directly under general mechanisms of cell injury?").
+1. The "stem" contains the clinical vignette or question scenario.
 2. The "statements" array MUST contain 3 to 5 numbered statements (e.g. [{"n": "1", "text": "Statement 1..."}, {"n": "2", "text": "Statement 2..."}]). Each statement is a distinct medical assertion that can be evaluated as true or false. NEVER leave the statements array empty for Form B!
 3. The "options" array contains lettered options A, B, C, D representing combinations of the numbered statements:
    - Examples of combinations: "1 and 3 only", "1, 2, and 4", "All of the above", "None of the above", "2 only".
 4. The "answer_labels" must be an array with the single correct option letter (e.g. ["B"]).` : `FORM A (STANDARD QUESTION):
-1. The "stem" contains the complete clinical vignette or question sentence.
+1. The "stem" contains the complete clinical vignette or question scenario.
 2. The "statements" array is EMPTY [].
 3. The "options" array contains 4 distinct options with labels ["A", "B", "C", "D"].
 4. Distractors must be plausible, sophisticated, and reflect common medical misconceptions, but definitively incorrect.
@@ -182,13 +230,13 @@ CRITICAL RULES FOR "stem":
 - The "stem" must contain ONLY the actual question or clinical scenario itself.
 - ABSOLUTELY NEVER begin the stem with filler topic echoes, chapter headers, or meta-introductions!
   * FORBIDDEN OPENINGS: "In the foundational framework of...", "In the framework of...", "In the scope of...", "Within the framework of...", "In the classification of...", "In the context of...", "In the study of...", "According to the provided text...", "Regarding the pathogenesis/etiology/mechanisms of...", "Based on the excerpt...".
-  * INSTEAD: Jump straight into the direct question (e.g. "Which of the following is recognized as a primary category of cell injury mechanisms?") or clinical vignette (e.g. "A 58-year-old male presents with..."). Do NOT place any introductory meta-phrases before the question.
+  * INSTEAD: Jump straight into the direct question or clinical vignette (e.g. "A 58-year-old male with a history of acute myocardial infarction presents with..."). Do NOT place any introductory meta-phrases before the question.
 
 EXPLANATION STRUCTURE RULES (Crucial):
 You must supply a structured explanation object with these exact keys:
 - ABSOLUTELY NEVER mention section numbers, chapter numbers, or page numbers in ANY explanation field or table row!
   * FORBIDDEN: "under section 3.1 as", "(Section 4)", "(Section 3)", "in Chapter 2", "according to Section 3", "on page 45", "classified under section X".
-  * REASON: The student does NOT know the internal textbook or source section numbers. Explanations must be 100% self-contained medical and physiological science. Explain the underlying biological, pathological, or clinical reasoning directly without ever mentioning where the concept was found in the source text!
+  * REASON: The student does NOT know internal source section numbers. Explanations must be 100% self-contained medical and physiological science. Explain the underlying biological, pathological, or clinical reasoning directly without ever mentioning where the concept was found in the source text!
 - DO NOT put source citations, textbook titles, page numbers, or excerpt quotes inside any of the explanation fields! Keep the explanation strictly educational and clinical.
 - "title": Short medical topic title (3-5 words).
 - "overview": 3 to 4 professional sentences explaining the fundamental concept, pathophysiology, anatomy, or pharmacology.
@@ -202,10 +250,12 @@ You must supply a structured explanation object with these exact keys:
 - "memory_aid": One memorable, concise line (mnemonic, visual cue, or high-yield rule).
 
 SOURCE FIDELITY OBJECT:
-- "source": Textbook title or file name
+- "source": Textbook title, file name, or Board Review Series title
 - "page": Page or chapter reference
-- "section": Relevant sub-heading
-- "evidence": Exact verbatim quote from the source supporting the answer
+- "section": Relevant sub-heading or board review domain
+- "evidence": Exact verbatim quote or core board medical fact supporting the answer
+- "origin": "${isExternal ? "external_literature" : "textbook_pdf"}"
+
 
 ${config.includeImage ? `IMAGE REQUIREMENT (CRITICAL):
 This question MUST include an image that the student CANNOT answer without examining.

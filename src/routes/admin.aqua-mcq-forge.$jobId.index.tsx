@@ -22,8 +22,10 @@ import {
   FileText,
   ExternalLink,
   Zap,
+  Globe,
   Image as ImageIcon,
 } from "lucide-react";
+
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { guardRedirect } from "@/lib/guard-redirect";
@@ -759,8 +761,36 @@ function AquaMcqForgeStudio() {
 
                   </div>
 
+                  {/* External Medical Literature & Web Questions */}
+                  <div className="space-y-3 p-4 rounded-xl border border-slate-200 bg-slate-50">
+                    <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div>
+                        <Label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <Globe size={14} className="text-indigo-600" /> External Web &amp; Book Sourced Questions
+                        </Label>
+                        <p className="text-slate-500 mt-0.5">
+                          How many questions should be sourced &amp; adapted from medical board question banks (USMLE Step 1, Robbins, PreTest) on this topic?
+                          Set to 0 to only synthesize from the uploaded PDF text.
+                        </p>
+                      </div>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={500}
+                        className="w-20 h-8 text-sm text-center font-bold border-indigo-300 focus:ring-indigo-500"
+                        value={job.external_questions_count ?? 0}
+                        onChange={async (e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          await updateJob({ data: { jobId, patch: { external_questions_count: val } } });
+                          await refresh();
+                        }}
+                      />
+                    </div>
+                  </div>
+
                   {/* Difficulty Ratios */}
                   <div className="space-y-4 p-4 rounded-xl border border-slate-200 bg-slate-50">
+
                     <div className="flex justify-between items-center">
                       <Label className="text-xs font-bold uppercase tracking-wider text-slate-700">Difficulty Ratios</Label>
                       <span className="text-xs font-mono font-bold text-indigo-600">
