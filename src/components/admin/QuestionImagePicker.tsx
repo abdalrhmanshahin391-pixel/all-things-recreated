@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { ImageIcon, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { QuestionImage } from "@/components/quiz/QuestionImage";
-import { deleteQuestionImage, uploadQuestionImage } from "@/lib/question-image";
+import { uploadQuestionImage } from "@/lib/question-image";
 
 /** Lets an admin attach one picture to a question (stored privately). */
 export function QuestionImagePicker({
@@ -19,10 +19,9 @@ export function QuestionImagePicker({
     if (!file) return;
     setBusy(true);
     try {
-      const previous = path;
+      // The old picture is only deleted after the question is saved.
       const next = await uploadQuestionImage(file);
       onChange(next);
-      await deleteQuestionImage(previous);
     } catch (e: any) {
       toast.error(e?.message ?? "Could not upload that picture.");
     } finally {
@@ -32,9 +31,7 @@ export function QuestionImagePicker({
   }
 
   async function remove() {
-    const previous = path;
     onChange(null);
-    await deleteQuestionImage(previous);
   }
 
   return (

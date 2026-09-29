@@ -33,7 +33,8 @@ export function cleanQuestionPreamble(stem: string | null | undefined): string {
   const metaOpeningRegex =
     /^(?:In|Within|Under|Regarding|Concerning|With respect to|In terms of|According to|Based on|As described in|Referring to)\s+(?:the\s+)?[^,?:;]+[,\-:;]\s*(?=(?:which|what|how|why|when|where|who|identify|select|name)\b)/i;
 
-  const match = s.match(metaOpeningRegex);
+  // Disabled: stripping generic "In X, which…" clauses removed clinical context students need.
+  const match = false as boolean ? s.match(metaOpeningRegex) : null;
   if (match && !isClinicalVignette(match[0])) {
     s = s.slice(match[0].length).trim();
     if (s.length > 0) {
