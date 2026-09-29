@@ -79,3 +79,10 @@ Before modifying any code:
 1. **Inspect First**: Locate and inspect all relevant routes, components, server functions, database queries, and styling.
 2. **Explain What Was Found**: Clearly explain how the current system behaves, what existing components/APIs already exist, the root causes or missing integrations, and the intended multi-layer approach.
 3. **No Coding Without Full Understanding**: Ensure the system's architecture, data contracts, and edge cases are completely understood before touching code.
+
+## Visual Design & UI Consistency Standard
+**The current website is the source of truth for visual design.**
+When adding or modifying features:
+- **Match Existing Design**: Match existing spacing, typography, colors, theme variables, component primitives (Radix UI / Shadcn buttons, dialogs, inputs, sliders, badges), Framer Motion animations, responsive behavior, and interaction patterns.
+- **No Unsolicited Redesigns**: Do not redesign or alter the visual appearance of existing pages, layouts, cards, or components unless explicitly requested.
+- **Seamless Integration**: Every new feature or control must feel native and completely indistinguishable from the rest of the AquaQbank platform.
