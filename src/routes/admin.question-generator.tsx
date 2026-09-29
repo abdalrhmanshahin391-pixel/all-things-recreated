@@ -220,6 +220,8 @@ function QuestionGeneratorPage() {
   const [runResult, setRunResult] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [failedBatches, setFailedBatches] = useState<Batch[]>([]);
   const [askSolve, setAskSolve] = useState(false);
+  // True after a transcribe-only run until answers are written (answers are placeholders).
+  const [detectPending, setDetectPending] = useState(false);
   const [solving, setSolving] = useState(false);
   
 
@@ -762,7 +764,7 @@ function QuestionGeneratorPage() {
             : `${added} question${added === 1 ? "" : "s"} added. Total ready for review: ${collected.length}.`,
       });
       toast.success(`Done — ${added} new question(s).`);
-      if (runMode === "detect") setAskSolve(true);
+      if (runMode === "detect") { setAskSolve(true); setDetectPending(true); }
     }
   }
 
@@ -829,6 +831,7 @@ function QuestionGeneratorPage() {
         solved += Math.min(back.length, group.length);
         logLine(`Answered ${Math.min(back.length, group.length)} question(s).`, "ok");
       }
+      setDetectPending(false);
       setRunResult({ kind: "ok", text: `${solved} question(s) answered with explanations.` });
       toast.success(`Answered ${solved} question(s).`);
     } catch (e) {
@@ -886,6 +889,10 @@ function QuestionGeneratorPage() {
     const chosen = items.filter((i) => i.selected);
     if (!subjectId) { toast.error("Pick a course, section and subject first."); return; }
     if (!chosen.length) { toast.error("Select at least one question."); return; }
+    if (detectPending && chosen.some((i) => !String(i.correct_explanation ?? "").trim())) {
+      toast.error("These questions were only detected — their answers are placeholders. Solve them (or write an explanation for each) before saving.");
+      return;
+    }
     setSaving(true);
     let saved = 0;
     let duplicates = 0;

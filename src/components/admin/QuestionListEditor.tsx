@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { QuestionImagePicker } from "@/components/admin/QuestionImagePicker";
+import { deleteQuestionImage } from "@/lib/question-image";
 import { AMG_MODELS, amgRewriteSubjectExplanations } from "@/lib/aqua-mcq-gen.functions";
 import { Button } from "@/components/ui/button";
 import { formatQuestionStem } from "@/lib/question-format";
@@ -484,6 +485,7 @@ export function EditQuestionDialog({
           answerMode: multi ? "multiple" : "single",
           options: clean.map((option) => ({ text: option.text.trim(), isCorrect: !!option.is_correct })),
         });
+        if (question.image_url !== imagePath) void deleteQuestionImage(question.image_url);
         toast.success("Question updated.");
         onSaved();
         return;
@@ -513,6 +515,8 @@ export function EditQuestionDialog({
       const { error: insErr } = await (supabase.from as any)("question_options").insert(rows);
       if (insErr) throw insErr;
 
+      // Only now is it safe to remove a replaced/removed picture.
+      if (question.image_url !== imagePath) void deleteQuestionImage(question.image_url);
       toast.success("Question updated.");
       onSaved();
     } catch (e: any) {

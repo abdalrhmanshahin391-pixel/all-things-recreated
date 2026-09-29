@@ -43,7 +43,8 @@ export const exportSectionQuestionsForNotebookLmServerFn = createServerFn({ meth
     return data;
   })
   .handler(async ({ data }) => {
-    const { supabaseAdmin } = await resolveCallerUser();
+    const { supabaseAdmin, isAdmin } = await resolveCallerUser();
+    if (!isAdmin) throw new Error("Only admins can export section questions.");
 
     // 1. Fetch course info
     const { data: course, error: cErr } = await (supabaseAdmin.from("courses") as any)

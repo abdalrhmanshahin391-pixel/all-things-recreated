@@ -425,6 +425,7 @@ function Page() {
             </div>
 
             <SortCard
+              key={job.id}
               mode={(job.sort_mode as string) || "none"}
               topics={Array.isArray(job.sort_topics) ? (job.sort_topics as string[]) : []}
               locked={stage === "solving" || solvedCount > 0}

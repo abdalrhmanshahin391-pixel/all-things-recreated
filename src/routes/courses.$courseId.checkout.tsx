@@ -224,6 +224,11 @@ function CheckoutPage() {
           setOpening(false);
           return;
         }
+        // A free coupon was already redeemed (once) inside handleApplyCoupon.
+        if ((validated.price_after ?? total) <= 0) {
+          setOpening(false);
+          return;
+        }
         currentTotal = validated.price_after ?? total;
         activeCode = validated.code;
       }

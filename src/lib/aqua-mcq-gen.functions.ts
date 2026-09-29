@@ -122,9 +122,26 @@ function parseJson(text: string): any {
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
   if (start >= 0 && end > start) raw = raw.slice(start, end + 1);
-  // Strip control characters except newline (\u000a), carriage return (\u000d), and tab (\u0009)
-  raw = raw.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]+/g, " ").replace(/,\s*([}\]])/g, "$1");
-  return JSON.parse(raw);
+  // Escape raw line breaks/tabs inside string values (keeps multi-line statements), drop other control chars.
+  let out = "";
+  let inStr = false;
+  let esc = false;
+  for (const ch of raw) {
+    if (inStr) {
+      if (esc) { out += ch; esc = false; continue; }
+      if (ch === "\\") { out += ch; esc = true; continue; }
+      if (ch === '"') { inStr = false; out += ch; continue; }
+      if (ch === "\n") { out += "\\n"; continue; }
+      if (ch === "\r") continue;
+      if (ch === "\t") { out += "\\t"; continue; }
+      if (ch < " ") { out += " "; continue; }
+      out += ch;
+    } else {
+      if (ch === '"') inStr = true;
+      out += ch < " " && ch !== "\n" && ch !== "\r" && ch !== "\t" ? " " : ch;
+    }
+  }
+  return JSON.parse(out.replace(/,\s*([}\]])/g, "$1"));
 }
 
 function dupHash(stem: string): string {
@@ -272,7 +289,14 @@ export const amgListGroups = createServerFn({ method: "GET" })
     const { data: groups } = await supabase.from(GROUPS).select("*").order("created_at", { ascending: false });
     const list = groups ?? [];
     if (!list.length) return [];
-    const { data: items } = await supabase.from(ITEMS).select("group_id, status, flagged, archived");
+    const items: any[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data: page, error } = await supabase.from(ITEMS)
+        .select("id, group_id, status, flagged, archived").order("id").range(from, from + 999);
+      if (error) throw new Error(error.message);
+      items.push(...(page ?? []));
+      if (!page || page.length < 1000) break;
+    }
     return list.map((g: any) => {
       const all = (items ?? []).filter((i: any) => i.group_id === g.id);
       const mine = all.filter((i: any) => !i.archived);
@@ -669,14 +693,18 @@ export const amgRestoreGroupItems = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = await ensureAdmin(context);
-    const { data: rows, error: readErr } = await supabase.from(ITEMS)
-      .select("*").eq("group_id", data.groupId).eq("archived", true);
-    if (readErr) throw new Error(readErr.message);
-    const list = rows ?? [];
+    const list: any[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data: page, error: readErr } = await supabase.from(ITEMS)
+        .select("*").eq("group_id", data.groupId).eq("archived", true).order("id").range(from, from + 999);
+      if (readErr) throw new Error(readErr.message);
+      list.push(...(page ?? []));
+      if (!page || page.length < 1000) break;
+    }
     if (!list.length) throw new Error("There is nothing to bring back for this group.");
 
     const now = new Date().toISOString();
-    for (const item of list) {
+    const patches = list.map((item: any) => {
       const o: any = item.orig ?? {};
       const patch: any = {
         archived: false,
@@ -696,8 +724,15 @@ export const amgRestoreGroupItems = createServerFn({ method: "POST" })
         updated_at: now,
       };
       patch.dup_hash = dupHash(String(patch.stem ?? ""));
-      const { error } = await supabase.from(ITEMS).update(patch).eq("id", item.id);
-      if (error) throw new Error(error.message);
+      return { id: item.id as string, patch };
+    });
+    // Restore in parallel batches so large groups don't time out.
+    for (let i = 0; i < patches.length; i += 25) {
+      const res = await Promise.all(
+        patches.slice(i, i + 25).map((p) => supabase.from(ITEMS).update(p.patch).eq("id", p.id)),
+      );
+      const bad = res.find((r) => r.error);
+      if (bad?.error) throw new Error(bad.error.message);
     }
 
     await supabase.from(GROUPS).update({ status: "review" }).eq("id", data.groupId);

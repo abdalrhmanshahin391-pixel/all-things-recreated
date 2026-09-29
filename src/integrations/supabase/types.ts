@@ -1604,6 +1604,7 @@ export type Database = {
           published: boolean
           questions_count_final: number
           questions_count_mid: number
+          semester: number | null
           show_on_home: boolean
           subjects_count: number
           title: string
@@ -1637,6 +1638,7 @@ export type Database = {
           published?: boolean
           questions_count_final?: number
           questions_count_mid?: number
+          semester?: number | null
           show_on_home?: boolean
           subjects_count?: number
           title: string
@@ -1670,6 +1672,7 @@ export type Database = {
           published?: boolean
           questions_count_final?: number
           questions_count_mid?: number
+          semester?: number | null
           show_on_home?: boolean
           subjects_count?: number
           title?: string
@@ -3676,6 +3679,7 @@ export type Database = {
           group_size: number
           id: string
           name: string
+          original_price: number | null
           package_type: Database["public"]["Enums"]["package_type"]
           paddle_price_id: string | null
           price: number
@@ -3690,6 +3694,7 @@ export type Database = {
           group_size?: number
           id?: string
           name: string
+          original_price?: number | null
           package_type?: Database["public"]["Enums"]["package_type"]
           paddle_price_id?: string | null
           price?: number
@@ -3704,6 +3709,7 @@ export type Database = {
           group_size?: number
           id?: string
           name?: string
+          original_price?: number | null
           package_type?: Database["public"]["Enums"]["package_type"]
           paddle_price_id?: string | null
           price?: number
@@ -4642,10 +4648,13 @@ export type Database = {
       }
       site_settings: {
         Row: {
+          about_sentence_ar: string | null
+          about_sentence_en: string | null
           brand_style: string
           committee_default_storage: string
           committee_qr_link: string | null
           committee_qr_path: string | null
+          committee_team_visible: boolean
           header_style: string
           id: boolean
           logo_url: string | null
@@ -4681,10 +4690,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          about_sentence_ar?: string | null
+          about_sentence_en?: string | null
           brand_style?: string
           committee_default_storage?: string
           committee_qr_link?: string | null
           committee_qr_path?: string | null
+          committee_team_visible?: boolean
           header_style?: string
           id?: boolean
           logo_url?: string | null
@@ -4720,10 +4732,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          about_sentence_ar?: string | null
+          about_sentence_en?: string | null
           brand_style?: string
           committee_default_storage?: string
           committee_qr_link?: string | null
           committee_qr_path?: string | null
+          committee_team_visible?: boolean
           header_style?: string
           id?: boolean
           logo_url?: string | null
@@ -6132,6 +6147,7 @@ export type Database = {
         Args: { _phone: string; _username: string }
         Returns: Json
       }
+      is_committee_en: { Args: { _user_id: string }; Returns: boolean }
       is_lecture_staff: {
         Args: { _course_id: string; _user_id: string }
         Returns: boolean

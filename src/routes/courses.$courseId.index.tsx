@@ -725,7 +725,7 @@ function CourseDetailPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 sm:gap-3">
-                        <button
+                        {isAdmin && <button
                           type="button"
                           title="Copy section questions for NotebookLM (without answers)"
                           onClick={(e) => {
@@ -736,7 +736,7 @@ function CourseDetailPage() {
                         >
                           <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
                           <span>NotebookLM</span>
-                        </button>
+                        </button>}
                         <span className="hidden sm:inline-flex text-[11px] font-bold uppercase tracking-wider text-muted-foreground bg-muted rounded-full px-2.5 py-1">
                           {items.length} {items.length === 1 ? "subject" : "subjects"}
                         </span>

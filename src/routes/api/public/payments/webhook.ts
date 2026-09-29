@@ -63,20 +63,17 @@ async function handleTransactionCompleted(event: any, env: PaddleEnv) {
       ? customData.selectedCourseIds.filter(Boolean)
       : [];
 
-    let courseIds: string[] = [];
-    if (selectedCourseIds.length > 0) {
-      courseIds = selectedCourseIds;
-    } else {
-      // Fetch fixed courses configured in this package
-      const { data: links, error: linkErr } = await (supabase.from("package_courses") as any)
-        .select("course_id")
-        .eq("package_id", packageId);
-      if (linkErr) {
-        console.error("Failed to load package_courses", linkErr);
-        throw linkErr;
-      }
-      courseIds = ((links ?? []) as any[]).map((l) => l.course_id);
+    const { data: links, error: linkErr } = await (supabase.from("package_courses") as any)
+      .select("course_id")
+      .eq("package_id", packageId);
+    if (linkErr) {
+      console.error("Failed to load package_courses", linkErr);
+      throw linkErr;
     }
+    const linked = ((links ?? []) as any[]).map((l) => l.course_id as string);
+    // Only honour picks that actually belong to this package.
+    const courseIds: string[] =
+      selectedCourseIds.length > 0 ? linked.filter((id) => selectedCourseIds.includes(id)) : linked;
 
     if (courseIds.length === 0) {
       console.warn("Package has no courses; nothing to grant", { packageId });
