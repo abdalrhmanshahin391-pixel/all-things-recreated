@@ -664,6 +664,7 @@ function AdminCourseLessonsPage() {
             </Link>
             <Link
               to="/admin/lectures"
+              search={{ courseId: "" }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shadow-sm"
             >
               Lectures Hub
