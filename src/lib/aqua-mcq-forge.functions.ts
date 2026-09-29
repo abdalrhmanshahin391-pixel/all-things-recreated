@@ -345,9 +345,6 @@ export const amfListJobs = createServerFn({ method: "GET" })
           dup_threshold: meta.dup_threshold ?? 87,
           include_images: meta.include_images ?? false,
           image_count: meta.image_count ?? 0,
-          image_target_count: meta.image_target_count ?? meta.image_count ?? 0,
-          external_questions_count: meta.external_questions_count ?? 0,
-          objective_ratios: meta.objective_ratios ?? {},
           source_fidelity_enabled: meta.source_fidelity_enabled ?? true,
         };
       });
@@ -553,9 +550,6 @@ export async function fetchJobData(supabase: any, jobId: string) {
       include_images: meta.include_images ?? false,
       image_frequency: meta.image_frequency ?? "auto",
       image_count: meta.image_count ?? 0,
-      image_target_count: meta.image_target_count ?? meta.image_count ?? 0,
-      external_questions_count: meta.external_questions_count ?? 0,
-      objective_ratios: meta.objective_ratios ?? {},
       source_fidelity_enabled: meta.source_fidelity_enabled ?? true,
     };
 
@@ -688,10 +682,8 @@ export const amfUpdateJob = createServerFn({ method: "POST" })
     const { supabase } = await ensureStaff(context);
 
     // Try amf_jobs
-    try {
-      const { data: row, error: jErr } = await supabase.from(JOBS).update(data.patch).eq("id", data.jobId).select("*").maybeSingle();
-      if (!jErr && row) return row;
-    } catch {}
+    const { data: row } = await supabase.from(JOBS).update(data.patch).eq("id", data.jobId).select("*").maybeSingle();
+    if (row) return row;
 
     // Fallback to amg_groups
     const { data: gRow } = await supabase.from(AMG_GROUPS).select("*").eq("id", data.jobId).maybeSingle();
@@ -701,12 +693,11 @@ export const amfUpdateJob = createServerFn({ method: "POST" })
         meta = JSON.parse(gRow.instructions || "{}");
       } catch {}
       const newMeta = { ...meta, ...data.patch };
-      const { error: upErr } = await supabase
+      await supabase
         .from(AMG_GROUPS)
         .update({ instructions: JSON.stringify(newMeta), updated_at: new Date().toISOString() })
         .eq("id", data.jobId);
-      if (upErr) throw new Error(upErr.message);
-      return { ...gRow, ...newMeta, id: data.jobId };
+      return { ...gRow, ...newMeta };
     }
 
     return { ok: true };
