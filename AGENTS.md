@@ -108,7 +108,7 @@ If important requirements are ambiguous, ask questions BEFORE creating the imple
 - **Multiple-Choice**: Use for decisions with predictable options. Provide clear options, include "Other" when appropriate, and explain briefly why the decision matters when it is not obvious.
 - **Open-Ended**: Use when the user needs to describe a custom requirement.
 - **Product-Level Framing**: Do not overwhelm the user with technical questions. Translate technical decisions into product-level choices whenever possible.
-- **Only Essential Questions**: Do not ask questions whose answers can be determined reliably by inspecting the existing codebase. Ask only questions that could materially change the implementation.
+- **Strict Codebase Investigation First**: **Never ask the user about something that can be determined by inspecting the repository.** Inspect the database schema, routes, components, utilities, and configuration files first. Ask only questions about genuinely unspecified product behavior or business preferences that materially change the implementation.
 
 
 ### PHASE 3 — PROPOSE
