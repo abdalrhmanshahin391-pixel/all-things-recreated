@@ -129,6 +129,7 @@ function AdminCourseLessonsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [options, setOptions] = useState<QOption[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isStaff, setIsStaff] = useState<boolean | null>(null);
 
   // Overview editor states
@@ -182,94 +183,119 @@ function AdminCourseLessonsPage() {
       .eq("course_id", courseId)
       .eq("user_id", user.id)
       .maybeSingle()
-      .then(({ data }) => {
-        if (!data) guardRedirect(navigate);
-        else setIsStaff(true);
+      .then(({ data, error }) => {
+        if (error || !data) {
+          toast.error("You do not have staff permission for this course.");
+          guardRedirect(navigate);
+        } else {
+          setIsStaff(true);
+        }
       });
   }, [loading, user, isAdmin, isRealAdmin, courseId, navigate]);
 
   // Load Course and Syllabus data
   async function loadData() {
     setLoadingData(true);
-    const { data: cData, error: cErr } = await supabase
-      .from("courses")
-      .select(
-        "id,title,year,semester,published,university_id,price,image_url,intro_image_url,intro_video_url,intro_video_storage_path,intro_free",
-      )
-      .eq("id", courseId)
-      .maybeSingle();
-
-    if (cErr || !cData) {
-      toast.error("Could not find this lecture course");
-      setLoadingData(false);
-      return;
-    }
-
-    const loadedCourse = cData as unknown as Course;
-    setCourse(loadedCourse);
-    setIntroVideoUrl(loadedCourse.intro_video_url ?? "");
-    setIntroImageUrl(loadedCourse.intro_image_url ?? "");
-    setIntroFree(loadedCourse.intro_free ?? true);
-    setPublished(loadedCourse.published ?? false);
-
-    resolveCourseImageUrl(loadedCourse.intro_image_url || loadedCourse.image_url).then((url) => {
-      setResolvedPosterUrl(url);
-    });
-
-    // Load subjects
-    const { data: subs } = await (supabase.from as any)("lecture_subjects")
-      .select("id,course_id,title,position,hidden")
-      .eq("course_id", courseId)
-      .order("position");
-    const subList = (subs ?? []) as Subject[];
-    setSubjects(subList);
-
-    if (subList.length > 0) {
-      const { data: its } = await (supabase.from as any)("lecture_items")
+    setLoadError(null);
+    try {
+      const { data: cData, error: cErr } = await supabase
+        .from("courses")
         .select(
-          "id,subject_id,kind,title,position,video_url,video_storage_path,pdf_url,pdf_storage_path,link_url,is_free",
+          "id,title,year,published,university_id,price,image_url,intro_image_url,intro_video_url,intro_video_storage_path,intro_free",
         )
-        .in(
-          "subject_id",
-          subList.map((s) => s.id),
-        )
+        .eq("id", courseId)
+        .maybeSingle();
+
+      if (cErr) {
+        console.error("loadData course error:", cErr);
+        toast.error(cErr.message || "Could not load this lecture course");
+        setLoadError(cErr.message || "Failed to load course");
+        setLoadingData(false);
+        return;
+      }
+
+      if (!cData) {
+        toast.error("Could not find this lecture course");
+        setLoadError("Course not found in database");
+        setLoadingData(false);
+        return;
+      }
+
+      const loadedCourse = cData as unknown as Course;
+      setCourse(loadedCourse);
+      setIntroVideoUrl(loadedCourse.intro_video_url ?? "");
+      setIntroImageUrl(loadedCourse.intro_image_url ?? "");
+      setIntroFree(loadedCourse.intro_free ?? true);
+      setPublished(loadedCourse.published ?? false);
+
+      resolveCourseImageUrl(loadedCourse.intro_image_url || loadedCourse.image_url).then((url) => {
+        setResolvedPosterUrl(url);
+      });
+
+      // Load subjects
+      const { data: subs, error: subsErr } = await (supabase.from as any)("lecture_subjects")
+        .select("id,course_id,title,position,hidden")
+        .eq("course_id", courseId)
         .order("position");
-      const itList = (its ?? []) as Item[];
-      setItems(itList);
+      if (subsErr) console.warn("Error loading subjects:", subsErr);
+      const subList = (subs ?? []) as Subject[];
+      setSubjects(subList);
 
-      const allItemIds = itList.map((i) => i.id);
-      if (allItemIds.length > 0) {
-        const { data: qz } = await (supabase.from as any)("lecture_quizzes")
-          .select("id,item_id")
-          .in("item_id", allItemIds);
-        const qzList = (qz ?? []) as Quiz[];
-        setQuizzes(qzList);
+      if (subList.length > 0) {
+        const { data: its, error: itsErr } = await (supabase.from as any)("lecture_items")
+          .select(
+            "id,subject_id,kind,title,position,video_url,video_storage_path,pdf_url,pdf_storage_path,link_url,is_free",
+          )
+          .in(
+            "subject_id",
+            subList.map((s) => s.id),
+          )
+          .order("position");
+        if (itsErr) console.warn("Error loading items:", itsErr);
+        const itList = (its ?? []) as Item[];
+        setItems(itList);
 
-        if (qzList.length > 0) {
-          const { data: qs } = await (supabase.from as any)("lecture_quiz_questions")
-            .select("id,quiz_id,position,prompt,explanation,published")
-            .in(
-              "quiz_id",
-              qzList.map((q) => q.id),
-            )
-            .order("position");
-          const qsList = (qs ?? []) as Question[];
-          setQuestions(qsList);
+        const allItemIds = itList.map((i) => i.id);
+        if (allItemIds.length > 0) {
+          const { data: qz, error: qzErr } = await (supabase.from as any)("lecture_quizzes")
+            .select("id,item_id")
+            .in("item_id", allItemIds);
+          if (qzErr) console.warn("Error loading quizzes:", qzErr);
+          const qzList = (qz ?? []) as Quiz[];
+          setQuizzes(qzList);
 
-          if (qsList.length > 0) {
-            const { data: ops } = await (supabase.from as any)("lecture_quiz_options")
-              .select("id,question_id,position,body,is_correct")
+          if (qzList.length > 0) {
+            const { data: qs, error: qsErr } = await (supabase.from as any)("lecture_quiz_questions")
+              .select("id,quiz_id,position,prompt,explanation,published")
               .in(
-                "question_id",
-                qsList.map((q) => q.id),
+                "quiz_id",
+                qzList.map((q) => q.id),
               )
               .order("position");
-            setOptions((ops ?? []) as QOption[]);
+            if (qsErr) console.warn("Error loading quiz questions:", qsErr);
+            const qsList = (qs ?? []) as Question[];
+            setQuestions(qsList);
+
+            if (qsList.length > 0) {
+              const { data: ops, error: opsErr } = await (supabase.from as any)("lecture_quiz_options")
+                .select("id,question_id,position,body,is_correct")
+                .in(
+                  "question_id",
+                  qsList.map((q) => q.id),
+                )
+                .order("position");
+              if (opsErr) console.warn("Error loading quiz options:", opsErr);
+              setOptions((ops ?? []) as QOption[]);
+            }
           }
         }
       }
+    } catch (err: any) {
+      console.error("loadData error:", err);
+      setLoadError(err?.message || "Failed to load course syllabus data");
+    } finally {
+      setLoadingData(false);
     }
-    setLoadingData(false);
   }
 
   useEffect(() => {
@@ -631,13 +657,44 @@ function AdminCourseLessonsPage() {
     loadData();
   }
 
-  if (loadingData || !course) {
+  if (loadingData && !course) {
     return (
       <div className="min-h-screen bg-background text-foreground">
         <SiteHeader />
         <div className="pt-32 flex flex-col items-center justify-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">Loading course syllabus manager…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!course) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <SiteHeader />
+        <div className="pt-32 flex flex-col items-center justify-center gap-4 text-center px-4 max-w-md mx-auto">
+          <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-200">
+            <X size={24} />
+          </div>
+          <h2 className="text-lg font-bold text-foreground">Course Not Found</h2>
+          <p className="text-sm text-muted-foreground">
+            {loadError || "Could not load this lecture course. It may not exist or permissions may be missing."}
+          </p>
+          <div className="flex gap-3 mt-2">
+            <button
+              onClick={() => loadData()}
+              className="px-4 py-2 rounded-md border border-border text-sm font-semibold hover:bg-muted"
+            >
+              Try Again
+            </button>
+            <Link
+              to="/admin/lectures"
+              className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90"
+            >
+              Back to Lecture Courses
+            </Link>
+          </div>
         </div>
       </div>
     );

@@ -6,10 +6,12 @@ export function IntroVideoModal({
   src,
   title,
   onClose,
+  watermark = false,
 }: {
   src: string | null;
   title?: string;
   onClose: () => void;
+  watermark?: boolean;
 }) {
   const { user, profile } = useAuth();
 
@@ -108,24 +110,26 @@ export function IntroVideoModal({
           />
         )}
 
-        {/* Forensic Watermark Overlay across the video */}
-        <div
-          className="absolute inset-0 pointer-events-none select-none z-20 overflow-hidden flex flex-col justify-around py-4"
-          aria-hidden="true"
-        >
-          <div className="flex justify-around opacity-20 text-[11px] sm:text-xs font-mono font-bold text-white -rotate-12 tracking-widest whitespace-nowrap">
-            <span>{watermarkText}</span>
-            <span className="hidden sm:inline">{watermarkText}</span>
+        {/* Forensic Watermark Overlay across the video (only for enrolled lecture videos) */}
+        {watermark && (
+          <div
+            className="absolute inset-0 pointer-events-none select-none z-20 overflow-hidden flex flex-col justify-around py-4"
+            aria-hidden="true"
+          >
+            <div className="flex justify-around opacity-20 text-[11px] sm:text-xs font-mono font-bold text-white -rotate-12 tracking-widest whitespace-nowrap">
+              <span>{watermarkText}</span>
+              <span className="hidden sm:inline">{watermarkText}</span>
+            </div>
+            <div className="flex justify-around opacity-25 text-[11px] sm:text-xs font-mono font-bold text-white -rotate-12 tracking-widest whitespace-nowrap">
+              <span className="hidden sm:inline">{watermarkText}</span>
+              <span>{watermarkText}</span>
+            </div>
+            <div className="flex justify-around opacity-20 text-[11px] sm:text-xs font-mono font-bold text-white -rotate-12 tracking-widest whitespace-nowrap">
+              <span>{watermarkText}</span>
+              <span className="hidden sm:inline">{watermarkText}</span>
+            </div>
           </div>
-          <div className="flex justify-around opacity-25 text-[11px] sm:text-xs font-mono font-bold text-white -rotate-12 tracking-widest whitespace-nowrap">
-            <span className="hidden sm:inline">{watermarkText}</span>
-            <span>{watermarkText}</span>
-          </div>
-          <div className="flex justify-around opacity-20 text-[11px] sm:text-xs font-mono font-bold text-white -rotate-12 tracking-widest whitespace-nowrap">
-            <span>{watermarkText}</span>
-            <span className="hidden sm:inline">{watermarkText}</span>
-          </div>
-        </div>
+        )}
       </div>
 
       {title && (

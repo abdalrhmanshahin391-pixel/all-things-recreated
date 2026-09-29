@@ -115,7 +115,7 @@ function AdminLecturesPage() {
   async function loadCourses(staffIds: string[]) {
     let q = supabase
       .from("courses")
-      .select("id,title,year,semester,published,university_id,intro_video_url,intro_video_storage_path,intro_free")
+      .select("id,title,year,published,university_id,intro_video_url,intro_video_storage_path,intro_free")
       .eq("kind", "lectures")
       .order("year")
       .order("title");
