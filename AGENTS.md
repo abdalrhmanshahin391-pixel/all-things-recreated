@@ -72,3 +72,10 @@ Before writing any code, systematically identify and implement all affected laye
 7. **End-to-End Verification**: Full TypeScript type checking (`npx tsc --noEmit`), route integrity, and error recovery.
 
 Never stop at superficial UI changes when backend, persistence, or data pipelines are involved. Deliver complete, end-to-end features every time.
+
+## Mandatory Inspection & Explanation Step
+**Never start coding before inspecting the existing implementation and explaining what was found.**
+Before modifying any code:
+1. **Inspect First**: Locate and inspect all relevant routes, components, server functions, database queries, and styling.
+2. **Explain What Was Found**: Clearly explain how the current system behaves, what existing components/APIs already exist, the root causes or missing integrations, and the intended multi-layer approach.
+3. **No Coding Without Full Understanding**: Ensure the system's architecture, data contracts, and edge cases are completely understood before touching code.
