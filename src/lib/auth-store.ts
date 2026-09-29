@@ -14,6 +14,7 @@ export type AuthSnapshot = {
   user: User | null;
   profile: Profile | null;
   isRealAdmin: boolean;
+  isTeacher: boolean;
   isCommittee: boolean;
   isCommitteeEn: boolean;
   isCommitteeAr: boolean;
@@ -29,6 +30,7 @@ const EMPTY: AuthSnapshot = {
   user: null,
   profile: null,
   isRealAdmin: false,
+  isTeacher: false,
   isCommittee: false,
   isCommitteeEn: false,
   isCommitteeAr: false,
@@ -61,10 +63,11 @@ function emit(next: Partial<AuthSnapshot>) {
 async function loadExtras(uid: string) {
   if (extrasFor === uid) return;
   extrasFor = uid;
-  const [{ data: prof }, { data: roles }, { data: committeeEnContent }] = await Promise.all([
+  const [{ data: prof }, { data: roles }, { data: committeeEnContent }, { data: teacherContent }] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", uid),
     (supabase.from as any)("site_content").select("value_en").eq("key", "committee_en_user_ids").maybeSingle(),
+    (supabase.from as any)("site_content").select("value_en").eq("key", "teacher_user_ids").maybeSingle(),
   ]);
   // A newer auth event may have landed while we were fetching.
   if (snapshot.user?.id !== uid) return;
@@ -79,6 +82,15 @@ async function loadExtras(uid: string) {
     } catch {}
   }
 
+  let persistentTeacher = false;
+  if (teacherContent?.value_en) {
+    try {
+      const ids = JSON.parse(teacherContent.value_en);
+      if (Array.isArray(ids) && ids.includes(uid)) persistentTeacher = true;
+    } catch {}
+  }
+
+  const isTeacher = persistentTeacher || list.some((r) => r.role === "teacher");
   const isCommitteeAr = list.some((r) => r.role === "committee");
   const isCommitteeEn = persistentCommitteeEn || list.some((r) => r.role === "committee_en");
   const isCommitteeHead = list.some((r) => r.role === "committee_head");
@@ -87,6 +99,7 @@ async function loadExtras(uid: string) {
   emit({
     profile: (prof as Profile | null) ?? null,
     isRealAdmin: list.some((r) => r.role === "admin"),
+    isTeacher,
     isCommittee,
     isCommitteeEn,
     isCommitteeAr,
@@ -112,7 +125,7 @@ function start() {
     if (!uid) {
       extrasFor = null;
       extrasLoaded.clear();
-      emit({ session: null, user: null, profile: null, isRealAdmin: false, isCommittee: false, isCommitteeEn: false, isCommitteeAr: false, isCommitteeHead: false, isGolden: false, isQa: false, loading: false });
+      emit({ session: null, user: null, profile: null, isRealAdmin: false, isTeacher: false, isCommittee: false, isCommitteeEn: false, isCommitteeAr: false, isCommitteeHead: false, isGolden: false, isQa: false, loading: false });
       return;
     }
     emit({ session: s, user: s?.user ?? null, loading: !extrasLoaded.has(uid) });

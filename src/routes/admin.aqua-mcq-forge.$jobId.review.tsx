@@ -20,6 +20,8 @@ import {
   Quote,
   ShieldCheck,
   BookOpen,
+  Globe,
+  Trash2,
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
@@ -46,8 +48,10 @@ import {
   amfListItems,
   amfUpdateItem,
   amfSetItemsStatus,
+  amfPurgeDuplicates,
 } from "@/lib/aqua-mcq-forge.functions";
 import { formatQuestionStem, ensureCombinedStemWithStatements } from "@/lib/question-format";
+
 import { stripSourceCitation } from "@/lib/aqua-mcq-forge.explanation";
 
 export const Route = createFileRoute("/admin/aqua-mcq-forge/$jobId/review")({
@@ -72,11 +76,27 @@ function AquaMcqForgeReview() {
   const listItems = useServerFn(amfListItems);
   const updateItem = useServerFn(amfUpdateItem);
   const setItemsStatus = useServerFn(amfSetItemsStatus);
+  const purgeDuplicatesFn = useServerFn(amfPurgeDuplicates);
 
   const [job, setJob] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [topics, setTopics] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+
+  async function handlePurgeDuplicates() {
+    if (!confirm("Are you sure you want to permanently delete all duplicate and rejected questions?")) return;
+    try {
+      setBusy(true);
+      await purgeDuplicatesFn({ data: { jobId } });
+      toast.success("Duplicate and rejected questions have been purged.");
+      await refresh();
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to purge duplicates.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [topicFilter, setTopicFilter] = useState<string>("all");
 
@@ -204,6 +224,15 @@ function AquaMcqForgeReview() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
+              onClick={handlePurgeDuplicates}
+              disabled={busy || items.length === 0}
+              variant="outline"
+              className="border-rose-300 text-rose-700 hover:bg-rose-50 gap-1.5 text-xs font-bold"
+            >
+              <Trash2 size={14} /> Purge Duplicates
+            </Button>
+
+            <Button
               onClick={handleBulkApprove}
               disabled={busy || items.length === 0}
               variant="outline"
@@ -221,6 +250,7 @@ function AquaMcqForgeReview() {
               </Button>
             </Link>
           </div>
+
         </div>
 
         {/* Filters */}
@@ -337,6 +367,17 @@ function AquaMcqForgeReview() {
                           {item.objective}
                         </Badge>
 
+                        {item.source_fidelity?.origin === "external_literature" ? (
+                          <Badge className="bg-purple-100 text-purple-800 border-purple-300 gap-1 text-[11px] font-bold">
+                            <Globe size={11} /> Board / Web Literature
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-slate-100 text-slate-700 border-slate-300 gap-1 text-[11px] font-bold">
+                            <BookOpen size={11} /> Textbook PDF
+                          </Badge>
+                        )}
+
+
                         {/* Deduplication similarity score */}
                         {item.dup_score > 0 && (
                           <span className="text-[11px] font-mono text-slate-400">
@@ -436,15 +477,24 @@ function AquaMcqForgeReview() {
                   <CardContent className="space-y-5 pt-4">
                     {/* Image illustration if present */}
                     {item.has_image && item.image_url && (
-                      <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-100 max-w-sm mx-auto">
-                        <img src={item.image_url} alt="Medical Question Illustration" className="w-full h-auto object-contain" />
+                      <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-100 max-w-md mx-auto shadow-sm">
+                        <img
+                          src={item.image_url}
+                          alt="Medical Literature Reference"
+                          className="w-full h-auto object-contain max-h-80 bg-white"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLElement).style.display = "none";
+                          }}
+                        />
                         {item.image_prompt && (
-                          <div className="p-2 text-[11px] text-slate-500 italic bg-white border-t border-slate-100">
-                            Illustration: {item.image_prompt}
+                          <div className="p-2 text-[11px] text-slate-600 bg-white border-t border-slate-100 flex items-center justify-between gap-2">
+                            <span className="truncate">Reference: {item.image_prompt}</span>
+                            <span className="text-[10px] font-bold text-indigo-600 shrink-0">Wikimedia Verified</span>
                           </div>
                         )}
                       </div>
                     )}
+
 
                     {/* Question Stem */}
                     <div className="text-base font-semibold text-slate-900 leading-relaxed whitespace-pre-wrap">

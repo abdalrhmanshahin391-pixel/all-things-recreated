@@ -72,11 +72,13 @@ type Course = {
   price: number;
   kind: string;
   image_url: string | null;
+  intro_image_url?: string | null;
   published: boolean;
   intro_video_url: string | null;
   intro_video_storage_path: string | null;
   intro_free: boolean;
 };
+
 
 type Subject = { id: string; title: string; position: number; hidden?: boolean };
 type Item = {
@@ -141,7 +143,7 @@ function LectureCoursePage() {
       setLoading(true);
       const { data } = await supabase
         .from("courses")
-        .select("id,title,year,price,kind,image_url,published,intro_video_url,intro_video_storage_path,intro_free")
+        .select("id,title,year,price,kind,image_url,intro_image_url,published,intro_video_url,intro_video_storage_path,intro_free")
         .eq("id", courseId)
         .maybeSingle();
       if (cancelled) return;
@@ -151,7 +153,9 @@ function LectureCoursePage() {
         return;
       }
       setCourse(c);
-      if (c?.image_url) resolveCourseImageUrl(c.image_url).then((u) => !cancelled && setCoverUrl(u));
+      const coverPath = c?.intro_image_url || c?.image_url;
+      if (coverPath) resolveCourseImageUrl(coverPath).then((u) => !cancelled && setCoverUrl(u));
+
 
       const { data: subs } = await (supabase.from as any)("lecture_subjects")
         .select("id,title,position,hidden")
@@ -450,12 +454,13 @@ function LectureCoursePage() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Link
-                to="/admin/lectures"
-                search={{ courseId }}
+                to="/admin/lectures/$courseId"
+                params={{ courseId }}
                 className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90"
               >
                 Topics &amp; lessons →
               </Link>
+
               <Link
                 to="/admin/lecture-centre"
                 className="px-4 py-2 rounded-md border border-border text-sm font-semibold hover:border-accent"
