@@ -33,6 +33,8 @@ export interface SyncPaddlePriceInput {
   price: number;
   currency?: string;
   environment?: PaddleEnv;
+  /** When false, never save the price onto the course (used for one-off coupon prices). */
+  persist?: boolean;
 }
 
 /**
@@ -118,7 +120,7 @@ export const syncPaddleCoursePrice = createServerFn({ method: "POST" })
           );
         });
         if (matchingPrice) {
-          if (data.courseId) {
+          if (data.courseId && data.persist !== false) {
             const supabase = getAdminSupabase();
             await (supabase.from("courses") as any)
               .update({ paddle_price_id: matchingPrice.id })
@@ -160,7 +162,7 @@ export const syncPaddleCoursePrice = createServerFn({ method: "POST" })
     }
 
     // 4. Update the course in Supabase if courseId was supplied
-    if (data.courseId) {
+    if (data.courseId && data.persist !== false) {
       try {
         const supabase = getAdminSupabase();
         await (supabase.from("courses") as any)
@@ -436,16 +438,32 @@ export const verifyAndFulfillTransaction = createServerFn({ method: "POST" })
         .select("course_id")
         .eq("package_id", packageId);
 
-      const courseIds = ((links ?? []) as any[]).map((l) => l.course_id);
+      const linked = ((links ?? []) as any[]).map((l) => l.course_id as string);
+      const picked: string[] = Array.isArray((customData as any).selectedCourseIds)
+        ? (customData as any).selectedCourseIds.filter(Boolean)
+        : [];
+      // "Pick any N" packages: only grant the courses the student chose (and only ones in the package).
+      const courseIds = picked.length > 0 ? linked.filter((id) => picked.includes(id)) : linked;
+      const { data: meta } = courseIds.length
+        ? await (adminDb.from("courses") as any).select("id, kind").in("id", courseIds)
+        : { data: [] };
+      const kind = new Map<string, string>(((meta ?? []) as any[]).map((c) => [c.id, c.kind || "questions"]));
       const grantees = Array.from(new Set([userId, ...memberIds.filter(Boolean)]));
-      const rows: Array<{ user_id: string; course_id: string }> = [];
+      const qRows: Array<{ user_id: string; course_id: string }> = [];
+      const lRows: Array<{ user_id: string; course_id: string }> = [];
       for (const uid of grantees) {
         for (const cid of courseIds) {
-          rows.push({ user_id: uid, course_id: cid });
+          (kind.get(cid) === "lectures" ? lRows : qRows).push({ user_id: uid, course_id: cid });
         }
       }
-      if (rows.length > 0) {
-        await (adminDb.from("user_courses") as any).upsert(rows, {
+      if (qRows.length > 0) {
+        await (adminDb.from("user_courses") as any).upsert(qRows, {
+          onConflict: "user_id,course_id",
+          ignoreDuplicates: true,
+        });
+      }
+      if (lRows.length > 0) {
+        await (adminDb.from("user_lecture_courses") as any).upsert(lRows, {
           onConflict: "user_id,course_id",
           ignoreDuplicates: true,
         });
@@ -581,9 +599,22 @@ export const resolvePaddleCheckoutPrice = createServerFn({ method: "POST" })
         typeof c.paddle_price_id === "string" &&
         c.paddle_price_id.startsWith("pri_")
       ) {
-        return { paddlePriceId: c.paddle_price_id };
+        // Make sure the saved price still charges the listed amount (repairs old coupon overwrites).
+        let matches = true;
+        try {
+          const pr = await gatewayFetch(env, `/prices/${c.paddle_price_id}`);
+          if (pr.ok) {
+            const pj: any = await pr.json();
+            const amt = Number(pj?.data?.unit_price?.amount);
+            if (Number.isFinite(amt) && amt !== Math.round(originalPrice * 100)) matches = false;
+          }
+        } catch {
+          /* keep stored price if lookup fails */
+        }
+        if (matches) return { paddlePriceId: c.paddle_price_id };
       }
     }
+    const isCoupon = !!data.couponCode && Math.abs(finalPrice - originalPrice) >= 0.01;
 
     // If discounted, sync a price matching the discounted amount
     const discountedTitle = data.couponCode
@@ -597,6 +628,7 @@ export const resolvePaddleCheckoutPrice = createServerFn({ method: "POST" })
         price: finalPrice,
         currency: data.currency || "USD",
         environment: env,
+        persist: !isCoupon,
       },
     });
 
