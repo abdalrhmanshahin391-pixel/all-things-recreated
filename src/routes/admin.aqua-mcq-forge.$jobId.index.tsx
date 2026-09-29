@@ -24,8 +24,6 @@ import {
   Zap,
   Globe,
   Image as ImageIcon,
-  Check,
-  RotateCcw,
 } from "lucide-react";
 
 import { SiteHeader } from "@/components/SiteHeader";
@@ -106,32 +104,6 @@ function AquaMcqForgeStudio() {
       setBusy(false);
     }
   }, [getJob, jobId]);
-
-  const patchJobQuietly = useCallback(
-    async (patch: Record<string, any>) => {
-      setJob((prev: any) => ({ ...prev, ...patch }));
-      try {
-        await updateJob({ data: { jobId, patch } });
-      } catch (err: any) {
-        toast.error(err?.message || "Failed to update setting");
-      }
-    },
-    [updateJob, jobId],
-  );
-
-  const patchTopicQuietly = useCallback(
-    async (topicId: string, patch: Record<string, any>) => {
-      setTopics((prev: any[]) =>
-        prev.map((t) => (t.id === topicId ? { ...t, ...patch } : t)),
-      );
-      try {
-        await updateTopic({ data: { topicId, patch } });
-      } catch (err: any) {
-        toast.error(err?.message || "Failed to update topic setting");
-      }
-    },
-    [updateTopic],
-  );
 
   useEffect(() => {
     void refresh();
@@ -582,8 +554,9 @@ function AquaMcqForgeStudio() {
                               <div className="flex items-center gap-2">
                                 <Switch
                                   checked={t.enabled}
-                                  onCheckedChange={(val) => {
-                                    patchTopicQuietly(t.id, { enabled: val });
+                                  onCheckedChange={async (val) => {
+                                    await updateTopic({ data: { topicId: t.id, patch: { enabled: val } } });
+                                    await refresh();
                                   }}
                                 />
                                 <span className="font-bold text-sm text-slate-900">{t.name}</span>
@@ -599,23 +572,12 @@ function AquaMcqForgeStudio() {
                                     type="number"
                                     min={0}
                                     max={50}
-                                    className="w-14 h-7 text-xs text-center p-1 bg-white"
+                                    className="w-14 h-7 text-xs text-center p-1"
                                     value={t.min_questions}
-                                    onChange={(e) => {
-                                      const raw = e.target.value;
-                                      const val = raw === "" ? 0 : parseInt(raw, 10);
-                                      setTopics((prev: any[]) =>
-                                        prev.map((item) => (item.id === t.id ? { ...item, min_questions: isNaN(val) ? 0 : val } : item)),
-                                      );
-                                    }}
-                                    onBlur={() => {
-                                      patchTopicQuietly(t.id, { min_questions: t.min_questions });
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        patchTopicQuietly(t.id, { min_questions: t.min_questions });
-                                        (e.target as HTMLInputElement).blur();
-                                      }
+                                    onChange={async (e) => {
+                                      const val = parseInt(e.target.value) || 0;
+                                      await updateTopic({ data: { topicId: t.id, patch: { min_questions: val } } });
+                                      await refresh();
                                     }}
                                   />
                                 </div>
@@ -625,23 +587,12 @@ function AquaMcqForgeStudio() {
                                     type="number"
                                     min={1}
                                     max={50}
-                                    className="w-14 h-7 text-xs text-center p-1 bg-white"
+                                    className="w-14 h-7 text-xs text-center p-1"
                                     value={t.target_questions}
-                                    onChange={(e) => {
-                                      const raw = e.target.value;
-                                      const val = raw === "" ? 1 : parseInt(raw, 10);
-                                      setTopics((prev: any[]) =>
-                                        prev.map((item) => (item.id === t.id ? { ...item, target_questions: isNaN(val) ? 1 : val } : item)),
-                                      );
-                                    }}
-                                    onBlur={() => {
-                                      patchTopicQuietly(t.id, { target_questions: t.target_questions });
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        patchTopicQuietly(t.id, { target_questions: t.target_questions });
-                                        (e.target as HTMLInputElement).blur();
-                                      }
+                                    onChange={async (e) => {
+                                      const val = parseInt(e.target.value) || 1;
+                                      await updateTopic({ data: { topicId: t.id, patch: { target_questions: val } } });
+                                      await refresh();
                                     }}
                                   />
                                 </div>
@@ -769,21 +720,12 @@ function AquaMcqForgeStudio() {
                             type="number"
                             min={0}
                             max={500}
-                            className="w-20 h-8 text-sm text-center font-bold border-indigo-300 focus:ring-indigo-500 bg-white"
+                            className="w-20 h-8 text-sm text-center font-bold border-indigo-300 focus:ring-indigo-500"
                             value={job.image_target_count ?? 0}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              const val = raw === "" ? 0 : parseInt(raw, 10);
-                              setJob((prev: any) => ({ ...prev, image_target_count: isNaN(val) ? 0 : val }));
-                            }}
-                            onBlur={() => {
-                              patchJobQuietly({ image_target_count: job.image_target_count ?? 0 });
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                patchJobQuietly({ image_target_count: job.image_target_count ?? 0 });
-                                (e.target as HTMLInputElement).blur();
-                              }
+                            onChange={async (e) => {
+                              const val = parseInt(e.target.value) || 0;
+                              await updateJob({ data: { jobId, patch: { image_target_count: val } } });
+                              await refresh();
                             }}
                           />
                         </div>
@@ -803,8 +745,9 @@ function AquaMcqForgeStudio() {
                                       ? "bg-indigo-600 text-white text-xs h-7 font-bold"
                                       : "text-xs h-7 border-slate-300"
                                   }
-                                  onClick={() => {
-                                    patchJobQuietly({ image_frequency: mode });
+                                  onClick={async () => {
+                                    await updateJob({ data: { jobId, patch: { image_frequency: mode } } });
+                                    await refresh();
                                   }}
                                 >
                                   {mode === "every" ? "Every Question" : mode === "half" ? "Every 2nd" : "AI Decides"}
@@ -821,7 +764,7 @@ function AquaMcqForgeStudio() {
                   {/* External Medical Literature & Web Questions */}
                   <div className="space-y-3 p-4 rounded-xl border border-slate-200 bg-slate-50">
                     <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-                      <div className="max-w-md">
+                      <div>
                         <Label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                           <Globe size={14} className="text-indigo-600" /> External Web &amp; Book Sourced Questions
                         </Label>
@@ -830,54 +773,24 @@ function AquaMcqForgeStudio() {
                           Set to 0 to only synthesize from the uploaded PDF text.
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={500}
-                          className="w-24 h-8 text-sm text-center font-bold border-indigo-300 focus:ring-indigo-500 bg-white shadow-xs"
-                          value={job.external_questions_count ?? 0}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            const val = raw === "" ? 0 : parseInt(raw, 10);
-                            setJob((prev: any) => ({ ...prev, external_questions_count: isNaN(val) ? 0 : val }));
-                          }}
-                          onBlur={() => {
-                            patchJobQuietly({ external_questions_count: job.external_questions_count ?? 0 });
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              patchJobQuietly({ external_questions_count: job.external_questions_count ?? 0 });
-                              (e.target as HTMLInputElement).blur();
-                            }
-                          }}
-                        />
-                      </div>
-                    </div>
-                    {/* Quick presets for External Questions */}
-                    <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-200/70">
-                      <span className="text-[11px] text-slate-500 font-semibold mr-1">Quick Select:</span>
-                      {[0, 5, 10, 15, 25, 50].map((cnt) => (
-                        <Button
-                          key={cnt}
-                          type="button"
-                          size="sm"
-                          variant={(job.external_questions_count ?? 0) === cnt ? "default" : "outline"}
-                          className={
-                            (job.external_questions_count ?? 0) === cnt
-                              ? "bg-indigo-600 text-white text-xs h-6 px-2.5 font-bold"
-                              : "text-xs h-6 px-2.5 border-slate-300 bg-white hover:bg-slate-100 text-slate-700"
-                          }
-                          onClick={() => patchJobQuietly({ external_questions_count: cnt })}
-                        >
-                          {cnt === 0 ? "0 (PDF Only)" : `${cnt} Questions`}
-                        </Button>
-                      ))}
+                      <Input
+                        type="number"
+                        min={0}
+                        max={500}
+                        className="w-20 h-8 text-sm text-center font-bold border-indigo-300 focus:ring-indigo-500"
+                        value={job.external_questions_count ?? 0}
+                        onChange={async (e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          await updateJob({ data: { jobId, patch: { external_questions_count: val } } });
+                          await refresh();
+                        }}
+                      />
                     </div>
                   </div>
 
                   {/* Difficulty Ratios */}
                   <div className="space-y-4 p-4 rounded-xl border border-slate-200 bg-slate-50">
+
                     <div className="flex justify-between items-center">
                       <Label className="text-xs font-bold uppercase tracking-wider text-slate-700">Difficulty Ratios</Label>
                       <span className="text-xs font-mono font-bold text-indigo-600">
@@ -889,89 +802,51 @@ function AquaMcqForgeStudio() {
                       <div>
                         <div className="flex justify-between font-semibold mb-1">
                           <span className="text-emerald-700">Easy (Direct Recall, 1-step):</span>
-                          <span className="font-mono font-bold">{job.difficulty_easy}%</span>
+                          <span>{job.difficulty_easy}%</span>
                         </div>
                         <Slider
                           value={[job.difficulty_easy]}
                           min={0}
                           max={100}
                           step={5}
-                          onValueChange={([val]) => {
-                            setJob((prev: any) => ({ ...prev, difficulty_easy: val }));
-                          }}
-                          onValueCommit={([val]) => {
-                            patchJobQuietly({ difficulty_easy: val });
+                          onValueChange={async ([val]) => {
+                            await updateJob({ data: { jobId, patch: { difficulty_easy: val } } });
+                            await refresh();
                           }}
                         />
                       </div>
                       <div>
                         <div className="flex justify-between font-semibold mb-1">
                           <span className="text-amber-700">Medium (Understanding, 2-step):</span>
-                          <span className="font-mono font-bold">{job.difficulty_medium}%</span>
+                          <span>{job.difficulty_medium}%</span>
                         </div>
                         <Slider
                           value={[job.difficulty_medium]}
                           min={0}
                           max={100}
                           step={5}
-                          onValueChange={([val]) => {
-                            setJob((prev: any) => ({ ...prev, difficulty_medium: val }));
-                          }}
-                          onValueCommit={([val]) => {
-                            patchJobQuietly({ difficulty_medium: val });
+                          onValueChange={async ([val]) => {
+                            await updateJob({ data: { jobId, patch: { difficulty_medium: val } } });
+                            await refresh();
                           }}
                         />
                       </div>
                       <div>
                         <div className="flex justify-between font-semibold mb-1">
                           <span className="text-rose-700">Hard (Multi-step Clinical Reasoning):</span>
-                          <span className="font-mono font-bold">{job.difficulty_hard}%</span>
+                          <span>{job.difficulty_hard}%</span>
                         </div>
                         <Slider
                           value={[job.difficulty_hard]}
                           min={0}
                           max={100}
                           step={5}
-                          onValueChange={([val]) => {
-                            setJob((prev: any) => ({ ...prev, difficulty_hard: val }));
-                          }}
-                          onValueCommit={([val]) => {
-                            patchJobQuietly({ difficulty_hard: val });
+                          onValueChange={async ([val]) => {
+                            await updateJob({ data: { jobId, patch: { difficulty_hard: val } } });
+                            await refresh();
                           }}
                         />
                       </div>
-                    </div>
-
-                    {/* Presets for Difficulty */}
-                    <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-200/70">
-                      <span className="text-[11px] text-slate-500 font-semibold mr-1">Presets:</span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-6 px-2 border-slate-300 bg-white hover:bg-slate-100"
-                        onClick={() => patchJobQuietly({ difficulty_easy: 20, difficulty_medium: 50, difficulty_hard: 30 })}
-                      >
-                        ⚖️ Balanced (20/50/30)
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-6 px-2 border-slate-300 bg-white hover:bg-slate-100"
-                        onClick={() => patchJobQuietly({ difficulty_easy: 10, difficulty_medium: 40, difficulty_hard: 50 })}
-                      >
-                        🔥 Hard / USMLE (10/40/50)
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-6 px-2 border-slate-300 bg-white hover:bg-slate-100"
-                        onClick={() => patchJobQuietly({ difficulty_easy: 50, difficulty_medium: 40, difficulty_hard: 10 })}
-                      >
-                        🌱 Beginner (50/40/10)
-                      </Button>
                     </div>
                   </div>
 
@@ -986,11 +861,9 @@ function AquaMcqForgeStudio() {
                       min={50}
                       max={100}
                       step={1}
-                      onValueChange={([val]) => {
-                        setJob((prev: any) => ({ ...prev, dup_threshold: val }));
-                      }}
-                      onValueCommit={([val]) => {
-                        patchJobQuietly({ dup_threshold: val });
+                      onValueChange={async ([val]) => {
+                        await updateJob({ data: { jobId, patch: { dup_threshold: val } } });
+                        await refresh();
                       }}
                     />
                     <p className="text-xs text-slate-500">
@@ -1000,7 +873,7 @@ function AquaMcqForgeStudio() {
 
                   {/* Question Type Ratios */}
                   <div className="space-y-4 p-4 rounded-xl border border-slate-200 bg-slate-50">
-                    <div className="flex flex-wrap justify-between items-start gap-2">
+                    <div className="flex justify-between items-start">
                       <div>
                         <Label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                           <Wand2 size={14} className="text-indigo-600" /> Question Type Ratios
@@ -1010,100 +883,14 @@ function AquaMcqForgeStudio() {
                           Set all to 0 for fully random. Values are relative (auto-normalized).
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded border border-indigo-200">
-                          Total:{" "}
-                          {Object.values(job.objective_ratios ?? {}).reduce(
-                            (a: number, b: unknown) => a + (Number(b) || 0),
-                            0,
-                          )}
-                          %
-                        </span>
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-7 px-3 font-semibold shadow-sm"
-                          onClick={() => {
-                            patchJobQuietly({ objective_ratios: job.objective_ratios ?? {} });
-                            toast.success("Question type ratios saved successfully!");
-                          }}
-                        >
-                          <Check size={13} className="mr-1" /> Save Ratios
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Quick Presets Bar */}
-                    <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-lg bg-white border border-slate-200 text-xs">
-                      <span className="text-[11px] text-slate-500 font-bold mr-1">Presets:</span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-6 px-2 border-slate-300 hover:bg-indigo-50 hover:text-indigo-700"
-                        onClick={() => {
-                          const preset = {
-                            recall: 15,
-                            understanding: 20,
-                            clinical_vignette: 25,
-                            clinical_reasoning: 15,
-                            tricky: 15,
-                            comparison: 10,
-                          };
-                          patchJobQuietly({ objective_ratios: preset });
-                          toast.success("Applied Balanced Mix preset");
-                        }}
-                      >
-                        ⚖️ Balanced Mix
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-6 px-2 border-slate-300 hover:bg-emerald-50 hover:text-emerald-700"
-                        onClick={() => {
-                          const preset = {
-                            clinical_vignette: 40,
-                            clinical_reasoning: 30,
-                            tricky: 15,
-                            identification: 15,
-                          };
-                          patchJobQuietly({ objective_ratios: preset });
-                          toast.success("Applied Clinical Case Focus preset");
-                        }}
-                      >
-                        🏥 Clinical / USMLE Focus
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-6 px-2 border-slate-300 hover:bg-amber-50 hover:text-amber-700"
-                        onClick={() => {
-                          const preset = {
-                            recall: 35,
-                            understanding: 35,
-                            classification: 15,
-                            comparison: 15,
-                          };
-                          patchJobQuietly({ objective_ratios: preset });
-                          toast.success("Applied Foundations & Recall preset");
-                        }}
-                      >
-                        🧠 Foundations &amp; Recall
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="text-xs h-6 px-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 ml-auto"
-                        onClick={() => {
-                          patchJobQuietly({ objective_ratios: {} });
-                          toast.info("Reset all ratios to 0% (AI will auto-balance)");
-                        }}
-                      >
-                        <RotateCcw size={12} className="mr-1" /> Reset All (0%)
-                      </Button>
+                      <span className="text-xs font-mono font-bold text-indigo-600">
+                        Total:{" "}
+                        {Object.values(job.objective_ratios ?? {}).reduce(
+                          (a: number, b: unknown) => a + (Number(b) || 0),
+                          0,
+                        )}
+                        %
+                      </span>
                     </div>
 
                     <div className="space-y-3 text-xs">
@@ -1121,25 +908,20 @@ function AquaMcqForgeStudio() {
                       ].map(({ id, label, color }) => {
                         const currentVal = Number((job.objective_ratios ?? {})[id] ?? 0);
                         return (
-                          <div key={id} className="p-2 rounded-lg bg-white border border-slate-100 shadow-xs">
-                            <div className="flex justify-between font-semibold mb-1.5">
+                          <div key={id}>
+                            <div className="flex justify-between font-semibold mb-1">
                               <span className={color}>{label}:</span>
-                              <span className="font-mono font-bold text-slate-800">{currentVal}%</span>
+                              <span>{currentVal}%</span>
                             </div>
                             <Slider
                               value={[currentVal]}
                               min={0}
                               max={100}
                               step={5}
-                              onValueChange={([val]) => {
-                                setJob((prev: any) => ({
-                                  ...prev,
-                                  objective_ratios: { ...(prev?.objective_ratios ?? {}), [id]: val },
-                                }));
-                              }}
-                              onValueCommit={([val]) => {
+                              onValueChange={async ([val]) => {
                                 const newRatios = { ...(job.objective_ratios ?? {}), [id]: val };
-                                patchJobQuietly({ objective_ratios: newRatios });
+                                await updateJob({ data: { jobId, patch: { objective_ratios: newRatios } } });
+                                await refresh();
                               }}
                             />
                           </div>

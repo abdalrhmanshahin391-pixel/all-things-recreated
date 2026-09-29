@@ -235,10 +235,7 @@ function LectureCoursePage() {
     setVideoLoading(item.id);
     const url = await resolveLectureVideoUrl(item.video_url, item.video_storage_path);
     setVideoLoading(null);
-    if (url) {
-      setActiveVideo({ src: url, title: item.title });
-      setIntroOpen(false);
-    }
+    if (url) setActiveVideo({ src: url, title: item.title });
   }
 
   async function openPdf(item: Item) {
@@ -488,7 +485,6 @@ function LectureCoursePage() {
         <IntroVideoModal
           src={activeVideo.src}
           title={activeVideo.title}
-          watermark={!introOpen}
           onClose={() => {
             setActiveVideo(null);
             setIntroOpen(false);
