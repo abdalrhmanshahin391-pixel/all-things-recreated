@@ -29,6 +29,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { needsOnboarding } from "@/lib/onboarding";
 import { Toaster } from "@/components/ui/sonner";
 import { PrayerNotificationWatcher } from "@/components/prayer/PrayerNotificationWatcher";
+import { IS_MAINTENANCE_MODE } from "@/config/maintenance";
+import { MaintenanceScreen } from "@/components/MaintenanceScreen";
 
 // Language only — the seasonal theme comes from the server-rendered head script
 // so it can never flash a stale value from localStorage.
@@ -105,7 +107,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "AquaQBank Academy — Medical Question Bank & Study Materials" },
+      { title: IS_MAINTENANCE_MODE ? "Under Maintenance — AquaQBank Academy" : "AquaQBank Academy — Medical Question Bank & Study Materials" },
       { name: "description", content: "AquaQBank Academy is the online medical study academy: question banks, past exam questions, video lectures and committee notes, organized by year and course." },
       { name: "author", content: "AquaQBank Academy" },
       { name: "google-site-verification", content: "U9UIGln2ZVhjR6-rfab8T6y0XwmD0zLbLQqcwmBL1Lg" },
@@ -239,6 +241,7 @@ function RootComponent() {
   });
 
   useEffect(() => {
+    if (IS_MAINTENANCE_MODE) return;
     let unsub: (() => void) | undefined;
     (async () => {
       const { supabase } = await import("@/integrations/supabase/client");
@@ -259,6 +262,17 @@ function RootComponent() {
     return () => unsub?.();
   }, [queryClient, router]);
 
+  if (IS_MAINTENANCE_MODE) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <LanguageProvider>
+            <MaintenanceScreen />
+          </LanguageProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
