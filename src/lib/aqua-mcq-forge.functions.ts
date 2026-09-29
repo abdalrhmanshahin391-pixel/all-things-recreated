@@ -223,13 +223,10 @@ async function callOpenAiText(apiKey: string, model: string, system: string, pro
   return json?.choices?.[0]?.message?.content ?? "";
 }
 
-import { searchRealMedicalImage } from "@/lib/wikimedia-images";
-
 /**
- * Real Medical Image Retrieval:
- * Searches Wikimedia Commons for authentic, high-resolution medical histology,
- * pathology specimens, electron micrographs, and anatomical schematics.
- * Completely replaces synthetic AI blobs with genuine scientific medical literature imagery.
+ * Pure AI Image Generation:
+ * Generates an educational medical diagram from scratch using AI image synthesis models (Flux / SDXL via Pollinations AI,
+ * or Imagen / DALL-E if keys are present). Never pulls from Google Search and never crops from the PDF.
  */
 export async function generateMedicalDiagram(
   supabase: any,
@@ -238,17 +235,7 @@ export async function generateMedicalDiagram(
   prompt: string,
   jobId: string,
 ): Promise<string> {
-  // 1. Search authentic medical literature on Wikimedia Commons
-  try {
-    const realImg = await searchRealMedicalImage(prompt);
-    if (realImg?.url) {
-      return realImg.url;
-    }
-  } catch (e) {
-    console.warn("[generateMedicalDiagram] Wikimedia search error:", e);
-  }
-
-  // 2. Try DALL-E 3 if OpenAI provider with high-fidelity scientific prompt
+  // 1. Try DALL-E 3 if OpenAI provider
   if (provider === "openai" && apiKey) {
     try {
       const res = await fetch("https://api.openai.com/v1/images/generations", {
@@ -256,7 +243,7 @@ export async function generateMedicalDiagram(
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: "dall-e-3",
-          prompt: `High precision medical anatomical schematic or histology illustration: ${prompt}. Crisp vector medical board exam diagram, pure white background, annotated.`,
+          prompt: `Medical scientific diagram, textbook educational illustration with clear annotations: ${prompt}. White background, crisp schematic vector style.`,
           n: 1,
           size: "1024x1024",
         }),
@@ -271,11 +258,16 @@ export async function generateMedicalDiagram(
     }
   }
 
-  // Fallback to high-res medical diagram
-  const fallback = await searchRealMedicalImage("cellular injury histology pathology");
-  return fallback?.url || "https://upload.wikimedia.org/wikipedia/commons/4/48/Biological_cell.svg";
-}
+  // 2. High-speed, guaranteed pure AI generation via Flux / SDXL (Pollinations AI)
+  // Generates 100% original medical schematics on the fly
+  const sanitizedPrompt = encodeURIComponent(
+    `medical textbook diagram illustration of ${prompt}, clean white background, high definition anatomical schematic, scientific chart`,
+  );
+  const seed = Math.floor(Math.random() * 9000000) + 1000000;
+  const aiImageUrl = `https://image.pollinations.ai/prompt/${sanitizedPrompt}?width=800&height=600&model=flux&nologo=true&seed=${seed}`;
 
+  return aiImageUrl;
+}
 
 // ================================================================= KEYS =====
 
@@ -401,7 +393,6 @@ export const amfCreateJob = createServerFn({ method: "POST" })
       includeImages: z.boolean().default(false),
       imageCount: z.number().int().min(0).max(100).default(0),
       imageFrequency: z.string().default("auto").optional(),
-      externalQuestionsCount: z.number().int().min(0).max(500).default(0).optional(),
       apiMode: z.enum(["standard", "batch"]).default("standard").optional(),
       sourceFidelityEnabled: z.boolean().default(true),
     }),
@@ -432,8 +423,6 @@ export const amfCreateJob = createServerFn({ method: "POST" })
           dup_threshold: data.dupThreshold,
           include_images: data.includeImages,
           image_count: data.imageCount,
-          image_target_count: data.imageCount,
-          external_questions_count: data.externalQuestionsCount || 0,
           source_fidelity_enabled: data.sourceFidelityEnabled,
           status: "draft",
           created_by: userId,
@@ -445,7 +434,6 @@ export const amfCreateJob = createServerFn({ method: "POST" })
     } catch {
       // fallback
     }
-
 
     // 2. Resilient fallback to amg_groups
     const metaPayload = {
@@ -945,9 +933,8 @@ function selectQuotaObjective(
   const totalExisting = existingObjectives.length || 1;
 
   // Find the objective furthest below its target ratio
-  let bestObjective: string = allObjectiveIds[0];
+  let bestObjective = allObjectiveIds[0];
   let bestDeficit = -Infinity;
-
 
   for (const [obj, targetPct] of Object.entries(normalizedRatios)) {
     if (targetPct <= 0) continue;
@@ -994,31 +981,20 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
 
     const apiKey = await getKey(supabase, job.provider);
 
-    // Existing items — collect objectives, stems and answers for quota & anti-repetition tracking
+    // Existing items — also collect objectives for quota tracking
     let existingItems: any[] = [];
     const { data: amfItems } = await supabase
       .from(ITEMS)
-      .select("stem, topic_id, objective, answer_labels, options, raw_explanation, source_fidelity")
+      .select("stem, topic_id, objective")
       .eq("job_id", data.jobId);
     if (amfItems) {
       existingItems = amfItems;
     } else {
-      const { data: amgItems } = await supabase.from(AMG_ITEMS).select("stem, options, answer_labels, explanation").eq("group_id", data.jobId);
+      const { data: amgItems } = await supabase.from(AMG_ITEMS).select("stem").eq("group_id", data.jobId);
       existingItems = amgItems ?? [];
     }
 
     const existingStems = existingItems.map((i: any) => String(i.stem ?? ""));
-    const existingAnswers: string[] = [];
-    for (const it of existingItems) {
-      if (Array.isArray(it.options) && Array.isArray(it.answer_labels)) {
-        for (const opt of it.options) {
-          if (it.answer_labels.includes(opt.label) && opt.text) {
-            existingAnswers.push(opt.text.trim());
-          }
-        }
-      }
-    }
-
     // Track objectives of existing questions for quota-based selection
     const existingObjectives: string[] = existingItems.map((i: any) => String(i.objective ?? "")).filter(Boolean);
     // Track how many image questions already exist
@@ -1032,7 +1008,6 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
       existingImageCount = count ?? 0;
     }
 
-
     let generatedCount = 0;
     const failures: string[] = [];
     const authoredItems: any[] = [];
@@ -1045,20 +1020,15 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
     for (let step = 0; step < data.batchSize; step++) {
       const selectedTopic = activeTopics[step % activeTopics.length];
 
-      // Sequential document-wide chunk traversal: NEVER repeat the same 3 pages!
+      // Relevant text chunk for this topic or sequential chunk across the whole book
       const topicKeywords = selectedTopic.name.toLowerCase().split(" ").filter((w: string) => w.length > 3);
       const matchingChunks = allChunks.filter((chunk: string) =>
         topicKeywords.some((kw: string) => chunk.toLowerCase().includes(kw)),
       );
-      const pool = matchingChunks.length > 0 ? matchingChunks : allChunks;
-      // Advance through pool so every question gets a different slice of the document
-      const startIndex = (existingStems.length + step * 2) % Math.max(1, pool.length);
-      const chunksSelected = [
-        pool[startIndex],
-        pool[(startIndex + 1) % pool.length],
-        pool[(startIndex + 2) % pool.length],
-      ].filter(Boolean);
-      const textToUse = chunksSelected.join("\n\n").slice(0, 24000);
+      const chunkIdx = (existingStems.length + step) % Math.max(1, allChunks.length);
+      const textToUse = (matchingChunks.length ? matchingChunks.slice(0, 3) : [allChunks[chunkIdx] || allChunks[0]])
+        .join("\n\n")
+        .slice(0, 24000);
 
       // Determine parameters for this question
       const difficulty = selectWeightedDifficulty(job.difficulty_easy, job.difficulty_medium, job.difficulty_hard);
@@ -1072,11 +1042,6 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
         ...authoredItems.map((ai) => ai.objective ?? ""),
       ]);
 
-      // Check external literature questions count
-      const externalTargetCount = Number(job.external_questions_count ?? 0);
-      const currentExternalCount = authoredItems.filter((i) => i.isExternal).length;
-      const isExternalStep = externalTargetCount > 0 && currentExternalCount < externalTargetCount;
-
       // Image: use image_target_count (absolute number) if set; otherwise fall back to frequency string
       const imageTargetCount: number | null =
         typeof job.image_target_count === "number" ? job.image_target_count : null;
@@ -1089,23 +1054,6 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
             (job.image_frequency === "half" && (step + existingStems.length) % 2 === 0) ||
             (step + existingStems.length) % 3 === 0);
 
-      // Anti-repetition forbidden concepts list
-      const forbiddenConcepts = [
-        ...existingStems.slice(-6).map((s) => s.slice(0, 80)),
-        ...existingAnswers.slice(-10),
-        ...authoredItems.map((ai) => ai.stem.slice(0, 80)),
-      ];
-
-      // Pre-search real medical image if needed so AI can write stem directly about it
-      let preSearchedImage: any = null;
-      if (shouldIncludeImage) {
-        try {
-          preSearchedImage = await searchRealMedicalImage(`${selectedTopic.name} ${objective} pathology histology`);
-        } catch (e) {
-          console.warn("[amfGenerateBatch] Pre-search real medical image error:", e);
-        }
-      }
-
       // Build generation prompt
       const systemPrompt = buildGenerationSystemPrompt({
         sourceMode: job.source_mode,
@@ -1114,28 +1062,18 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
         objective,
         styleContext: job.style_sample_text,
         includeImage: shouldIncludeImage,
-        forbiddenConcepts,
-        externalLiteratureMode: isExternalStep,
-        imageInfo: preSearchedImage
-          ? { title: preSearchedImage.title, description: preSearchedImage.description, url: preSearchedImage.url }
-          : null,
       });
 
       const userPrompt = `TOPIC: ${selectedTopic.name}
 SOURCE MATERIAL EXCERPT:
 ${textToUse}
 
-${
-  isExternalStep
-    ? `TASK: Author ONE pristine ${difficulty.toUpperCase()} board-exam standard multiple choice question (USMLE / Robbins / PreTest style) testing the same core medical principles as the source text above. Adapt from authentic medical literature & board question banks.`
-    : `Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Combined" : "Standard"} medical MCQ based on this source text.`
-}
+Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Combined" : "Standard"} medical MCQ based on this source text.
 MANDATORY CONSTRAINTS:
-1. Start the question directly with the clinical vignette or core question. Do NOT write "In the classification of...", "According to...", or echo the topic title in the stem!
+1. Start the question directly with the core question (e.g. "Which of the following...", "What is...") or clinical case. Do NOT write "In the classification of...", "According to...", or echo the topic title in the stem!
 2. Do NOT include source citations, book titles, or page numbers in the explanation text.
-${shouldIncludeImage ? "3. The question stem MUST reference the attached real medical image and require visual inspection to answer." : ""}
+${shouldIncludeImage ? "3. Include an image_prompt describing a clean educational medical schematic/diagram for this question." : ""}
 Return STRICT JSON.`;
-
 
       try {
         let questionJson: any = null;
@@ -1204,32 +1142,16 @@ Return STRICT JSON.`;
           continue;
         }
 
-        // Answer-level deduplication: reject if answer text concept matches an existing answer in this job
-        const newCorrectOption = Array.isArray(questionJson.options) && Array.isArray(questionJson.answer_labels)
-          ? questionJson.options.find((o: any) => questionJson.answer_labels.includes(o.label))?.text
-          : null;
-        if (newCorrectOption) {
-          const isAnswerDuplicate = existingAnswers.some(
-            (ans) => calculateSimilarity(ans.toLowerCase(), newCorrectOption.toLowerCase()) > 70,
-          );
-          if (isAnswerDuplicate) {
-            failures.push(`Rejected duplicate answer concept: "${newCorrectOption}" already tested.`);
-            continue;
-          }
-          existingAnswers.push(newCorrectOption.trim());
-        }
-
-        // Real medical image retrieval (Wikimedia Commons scientific repository)
-        let imageUrl: string | null = preSearchedImage?.url ?? null;
-        if (!imageUrl && (shouldIncludeImage || (questionJson.image_needed && questionJson.image_prompt))) {
-          const query = questionJson.image_prompt || `${selectedTopic.name} pathology histology`;
+        // Pure AI image generation if needed (Flux / SDXL pure synthetic diagram)
+        let imageUrl: string | null = null;
+        if (shouldIncludeImage || (questionJson.image_needed && questionJson.image_prompt)) {
+          const diagramPrompt = questionJson.image_prompt || `${selectedTopic.name} medical pathophysiological diagram`;
           try {
-            imageUrl = await generateMedicalDiagram(supabase, job.provider, apiKey, query, job.id);
+            imageUrl = await generateMedicalDiagram(supabase, job.provider, apiKey, diagramPrompt, job.id);
           } catch (imgErr) {
-            console.warn("Medical image search error:", imgErr);
+            console.warn("Medical diagram generation error:", imgErr);
           }
         }
-
 
         // Build structured explanation markdown
         const explanationData: ExplanationData = questionJson.explanation ?? {};
@@ -1337,7 +1259,6 @@ Return STRICT JSON.`;
           imageUrl,
           hasImage: !!imageUrl,
           topicName: selectedTopic.name,
-          isExternal: isExternalStep,
         });
       } catch (err: any) {
         failures.push(`Generation attempt error: ${String(err?.message ?? err).slice(0, 160)}`);
@@ -1366,12 +1287,8 @@ export const amfListItems = createServerFn({ method: "POST" })
       let q = supabase.from(ITEMS).select("*").eq("job_id", data.jobId).eq("archived", false).order("order_index");
       if (data.statusFilter !== "all") q = q.eq("status", data.statusFilter);
       if (data.topicId) q = q.eq("topic_id", data.topicId);
-      let { data: rows, error } = await q;
+      const { data: rows, error } = await q;
       if (!error && rows) {
-        // When viewing "all", automatically hide rejected duplicates so review screen stays clean
-        if (data.statusFilter === "all") {
-          rows = rows.filter((r: any) => r.status !== "rejected" && (Number(r.dup_score) || 0) < 70);
-        }
         return rows.map((r: any) => ({
           ...r,
           stem: formatQuestionStem(r.stem),
@@ -1388,15 +1305,7 @@ export const amfListItems = createServerFn({ method: "POST" })
     const { data: gRows, error: gErr } = await q;
     if (gErr) throw new Error(gErr.message);
 
-    let cleanGRows = gRows ?? [];
-    if (data.statusFilter === "all") {
-      cleanGRows = cleanGRows.filter((i: any) => {
-        const exp = (i.explanation ?? {}) as any;
-        return i.status !== "rejected" && (Number(exp?.dup_score) || 0) < 70;
-      });
-    }
-
-    return cleanGRows.map((i: any) => {
+    return (gRows ?? []).map((i: any) => {
       const exp = (i.explanation ?? {}) as any;
       const rawExp = typeof exp.explanation === "string" ? exp.explanation : String(i.explanation ?? "");
       return {
@@ -1416,19 +1325,6 @@ export const amfListItems = createServerFn({ method: "POST" })
       };
     });
   });
-
-export const amfPurgeDuplicates = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ jobId: z.string().uuid() }).parse(d))
-  .handler(async ({ data, context }) => {
-    const { supabase } = await ensureStaff(context);
-    await supabase.from(ITEMS).delete().eq("job_id", data.jobId).eq("status", "rejected");
-    await supabase.from(ITEMS).delete().eq("job_id", data.jobId).gte("dup_score", 70);
-    await supabase.from(AMG_ITEMS).delete().eq("group_id", data.jobId).eq("status", "rejected");
-    return { ok: true };
-  });
-
-
 
 export const amfUpdateItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

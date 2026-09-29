@@ -16,8 +16,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
 import { MedicalPageBackdrop } from "@/components/common/MedicalPageBackdrop";
 import { resolveCourseImageUrl } from "@/lib/course-image";
-import { resolveLectureVideoUrl } from "@/lib/lecture-video";
-import { IntroVideoModal } from "@/components/lectures/IntroVideoModal";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useCourseOptions,
@@ -54,10 +52,6 @@ type Course = {
   price: number;
   kind: string;
   image_url: string | null;
-  intro_image_url?: string | null;
-  intro_video_url?: string | null;
-  intro_video_storage_path?: string | null;
-  intro_free?: boolean | null;
   published: boolean;
   currency?: string | null;
   compare_at_price?: number | null;
@@ -65,7 +59,6 @@ type Course = {
   discount_ends_at?: string | null;
   admin_only?: boolean | null;
 };
-
 
 const YEAR_ICONS = [GraduationCap, Video, PlayCircle, Mic, Clapperboard, Film];
 
@@ -92,11 +85,10 @@ function LecturesPage() {
       let query = supabase
         .from("courses")
         .select(
-          "id,title,year,price,kind,image_url,intro_image_url,intro_video_url,intro_video_storage_path,intro_free,published,currency,compare_at_price,discount_active,discount_ends_at,admin_only",
+          "id,title,year,price,kind,image_url,published,currency,compare_at_price,discount_active,discount_ends_at,admin_only",
         )
         .eq("published", true)
         .eq("kind", "lectures");
-
       if (!isAdmin) query = query.eq("admin_only", false);
       const [coursesRes, semMap] = await Promise.all([
         query.order("created_at", { ascending: true }),
@@ -140,14 +132,6 @@ function LecturesPage() {
   }, [user, authLoading]);
 
   const options = useCourseOptions();
-  const [activeVideo, setActiveVideo] = useState<{ src: string; title: string } | null>(null);
-
-  async function handlePlayIntro(c: Course) {
-    const url = await resolveLectureVideoUrl(c.intro_video_url ?? null, c.intro_video_storage_path ?? null);
-    if (url) {
-      setActiveVideo({ src: url, title: `${c.title} — Overview` });
-    }
-  }
 
   const byYear = useMemo(() => {
     const map = new Map<number, Course[]>();
@@ -203,7 +187,6 @@ function LecturesPage() {
                   year={year}
                   courses={list}
                   enrolledIds={enrolledIds}
-                  onPlayIntro={handlePlayIntro}
                   Icon={YEAR_ICONS[idx % YEAR_ICONS.length]}
                 />
               ))}
@@ -212,14 +195,6 @@ function LecturesPage() {
         </div>
       </main>
       </MedicalPageBackdrop>
-
-      {activeVideo && (
-        <IntroVideoModal
-          src={activeVideo.src}
-          title={activeVideo.title}
-          onClose={() => setActiveVideo(null)}
-        />
-      )}
     </div>
   );
 }
@@ -233,16 +208,13 @@ function LectureSection({
   year,
   courses,
   enrolledIds,
-  onPlayIntro,
   Icon,
 }: {
   year: number;
   courses: Course[];
   enrolledIds: Set<string>;
-  onPlayIntro: (c: Course) => void;
   Icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
 }) {
-
   const { lang } = useLang();
   const options = useCourseOptions();
   const isAllYears = isAllYearsCourse(year, options);
@@ -376,12 +348,7 @@ function LectureSection({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {displayedCourses.map((c) => (
-            <LectureCard
-              key={c.id}
-              course={c}
-              active={enrolledIds.has(c.id)}
-              onPlayIntro={onPlayIntro}
-            />
+            <LectureCard key={c.id} course={c} active={enrolledIds.has(c.id)} />
           ))}
         </div>
       )}
@@ -389,45 +356,25 @@ function LectureSection({
   );
 }
 
-function LectureCard({
-  course,
-  active,
-  onPlayIntro,
-}: {
-  course: Course;
-  active: boolean;
-  onPlayIntro: (c: Course) => void;
-}) {
+function LectureCard({ course, active }: { course: Course; active: boolean }) {
   const [imgUrl, setImgUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const coverPath = course.intro_image_url || course.image_url;
-    resolveCourseImageUrl(coverPath).then((u) => {
+    resolveCourseImageUrl(course.image_url).then((u) => {
       if (!cancelled) setImgUrl(u);
     });
     return () => {
       cancelled = true;
     };
-  }, [course.image_url, course.intro_image_url]);
-
-  const hasIntro = !!(course.intro_video_url || course.intro_video_storage_path);
+  }, [course.image_url]);
 
   return (
     <div className="group overflow-hidden flex flex-col rounded-lg bg-card border border-border shadow-[var(--shadow-card)] hover:border-accent/50 transition-colors">
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (hasIntro) {
-            onPlayIntro(course);
-          }
-        }}
-        className={`relative aspect-video overflow-hidden block bg-muted ${
-          hasIntro ? "cursor-pointer" : ""
-        }`}
+      <Link
+        to="/lectures/$courseId"
+        params={{ courseId: course.id }}
+        className="relative aspect-video overflow-hidden block bg-muted"
       >
         {imgUrl ? (
           <img
@@ -464,8 +411,7 @@ function LectureCard({
             </span>
           )}
         </div>
-      </div>
-
+      </Link>
       <div className="px-4 py-4 flex flex-col gap-3 flex-1">
         <div className="font-semibold text-base text-foreground text-center capitalize">
           {course.title}

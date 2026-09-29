@@ -21,7 +21,6 @@ import {
   Star,
   CheckSquare,
   BadgeCheck,
-  GraduationCap,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -37,7 +36,7 @@ import {
 import { toast } from "sonner";
 import { UserModerationDialog } from "@/components/admin/UserModerationDialog";
 import { UserEditDialog } from "@/components/admin/UserEditDialog";
-import { AdminBadge, QaBadge, TeacherBadge } from "@/components/RoleBadge";
+import { AdminBadge, QaBadge } from "@/components/RoleBadge";
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
 
@@ -55,8 +54,8 @@ export const Route = createFileRoute("/admin/users")({
   component: AdminUsersPage,
 });
 
-type RoleKey = "admin" | "committee" | "committee_en" | "committee_head" | "golden" | "qa" | "teacher";
-type Filter = "all" | "admin" | "committee" | "committee_en" | "committee_head" | "golden" | "qa" | "teacher" | "none" | "unverified";
+type RoleKey = "admin" | "committee" | "committee_en" | "committee_head" | "golden" | "qa";
+type Filter = "all" | "admin" | "committee" | "committee_en" | "committee_head" | "golden" | "qa" | "none" | "unverified";
 
 const ROLE_LABEL: Record<RoleKey, string> = {
   admin: "Admin",
@@ -65,7 +64,6 @@ const ROLE_LABEL: Record<RoleKey, string> = {
   committee_head: "رئيس اللجنة",
   golden: "Golden account",
   qa: "QA",
-  teacher: "Teacher",
 };
 
 function AdminUsersPage() {
@@ -115,7 +113,6 @@ function AdminUsersPage() {
       if (filter === "committee_en" && !u.roles.includes("committee_en")) return false;
       if (filter === "committee_head" && !u.roles.includes("committee_head")) return false;
       if (filter === "golden" && !u.roles.includes("golden")) return false;
-      if (filter === "teacher" && !u.roles.includes("teacher")) return false;
       if (filter === "qa" && !u.roles.includes("qa")) return false;
       if (filter === "none" && u.roles.length > 0) return false;
       if (filter === "unverified" && u.email_confirmed_at) return false;
@@ -137,7 +134,6 @@ function AdminUsersPage() {
       committee_en: users.filter((u) => u.roles.includes("committee_en")).length,
       heads: users.filter((u) => u.roles.includes("committee_head")).length,
       golden: users.filter((u) => u.roles.includes("golden")).length,
-      teachers: users.filter((u) => u.roles.includes("teacher")).length,
       qa: users.filter((u) => u.roles.includes("qa")).length,
     }),
     [users],
@@ -297,7 +293,6 @@ function AdminUsersPage() {
             ["committee_en", "Committee"],
             ["committee_head", "رئيس اللجنة"],
             ["golden", "Golden accounts"],
-            ["teacher", "Teachers"],
             ["qa", "QA"],
             ["none", "No role"],
             ["unverified", "Not verified"],
@@ -482,14 +477,6 @@ function AdminUsersPage() {
                         onClick={() => toggleRole(u, "golden")}
                       />
                       <RoleChip
-                        label={ROLE_LABEL.teacher}
-                        icon={<GraduationCap size={13} />}
-                        active={u.roles.includes("teacher")}
-                        busy={busyRole === `${u.id}:teacher`}
-                        onClick={() => toggleRole(u, "teacher")}
-                        variant="teacher"
-                      />
-                      <RoleChip
                         label={ROLE_LABEL.qa}
                         icon={<BadgeCheck size={13} />}
                         active={u.roles.includes("qa")}
@@ -599,7 +586,6 @@ export function UserRoleBadge({ roles, size = "sm" }: { roles: string[]; size?: 
   if (specificRoles.includes("committee_en")) return <CommitteeBadge size={size} label="Committee" />;
   if (specificRoles.includes("committee")) return <CommitteeBadge size={size} isAr />;
   if (specificRoles.includes("golden")) return <GoldenBadge size={size} />;
-  if (specificRoles.includes("teacher")) return <TeacherBadge size={size} />;
   if (specificRoles.includes("qa")) return <QaBadge size={size} />;
 
   if (specificRoles.length > 0) {
@@ -625,15 +611,13 @@ function RoleChip({
   icon: React.ReactNode;
   active: boolean;
   busy: boolean;
-  variant?: "default" | "committee" | "teacher";
+  variant?: "default" | "committee";
   onClick: () => void;
 }) {
   const activeClass =
     variant === "committee"
       ? "committee-chip font-bold shadow-sm"
-      : variant === "teacher"
-        ? "bg-emerald-600 text-white border-emerald-600 font-bold shadow-sm"
-        : "bg-primary text-primary-foreground border-primary";
+      : "bg-primary text-primary-foreground border-primary";
 
   return (
     <button

@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
-import { AdminBadge, StudentBadge, QaBadge, TeacherBadge } from "@/components/RoleBadge";
+import { AdminBadge, StudentBadge, QaBadge } from "@/components/RoleBadge";
 import { PushToggle } from "@/components/PushToggle";
 import {
   AlertCircle,
@@ -44,7 +44,7 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
-  const { user, profile, isGolden, isTeacher, isQa, isCommittee, isCommitteeEn, isCommitteeAr, isRealAdmin, loading } = useAuth();
+  const { user, profile, isGolden, isQa, isCommittee, isCommitteeEn, isCommitteeAr, isRealAdmin, loading } = useAuth();
   const navigate = useNavigate();
 
   const [fullName, setFullName] = useState("");
@@ -278,8 +278,6 @@ function ProfilePage() {
                 <AdminBadge size="md" />
               ) : isGolden ? (
                 <GoldenBadge size="md" />
-              ) : isTeacher ? (
-                <TeacherBadge size="md" />
               ) : isCommitteeEn ? (
                 <CommitteeBadge size="md" label="Committee" />
               ) : isCommittee ? (
@@ -298,11 +296,6 @@ function ProfilePage() {
             {isGolden && (
               <div className="mt-1 text-xs font-semibold text-primary">
                 Golden member — all courses and lectures included.
-              </div>
-            )}
-            {isTeacher && (
-              <div className="mt-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                Teacher member
               </div>
             )}
             {!isGolden && isCommitteeEn && (

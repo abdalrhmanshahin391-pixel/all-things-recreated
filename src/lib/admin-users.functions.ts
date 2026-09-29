@@ -52,7 +52,7 @@ export const adminListUsersAndDevices = createServerFn({ method: "GET" })
     // Canonical user list comes from an admin RPC that reads auth.users +
     // profiles + roles, so the admin sees every real account even when
     // the profiles row is missing after a remix.
-    const [rpcRes, devicesRes, profilesRes, settingsRes, committeeEnContentRes, teacherContentRes] = await Promise.all([
+    const [rpcRes, devicesRes, profilesRes, settingsRes, committeeEnContentRes] = await Promise.all([
       context.supabase.rpc("admin_list_all_users"),
       supabaseAdmin
         .from("user_devices")
@@ -70,10 +70,6 @@ export const adminListUsersAndDevices = createServerFn({ method: "GET" })
         .select("value_en")
         .eq("key", "committee_en_user_ids")
         .maybeSingle(),
-      (supabaseAdmin.from as any)("site_content")
-        .select("value_en")
-        .eq("key", "teacher_user_ids")
-        .maybeSingle(),
     ]);
     if (rpcRes.error) throw new Error(rpcRes.error.message);
 
@@ -85,15 +81,6 @@ export const adminListUsersAndDevices = createServerFn({ method: "GET" })
       } catch {}
     }
     const committeeEnSet = new Set(persistentCommitteeEnIds);
-
-    let persistentTeacherIds: string[] = [];
-    if (teacherContentRes?.data?.value_en) {
-      try {
-        const parsed = JSON.parse(teacherContentRes.data.value_en);
-        if (Array.isArray(parsed)) persistentTeacherIds = parsed;
-      } catch {}
-    }
-    const teacherSet = new Set(persistentTeacherIds);
 
     const globalLimit =
       (settingsRes.data as { default_device_limit?: number } | null)?.default_device_limit ?? 2;
@@ -123,9 +110,6 @@ export const adminListUsersAndDevices = createServerFn({ method: "GET" })
       let roles = [...rawRoles];
       if (committeeEnSet.has(r.id) && !roles.includes("committee_en")) {
         roles = [...roles, "committee_en"];
-      }
-      if (teacherSet.has(r.id) && !roles.includes("teacher")) {
-        roles = [...roles, "teacher"];
       }
 
       return {
@@ -507,13 +491,11 @@ export const adminToggleUserRole = createServerFn({ method: "POST" })
       console.warn(`[adminToggleUserRole] RPC failed for ${role}:`, e);
     }
 
-    if (role === "committee_en" || role === "teacher") {
-      const storageKey = role === "teacher" ? "teacher_user_ids" : "committee_en_user_ids";
-      const roleLabel = role === "teacher" ? "Teacher User IDs" : "Committee (English) User IDs";
+    if (role === "committee_en") {
       try {
         const { data: existingRow } = await (supabaseAdmin.from as any)("site_content")
           .select("value_en")
-          .eq("key", storageKey)
+          .eq("key", "committee_en_user_ids")
           .maybeSingle();
 
         let ids: string[] = [];
@@ -532,21 +514,21 @@ export const adminToggleUserRole = createServerFn({ method: "POST" })
 
         await (supabaseAdmin.from as any)("site_content").upsert(
           {
-            key: storageKey,
+            key: "committee_en_user_ids",
             group_key: "roles",
             group_label: "System Roles",
-            label: roleLabel,
+            label: "Committee (English) User IDs",
             value_en: JSON.stringify(ids),
             value_ar: JSON.stringify(ids),
             default_en: "[]",
             default_ar: "[]",
-            sort_order: role === "teacher" ? 997 : 998,
+            sort_order: 998,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "key" },
         );
       } catch (storeErr) {
-        console.warn(`[adminToggleUserRole] Error saving to resilient ${storageKey} store:`, storeErr);
+        console.warn("[adminToggleUserRole] Error saving to resilient committee_en store:", storeErr);
         throw storeErr;
       }
     } else if (!rpcSucceeded) {

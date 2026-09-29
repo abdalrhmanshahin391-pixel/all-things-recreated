@@ -120,8 +120,6 @@ import { Route as AdminEventsIndexRouteImport } from './routes/admin.events.inde
 import { Route as AdminEventsEventIdRouteImport } from './routes/admin.events.$eventId'
 import { Route as AdminGermanIndexRouteImport } from './routes/admin.german.index'
 import { Route as AdminGermanCourseIdRouteImport } from './routes/admin.german.$courseId'
-import { Route as AdminLecturesIndexRouteImport } from './routes/admin.lectures.index'
-import { Route as AdminLecturesCourseIdRouteImport } from './routes/admin.lectures.$courseId'
 import { Route as AdminPagesIndexRouteImport } from './routes/admin.pages.index'
 import { Route as AdminPagesPageIdRouteImport } from './routes/admin.pages.$pageId'
 import { Route as AdminUniTilesUniIdRouteImport } from './routes/admin.uni-tiles.$uniId'
@@ -716,16 +714,6 @@ const AdminGermanCourseIdRoute = AdminGermanCourseIdRouteImport.update({
   path: '/$courseId',
   getParentRoute: () => AdminGermanRoute,
 } as any)
-const AdminLecturesIndexRoute = AdminLecturesIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AdminLecturesRoute,
-} as any)
-const AdminLecturesCourseIdRoute = AdminLecturesCourseIdRouteImport.update({
-  id: '/$courseId',
-  path: '/$courseId',
-  getParentRoute: () => AdminLecturesRoute,
-} as any)
 const AdminPagesIndexRoute = AdminPagesIndexRouteImport.update({
   id: '/admin/pages/',
   path: '/admin/pages/',
@@ -957,7 +945,7 @@ export interface FileRoutesByFullPath {
   '/admin/jarvis-batch-v2': typeof AdminJarvisBatchV2Route
   '/admin/jarvis-batch-v2-ipad': typeof AdminJarvisBatchV2IpadRoute
   '/admin/lecture-centre': typeof AdminLectureCentreRoute
-  '/admin/lectures': typeof AdminLecturesRouteWithChildren
+  '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
   '/admin/navigation': typeof AdminNavigationRoute
@@ -1015,7 +1003,6 @@ export interface FileRoutesByFullPath {
   '/admin/aqua-mcq-gen/approval': typeof AdminAquaMcqGenApprovalRoute
   '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
-  '/admin/lectures/$courseId': typeof AdminLecturesCourseIdRoute
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
   '/api/german/tts': typeof ApiGermanTtsRoute
@@ -1035,7 +1022,6 @@ export interface FileRoutesByFullPath {
   '/admin/aqua-mcq-gen/': typeof AdminAquaMcqGenIndexRoute
   '/admin/events/': typeof AdminEventsIndexRoute
   '/admin/german/': typeof AdminGermanIndexRoute
-  '/admin/lectures/': typeof AdminLecturesIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/committee/$year/': typeof CommitteeYearIndexRoute
   '/courses/$courseId/': typeof CoursesCourseIdIndexRoute
@@ -1099,6 +1085,7 @@ export interface FileRoutesByTo {
   '/admin/jarvis-batch-v2': typeof AdminJarvisBatchV2Route
   '/admin/jarvis-batch-v2-ipad': typeof AdminJarvisBatchV2IpadRoute
   '/admin/lecture-centre': typeof AdminLectureCentreRoute
+  '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
   '/admin/navigation': typeof AdminNavigationRoute
@@ -1152,7 +1139,6 @@ export interface FileRoutesByTo {
   '/admin/aqua-mcq-gen/approval': typeof AdminAquaMcqGenApprovalRoute
   '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
-  '/admin/lectures/$courseId': typeof AdminLecturesCourseIdRoute
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
   '/api/german/tts': typeof ApiGermanTtsRoute
@@ -1171,7 +1157,6 @@ export interface FileRoutesByTo {
   '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenIndexRoute
   '/admin/events': typeof AdminEventsIndexRoute
   '/admin/german': typeof AdminGermanIndexRoute
-  '/admin/lectures': typeof AdminLecturesIndexRoute
   '/admin/pages': typeof AdminPagesIndexRoute
   '/committee/$year': typeof CommitteeYearIndexRoute
   '/courses/$courseId': typeof CoursesCourseIdIndexRoute
@@ -1243,7 +1228,7 @@ export interface FileRoutesById {
   '/admin/jarvis-batch-v2': typeof AdminJarvisBatchV2Route
   '/admin/jarvis-batch-v2-ipad': typeof AdminJarvisBatchV2IpadRoute
   '/admin/lecture-centre': typeof AdminLectureCentreRoute
-  '/admin/lectures': typeof AdminLecturesRouteWithChildren
+  '/admin/lectures': typeof AdminLecturesRoute
   '/admin/legal': typeof AdminLegalRoute
   '/admin/marketing': typeof AdminMarketingRoute
   '/admin/navigation': typeof AdminNavigationRoute
@@ -1301,7 +1286,6 @@ export interface FileRoutesById {
   '/admin/aqua-mcq-gen/approval': typeof AdminAquaMcqGenApprovalRoute
   '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
-  '/admin/lectures/$courseId': typeof AdminLecturesCourseIdRoute
   '/admin/pages/$pageId': typeof AdminPagesPageIdRoute
   '/admin/uni-tiles/$uniId': typeof AdminUniTilesUniIdRoute
   '/api/german/tts': typeof ApiGermanTtsRoute
@@ -1321,7 +1305,6 @@ export interface FileRoutesById {
   '/admin/aqua-mcq-gen/': typeof AdminAquaMcqGenIndexRoute
   '/admin/events/': typeof AdminEventsIndexRoute
   '/admin/german/': typeof AdminGermanIndexRoute
-  '/admin/lectures/': typeof AdminLecturesIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/committee/$year/': typeof CommitteeYearIndexRoute
   '/courses/$courseId/': typeof CoursesCourseIdIndexRoute
@@ -1452,7 +1435,6 @@ export interface FileRouteTypes {
     | '/admin/aqua-mcq-gen/approval'
     | '/admin/events/$eventId'
     | '/admin/german/$courseId'
-    | '/admin/lectures/$courseId'
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
     | '/api/german/tts'
@@ -1472,7 +1454,6 @@ export interface FileRouteTypes {
     | '/admin/aqua-mcq-gen/'
     | '/admin/events/'
     | '/admin/german/'
-    | '/admin/lectures/'
     | '/admin/pages/'
     | '/committee/$year/'
     | '/courses/$courseId/'
@@ -1536,6 +1517,7 @@ export interface FileRouteTypes {
     | '/admin/jarvis-batch-v2'
     | '/admin/jarvis-batch-v2-ipad'
     | '/admin/lecture-centre'
+    | '/admin/lectures'
     | '/admin/legal'
     | '/admin/marketing'
     | '/admin/navigation'
@@ -1589,7 +1571,6 @@ export interface FileRouteTypes {
     | '/admin/aqua-mcq-gen/approval'
     | '/admin/events/$eventId'
     | '/admin/german/$courseId'
-    | '/admin/lectures/$courseId'
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
     | '/api/german/tts'
@@ -1608,7 +1589,6 @@ export interface FileRouteTypes {
     | '/admin/aqua-mcq-gen'
     | '/admin/events'
     | '/admin/german'
-    | '/admin/lectures'
     | '/admin/pages'
     | '/committee/$year'
     | '/courses/$courseId'
@@ -1737,7 +1717,6 @@ export interface FileRouteTypes {
     | '/admin/aqua-mcq-gen/approval'
     | '/admin/events/$eventId'
     | '/admin/german/$courseId'
-    | '/admin/lectures/$courseId'
     | '/admin/pages/$pageId'
     | '/admin/uni-tiles/$uniId'
     | '/api/german/tts'
@@ -1757,7 +1736,6 @@ export interface FileRouteTypes {
     | '/admin/aqua-mcq-gen/'
     | '/admin/events/'
     | '/admin/german/'
-    | '/admin/lectures/'
     | '/admin/pages/'
     | '/committee/$year/'
     | '/courses/$courseId/'
@@ -1829,7 +1807,7 @@ export interface RootRouteChildren {
   AdminJarvisBatchV2Route: typeof AdminJarvisBatchV2Route
   AdminJarvisBatchV2IpadRoute: typeof AdminJarvisBatchV2IpadRoute
   AdminLectureCentreRoute: typeof AdminLectureCentreRoute
-  AdminLecturesRoute: typeof AdminLecturesRouteWithChildren
+  AdminLecturesRoute: typeof AdminLecturesRoute
   AdminLegalRoute: typeof AdminLegalRoute
   AdminMarketingRoute: typeof AdminMarketingRoute
   AdminNavigationRoute: typeof AdminNavigationRoute
@@ -2672,20 +2650,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminGermanCourseIdRouteImport
       parentRoute: typeof AdminGermanRoute
     }
-    '/admin/lectures/': {
-      id: '/admin/lectures/'
-      path: '/'
-      fullPath: '/admin/lectures/'
-      preLoaderRoute: typeof AdminLecturesIndexRouteImport
-      parentRoute: typeof AdminLecturesRoute
-    }
-    '/admin/lectures/$courseId': {
-      id: '/admin/lectures/$courseId'
-      path: '/$courseId'
-      fullPath: '/admin/lectures/$courseId'
-      preLoaderRoute: typeof AdminLecturesCourseIdRouteImport
-      parentRoute: typeof AdminLecturesRoute
-    }
     '/admin/pages/': {
       id: '/admin/pages/'
       path: '/admin/pages'
@@ -3109,20 +3073,6 @@ const AdminGermanRouteWithChildren = AdminGermanRoute._addFileChildren(
   AdminGermanRouteChildren,
 )
 
-interface AdminLecturesRouteChildren {
-  AdminLecturesCourseIdRoute: typeof AdminLecturesCourseIdRoute
-  AdminLecturesIndexRoute: typeof AdminLecturesIndexRoute
-}
-
-const AdminLecturesRouteChildren: AdminLecturesRouteChildren = {
-  AdminLecturesCourseIdRoute: AdminLecturesCourseIdRoute,
-  AdminLecturesIndexRoute: AdminLecturesIndexRoute,
-}
-
-const AdminLecturesRouteWithChildren = AdminLecturesRoute._addFileChildren(
-  AdminLecturesRouteChildren,
-)
-
 interface GermanCourseIdReviewRouteChildren {
   GermanCourseIdReviewRunRoute: typeof GermanCourseIdReviewRunRoute
   GermanCourseIdReviewIndexRoute: typeof GermanCourseIdReviewIndexRoute
@@ -3187,7 +3137,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminJarvisBatchV2Route: AdminJarvisBatchV2Route,
   AdminJarvisBatchV2IpadRoute: AdminJarvisBatchV2IpadRoute,
   AdminLectureCentreRoute: AdminLectureCentreRoute,
-  AdminLecturesRoute: AdminLecturesRouteWithChildren,
+  AdminLecturesRoute: AdminLecturesRoute,
   AdminLegalRoute: AdminLegalRoute,
   AdminMarketingRoute: AdminMarketingRoute,
   AdminNavigationRoute: AdminNavigationRoute,
@@ -3253,3 +3203,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
