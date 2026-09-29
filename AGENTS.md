@@ -87,13 +87,74 @@ When adding or modifying features:
 - **No Unsolicited Redesigns**: Do not redesign or alter the visual appearance of existing pages, layouts, cards, or components unless explicitly requested.
 - **Seamless Integration**: Every new feature or control must feel native and completely indistinguishable from the rest of the AquaQbank platform.
 
-## Two-Phase Feature Workflow
-Every feature request must strictly follow this two-phase execution process:
-1. **Phase 1: Architectural Analysis (Zero Code Changes)**
-   - Analyze how the feature integrates into the current AquaQbank architecture.
-   - Map out all affected layers (Database, Server Functions, Auth, State, UI, Responsive).
-   - Explain findings and the concrete plan before modifying any code.
-2. **Phase 2: Full Implementation & Verification**
-   - Implement the complete plan across all affected layers while strictly preserving existing UI/UX and functionality.
-   - Test and verify the affected parts (including full `npx tsc --noEmit` type checking, broken imports check, and runtime validation).
-   - Fix any issues found before reporting completion.
+## 6-Phase Development Workflow
+For every non-trivial feature request, **DO NOT start coding immediately**. Follow this mandatory workflow:
+
+### PHASE 1 — UNDERSTAND
+First inspect the existing codebase and determine:
+- What parts of the application are affected
+- Existing components that can be reused
+- Existing APIs/server functions
+- Existing database tables/schema
+- Existing authentication/authorization
+- Existing UI patterns
+- Potential dependencies or side effects
+*Do not modify files during this phase.*
+
+### PHASE 2 — CLARIFY
+If important requirements are ambiguous, ask questions BEFORE creating the implementation plan.
+- Prefer structured questions.
+- Use multiple-choice questions when possible.
+- For requirements that cannot reasonably be represented as multiple choice, ask an open-ended question.
+- Do not ask questions whose answers can be determined reliably by inspecting the existing codebase.
+- Do not ask unnecessary questions.
+- Ask only questions that could materially change the implementation.
+
+### PHASE 3 — PROPOSE
+After all important requirements are clear, create an implementation plan.
+The plan must include:
+- Feature summary
+- User flow
+- Files/components that will change
+- Backend/API changes
+- Database changes
+- Authentication/permissions
+- UI changes
+- Edge cases
+- Testing plan
+- Risks or potential breaking changes
+
+*Clearly distinguish:*
+- Existing code that will be reused
+- Existing code that will be modified
+- New code that will be created
+
+### PHASE 4 — WAIT FOR APPROVAL
+Do NOT implement the plan yet.
+End the message with:
+`Plan ready. Should I proceed with implementation?`
+Only begin implementation after the user approves.
+
+### PHASE 5 — IMPLEMENT
+After approval:
+- Implement the approved plan
+- Do not make unrelated changes
+- Reuse existing architecture
+- Preserve existing UI
+- Keep changes minimal and maintainable
+- If implementation requires a significant deviation from the approved plan, stop and explain the deviation before continuing.
+
+### PHASE 6 — VERIFY
+After implementation:
+- Check TypeScript errors (`npx tsc --noEmit`)
+- Check imports
+- Check routes
+- Check API/server functions
+- Check database interactions
+- Check authentication/authorization
+- Check responsive behavior
+- Check obvious runtime issues
+- Fix issues caused by your implementation.
+
+Then provide a concise implementation summary.
+
