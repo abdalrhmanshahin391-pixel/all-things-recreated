@@ -59,3 +59,16 @@ First determine whether the existing codebase already contains:
 
 Then extend the existing system.
 When a request affects multiple parts of the application, implement the complete feature rather than only changing the visible UI.
+
+## Full Product Requirement Policy
+**Treat every feature request as a full product requirement, not merely a UI change.**
+Before writing any code, systematically identify and implement all affected layers:
+1. **Database & Schema**: Tables, columns, relationships, default values, storage buckets, and serialization.
+2. **Backend & Server Functions**: APIs, server functions (`createServerFn`), input validation, and business logic.
+3. **Authorization & Security**: Role checks (`useAuth`, `ensureStaff`, `ensureAdmin`), access control, and data isolation.
+4. **State Management & Caching**: TanStack Query invalidation, optimistic UI updates, and refresh cycles.
+5. **UI & User Experience**: Interactive controls, loading indicators, empty states, error toasts, and feedback.
+6. **Responsive & Mobile Viewports**: Desktop, iPad/tablet, and mobile layouts.
+7. **End-to-End Verification**: Full TypeScript type checking (`npx tsc --noEmit`), route integrity, and error recovery.
+
+Never stop at superficial UI changes when backend, persistence, or data pipelines are involved. Deliver complete, end-to-end features every time.
