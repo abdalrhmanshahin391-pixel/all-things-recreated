@@ -199,7 +199,7 @@ export function PackagesStrip() {
                     <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
                       {isGroup
                         ? t("cms.home.packages.groupPrice", { count: p.group_size })
-                        : t("cms.home.packages.totalInvestment")}
+                        : t("cms.home.packages.totalInvestment", { defaultValue: isAr ? "السعر الإجمالي" : "Total investment" })}
                     </p>
                     <div className="flex items-baseline justify-center gap-2 mt-1">
                       <span className="font-display font-black text-4xl text-foreground">
@@ -219,9 +219,7 @@ export function PackagesStrip() {
                     </div>
                     {perStudent !== null && (
                       <p className="text-xs font-bold mt-1 text-muted-foreground">
-                        {t("cms.home.packages.perStudent", {
-                          amount: `${sym}${perStudent.toFixed(0)}`,
-                        })}
+                        ≈ {sym}{perStudent.toFixed(0)} {t("cms.home.packages.perStudent")}
                       </p>
                     )}
                   </div>
@@ -233,7 +231,7 @@ export function PackagesStrip() {
                       boxShadow: "0 4px 0 color-mix(in oklab, var(--primary) 70%, black)",
                     }}
                   >
-                    {t("cms.home.packages.viewPackage")}
+                    {t("cms.home.packages.viewPackage", { defaultValue: isAr ? "عرض الباقة" : "View package" })}
                     <ArrowRight size={14} strokeWidth={3} />
                   </span>
                 </div>
