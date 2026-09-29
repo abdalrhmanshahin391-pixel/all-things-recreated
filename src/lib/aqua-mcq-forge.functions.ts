@@ -933,8 +933,9 @@ function selectQuotaObjective(
   const totalExisting = existingObjectives.length || 1;
 
   // Find the objective furthest below its target ratio
-  let bestObjective = allObjectiveIds[0];
+  let bestObjective: string = allObjectiveIds[0];
   let bestDeficit = -Infinity;
+
 
   for (const [obj, targetPct] of Object.entries(normalizedRatios)) {
     if (targetPct <= 0) continue;
