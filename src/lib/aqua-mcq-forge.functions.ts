@@ -897,10 +897,58 @@ function selectQuestionForm(stdPct: number, combPct: number, aiDecides: boolean)
   return Math.random() * 100 < normalizedStd ? "A" : "B";
 }
 
-function selectRandomObjective(): string {
-  const idx = Math.floor(Math.random() * QUESTION_OBJECTIVES.length);
-  return QUESTION_OBJECTIVES[idx].id;
+
+/**
+ * Selects a question objective based on the job's configured ratios.
+ * Falls back to purely random if no ratios configured.
+ *
+ * @param ratios  Object like { recall: 20, clinical_vignette: 30, tricky: 15, ... }
+ * @param existingObjectives  Array of objectives already generated this batch/job
+ */
+function selectQuotaObjective(
+  ratios: Record<string, number> | null | undefined,
+  existingObjectives: string[],
+): string {
+  const allObjectiveIds = QUESTION_OBJECTIVES.map((o) => o.id);
+
+  // If no ratios configured, fall back to random
+  if (!ratios || Object.keys(ratios).length === 0) {
+    return allObjectiveIds[Math.floor(Math.random() * allObjectiveIds.length)];
+  }
+
+  // Normalize ratios to sum to 100
+  const total = Object.values(ratios).reduce((a, b) => a + (Number(b) || 0), 0);
+  if (total === 0) return allObjectiveIds[Math.floor(Math.random() * allObjectiveIds.length)];
+
+  const normalizedRatios: Record<string, number> = {};
+  for (const [k, v] of Object.entries(ratios)) {
+    normalizedRatios[k] = ((Number(v) || 0) / total) * 100;
+  }
+
+  // Count existing objectives
+  const counts: Record<string, number> = {};
+  for (const obj of existingObjectives) {
+    counts[obj] = (counts[obj] ?? 0) + 1;
+  }
+  const totalExisting = existingObjectives.length || 1;
+
+  // Find the objective furthest below its target ratio
+  let bestObjective = allObjectiveIds[0];
+  let bestDeficit = -Infinity;
+
+  for (const [obj, targetPct] of Object.entries(normalizedRatios)) {
+    if (targetPct <= 0) continue;
+    const currentPct = ((counts[obj] ?? 0) / totalExisting) * 100;
+    const deficit = targetPct - currentPct;
+    if (deficit > bestDeficit) {
+      bestDeficit = deficit;
+      bestObjective = obj;
+    }
+  }
+
+  return bestObjective;
 }
+
 
 export const amfGenerateBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -933,9 +981,12 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
 
     const apiKey = await getKey(supabase, job.provider);
 
-    // Existing items
+    // Existing items — also collect objectives for quota tracking
     let existingItems: any[] = [];
-    const { data: amfItems } = await supabase.from(ITEMS).select("stem, topic_id").eq("job_id", data.jobId);
+    const { data: amfItems } = await supabase
+      .from(ITEMS)
+      .select("stem, topic_id, objective")
+      .eq("job_id", data.jobId);
     if (amfItems) {
       existingItems = amfItems;
     } else {
@@ -944,6 +995,18 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
     }
 
     const existingStems = existingItems.map((i: any) => String(i.stem ?? ""));
+    // Track objectives of existing questions for quota-based selection
+    const existingObjectives: string[] = existingItems.map((i: any) => String(i.objective ?? "")).filter(Boolean);
+    // Track how many image questions already exist
+    let existingImageCount = 0;
+    {
+      const { count } = await supabase
+        .from(ITEMS)
+        .select("id", { count: "exact", head: true })
+        .eq("job_id", data.jobId)
+        .eq("has_image", true);
+      existingImageCount = count ?? 0;
+    }
 
     let generatedCount = 0;
     const failures: string[] = [];
@@ -970,14 +1033,26 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
       // Determine parameters for this question
       const difficulty = selectWeightedDifficulty(job.difficulty_easy, job.difficulty_medium, job.difficulty_hard);
       const form = selectQuestionForm(job.type_standard, job.type_combined, job.ai_decides_type);
-      const objective = selectRandomObjective();
 
-      // Check whether this question should have a pure AI medical diagram
+      // Quota-based objective selection using job.objective_ratios
+      const objectiveRatios: Record<string, number> | null =
+        job.objective_ratios && typeof job.objective_ratios === "object" ? job.objective_ratios : null;
+      const objective = selectQuotaObjective(objectiveRatios, [
+        ...existingObjectives,
+        ...authoredItems.map((ai) => ai.objective ?? ""),
+      ]);
+
+      // Image: use image_target_count (absolute number) if set; otherwise fall back to frequency string
+      const imageTargetCount: number | null =
+        typeof job.image_target_count === "number" ? job.image_target_count : null;
+      const alreadyHasImage = existingImageCount + authoredItems.filter((ai) => ai.hasImage).length;
       const shouldIncludeImage =
         job.include_images &&
-        (job.image_frequency === "every" ||
-          (job.image_frequency === "half" && (step + existingStems.length) % 2 === 0) ||
-          (step + existingStems.length) % 3 === 0);
+        (imageTargetCount !== null
+          ? alreadyHasImage < imageTargetCount
+          : job.image_frequency === "every" ||
+            (job.image_frequency === "half" && (step + existingStems.length) % 2 === 0) ||
+            (step + existingStems.length) % 3 === 0);
 
       // Build generation prompt
       const systemPrompt = buildGenerationSystemPrompt({
@@ -1180,6 +1255,7 @@ Return STRICT JSON.`;
           stem: stemFormatted.slice(0, 100),
           form,
           difficulty,
+          objective,
           imageUrl,
           hasImage: !!imageUrl,
           topicName: selectedTopic.name,

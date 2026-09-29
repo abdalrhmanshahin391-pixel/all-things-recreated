@@ -705,31 +705,58 @@ function AquaMcqForgeStudio() {
                     </div>
 
                     {job.include_images && (
-                      <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
-                        <span className="text-slate-600 font-medium">Diagram Frequency:</span>
-                        <div className="flex items-center gap-2">
-                          {(["every", "half", "auto"] as const).map((mode) => (
-                            <Button
-                              key={mode}
-                              type="button"
-                              size="sm"
-                              variant={job.image_frequency === mode ? "default" : "outline"}
-                              className={
-                                job.image_frequency === mode
-                                  ? "bg-indigo-600 text-white text-xs h-7 font-bold"
-                                  : "text-xs h-7 border-slate-300"
-                              }
-                              onClick={async () => {
-                                await updateJob({ data: { jobId, patch: { image_frequency: mode } } });
-                                await refresh();
-                              }}
-                            >
-                              {mode === "every" ? "Every Question" : mode === "half" ? "Every 2nd Question" : "AI Decides"}
-                            </Button>
-                          ))}
+                      <div className="pt-2 border-t border-slate-100 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+                          <div>
+                            <span className="text-slate-600 font-bold">How many questions should have an image?</span>
+                            <p className="text-slate-400 mt-0.5">
+                              Set a target count. Questions stop getting images once this number is reached.
+                              Set to 0 to use the frequency mode below instead.
+                            </p>
+                          </div>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={500}
+                            className="w-20 h-8 text-sm text-center font-bold border-indigo-300 focus:ring-indigo-500"
+                            value={job.image_target_count ?? 0}
+                            onChange={async (e) => {
+                              const val = parseInt(e.target.value) || 0;
+                              await updateJob({ data: { jobId, patch: { image_target_count: val } } });
+                              await refresh();
+                            }}
+                          />
                         </div>
+
+                        {(job.image_target_count ?? 0) === 0 && (
+                          <div className="flex flex-wrap items-center justify-between gap-3 text-xs pt-1">
+                            <span className="text-slate-600 font-medium">Fallback Frequency:</span>
+                            <div className="flex items-center gap-2">
+                              {(["every", "half", "auto"] as const).map((mode) => (
+                                <Button
+                                  key={mode}
+                                  type="button"
+                                  size="sm"
+                                  variant={job.image_frequency === mode ? "default" : "outline"}
+                                  className={
+                                    job.image_frequency === mode
+                                      ? "bg-indigo-600 text-white text-xs h-7 font-bold"
+                                      : "text-xs h-7 border-slate-300"
+                                  }
+                                  onClick={async () => {
+                                    await updateJob({ data: { jobId, patch: { image_frequency: mode } } });
+                                    await refresh();
+                                  }}
+                                >
+                                  {mode === "every" ? "Every Question" : mode === "half" ? "Every 2nd" : "AI Decides"}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
+
                   </div>
 
                   {/* Difficulty Ratios */}
@@ -812,6 +839,65 @@ function AquaMcqForgeStudio() {
                     <p className="text-xs text-slate-500">
                       Questions with similarity ≥ {job.dup_threshold}% are automatically rejected to avoid duplicates.
                     </p>
+                  </div>
+
+                  {/* Question Type Ratios */}
+                  <div className="space-y-4 p-4 rounded-xl border border-slate-200 bg-slate-50">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <Label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <Wand2 size={14} className="text-indigo-600" /> Question Type Ratios
+                        </Label>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Control what % of questions are clinical vignettes, tricky, recall, etc.
+                          Set all to 0 for fully random. Values are relative (auto-normalized).
+                        </p>
+                      </div>
+                      <span className="text-xs font-mono font-bold text-indigo-600">
+                        Total:{" "}
+                        {Object.values(job.objective_ratios ?? {}).reduce(
+                          (a: number, b: unknown) => a + (Number(b) || 0),
+                          0,
+                        )}
+                        %
+                      </span>
+                    </div>
+
+                    <div className="space-y-3 text-xs">
+                      {[
+                        { id: "recall", label: "Direct Recall", color: "text-slate-700" },
+                        { id: "understanding", label: "Understanding / Mechanism", color: "text-blue-700" },
+                        { id: "clinical_vignette", label: "🏥 Clinical Vignette (Case Scenario)", color: "text-emerald-700" },
+                        { id: "tricky", label: "🪤 Tricky / Red-Herring", color: "text-rose-700" },
+                        { id: "comparison", label: "Comparison / Differentiation", color: "text-purple-700" },
+                        { id: "application", label: "Application of Concepts", color: "text-amber-700" },
+                        { id: "identification", label: "Identification / Diagnosis", color: "text-indigo-700" },
+                        { id: "clinical_reasoning", label: "Clinical Case Reasoning", color: "text-teal-700" },
+                        { id: "sequence", label: "Sequence / Step Progression", color: "text-orange-700" },
+                        { id: "classification", label: "Classification / Taxonomy", color: "text-cyan-700" },
+                      ].map(({ id, label, color }) => {
+                        const currentVal = Number((job.objective_ratios ?? {})[id] ?? 0);
+                        return (
+                          <div key={id}>
+                            <div className="flex justify-between font-semibold mb-1">
+                              <span className={color}>{label}:</span>
+                              <span>{currentVal}%</span>
+                            </div>
+                            <Slider
+                              value={[currentVal]}
+                              min={0}
+                              max={100}
+                              step={5}
+                              onValueChange={async ([val]) => {
+                                const newRatios = { ...(job.objective_ratios ?? {}), [id]: val };
+                                await updateJob({ data: { jobId, patch: { objective_ratios: newRatios } } });
+                                await refresh();
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </CardContent>
               </Card>

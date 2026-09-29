@@ -24,10 +24,65 @@ export const QUESTION_OBJECTIVES = [
   { id: "comparison", label: "Comparison / Differentiation" },
   { id: "application", label: "Application of Concepts" },
   { id: "clinical_reasoning", label: "Clinical Case Reasoning" },
+  { id: "clinical_vignette", label: "Clinical Vignette (Case Scenario)" },
+  { id: "tricky", label: "Tricky / Red-Herring" },
   { id: "sequence", label: "Sequence / Step Progression" },
   { id: "classification", label: "Classification / Taxonomy" },
   { id: "identification", label: "Identification / Diagnosis" },
 ] as const;
+
+/**
+ * Returns an objective-specific prompt block to inject into the system prompt.
+ * This forces the AI to follow the style of the selected question type.
+ */
+export function buildObjectivePromptBlock(objective: string, includeImage: boolean): string {
+  switch (objective) {
+    case "clinical_vignette":
+      return `
+OBJECTIVE — CLINICAL VIGNETTE (CASE SCENARIO):
+- Write a realistic patient case scenario as the stem (age, sex, chief complaint, key history, physical exam findings, lab values if relevant).
+- The student must read ALL details to identify the correct answer — no single-sentence shortcut.
+- Distractors must each reflect a plausible clinical mistake (e.g. confusing similar presentations).
+- NEVER start with "In the context of..." — open with the patient: "A 34-year-old female presents with...".
+${includeImage ? '- The question MUST explicitly reference the image: "Based on the histological findings shown in the image above..." or "Referring to the diagram, what mechanism is responsible for..."\n- The image must contain visual information (e.g. a slide, diagram, or graph) that is REQUIRED to answer — the student cannot solve the question without it.' : ""}`;
+
+    case "tricky":
+      return `
+OBJECTIVE — TRICKY / RED-HERRING QUESTION:
+- Design the stem so the most obvious-sounding answer is WRONG.
+- Include a "pivot detail" in the stem (a specific number, timeline, negation word, or anatomical qualifier) that changes the answer entirely.
+- One distractor must sound exactly right but fail due to this pivot detail.
+- The correct answer should be initially surprising, but 100% defensible upon close reading.
+- DO NOT telegraph that this is a trick question. Write it as a normal clinical question.
+${includeImage ? '- If including an image, the image must contain a specific visual detail (e.g. an unexpected finding, an arrow pointing to a subtle lesion) that resolves the ambiguity in the stem.\n- Explicitly reference the image: "Refer to the image provided." or "Based on the finding shown above..."' : ""}`;
+
+    case "identification":
+    case "clinical_reasoning":
+      return `
+OBJECTIVE — IDENTIFICATION / CLINICAL REASONING:
+- Frame the question around identifying a diagnosis, mechanism, or structure.
+- Provide enough clinical or visual context (history, signs, or diagram description) for the student to reason through.
+- Distractors must be genuine diagnostic mimics or related mechanisms.
+${includeImage ? '- The image is central to this question. The stem MUST say: "Based on the image shown..." or "Refer to the diagram above..."\n- The image should show a pathological finding, anatomical structure, or lab result that the student must identify or interpret.' : ""}`;
+
+    case "comparison":
+      return `
+OBJECTIVE — COMPARISON / DIFFERENTIATION:
+- The question must require comparing two or more similar medical concepts, drugs, conditions, or mechanisms.
+- At least one distractor must swap a feature between the compared entities.
+- Correct answer requires knowing the precise distinguishing feature.`;
+
+    case "sequence":
+      return `
+OBJECTIVE — SEQUENCE / STEP PROGRESSION:
+- The question must test understanding of an ordered process (e.g. coagulation steps, cell cycle phases, action potential stages).
+- Ask about the correct order, the step that follows a specific event, or what happens if a step is disrupted.`;
+
+    default:
+      return "";
+  }
+}
+
 
 /** Prompt to discover chapters and topics from textbook text */
 export function buildTopicDiscoveryPrompt(textSample: string): string {
@@ -97,6 +152,8 @@ export function buildGenerationSystemPrompt(config: {
     hard: "HARD: Requires multi-step reasoning, similar/challenging alternatives, application of clinical concepts, or discriminating between closely related medical concepts.",
   };
 
+  const objectiveBlock = buildObjectivePromptBlock(config.objective, config.includeImage ?? false);
+
   return `You are Aqua MCQ Forge, the world's most rigorous medical multiple-choice question author.
 Your task is to author ONE pristine, board-exam standard medical MCQ based SOLELY on the supplied textbook source knowledge.
 
@@ -106,6 +163,7 @@ TARGET QUESTION CONFIGURATION:
 - Question Objective: ${config.objective}
 - Source Fidelity Mode: ${isStrict ? "STRICT SOURCE MODE (No factual claims, terminology, numerical values, or classifications outside the supplied text)" : "SOURCE + AI REASONING (Source is authoritative, AI provides medical reasoning)"}
 ${config.styleContext ? `\nSTYLE GUIDE & COURSE CLONING REFERENCE (Match this tone, question length, and distractor sophistication):\n${config.styleContext.slice(0, 2000)}\n` : ""}
+${objectiveBlock ? `\n${objectiveBlock}\n` : ""}
 
 QUESTION STRUCTURE RULES:
 ${isFormB ? `FORM B (COMBINED QUESTION):
@@ -149,10 +207,21 @@ SOURCE FIDELITY OBJECT:
 - "section": Relevant sub-heading
 - "evidence": Exact verbatim quote from the source supporting the answer
 
-${config.includeImage ? `IMAGE REQUIREMENT:
-This question should include a medical visual or diagram. Provide:
-- "image_needed": true
-- "image_prompt": "A clear, detailed description of the medical diagram, anatomical illustration, or clinical sketch required for this question."` : `"image_needed": false, "image_prompt": ""`}
+${config.includeImage ? `IMAGE REQUIREMENT (CRITICAL):
+This question MUST include an image that the student CANNOT answer without examining.
+Rules:
+- Set "image_needed": true
+- The question "stem" MUST explicitly reference the image. Use phrases like:
+  * "Based on the image shown above, what is the most likely diagnosis?"
+  * "Refer to the diagram provided. What does the labeled structure represent?"
+  * "Looking at the histological slide shown, identify the type of necrosis depicted."
+  * "The graph above shows a patient's values over time. What is the most likely cause?"
+- NEVER make the image purely decorative — the correct answer must depend on visual information in the image.
+- For "image_prompt": write a DETAILED, SPECIFIC description of exactly what the image should show:
+  * Good: "A photomicrograph of hepatic tissue showing nuclear pyknosis, cellular swelling, and eosinophilic cytoplasm consistent with coagulative necrosis"
+  * Good: "A labeled anatomical diagram of the nephron highlighting the loop of Henle with countercurrent multiplier arrows"
+  * Bad: "A medical diagram" (too vague)` : `"image_needed": false, "image_prompt": ""`}
+
 
 Return STRICT JSON only, matching this exact shape:
 {
