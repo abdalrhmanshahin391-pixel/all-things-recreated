@@ -596,55 +596,7 @@ export async function fetchJobData(supabase: any, jobId: string) {
     });
   }
 
-  // Opportunistically clean any existing questions in questions table matching preambles, source citations, or missing statements
-  try {
-    const { data: badStems } = await supabase
-      .from("questions")
-      .select("id, stem, explanation")
-      .or("stem.ilike.In the classification of%,stem.ilike.According to the%")
-      .limit(50);
-    for (const b of badStems ?? []) {
-      const cleanStem = formatQuestionStem(b.stem);
-      const cleanExp = stripSourceCitation(b.explanation);
-      if (cleanStem !== b.stem || cleanExp !== b.explanation) {
-        await supabase.from("questions").update({ stem: cleanStem, explanation: cleanExp || null }).eq("id", b.id);
-      }
-    }
-    const { data: badExp } = await supabase
-      .from("questions")
-      .select("id, stem, explanation")
-      .ilike("explanation", "%Source Citation%")
-      .limit(50);
-    for (const b of badExp ?? []) {
-      const cleanStem = formatQuestionStem(b.stem);
-      const cleanExp = stripSourceCitation(b.explanation);
-      await supabase.from("questions").update({ stem: cleanStem, explanation: cleanExp || null }).eq("id", b.id);
-    }
-
-    // Also sync statements for any combined question missing them
-    for (const item of items) {
-      if (Array.isArray(item.statements) && item.statements.length > 0) {
-        const fullStem = buildCombinedStem(item.stem, item.statements);
-        const lead30 = cleanQuestionPreamble(item.stem).slice(0, 30);
-        if (lead30.length > 8) {
-          const { data: qMatches } = await supabase
-            .from("questions")
-            .select("id, stem, explanation")
-            .ilike("stem", `%${lead30}%`);
-          for (const qm of qMatches ?? []) {
-            if (!qm.stem.includes("1.")) {
-              await supabase
-                .from("questions")
-                .update({ stem: fullStem, explanation: stripSourceCitation(qm.explanation) || null })
-                .eq("id", qm.id);
-            }
-          }
-        }
-      }
-    }
-  } catch {
-    // non-blocking
-  }
+  // Read-only: live course questions are never modified when a job is opened.
 
   return {
     job,
@@ -1591,35 +1543,7 @@ export const amfImportJob = createServerFn({ method: "POST" })
       }
     }
 
-    // Clean any existing questions in this subject that have source citation or preambles, and restore missing statements
-    try {
-      const { data: existingQ } = await supabase
-        .from("questions")
-        .select("id, stem, explanation")
-        .eq("subject_id", data.subjectId);
-      for (const eq of existingQ ?? []) {
-        // If question matches an approved item with statements, ensure statements are present
-        const matchedItem = approvedItems.find(
-          (ai) =>
-            Array.isArray(ai.statements) &&
-            ai.statements.length > 0 &&
-            cleanQuestionPreamble(eq.stem).startsWith(cleanQuestionPreamble(ai.stem).slice(0, 30)),
-        );
-        const cleanExp = stripSourceCitation(eq.explanation);
-        const targetStem = matchedItem
-          ? buildCombinedStem(eq.stem, matchedItem.statements)
-          : ensureCombinedStemWithStatements(eq.stem, cleanExp);
-        const cleanStem = formatQuestionStem(targetStem);
-        if (cleanStem !== eq.stem || cleanExp !== eq.explanation) {
-          await supabase
-            .from("questions")
-            .update({ stem: cleanStem, explanation: cleanExp || null })
-            .eq("id", eq.id);
-        }
-      }
-    } catch {
-      // non-blocking
-    }
+    // Existing course questions are never rewritten here — only newly inserted rows are touched.
 
     return { inserted, skipped, failed, errors: errors.slice(0, 5) };
   });
