@@ -86,3 +86,14 @@ When adding or modifying features:
 - **Match Existing Design**: Match existing spacing, typography, colors, theme variables, component primitives (Radix UI / Shadcn buttons, dialogs, inputs, sliders, badges), Framer Motion animations, responsive behavior, and interaction patterns.
 - **No Unsolicited Redesigns**: Do not redesign or alter the visual appearance of existing pages, layouts, cards, or components unless explicitly requested.
 - **Seamless Integration**: Every new feature or control must feel native and completely indistinguishable from the rest of the AquaQbank platform.
+
+## Two-Phase Feature Workflow
+Every feature request must strictly follow this two-phase execution process:
+1. **Phase 1: Architectural Analysis (Zero Code Changes)**
+   - Analyze how the feature integrates into the current AquaQbank architecture.
+   - Map out all affected layers (Database, Server Functions, Auth, State, UI, Responsive).
+   - Explain findings and the concrete plan before modifying any code.
+2. **Phase 2: Full Implementation & Verification**
+   - Implement the complete plan across all affected layers while strictly preserving existing UI/UX and functionality.
+   - Test and verify the affected parts (including full `npx tsc --noEmit` type checking, broken imports check, and runtime validation).
+   - Fix any issues found before reporting completion.
