@@ -363,9 +363,19 @@ function AquaMcqForgeReview() {
                           {item.difficulty}
                         </Badge>
 
-                        <Badge variant="outline" className="text-[11px] text-slate-500 uppercase tracking-wider">
-                          {item.objective}
-                        </Badge>
+                        {item.objective === "tricky" ? (
+                          <Badge className="bg-amber-100 text-amber-900 border-amber-300 gap-1 text-[11px] font-bold">
+                            ⚠️ Cognitive Trap
+                          </Badge>
+                        ) : item.objective === "recall" ? (
+                          <Badge className="bg-cyan-100 text-cyan-900 border-cyan-300 gap-1 text-[11px] font-bold">
+                            ⚡ Direct PDF Recall
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[11px] text-slate-500 uppercase tracking-wider">
+                            {item.objective}
+                          </Badge>
+                        )}
 
                         {item.source_fidelity?.origin === "external_literature" ? (
                           <Badge className="bg-purple-100 text-purple-800 border-purple-300 gap-1 text-[11px] font-bold">
@@ -476,14 +486,18 @@ function AquaMcqForgeReview() {
 
                   <CardContent className="space-y-5 pt-4">
                     {/* Image illustration if present */}
-                    {item.has_image && item.image_url && (
+                    {(item.has_image || item.image_url) && item.image_url && (
                       <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-100 max-w-md mx-auto shadow-sm">
                         <img
                           src={item.image_url}
                           alt="Medical Literature Reference"
                           className="w-full h-auto object-contain max-h-80 bg-white"
+                          loading="lazy"
                           onError={(e) => {
-                            (e.currentTarget as HTMLElement).style.display = "none";
+                            const parent = (e.currentTarget as HTMLElement).parentElement;
+                            if (parent) {
+                              parent.innerHTML = '<div class="p-4 text-xs text-slate-500 text-center italic">Medical image preview unavailable.</div>';
+                            }
                           }}
                         />
                         {item.image_prompt && (

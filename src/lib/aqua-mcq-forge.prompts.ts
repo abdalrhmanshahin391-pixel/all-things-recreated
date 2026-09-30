@@ -37,6 +37,15 @@ export const QUESTION_OBJECTIVES = [
  */
 export function buildObjectivePromptBlock(objective: string, includeImage: boolean): string {
   switch (objective) {
+    case "recall":
+      return `
+OBJECTIVE — DIRECT RECALL & CORE DEFINITIONS (FAST-PACED):
+- Directly test a key definition, morphological hallmark, criterion, or classification directly from the source textbook.
+- Keep the stem SHORT and CONCISE (1 to 2 sentences max).
+- Directly ask: e.g. "Which cellular change is the definitive hallmark of irreversible cell injury?", "What type of necrosis is characterized by...", "Which enzyme catalyzes the rate-limiting step in..."
+- Options must be concise, focused terms or short phrases.
+- Fast-paced and direct — do NOT pad with an artificial lengthy patient case.`;
+
     case "clinical_vignette":
       return `
 OBJECTIVE — CLINICAL VIGNETTE (CASE SCENARIO):
@@ -48,12 +57,12 @@ ${includeImage ? '- The question MUST explicitly reference the image: "Based on 
 
     case "tricky":
       return `
-OBJECTIVE — TRICKY / RED-HERRING QUESTION:
-- Design the stem so the most obvious-sounding answer is WRONG.
-- Include a "pivot detail" in the stem (a specific number, timeline, negation word, or anatomical qualifier) that changes the answer entirely.
-- One distractor must sound exactly right but fail due to this pivot detail.
-- The correct answer should be initially surprising, but 100% defensible upon close reading.
-- DO NOT telegraph that this is a trick question. Write it as a normal clinical question.
+OBJECTIVE — TRICKY / COGNITIVE TRAP (STUDENT THINKS WRONG OPTION IS RIGHT):
+- Design the question so that ONE incorrect option is a highly alluring "Cognitive Trap" — a classic medical misconception or near-miss that an unprepared student will mistake as the correct answer.
+- Include a specific pivot detail in the stem (timeline, age, organ-specific exception, or subtle histological clue) that invalidates the tempting trap option.
+- The correct answer should initially surprise students who skim, but be 100% scientifically defensible upon close reading.
+- In the explanation, include a dedicated breakdown: "⚠️ Cognitive Trap: Why Option [X] is tempting, and why it is actually incorrect."
+- DO NOT telegraph that this is a trick question. Write it as a standard professional question.
 ${includeImage ? '- If including an image, the image must contain a specific visual detail (e.g. an unexpected finding, an arrow pointing to a subtle lesion) that resolves the ambiguity in the stem.\n- Explicitly reference the image: "Refer to the image provided." or "Based on the finding shown above..."' : ""}`;
 
     case "identification":
@@ -134,7 +143,6 @@ RULES:
 - Output pure JSON only.`;
 }
 
-/** Generation System Prompt for authoring a question */
 export function buildGenerationSystemPrompt(config: {
   sourceMode: "strict" | "reasoning";
   form: "A" | "B";
@@ -145,10 +153,13 @@ export function buildGenerationSystemPrompt(config: {
   forbiddenConcepts?: string[];
   externalLiteratureMode?: boolean;
   imageInfo?: { title: string; description: string; url: string } | null;
+  lengthStyle?: "short_direct" | "medium_case" | "long_vignette" | "tricky_trap";
 }): string {
   const isStrict = config.sourceMode === "strict";
   const isFormB = config.form === "B";
   const isExternal = !!config.externalLiteratureMode;
+  const isShortDirect = config.lengthStyle === "short_direct" || config.objective === "recall";
+  const isTrickyTrap = config.lengthStyle === "tricky_trap" || config.objective === "tricky";
 
   const difficultyDefinitions = {
     easy: "EASY: Direct conceptual understanding, clear one-step physiological reasoning, standard terminology.",
@@ -157,6 +168,23 @@ export function buildGenerationSystemPrompt(config: {
   };
 
   const objectiveBlock = buildObjectivePromptBlock(config.objective, config.includeImage ?? false);
+
+  const lengthDirective = isShortDirect
+    ? `\nQUESTION PACING & LENGTH DIRECTIVE — SHORT & DIRECT QUESTION (1-2 SENTENCES MAXIMUM):
+- The question stem MUST be SHORT, CRISP, and PUNCHY (1 to 2 sentences maximum).
+- Directly test core definitions, diagnostic hallmarks, pathological criteria, or biochemical cascades directly from the source material.
+- DO NOT pad with a long, dense fictional patient scenario for this question. Keep it fast-paced, punchy, and clear so the overall course has great pacing and avoids student fatigue!`
+    : config.lengthStyle === "long_vignette"
+      ? `\nQUESTION PACING & LENGTH DIRECTIVE — FULL BOARD VIGNETTE (5-7 SENTENCES):
+- Author an authentic, multi-step USMLE / Robbins clinical case (patient demographics, history, vitals, labs, or biopsy findings).
+- The student must synthesize multiple clinical clues to identify the correct mechanism or diagnosis.`
+      : isTrickyTrap
+        ? `\nQUESTION STYLE DIRECTIVE — COGNITIVE TRAP (CONFUSING / TEMPTING DISTRACTOR):
+- Design ONE distractor to be an alluring "Cognitive Trap" (a common medical misconception or tempting near-miss that students mistakenly think is right).
+- Include a specific pivot detail in the stem that definitively separates the right answer from the trap.
+- In the explanation, include: "⚠️ Cognitive Trap: Why Option [X] is tempting..."`
+        : `\nQUESTION PACING & LENGTH DIRECTIVE — MEDIUM CLINICAL/MECHANISTIC (2-4 SENTENCES):
+- Write a focused 2 to 4 sentence clinical presentation or physiological problem. Balances clinical depth with smooth readability.`;
 
   const antiRepetitionBlock =
     config.forbiddenConcepts && config.forbiddenConcepts.length > 0
@@ -170,18 +198,19 @@ STRICT ANTI-SIMILARITY MANDATE: It is strictly forbidden to test the same mechan
   const externalModeBlock = isExternal
     ? `\nEXTERNAL MEDICAL LITERATURE & BOARD-EXAM SOURCING MODE (UWORLD / USMLE / AMBOSS / ROBBINS):
 You are tasked with sourcing and adapting an authentic international medical board question in the gold-standard style of UWorld Medical Question Bank, USMLE Step 1 / Step 2 CK, AMBOSS, and Robbins Pathology Review on this specific medical topic:
-- Structure: Realistic multi-step clinical presentation (patient demographics, chief complaint, vital signs, physical exam findings, and laboratory/diagnostic data).
+- Structure: Realistic clinical presentation (patient demographics, chief complaint, vital signs, physical exam findings, and laboratory/diagnostic data).
 - Clinical Reasoning: The question must test multi-step pathophysiology or pharmacology (e.g. underlying enzyme defect, cellular cascade, diagnostic confirmation, or next best step), not isolated surface memorization.
 - Educational Objective: The explanation MUST conclude with a crisp, high-yield pearl: "Educational Objective: [Key high-yield board concept]".
 - In "source_fidelity", record the medical literature origin (e.g. "UWorld / USMLE Step 1 Clinical Concept — General Pathology" or "Robbins Pathology Board Review").\n`
     : "";
 
-  const criticalThinkingBlock = `\nGENUINE CRITICAL THINKING MANDATE (NO SHALLOW QUESTIONS):
-- STRICTLY FORBIDDEN: Writing a fake 1-sentence opening (e.g. "A patient has hypoxia...") and then asking for a raw textbook bullet point (e.g. "Which is an established general mechanism?").
-- INSTEAD: Require REAL clinical synthesis or cause-and-effect:
-  * Present a clinical scenario with vital signs, specific timeline, laboratory abnormalities, or biopsy findings.
-  * The student must reason through the cascade (e.g. Why ATP depletion halts the Na+/K+ ATPase pump → sodium influx → hydropic swelling).
-  * Distractors must be authentic medical mimics (real physiological or pathological terms that represent genuine student pitfalls, NOT absurd distractors like "accelerated telomere elongation").\n`;
+  const reasoningDirective = isShortDirect
+    ? `\nDIRECT HIGH-YIELD SOURCING MANDATE:
+- Directly test core medical definitions, morphological hallmarks, enzyme cascades, or pathology criteria from the source excerpt.
+- Distractors must be authentic medical terms or related physiological concepts, not absurd distractors.\n`
+    : `\nGENUINE MEDICAL REASONING MANDATE:
+- The question must require understanding cause-and-effect or clinical synthesis rather than superficial keyword matching.
+- Distractors must be authentic medical mimics (real physiological or pathological terms that represent genuine student pitfalls).\n`;
 
   const imageBlock = config.includeImage
     ? config.imageInfo
@@ -210,9 +239,10 @@ TARGET QUESTION CONFIGURATION:
 - Question Objective: ${config.objective}
 - Source Fidelity Mode: ${isStrict ? "STRICT SOURCE MODE (Source is primary factual foundation)" : "SOURCE + AI CLINICAL REASONING"}
 ${config.styleContext ? `\nSTYLE GUIDE & COURSE REFERENCE:\n${config.styleContext.slice(0, 2000)}\n` : ""}
+${lengthDirective}
 ${antiRepetitionBlock}
 ${externalModeBlock}
-${criticalThinkingBlock}
+${reasoningDirective}
 ${objectiveBlock ? `\n${objectiveBlock}\n` : ""}
 ${imageBlock}
 
@@ -223,7 +253,7 @@ ${isFormB ? `FORM B (COMBINED QUESTION):
 3. The "options" array contains lettered options A, B, C, D representing combinations of the numbered statements:
    - Examples of combinations: "1 and 3 only", "1, 2, and 4", "All of the above", "None of the above", "2 only".
 4. The "answer_labels" must be an array with the single correct option letter (e.g. ["B"]).` : `FORM A (STANDARD QUESTION):
-1. The "stem" contains the complete clinical vignette or question scenario.
+1. The "stem" contains the complete question or clinical scenario.
 2. The "statements" array is EMPTY [].
 3. The "options" array contains 4 distinct options with labels ["A", "B", "C", "D"].
 4. Distractors must be plausible, sophisticated, and reflect common medical misconceptions, but definitively incorrect.
@@ -231,9 +261,10 @@ ${isFormB ? `FORM B (COMBINED QUESTION):
 
 CRITICAL RULES FOR "stem":
 - The "stem" must contain ONLY the actual question or clinical scenario itself.
+${isShortDirect ? "- Stem length: Exactly 1 to 2 sentences. Fast-paced, direct, and unambiguous." : ""}
 - ABSOLUTELY NEVER begin the stem with filler topic echoes, chapter headers, or meta-introductions!
   * FORBIDDEN OPENINGS: "In the foundational framework of...", "In the framework of...", "In the scope of...", "Within the framework of...", "In the classification of...", "In the context of...", "In the study of...", "According to the provided text...", "Regarding the pathogenesis/etiology/mechanisms of...", "Based on the excerpt...".
-  * INSTEAD: Jump straight into the direct question or clinical vignette (e.g. "A 58-year-old male with a history of acute myocardial infarction presents with..."). Do NOT place any introductory meta-phrases before the question.
+  * INSTEAD: Jump straight into the direct question or clinical vignette.
 
 EXPLANATION STRUCTURE RULES (Crucial):
 You must supply a structured explanation object with these exact keys:

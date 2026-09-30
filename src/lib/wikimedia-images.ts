@@ -21,25 +21,34 @@ export interface MedicalImageResult {
  * Falls back to broader medical terms if a highly specific query returns no results.
  */
 export async function searchRealMedicalImage(query: string): Promise<MedicalImageResult | null> {
+  // Strip non-alphanumeric characters and meta-instruction words
   const cleanQuery = query
+    .replace(/\b(recall|objective|chapter|mcq|question|undefined|exam|form|test|step)\b/gi, " ")
     .replace(/[^\w\s-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
   if (!cleanQuery) return null;
 
-  // Search variations: primary specific query, then broader clinical query
+  const coreWords = cleanQuery.split(" ").filter((w) => w.length > 2);
+  const core3 = coreWords.slice(0, 3).join(" ");
+  const core2 = coreWords.slice(0, 2).join(" ");
+
+  // Search variations: primary specific query, then broader clinical queries, all with filetype:bitmap
   const queryCandidates = [
-    cleanQuery,
-    `${cleanQuery} histology pathology`,
-    `${cleanQuery.split(" ").slice(0, 3).join(" ")} medical diagram`,
-  ];
+    `${cleanQuery} filetype:bitmap`,
+    `${core3} pathology histology filetype:bitmap`,
+    `${core3} histology filetype:bitmap`,
+    `${core2} pathology filetype:bitmap`,
+    `${core2} medical diagram filetype:bitmap`,
+    `${core2} anatomy filetype:bitmap`,
+  ].filter((q, idx, arr) => arr.indexOf(q) === idx && q.length > 18);
 
   for (const q of queryCandidates) {
     try {
       const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(
         q,
-      )}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url|size|extmetadata&format=json&origin=*`;
+      )}&gsrnamespace=6&gsrlimit=10&prop=imageinfo&iiprop=url|size|mime|extmetadata&format=json&origin=*`;
 
       const res = await fetch(url, {
         headers: {
@@ -55,8 +64,6 @@ export async function searchRealMedicalImage(query: string): Promise<MedicalImag
       if (!pages) continue;
 
       const items = Object.values(pages) as any[];
-
-      // Filter for suitable medical images (JPG, PNG, WebP, SVG with adequate resolution)
       const validImages: MedicalImageResult[] = [];
 
       for (const item of items) {
@@ -64,9 +71,21 @@ export async function searchRealMedicalImage(query: string): Promise<MedicalImag
         if (!info?.url) continue;
 
         const imgUrl = String(info.url);
-        // Exclude audio, video, PDFs, or tiny icons
-        if (/\.(ogg|ogv|oga|mp4|webm|pdf|djvu)$/i.test(imgUrl)) continue;
-        if ((info.width && info.width < 400) || (info.height && info.height < 300)) continue;
+        const cleanPath = imgUrl.split("?")[0].toLowerCase();
+        const title = String(item.title || "");
+
+        // 1. Strict MIME verification: Must be an actual image
+        const mime = String(info.mime || "").toLowerCase();
+        if (mime && !mime.startsWith("image/")) continue;
+
+        // 2. Strict extension verification (strip query parameters first)
+        if (!/\.(jpe?g|png|webp|svg)$/i.test(cleanPath)) continue;
+
+        // 3. Exclude scanned antique books, Internet Archive documents, PDFs, audio/video
+        if (/\(IA\s+|\.pdf|\.djvu|\.ogg|\.mp4|\.webm/i.test(title) || /\(IA\s+/i.test(cleanPath)) continue;
+
+        // 4. Exclude tiny icons or corrupted files
+        if ((info.width && info.width < 300) || (info.height && info.height < 200)) continue;
 
         const extMeta = info.extmetadata ?? {};
         const rawDesc =
@@ -76,7 +95,7 @@ export async function searchRealMedicalImage(query: string): Promise<MedicalImag
           "";
 
         // Strip HTML tags from description
-        const cleanDesc = rawDesc.replace(/<[^>]*>/g, "").slice(0, 300).trim();
+        const cleanDesc = String(rawDesc).replace(/<[^>]*>/g, "").slice(0, 300).trim();
 
         validImages.push({
           url: imgUrl,
@@ -90,12 +109,42 @@ export async function searchRealMedicalImage(query: string): Promise<MedicalImag
       }
 
       if (validImages.length > 0) {
-        // Return the best-matching candidate
         return validImages[0];
       }
     } catch (err) {
       console.warn(`[searchRealMedicalImage] Error querying Wikimedia for "${q}":`, err);
     }
+  }
+
+  // 5. Final fallback to verified high-res histology/pathology specimen if nothing matched
+  try {
+    const fallbackUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(
+      "histopathology cell injury necrosis filetype:bitmap",
+    )}&gsrnamespace=6&gsrlimit=5&prop=imageinfo&iiprop=url|size|mime|extmetadata&format=json&origin=*`;
+    const fRes = await fetch(fallbackUrl, {
+      headers: { "User-Agent": "AquaQBank-MedicalMCQForge/2.0" },
+    });
+    if (fRes.ok) {
+      const fData = await fRes.json();
+      const fPages = Object.values(fData?.query?.pages || {}) as any[];
+      for (const p of fPages) {
+        const fInfo = p?.imageinfo?.[0];
+        const fClean = String(fInfo?.url || "").split("?")[0].toLowerCase();
+        if (fInfo?.url && /\.(jpe?g|png|webp)$/i.test(fClean) && fInfo?.mime?.startsWith("image/")) {
+          return {
+            url: fInfo.url,
+            thumbnailUrl: fInfo.thumburl || fInfo.url,
+            title: String(p.title || "").replace(/^File:/i, "").replace(/\.[^.]+$/, ""),
+            description: "High-resolution medical histology micrograph reference.",
+            sourceUrl: fInfo.descriptionurl || fInfo.url,
+            width: fInfo.width || 800,
+            height: fInfo.height || 600,
+          };
+        }
+      }
+    }
+  } catch (fbErr) {
+    console.warn("[searchRealMedicalImage] Fallback error:", fbErr);
   }
 
   return null;

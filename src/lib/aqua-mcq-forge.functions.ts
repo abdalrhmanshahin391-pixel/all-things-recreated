@@ -1089,11 +1089,38 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
         ...authoredItems.map((ai) => `Stem: "${ai.stem.slice(0, 100)}..."`),
       ];
 
+      // Balanced pacing and length style rotation:
+      // ~35% short_direct (1-2 sentences), ~35% medium_case (2-4 sentences), ~20% long_vignette, ~10% tricky_trap
+      const lengthCycle: Array<"short_direct" | "medium_case" | "long_vignette" | "tricky_trap"> = [
+        "short_direct",
+        "medium_case",
+        "short_direct",
+        "long_vignette",
+        "medium_case",
+        "tricky_trap",
+        "short_direct",
+        "medium_case",
+        "long_vignette",
+        "medium_case",
+      ];
+      const cycleIdx = (existingStems.length + step) % lengthCycle.length;
+      let lengthStyle: "short_direct" | "medium_case" | "long_vignette" | "tricky_trap" = lengthCycle[cycleIdx];
+
+      // If the quota objective specifically demands recall, force short_direct; if tricky, force tricky_trap
+      if (objective === "recall") {
+        lengthStyle = "short_direct";
+      } else if (objective === "tricky") {
+        lengthStyle = "tricky_trap";
+      } else if (objective === "clinical_vignette") {
+        lengthStyle = "long_vignette";
+      }
+
       // Pre-search real medical image if needed so AI can write stem directly about it
       let preSearchedImage: any = null;
       if (shouldIncludeImage) {
         try {
-          preSearchedImage = await searchRealMedicalImage(`${selectedTopic.name} ${objective} pathology histology`);
+          const cleanTopic = selectedTopic.name.replace(/\b(introduction|overview|chapter|review|general|part \d+)\b/gi, "").trim();
+          preSearchedImage = await searchRealMedicalImage(`${cleanTopic || selectedTopic.name} pathology histology`);
         } catch (e) {
           console.warn("[amfGenerateBatch] Pre-search real medical image error:", e);
         }
@@ -1109,6 +1136,7 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
         includeImage: shouldIncludeImage,
         forbiddenConcepts,
         externalLiteratureMode: isExternalStep,
+        lengthStyle,
         imageInfo: preSearchedImage
           ? { title: preSearchedImage.title, description: preSearchedImage.description, url: preSearchedImage.url }
           : null,
@@ -1216,7 +1244,8 @@ Return STRICT JSON.`;
         // Real medical image retrieval (Wikimedia Commons scientific repository)
         let imageUrl: string | null = preSearchedImage?.url ?? null;
         if (!imageUrl && (shouldIncludeImage || (questionJson.image_needed && questionJson.image_prompt))) {
-          const query = questionJson.image_prompt || `${selectedTopic.name} pathology histology`;
+          const cleanTopic = selectedTopic.name.replace(/\b(introduction|overview|chapter|review|general|part \d+)\b/gi, "").trim();
+          const query = questionJson.image_prompt || `${cleanTopic || selectedTopic.name} pathology histology`;
           try {
             imageUrl = await generateMedicalDiagram(supabase, job.provider, apiKey, query, job.id);
           } catch (imgErr) {
@@ -1518,6 +1547,7 @@ export const amfImportJob = createServerFn({ method: "POST" })
           ...i,
           stem: formatQuestionStem(i.stem),
           explanation: stripSourceCitation(rawExp),
+          image_url: i.image_url || exp.image_url || null,
         };
       });
     }
@@ -1546,6 +1576,7 @@ export const amfImportJob = createServerFn({ method: "POST" })
           subject_id: data.subjectId,
           stem: cleanStem,
           explanation: cleanExp || null,
+          image_url: item.image_url || null,
           answer_mode: item.answer_mode ?? "single",
           sort_order: sort,
         };
