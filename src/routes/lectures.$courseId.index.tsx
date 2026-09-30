@@ -21,7 +21,6 @@ import { resolveCourseImageUrl } from "@/lib/course-image";
 import { resolveLectureVideoUrl, resolveLecturePdfUrl } from "@/lib/lecture-video";
 import { IntroVideoModal } from "@/components/lectures/IntroVideoModal";
 import { LecturePdfModal } from "@/components/lectures/LecturePdfModal";
-import { ProtectedContent } from "@/components/protect/ProtectedContent";
 import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
 import { CourseMaterialsList, LiveClassesList } from "@/components/lectures/LectureExtras";
 import { ensureFreeEnrollment } from "@/lib/course-access";
@@ -57,11 +56,7 @@ export const Route = createFileRoute("/lectures/$courseId/")({
       links: [{ rel: "canonical", href: url }],
     };
   },
-  component: () => (
-    <ProtectedContent context="lectures">
-      <LectureCoursePage />
-    </ProtectedContent>
-  ),
+  component: LectureCoursePage,
 });
 
 
