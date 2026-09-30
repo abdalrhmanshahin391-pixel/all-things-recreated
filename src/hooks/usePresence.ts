@@ -30,7 +30,7 @@ export function usePresence() {
       heartbeatTimer = setInterval(() => {
         if (typeof document !== "undefined" && document.hidden) return;
         heartbeat(uid);
-      }, 180_000);
+      }, 900_000);
     }
 
     function stop() {

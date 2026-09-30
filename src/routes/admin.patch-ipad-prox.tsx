@@ -246,7 +246,7 @@ function PatchIpadProX() {
       }
     };
     void tick();
-    const t = setInterval(() => { void tick(); }, 12_000);
+    const t = setInterval(() => { if (!document.hidden) void tick(); }, 20_000);
     return () => clearInterval(t);
   }, [jobId, refreshJobs, pollCutFn, pollSolveFn, cropStoredPages, loadJob]);
 

@@ -375,7 +375,7 @@ function DeviceTracker() {
     // every focus/visibility change. That is a request storm at scale for a
     // check that only needs to be roughly current, so it is now throttled to
     // once every 5 minutes and never runs while the tab is hidden.
-    const MIN_GAP_MS = 5 * 60_000;
+    const MIN_GAP_MS = 30 * 60_000;
 
     async function ping(force = false) {
       if (cancelled) return;
@@ -417,7 +417,7 @@ function DeviceTracker() {
       void ping(true);
     })();
 
-    const interval = window.setInterval(() => void ping(), MIN_GAP_MS);
+
     const onVisible = () => {
       if (document.visibilityState === "visible") void ping();
     };
@@ -426,7 +426,7 @@ function DeviceTracker() {
     return () => {
       cancelled = true;
       unsub?.();
-      window.clearInterval(interval);
+
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
