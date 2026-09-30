@@ -1299,6 +1299,11 @@ function AquaMcqForgeStudio() {
     }
     stopRunnerRef.current = false;
     setRunning(true);
+    patchJobQuietly({ status: "generating" });
+    try {
+      localStorage.setItem(`amf_runner_active_${jobId}`, "true");
+    } catch {}
+
     const modeLabel = topics.length === 0 ? "Full Document Mode (Single Topic)" : `${topics.length} Sub-Topic Mode`;
     const apiLabel = job?.api_mode === "batch" ? "💰 50% Batch API (Cost Saver)" : "⚡ Standard Realtime API";
     setRunnerLog((prev) => [
@@ -1308,7 +1313,7 @@ function AquaMcqForgeStudio() {
 
     try {
       const targetCount = job.coverageMode ? 50 : (job.total_questions ?? 20);
-      const batchSize = job?.api_mode === "batch" ? 3 : 2;
+      const batchSize = job?.api_mode === "batch" ? 4 : 2;
 
       while (!stopRunnerRef.current) {
         setRunnerLog((prev) => [`[${new Date().toLocaleTimeString()}] Authoring next question batch...`, ...prev.slice(0, 50)]);
@@ -1337,6 +1342,10 @@ function AquaMcqForgeStudio() {
         if (res.totalItems >= targetCount) {
           setRunnerLog((prev) => [`🎉 Target of ${targetCount} questions reached!`, ...prev.slice(0, 50)]);
           toast.success("Target question count reached!");
+          patchJobQuietly({ status: "completed" });
+          try {
+            localStorage.removeItem(`amf_runner_active_${jobId}`);
+          } catch {}
           break;
         }
 
@@ -1357,8 +1366,34 @@ function AquaMcqForgeStudio() {
   function stopGeneration() {
     stopRunnerRef.current = true;
     setRunning(false);
+    patchJobQuietly({ status: "paused" });
+    try {
+      localStorage.removeItem(`amf_runner_active_${jobId}`);
+    } catch {}
     setRunnerLog((prev) => [`[${new Date().toLocaleTimeString()}] Generation paused by user.`, ...prev.slice(0, 50)]);
   }
+
+  // Auto-resume generation session if user previously initiated it and navigated away
+  const autoResumedRef = useRef(false);
+  useEffect(() => {
+    if (!job || autoResumedRef.current || running) return;
+    let wasActive = false;
+    try {
+      wasActive = localStorage.getItem(`amf_runner_active_${jobId}`) === "true";
+    } catch {}
+    const isGenerating = job.status === "generating" || wasActive;
+    const targetCount = job.coverageMode ? 50 : (job.total_questions ?? 20);
+    const currentTotal = stats.total ?? 0;
+
+    if (isGenerating && currentTotal < targetCount && sources.length > 0) {
+      autoResumedRef.current = true;
+      setRunnerLog((prev) => [
+        `[${new Date().toLocaleTimeString()}] 🔄 Resumed active generation session (${currentTotal}/${targetCount} questions)...`,
+        ...prev,
+      ]);
+      void startGeneration();
+    }
+  }, [job, stats.total, sources.length, running, jobId]);
 
   if (!job) {
     return (
@@ -1914,6 +1949,15 @@ function AquaMcqForgeStudio() {
                       </Button>
                     </div>
                   </div>
+
+                  {job.api_mode === "batch" && (
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2.5">
+                      <span className="text-base">💰</span>
+                      <div>
+                        <strong>50% Batch API Background Mode:</strong> All questions are saved continuously to the cloud database. You can leave this page, switch tabs, or close your browser at any time — when you return, your progress is safely preserved and generation will automatically continue.
+                      </div>
+                    </div>
+                  )}
 
                   {/* Actions */}
                   <div className="flex flex-wrap items-center gap-3">

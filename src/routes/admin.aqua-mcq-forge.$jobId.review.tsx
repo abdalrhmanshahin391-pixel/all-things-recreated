@@ -146,6 +146,16 @@ function AquaMcqForgeReview() {
     }
   }
 
+  async function handleRemoveImage(itemId: string) {
+    try {
+      await updateItem({ data: { itemId, patch: { image_url: null, has_image: false } } });
+      setItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, image_url: null, has_image: false } : item)));
+      toast.success("Image removed from question.");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to remove image.");
+    }
+  }
+
   async function handleBulkApprove() {
     const pendingIds = items.filter((i) => i.status === "pending" || i.status === "needs_review").map((i) => i.id);
     if (!pendingIds.length) {
@@ -500,12 +510,19 @@ function AquaMcqForgeReview() {
                             }
                           }}
                         />
-                        {item.image_prompt && (
-                          <div className="p-2 text-[11px] text-slate-600 bg-white border-t border-slate-100 flex items-center justify-between gap-2">
-                            <span className="truncate">Reference: {item.image_prompt}</span>
-                            <span className="text-[10px] font-bold text-indigo-600 shrink-0">Wikimedia Verified</span>
+                        <div className="p-2 text-[11px] text-slate-600 bg-white border-t border-slate-100 flex items-center justify-between gap-2">
+                          <span className="truncate">{item.image_prompt ? `Reference: ${item.image_prompt}` : "Verified Medical Micrograph"}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[10px] font-bold text-indigo-600">Wikimedia Verified</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveImage(item.id)}
+                              className="text-rose-600 hover:text-rose-800 text-[10px] font-bold flex items-center gap-0.5 ml-1 transition"
+                            >
+                              <Trash2 size={11} /> Remove
+                            </button>
                           </div>
-                        )}
+                        </div>
                       </div>
                     )}
 

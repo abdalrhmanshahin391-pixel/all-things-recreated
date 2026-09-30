@@ -226,7 +226,54 @@ async function callOpenAiText(apiKey: string, model: string, system: string, pro
 import { searchRealMedicalImage } from "@/lib/wikimedia-images";
 
 /**
- * Real Medical Image Retrieval:
+ * Real Medical Image Retrieval helper:
+ * Extracts specific medical findings from text chunks for high-relevance search.
+ */
+export function extractSpecificPathologyEntity(text: string, topicName: string): string {
+  const cleanTopic = topicName.replace(/\b(introduction|overview|chapter|review|general|part \d+)\b/gi, "").trim();
+  const highYieldEntities = [
+    "coagulative necrosis",
+    "liquefactive necrosis",
+    "caseous necrosis",
+    "fat necrosis",
+    "fibrinoid necrosis",
+    "gangrenous necrosis",
+    "karyorrhexis",
+    "karyolysis",
+    "pyknosis",
+    "cellular swelling",
+    "hydropic change",
+    "steatosis",
+    "fatty change",
+    "fatty liver",
+    "apoptosis",
+    "autophagy",
+    "calcification",
+    "amyloid",
+    "lipofuscin",
+    "hemosiderin",
+    "hypertrophy",
+    "hyperplasia",
+    "metaplasia",
+    "dysplasia",
+    "atrophy",
+    "infarction",
+    "granuloma",
+    "thrombosis",
+    "embolism",
+    "atherosclerosis",
+    "inflammation",
+    "fibrosis",
+  ];
+  for (const entity of highYieldEntities) {
+    if (new RegExp(`\\b${entity}\\b`, "i").test(text)) {
+      return `${entity} ${cleanTopic || ""}`.trim();
+    }
+  }
+  return cleanTopic || topicName;
+}
+
+/**
  * Searches Wikimedia Commons for authentic, high-resolution medical histology,
  * pathology specimens, electron micrographs, and anatomical schematics.
  * Completely replaces synthetic AI blobs with genuine scientific medical literature imagery.
@@ -237,10 +284,11 @@ export async function generateMedicalDiagram(
   apiKey: string,
   prompt: string,
   jobId: string,
+  excludeUrls: string[] = [],
 ): Promise<string> {
   // 1. Search authentic medical literature on Wikimedia Commons with specific clinical prompt
   try {
-    const realImg = await searchRealMedicalImage(prompt);
+    const realImg = await searchRealMedicalImage(prompt, excludeUrls);
     if (realImg?.url) {
       return realImg.url;
     }
@@ -256,7 +304,7 @@ export async function generateMedicalDiagram(
       .filter((w) => w.length > 3)
       .slice(0, 3)
       .join(" ");
-    const broaderImg = await searchRealMedicalImage(`${cleanTokens} pathology`);
+    const broaderImg = await searchRealMedicalImage(`${cleanTokens} pathology`, excludeUrls);
     if (broaderImg?.url) {
       return broaderImg.url;
     }
@@ -265,7 +313,7 @@ export async function generateMedicalDiagram(
   }
 
   // 3. High-res real scientific diagram fallback from open medical literature
-  const fallback = await searchRealMedicalImage("cellular histology pathology specimen");
+  const fallback = await searchRealMedicalImage("cellular pathology histology specimen H&E", excludeUrls);
   return fallback?.url || "https://upload.wikimedia.org/wikipedia/commons/4/48/Biological_cell.svg";
 }
 
@@ -1023,6 +1071,11 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
       (i: any) => i.has_image || Boolean(i.image_url) || Boolean(i.explanation?.image_url),
     ).length;
 
+    // Collect all previously assigned image URLs to prevent ANY duplicate images across the course
+    const usedImageUrls: string[] = existingItems
+      .map((i: any) => i.image_url || i.raw_explanation?.image_url || i.explanation?.image_url)
+      .filter((u: any): u is string => typeof u === "string" && u.trim().length > 0);
+
     let generatedCount = 0;
     const failures: string[] = [];
     const authoredItems: any[] = [];
@@ -1119,8 +1172,16 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
       let preSearchedImage: any = null;
       if (shouldIncludeImage) {
         try {
-          const cleanTopic = selectedTopic.name.replace(/\b(introduction|overview|chapter|review|general|part \d+)\b/gi, "").trim();
-          preSearchedImage = await searchRealMedicalImage(`${cleanTopic || selectedTopic.name} pathology histology`);
+          const currentExcludedUrls = [
+            ...usedImageUrls,
+            ...authoredItems.map((ai) => ai.imageUrl).filter(Boolean),
+          ];
+          const specificConcept = extractSpecificPathologyEntity(textToUse, selectedTopic.name);
+          preSearchedImage = await searchRealMedicalImage(
+            specificConcept,
+            currentExcludedUrls,
+            existingStems.length + step,
+          );
         } catch (e) {
           console.warn("[amfGenerateBatch] Pre-search real medical image error:", e);
         }
@@ -1244,10 +1305,13 @@ Return STRICT JSON.`;
         // Real medical image retrieval (Wikimedia Commons scientific repository)
         let imageUrl: string | null = preSearchedImage?.url ?? null;
         if (!imageUrl && (shouldIncludeImage || (questionJson.image_needed && questionJson.image_prompt))) {
-          const cleanTopic = selectedTopic.name.replace(/\b(introduction|overview|chapter|review|general|part \d+)\b/gi, "").trim();
-          const query = questionJson.image_prompt || `${cleanTopic || selectedTopic.name} pathology histology`;
+          const currentExcludedUrls = [
+            ...usedImageUrls,
+            ...authoredItems.map((ai) => ai.imageUrl).filter(Boolean),
+          ];
+          const query = questionJson.image_prompt || extractSpecificPathologyEntity(textToUse, selectedTopic.name);
           try {
-            imageUrl = await generateMedicalDiagram(supabase, job.provider, apiKey, query, job.id);
+            imageUrl = await generateMedicalDiagram(supabase, job.provider, apiKey, query, job.id, currentExcludedUrls);
           } catch (imgErr) {
             console.warn("Medical image search error:", imgErr);
           }
