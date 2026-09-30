@@ -24,6 +24,8 @@ import {
   Zap,
   Globe,
   Image as ImageIcon,
+  Minus,
+  Plus,
 } from "lucide-react";
 
 import { SiteHeader } from "@/components/SiteHeader";
@@ -61,6 +63,525 @@ export const Route = createFileRoute("/admin/aqua-mcq-forge/$jobId/")({
   }),
   component: AquaMcqForgeStudio,
 });
+
+function TopicQuestionCountEditor({
+  topicId,
+  minVal,
+  targetVal,
+  onUpdateTopic,
+}: {
+  topicId: string;
+  minVal: number;
+  targetVal: number;
+  onUpdateTopic: (patch: Record<string, any>) => void;
+}) {
+  const [minText, setMinText] = useState(String(minVal));
+  const [targetText, setTargetText] = useState(String(targetVal));
+  const isMinFocused = useRef(false);
+  const isTargetFocused = useRef(false);
+
+  useEffect(() => {
+    if (!isMinFocused.current) setMinText(String(minVal));
+    if (!isTargetFocused.current) setTargetText(String(targetVal));
+  }, [minVal, targetVal]);
+
+  return (
+    <div className="flex items-center gap-4 text-xs font-semibold">
+      <div className="flex items-center gap-1.5">
+        <span className="text-slate-500">Min:</span>
+        <Input
+          type="number"
+          min={0}
+          max={50}
+          className="w-14 h-7 text-xs text-center p-1 font-bold border-slate-300"
+          value={minText}
+          onFocus={() => {
+            isMinFocused.current = true;
+          }}
+          onChange={(e) => {
+            setMinText(e.target.value);
+            const val = parseInt(e.target.value);
+            if (!isNaN(val) && val >= 0) {
+              onUpdateTopic({ min_questions: val });
+            }
+          }}
+          onBlur={() => {
+            isMinFocused.current = false;
+            const val = parseInt(minText);
+            const valid = isNaN(val) || val < 0 ? 0 : val;
+            setMinText(String(valid));
+            onUpdateTopic({ min_questions: valid });
+          }}
+        />
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-slate-500">Target:</span>
+        <Input
+          type="number"
+          min={1}
+          max={50}
+          className="w-14 h-7 text-xs text-center p-1 font-bold border-slate-300"
+          value={targetText}
+          onFocus={() => {
+            isTargetFocused.current = true;
+          }}
+          onChange={(e) => {
+            setTargetText(e.target.value);
+            const val = parseInt(e.target.value);
+            if (!isNaN(val) && val >= 1) {
+              onUpdateTopic({ target_questions: val });
+            }
+          }}
+          onBlur={() => {
+            isTargetFocused.current = false;
+            const val = parseInt(targetText);
+            const valid = isNaN(val) || val < 1 ? 1 : val;
+            setTargetText(String(valid));
+            onUpdateTopic({ target_questions: valid });
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ImageTargetEditor({
+  job,
+  onUpdate,
+}: {
+  job: any;
+  onUpdate: (patch: Record<string, any>) => void;
+}) {
+  const current = Number(job.image_target_count ?? 0);
+  const [text, setText] = useState(String(current));
+  const isFocused = useRef(false);
+
+  useEffect(() => {
+    if (!isFocused.current) setText(String(job.image_target_count ?? 0));
+  }, [job.image_target_count]);
+
+  const commit = (num: number) => {
+    const val = Math.max(0, Math.min(500, num));
+    setText(String(val));
+    onUpdate({ image_target_count: val });
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <Button
+        type="button"
+        size="icon"
+        variant="outline"
+        className="h-8 w-8 rounded-lg border-indigo-200 hover:bg-indigo-50 text-indigo-700"
+        onClick={() => commit(current - 1)}
+        disabled={current <= 0}
+      >
+        <Minus size={13} />
+      </Button>
+      <Input
+        type="number"
+        min={0}
+        max={500}
+        className="w-20 h-8 text-sm text-center font-bold border-indigo-300 focus:ring-indigo-500"
+        value={text}
+        onFocus={() => {
+          isFocused.current = true;
+        }}
+        onChange={(e) => {
+          setText(e.target.value);
+          const parsed = parseInt(e.target.value);
+          if (!isNaN(parsed) && parsed >= 0) {
+            onUpdate({ image_target_count: parsed });
+          }
+        }}
+        onBlur={() => {
+          isFocused.current = false;
+          const parsed = parseInt(text);
+          commit(isNaN(parsed) ? 0 : parsed);
+        }}
+      />
+      <Button
+        type="button"
+        size="icon"
+        variant="outline"
+        className="h-8 w-8 rounded-lg border-indigo-200 hover:bg-indigo-50 text-indigo-700"
+        onClick={() => commit(current + 1)}
+      >
+        <Plus size={13} />
+      </Button>
+      <span className="text-xs text-slate-500 font-medium ml-1">questions</span>
+    </div>
+  );
+}
+
+function QuestionSourceSplitEditor({
+  job,
+  onUpdate,
+}: {
+  job: any;
+  onUpdate: (patch: Record<string, any>) => void;
+}) {
+  const total = Number(job.total_questions ?? 20);
+  const ext = Math.max(0, Math.min(total, Number(job.external_questions_count ?? 0)));
+  const ai = Math.max(0, total - ext);
+
+  const [totalText, setTotalText] = useState(String(total));
+  const [extText, setExtText] = useState(String(ext));
+  const [aiText, setAiText] = useState(String(ai));
+
+  const isTotalFocused = useRef(false);
+  const isExtFocused = useRef(false);
+  const isAiFocused = useRef(false);
+
+  // Sync from props when not actively editing
+  useEffect(() => {
+    if (!isTotalFocused.current) setTotalText(String(total));
+    if (!isExtFocused.current) setExtText(String(ext));
+    if (!isAiFocused.current) setAiText(String(ai));
+  }, [total, ext, ai]);
+
+  const commitTotal = (newTot: number) => {
+    const validTot = Math.max(1, Math.min(500, newTot));
+    const newExt = Math.min(ext, validTot);
+    const newAi = validTot - newExt;
+    setTotalText(String(validTot));
+    setExtText(String(newExt));
+    setAiText(String(newAi));
+    onUpdate({ total_questions: validTot, external_questions_count: newExt });
+  };
+
+  const commitExt = (newExtVal: number) => {
+    const validExt = Math.max(0, Math.min(total, newExtVal));
+    const newAi = total - validExt;
+    setExtText(String(validExt));
+    setAiText(String(newAi));
+    onUpdate({ external_questions_count: validExt });
+  };
+
+  const commitAi = (newAiVal: number) => {
+    const validAi = Math.max(0, Math.min(total, newAiVal));
+    const newExt = total - validAi;
+    setAiText(String(validAi));
+    setExtText(String(newExt));
+    onUpdate({ external_questions_count: newExt });
+  };
+
+  const applyPreset = (extRatio: number) => {
+    const targetExt = Math.round(total * extRatio);
+    commitExt(targetExt);
+  };
+
+  const extPct = total > 0 ? Math.round((ext / total) * 100) : 0;
+  const aiPct = 100 - extPct;
+
+  return (
+    <div className="space-y-4 p-4 rounded-xl border border-indigo-200 bg-indigo-50/40">
+      {/* Header with live count badges */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+          <Globe size={15} className="text-indigo-600" /> Question Source Split (Internet vs. AI)
+        </Label>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+            🌐 {ext} Internet / UWorld ({extPct}%)
+          </span>
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+            🤖 {ai} PDF AI Synthesis ({aiPct}%)
+          </span>
+        </div>
+      </div>
+
+      <p className="text-xs text-slate-600 leading-relaxed">
+        Control exactly how many questions are sourced &amp; adapted from real international medical question banks (UWorld, USMLE Step 1/2, Robbins, AMBOSS) versus synthesized directly by AI from your uploaded textbook PDF.
+      </p>
+
+      {/* Total Questions Config Row */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 rounded-lg border border-slate-200 bg-white shadow-xs">
+        <div className="flex items-center gap-2 text-xs">
+          <span className="font-bold text-slate-700">Total Questions to Author:</span>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-7 w-7 rounded-md border-slate-300 hover:bg-slate-100"
+              onClick={() => commitTotal(total - 5)}
+              disabled={total <= 5}
+            >
+              <Minus size={12} />
+            </Button>
+            <Input
+              type="number"
+              min={1}
+              max={500}
+              className="w-16 h-7 text-xs text-center font-bold border-slate-300"
+              value={totalText}
+              onFocus={() => {
+                isTotalFocused.current = true;
+              }}
+              onChange={(e) => {
+                setTotalText(e.target.value);
+                const val = parseInt(e.target.value);
+                if (!isNaN(val) && val >= 1) {
+                  const newExt = Math.min(ext, val);
+                  const newAi = val - newExt;
+                  setExtText(String(newExt));
+                  setAiText(String(newAi));
+                  onUpdate({ total_questions: val, external_questions_count: newExt });
+                }
+              }}
+              onBlur={() => {
+                isTotalFocused.current = false;
+                const val = parseInt(totalText);
+                commitTotal(isNaN(val) || val < 1 ? 20 : val);
+              }}
+            />
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-7 w-7 rounded-md border-slate-300 hover:bg-slate-100"
+              onClick={() => commitTotal(total + 5)}
+            >
+              <Plus size={12} />
+            </Button>
+            <span className="text-slate-500 font-medium ml-1">questions</span>
+          </div>
+        </div>
+
+        {/* Quick Total Presets */}
+        <div className="flex items-center gap-1.5 text-xs">
+          <span className="text-slate-400 text-[11px] font-medium mr-1">Quick:</span>
+          {[10, 20, 30, 50, 100].map((count) => (
+            <Button
+              key={count}
+              type="button"
+              size="sm"
+              variant={total === count ? "default" : "outline"}
+              className={`h-6 px-2 text-[11px] font-bold ${
+                total === count
+                  ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                  : "text-slate-600 border-slate-200 hover:bg-slate-50"
+              }`}
+              onClick={() => commitTotal(count)}
+            >
+              {count}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Side-by-Side Split Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+        {/* Card 1: Internet / UWorld */}
+        <div className="p-3.5 rounded-xl border border-indigo-200 bg-white shadow-xs space-y-2">
+          <div className="flex justify-between items-center text-xs">
+            <span className="font-bold text-indigo-700 flex items-center gap-1.5">
+              <Globe size={14} /> Sourced from Internet / UWorld
+            </span>
+            <Badge variant="outline" className="font-mono font-bold text-indigo-600 bg-indigo-50 border-indigo-200">
+              {extPct}%
+            </Badge>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-8 w-8 rounded-lg border-indigo-200 hover:bg-indigo-50 text-indigo-700"
+              onClick={() => commitExt(ext - 1)}
+              disabled={ext <= 0}
+            >
+              <Minus size={13} />
+            </Button>
+            <Input
+              type="number"
+              min={0}
+              max={total}
+              className="w-20 h-8 text-sm text-center font-bold border-indigo-300 focus:ring-indigo-500"
+              value={extText}
+              onFocus={() => {
+                isExtFocused.current = true;
+              }}
+              onChange={(e) => {
+                setExtText(e.target.value);
+                const val = parseInt(e.target.value);
+                if (!isNaN(val) && val >= 0) {
+                  const clamped = Math.min(total, val);
+                  const newAi = total - clamped;
+                  setAiText(String(newAi));
+                  onUpdate({ external_questions_count: clamped });
+                }
+              }}
+              onBlur={() => {
+                isExtFocused.current = false;
+                const val = parseInt(extText);
+                commitExt(isNaN(val) || val < 0 ? 0 : val);
+              }}
+            />
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-8 w-8 rounded-lg border-indigo-200 hover:bg-indigo-50 text-indigo-700"
+              onClick={() => commitExt(ext + 1)}
+              disabled={ext >= total}
+            >
+              <Plus size={13} />
+            </Button>
+            <span className="text-xs text-slate-500 font-medium">questions</span>
+          </div>
+
+          <p className="text-[11px] text-slate-500">
+            Real clinical vignettes adapted from USMLE Step 1/2, UWorld &amp; AMBOSS.
+          </p>
+        </div>
+
+        {/* Card 2: PDF AI Synthesis */}
+        <div className="p-3.5 rounded-xl border border-emerald-200 bg-white shadow-xs space-y-2">
+          <div className="flex justify-between items-center text-xs">
+            <span className="font-bold text-emerald-700 flex items-center gap-1.5">
+              <Sparkles size={14} /> Synthesized from PDF / AI
+            </span>
+            <Badge variant="outline" className="font-mono font-bold text-emerald-600 bg-emerald-50 border-emerald-200">
+              {aiPct}%
+            </Badge>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-8 w-8 rounded-lg border-emerald-200 hover:bg-emerald-50 text-emerald-700"
+              onClick={() => commitAi(ai - 1)}
+              disabled={ai <= 0}
+            >
+              <Minus size={13} />
+            </Button>
+            <Input
+              type="number"
+              min={0}
+              max={total}
+              className="w-20 h-8 text-sm text-center font-bold border-emerald-300 focus:ring-emerald-500"
+              value={aiText}
+              onFocus={() => {
+                isAiFocused.current = true;
+              }}
+              onChange={(e) => {
+                setAiText(e.target.value);
+                const val = parseInt(e.target.value);
+                if (!isNaN(val) && val >= 0) {
+                  const clamped = Math.min(total, val);
+                  const newExt = total - clamped;
+                  setExtText(String(newExt));
+                  onUpdate({ external_questions_count: newExt });
+                }
+              }}
+              onBlur={() => {
+                isAiFocused.current = false;
+                const val = parseInt(aiText);
+                commitAi(isNaN(val) || val < 0 ? 0 : val);
+              }}
+            />
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-8 w-8 rounded-lg border-emerald-200 hover:bg-emerald-50 text-emerald-700"
+              onClick={() => commitAi(ai + 1)}
+              disabled={ai >= total}
+            >
+              <Plus size={13} />
+            </Button>
+            <span className="text-xs text-slate-500 font-medium">questions</span>
+          </div>
+
+          <p className="text-[11px] text-slate-500">
+            Original questions created directly from your textbook PDF content.
+          </p>
+        </div>
+      </div>
+
+      {/* Visual Slider */}
+      <div className="space-y-1.5 p-3 rounded-lg border border-slate-200 bg-white">
+        <div className="flex justify-between items-center text-xs font-semibold">
+          <span className="text-indigo-700 flex items-center gap-1">
+            🌐 {ext} Internet ({extPct}%)
+          </span>
+          <span className="text-emerald-700 flex items-center gap-1">
+            🤖 {ai} PDF AI ({aiPct}%)
+          </span>
+        </div>
+        <Slider
+          value={[ext]}
+          min={0}
+          max={total}
+          step={1}
+          onValueChange={([val]) => commitExt(val)}
+        />
+        <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+          <span>0% Internet (100% PDF)</span>
+          <span>50% / 50%</span>
+          <span>100% Internet (0% PDF)</span>
+        </div>
+      </div>
+
+      {/* Quick Presets Row */}
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
+        <span className="text-slate-500 font-medium text-[11px]">Quick Split Presets:</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-emerald-50 hover:text-emerald-700 border-slate-200"
+            onClick={() => applyPreset(0)}
+          >
+            🤖 100% PDF / AI
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-indigo-50 hover:text-indigo-700 border-slate-200"
+            onClick={() => applyPreset(0.25)}
+          >
+            🌐 25% Web / 75% PDF
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-indigo-50 hover:text-indigo-700 border-slate-200"
+            onClick={() => applyPreset(0.5)}
+          >
+            ⚖️ 50% / 50% Balanced
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-indigo-50 hover:text-indigo-700 border-slate-200"
+            onClick={() => applyPreset(0.75)}
+          >
+            🌐 75% Web / 25% PDF
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-indigo-50 hover:text-indigo-700 border-slate-200"
+            onClick={() => applyPreset(1)}
+          >
+            🌐 100% Internet / UWorld
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function AquaMcqForgeStudio() {
   const { jobId } = Route.useParams();
@@ -108,6 +629,34 @@ function AquaMcqForgeStudio() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const patchJobQuietly = useCallback(
+    async (patch: Record<string, any>) => {
+      setJob((prev: any) => (prev ? { ...prev, ...patch } : prev));
+      try {
+        const res: any = await updateJob({ data: { jobId, patch } });
+        if (res && typeof res === "object" && !res.error) {
+          setJob((prev: any) => (prev ? { ...prev, ...res } : prev));
+        }
+      } catch (err: any) {
+        console.error("Failed to quietly update job:", err);
+        toast.error(err?.message || "Failed to update setting.");
+      }
+    },
+    [updateJob, jobId],
+  );
+
+  const patchTopicQuietly = useCallback(
+    async (topicId: string, patch: Record<string, any>) => {
+      setTopics((prev: any[]) => prev.map((t) => (t.id === topicId ? { ...t, ...patch } : t)));
+      try {
+        await updateTopic({ data: { topicId, patch } });
+      } catch (err: any) {
+        console.error("Failed to quietly update topic:", err);
+      }
+    },
+    [updateTopic],
+  );
 
   // PDF Text Extraction & Upload
   async function handleSourceUpload(file: File) {
@@ -554,10 +1103,7 @@ function AquaMcqForgeStudio() {
                               <div className="flex items-center gap-2">
                                 <Switch
                                   checked={t.enabled}
-                                  onCheckedChange={async (val) => {
-                                    await updateTopic({ data: { topicId: t.id, patch: { enabled: val } } });
-                                    await refresh();
-                                  }}
+                                  onCheckedChange={(val) => patchTopicQuietly(t.id, { enabled: val })}
                                 />
                                 <span className="font-bold text-sm text-slate-900">{t.name}</span>
                               </div>
@@ -565,38 +1111,12 @@ function AquaMcqForgeStudio() {
                             </div>
 
                             {t.enabled && (
-                              <div className="flex items-center gap-4 text-xs font-semibold">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-slate-500">Min:</span>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    max={50}
-                                    className="w-14 h-7 text-xs text-center p-1"
-                                    value={t.min_questions}
-                                    onChange={async (e) => {
-                                      const val = parseInt(e.target.value) || 0;
-                                      await updateTopic({ data: { topicId: t.id, patch: { min_questions: val } } });
-                                      await refresh();
-                                    }}
-                                  />
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-slate-500">Target:</span>
-                                  <Input
-                                    type="number"
-                                    min={1}
-                                    max={50}
-                                    className="w-14 h-7 text-xs text-center p-1"
-                                    value={t.target_questions}
-                                    onChange={async (e) => {
-                                      const val = parseInt(e.target.value) || 1;
-                                      await updateTopic({ data: { topicId: t.id, patch: { target_questions: val } } });
-                                      await refresh();
-                                    }}
-                                  />
-                                </div>
-                              </div>
+                              <TopicQuestionCountEditor
+                                topicId={t.id}
+                                minVal={t.min_questions ?? 0}
+                                targetVal={t.target_questions ?? 1}
+                                onUpdateTopic={(patch) => patchTopicQuietly(t.id, patch)}
+                              />
                             )}
                           </div>
                         </div>
@@ -646,10 +1166,7 @@ function AquaMcqForgeStudio() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                       <button
                         type="button"
-                        onClick={async () => {
-                          await updateJob({ data: { jobId, patch: { api_mode: "standard" } } });
-                          await refresh();
-                        }}
+                        onClick={() => patchJobQuietly({ api_mode: "standard" })}
                         className={`p-3.5 rounded-xl border text-left transition ${
                           job.api_mode !== "batch"
                             ? "border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/20"
@@ -666,10 +1183,7 @@ function AquaMcqForgeStudio() {
 
                       <button
                         type="button"
-                        onClick={async () => {
-                          await updateJob({ data: { jobId, patch: { api_mode: "batch" } } });
-                          await refresh();
-                        }}
+                        onClick={() => patchJobQuietly({ api_mode: "batch" })}
                         className={`p-3.5 rounded-xl border text-left transition ${
                           job.api_mode === "batch"
                             ? "border-amber-600 bg-amber-50/50 ring-2 ring-amber-500/20"
@@ -699,10 +1213,7 @@ function AquaMcqForgeStudio() {
                       </div>
                       <Switch
                         checked={job.include_images}
-                        onCheckedChange={async (val) => {
-                          await updateJob({ data: { jobId, patch: { include_images: val } } });
-                          await refresh();
-                        }}
+                        onCheckedChange={(val) => patchJobQuietly({ include_images: val })}
                       />
                     </div>
 
@@ -716,18 +1227,7 @@ function AquaMcqForgeStudio() {
                               Set to 0 to use the frequency mode below instead.
                             </p>
                           </div>
-                          <Input
-                            type="number"
-                            min={0}
-                            max={500}
-                            className="w-20 h-8 text-sm text-center font-bold border-indigo-300 focus:ring-indigo-500"
-                            value={job.image_target_count ?? 0}
-                            onChange={async (e) => {
-                              const val = parseInt(e.target.value) || 0;
-                              await updateJob({ data: { jobId, patch: { image_target_count: val } } });
-                              await refresh();
-                            }}
-                          />
+                          <ImageTargetEditor job={job} onUpdate={patchJobQuietly} />
                         </div>
 
                         {(job.image_target_count ?? 0) === 0 && (
@@ -745,10 +1245,7 @@ function AquaMcqForgeStudio() {
                                       ? "bg-indigo-600 text-white text-xs h-7 font-bold"
                                       : "text-xs h-7 border-slate-300"
                                   }
-                                  onClick={async () => {
-                                    await updateJob({ data: { jobId, patch: { image_frequency: mode } } });
-                                    await refresh();
-                                  }}
+                                  onClick={() => patchJobQuietly({ image_frequency: mode })}
                                 >
                                   {mode === "every" ? "Every Question" : mode === "half" ? "Every 2nd" : "AI Decides"}
                                 </Button>
@@ -762,81 +1259,7 @@ function AquaMcqForgeStudio() {
                   </div>
 
                   {/* Question Source Split: Internet (UWorld/USMLE) vs. PDF AI Synthesis */}
-                  <div className="space-y-4 p-4 rounded-xl border border-indigo-200 bg-indigo-50/40">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                        <Globe size={15} className="text-indigo-600" /> Question Source Split (Internet vs. AI)
-                      </Label>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                          🌐 {job.external_questions_count ?? 0} Internet / UWorld
-                        </span>
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          🤖 {Math.max(0, (job.total_questions ?? 20) - (job.external_questions_count ?? 0))} PDF AI Synthesis
-                        </span>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      Control exactly how many questions are sourced &amp; adapted from real international medical question banks (UWorld, USMLE Step 1/2, Robbins, AMBOSS) versus synthesized directly by AI from your uploaded textbook PDF.
-                    </p>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                      <div className="p-3 rounded-lg border border-indigo-200 bg-white shadow-xs">
-                        <div className="flex justify-between items-center mb-1 text-xs">
-                          <span className="font-bold text-indigo-700 flex items-center gap-1">
-                            <Globe size={13} /> Sourced from Internet / UWorld
-                          </span>
-                          <span className="font-mono font-bold text-indigo-600">
-                            {job.total_questions ? Math.round(((job.external_questions_count ?? 0) / job.total_questions) * 100) : 0}%
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-2">
-                          <Input
-                            type="number"
-                            min={0}
-                            max={job.total_questions ?? 100}
-                            className="w-24 h-8 text-sm text-center font-bold border-indigo-300 focus:ring-indigo-500"
-                            value={job.external_questions_count ?? 0}
-                            onChange={async (e) => {
-                              const val = Math.max(0, parseInt(e.target.value) || 0);
-                              await updateJob({ data: { jobId, patch: { external_questions_count: val } } });
-                              await refresh();
-                            }}
-                          />
-                          <span className="text-xs text-slate-500">questions</span>
-                        </div>
-                      </div>
-
-                      <div className="p-3 rounded-lg border border-emerald-200 bg-white shadow-xs">
-                        <div className="flex justify-between items-center mb-1 text-xs">
-                          <span className="font-bold text-emerald-700 flex items-center gap-1">
-                            <Sparkles size={13} /> Synthesized from PDF / AI
-                          </span>
-                          <span className="font-mono font-bold text-emerald-600">
-                            {job.total_questions ? 100 - Math.round(((job.external_questions_count ?? 0) / job.total_questions) * 100) : 100}%
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-2">
-                          <Input
-                            type="number"
-                            min={0}
-                            max={job.total_questions ?? 100}
-                            className="w-24 h-8 text-sm text-center font-bold border-emerald-300 focus:ring-emerald-500"
-                            value={Math.max(0, (job.total_questions ?? 20) - (job.external_questions_count ?? 0))}
-                            onChange={async (e) => {
-                              const pdfVal = Math.max(0, parseInt(e.target.value) || 0);
-                              const total = job.total_questions ?? 20;
-                              const newExt = Math.max(0, total - pdfVal);
-                              await updateJob({ data: { jobId, patch: { external_questions_count: newExt } } });
-                              await refresh();
-                            }}
-                          />
-                          <span className="text-xs text-slate-500">questions</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <QuestionSourceSplitEditor job={job} onUpdate={patchJobQuietly} />
 
                   {/* Difficulty Ratios */}
                   <div className="space-y-4 p-4 rounded-xl border border-slate-200 bg-slate-50">
@@ -859,10 +1282,7 @@ function AquaMcqForgeStudio() {
                           min={0}
                           max={100}
                           step={5}
-                          onValueChange={async ([val]) => {
-                            await updateJob({ data: { jobId, patch: { difficulty_easy: val } } });
-                            await refresh();
-                          }}
+                          onValueChange={([val]) => patchJobQuietly({ difficulty_easy: val })}
                         />
                       </div>
                       <div>
@@ -875,10 +1295,7 @@ function AquaMcqForgeStudio() {
                           min={0}
                           max={100}
                           step={5}
-                          onValueChange={async ([val]) => {
-                            await updateJob({ data: { jobId, patch: { difficulty_medium: val } } });
-                            await refresh();
-                          }}
+                          onValueChange={([val]) => patchJobQuietly({ difficulty_medium: val })}
                         />
                       </div>
                       <div>
@@ -891,10 +1308,7 @@ function AquaMcqForgeStudio() {
                           min={0}
                           max={100}
                           step={5}
-                          onValueChange={async ([val]) => {
-                            await updateJob({ data: { jobId, patch: { difficulty_hard: val } } });
-                            await refresh();
-                          }}
+                          onValueChange={([val]) => patchJobQuietly({ difficulty_hard: val })}
                         />
                       </div>
                     </div>
@@ -911,10 +1325,7 @@ function AquaMcqForgeStudio() {
                       min={50}
                       max={100}
                       step={1}
-                      onValueChange={async ([val]) => {
-                        await updateJob({ data: { jobId, patch: { dup_threshold: val } } });
-                        await refresh();
-                      }}
+                      onValueChange={([val]) => patchJobQuietly({ dup_threshold: val })}
                     />
                     <p className="text-xs text-slate-500">
                       Questions with similarity ≥ {job.dup_threshold}% are automatically rejected to avoid duplicates.
@@ -968,10 +1379,9 @@ function AquaMcqForgeStudio() {
                               min={0}
                               max={100}
                               step={5}
-                              onValueChange={async ([val]) => {
+                              onValueChange={([val]) => {
                                 const newRatios = { ...(job.objective_ratios ?? {}), [id]: val };
-                                await updateJob({ data: { jobId, patch: { objective_ratios: newRatios } } });
-                                await refresh();
+                                patchJobQuietly({ objective_ratios: newRatios });
                               }}
                             />
                           </div>
@@ -1037,10 +1447,9 @@ function AquaMcqForgeStudio() {
                         className={`text-xs h-7 gap-1 font-semibold ${
                           job.api_mode === "batch" ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-white text-slate-700"
                         }`}
-                        onClick={async () => {
+                        onClick={() => {
                           const next = job.api_mode === "batch" ? "standard" : "batch";
-                          await updateJob({ data: { jobId, patch: { api_mode: next } } });
-                          await refresh();
+                          patchJobQuietly({ api_mode: next });
                         }}
                       >
                         {job.api_mode === "batch" ? "💰 Mode: 50% Batch" : "⚡ Mode: Standard"}
@@ -1053,10 +1462,7 @@ function AquaMcqForgeStudio() {
                         className={`text-xs h-7 gap-1 font-semibold ${
                           job.include_images ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-white text-slate-700"
                         }`}
-                        onClick={async () => {
-                          await updateJob({ data: { jobId, patch: { include_images: !job.include_images } } });
-                          await refresh();
-                        }}
+                        onClick={() => patchJobQuietly({ include_images: !job.include_images })}
                       >
                         <ImageIcon size={13} />
                         {job.include_images ? "AI Diagrams: ON" : "AI Diagrams: OFF"}

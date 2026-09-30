@@ -324,6 +324,8 @@ export const amfListJobs = createServerFn({ method: "GET" })
         } catch {}
         return {
           ...g,
+          ...meta,
+          api_mode: meta.api_mode || "standard",
           source_mode: meta.source_mode || "strict",
           style_mode: meta.style_mode || "ai",
           style_course_id: meta.style_course_id ?? null,
@@ -337,8 +339,12 @@ export const amfListJobs = createServerFn({ method: "GET" })
           coverage_mode: meta.coverage_mode ?? false,
           dup_threshold: meta.dup_threshold ?? 87,
           include_images: meta.include_images ?? false,
+          image_frequency: meta.image_frequency ?? "auto",
           image_count: meta.image_count ?? 0,
+          image_target_count: meta.image_target_count ?? meta.image_count ?? 0,
+          external_questions_count: meta.external_questions_count ?? 0,
           source_fidelity_enabled: meta.source_fidelity_enabled ?? true,
+          objective_ratios: meta.objective_ratios ?? {},
         };
       });
       jobs = parsedJobs;
@@ -459,7 +465,10 @@ export const amfCreateJob = createServerFn({ method: "POST" })
       include_images: data.includeImages,
       image_frequency: data.imageFrequency || "auto",
       image_count: data.imageCount,
+      image_target_count: data.imageCount,
+      external_questions_count: data.externalQuestionsCount || 0,
       source_fidelity_enabled: data.sourceFidelityEnabled,
+      objective_ratios: {},
       topics: [],
     };
 
@@ -526,6 +535,7 @@ export async function fetchJobData(supabase: any, jobId: string) {
 
     job = {
       ...gRow,
+      ...meta,
       api_mode: meta.api_mode || "standard",
       topics_optional: meta.topics_optional ?? true,
       source_mode: meta.source_mode || "strict",
@@ -543,7 +553,10 @@ export async function fetchJobData(supabase: any, jobId: string) {
       include_images: meta.include_images ?? false,
       image_frequency: meta.image_frequency ?? "auto",
       image_count: meta.image_count ?? 0,
+      image_target_count: meta.image_target_count ?? meta.image_count ?? 0,
+      external_questions_count: meta.external_questions_count ?? 0,
       source_fidelity_enabled: meta.source_fidelity_enabled ?? true,
+      objective_ratios: meta.objective_ratios ?? {},
     };
 
     topics = Array.isArray(meta.topics) ? meta.topics : [];
@@ -627,8 +640,10 @@ export const amfUpdateJob = createServerFn({ method: "POST" })
     const { supabase } = await ensureStaff(context);
 
     // Try amf_jobs
-    const { data: row } = await supabase.from(JOBS).update(data.patch).eq("id", data.jobId).select("*").maybeSingle();
-    if (row) return row;
+    try {
+      const { data: row, error: jErr } = await supabase.from(JOBS).update(data.patch).eq("id", data.jobId).select("*").maybeSingle();
+      if (!jErr && row) return row;
+    } catch {}
 
     // Fallback to amg_groups
     const { data: gRow } = await supabase.from(AMG_GROUPS).select("*").eq("id", data.jobId).maybeSingle();
@@ -638,11 +653,24 @@ export const amfUpdateJob = createServerFn({ method: "POST" })
         meta = JSON.parse(gRow.instructions || "{}");
       } catch {}
       const newMeta = { ...meta, ...data.patch };
-      await supabase
+      const directUpdates: Record<string, any> = {
+        instructions: JSON.stringify(newMeta),
+        updated_at: new Date().toISOString(),
+      };
+      if (typeof data.patch.name === "string") directUpdates.name = data.patch.name;
+      if (typeof data.patch.status === "string") directUpdates.status = data.patch.status;
+
+      const { data: updatedGRow } = await supabase
         .from(AMG_GROUPS)
-        .update({ instructions: JSON.stringify(newMeta), updated_at: new Date().toISOString() })
-        .eq("id", data.jobId);
-      return { ...gRow, ...newMeta };
+        .update(directUpdates)
+        .eq("id", data.jobId)
+        .select("*")
+        .maybeSingle();
+
+      return {
+        ...(updatedGRow || gRow),
+        ...newMeta,
+      };
     }
 
     return { ok: true };
@@ -957,12 +985,12 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
     let existingItems: any[] = [];
     const { data: amfItems } = await supabase
       .from(ITEMS)
-      .select("stem, topic_id, objective, answer_labels, options, raw_explanation, source_fidelity")
+      .select("stem, topic_id, objective, answer_labels, options, raw_explanation, source_fidelity, has_image, image_url")
       .eq("job_id", data.jobId);
     if (amfItems) {
       existingItems = amfItems;
     } else {
-      const { data: amgItems } = await supabase.from(AMG_ITEMS).select("stem, options, answer_labels, explanation").eq("group_id", data.jobId);
+      const { data: amgItems } = await supabase.from(AMG_ITEMS).select("stem, options, answer_labels, explanation, image_url").eq("group_id", data.jobId);
       existingItems = amgItems ?? [];
     }
 
@@ -991,15 +1019,9 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
     // Track objectives of existing questions for quota-based selection
     const existingObjectives: string[] = existingItems.map((i: any) => String(i.objective ?? "")).filter(Boolean);
     // Track how many image questions already exist
-    let existingImageCount = 0;
-    {
-      const { count } = await supabase
-        .from(ITEMS)
-        .select("id", { count: "exact", head: true })
-        .eq("job_id", data.jobId)
-        .eq("has_image", true);
-      existingImageCount = count ?? 0;
-    }
+    const existingImageCount = existingItems.filter(
+      (i: any) => i.has_image || Boolean(i.image_url) || Boolean(i.explanation?.image_url),
+    ).length;
 
     let generatedCount = 0;
     const failures: string[] = [];
