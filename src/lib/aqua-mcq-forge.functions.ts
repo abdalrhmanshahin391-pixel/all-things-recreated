@@ -238,7 +238,7 @@ export async function generateMedicalDiagram(
   prompt: string,
   jobId: string,
 ): Promise<string> {
-  // 1. Search authentic medical literature on Wikimedia Commons
+  // 1. Search authentic medical literature on Wikimedia Commons with specific clinical prompt
   try {
     const realImg = await searchRealMedicalImage(prompt);
     if (realImg?.url) {
@@ -248,31 +248,24 @@ export async function generateMedicalDiagram(
     console.warn("[generateMedicalDiagram] Wikimedia search error:", e);
   }
 
-  // 2. Try DALL-E 3 if OpenAI provider with high-fidelity scientific prompt
-  if (provider === "openai" && apiKey) {
-    try {
-      const res = await fetch("https://api.openai.com/v1/images/generations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model: "dall-e-3",
-          prompt: `High precision medical anatomical schematic or histology illustration: ${prompt}. Crisp vector medical board exam diagram, pure white background, annotated.`,
-          n: 1,
-          size: "1024x1024",
-        }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        const url = json?.data?.[0]?.url;
-        if (url) return url;
-      }
-    } catch (e) {
-      console.warn("DALL-E generation fallback:", e);
+  // 2. Broaden search to core medical histology / pathology keywords
+  try {
+    const cleanTokens = prompt
+      .replace(/[^a-zA-Z0-9\s]/g, " ")
+      .split(" ")
+      .filter((w) => w.length > 3)
+      .slice(0, 3)
+      .join(" ");
+    const broaderImg = await searchRealMedicalImage(`${cleanTokens} pathology`);
+    if (broaderImg?.url) {
+      return broaderImg.url;
     }
+  } catch (e) {
+    console.warn("[generateMedicalDiagram] Broader medical search error:", e);
   }
 
-  // Fallback to high-res medical diagram
-  const fallback = await searchRealMedicalImage("cellular injury histology pathology");
+  // 3. High-res real scientific diagram fallback from open medical literature
+  const fallback = await searchRealMedicalImage("cellular histology pathology specimen");
   return fallback?.url || "https://upload.wikimedia.org/wikipedia/commons/4/48/Biological_cell.svg";
 }
 
@@ -752,10 +745,24 @@ export const amfDiscoverTopics = createServerFn({ method: "POST" })
 
     if (!sources?.length) throw new Error("No textbook PDF uploaded yet. Upload a source PDF first.");
 
-    const sampleText = sources
-      .map((s: any) => (Array.isArray(s.chunks) ? s.chunks.slice(0, 8).join("\n\n") : String(s.extracted_text || "").slice(0, 35000)))
-      .join("\n\n")
-      .slice(0, 40000);
+    const sampleChunks: string[] = [];
+    for (const s of sources) {
+      if (Array.isArray(s.chunks) && s.chunks.length > 0) {
+        const total = s.chunks.length;
+        if (total <= 12) {
+          sampleChunks.push(...s.chunks);
+        } else {
+          // Sample evenly across the entire document (beginning, middle, and end)
+          const step = Math.max(1, Math.floor(total / 12));
+          for (let i = 0; i < total && sampleChunks.length < 16; i += step) {
+            sampleChunks.push(s.chunks[i]);
+          }
+        }
+      } else {
+        sampleChunks.push(String(s.extracted_text || "").slice(0, 45000));
+      }
+    }
+    const sampleText = sampleChunks.join("\n\n").slice(0, 60000);
 
     let rawTopics: any[] = [];
 
@@ -964,12 +971,22 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
     for (const it of existingItems) {
       if (Array.isArray(it.options) && Array.isArray(it.answer_labels)) {
         for (const opt of it.options) {
-          if (it.answer_labels.includes(opt.label) && opt.text) {
-            existingAnswers.push(opt.text.trim());
+          const optText = opt?.body || opt?.text || "";
+          if (it.answer_labels.includes(opt.label) && optText.trim()) {
+            existingAnswers.push(optText.trim());
           }
         }
       }
     }
+
+    // Count existing external questions already in database
+    const existingExternalCount = existingItems.filter(
+      (i: any) =>
+        i.source_origin === "external_literature" ||
+        (typeof i.source_fidelity === "string" && /usmle|uworld|robbins|external|board/i.test(i.source_fidelity)) ||
+        (typeof i.raw_explanation?.source_fidelity === "string" && /usmle|uworld|robbins|external|board/i.test(i.raw_explanation.source_fidelity)) ||
+        (typeof i.explanation?.source_fidelity === "string" && /usmle|uworld|robbins|external|board/i.test(i.explanation.source_fidelity)),
+    ).length;
 
     // Track objectives of existing questions for quota-based selection
     const existingObjectives: string[] = existingItems.map((i: any) => String(i.objective ?? "")).filter(Boolean);
@@ -984,7 +1001,6 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
       existingImageCount = count ?? 0;
     }
 
-
     let generatedCount = 0;
     const failures: string[] = [];
     const authoredItems: any[] = [];
@@ -997,14 +1013,17 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
     for (let step = 0; step < data.batchSize; step++) {
       const selectedTopic = activeTopics[step % activeTopics.length];
 
-      // Sequential document-wide chunk traversal: NEVER repeat the same 3 pages!
+      // Sequential document-wide chunk traversal: walk across ALL pages of the document
       const topicKeywords = selectedTopic.name.toLowerCase().split(" ").filter((w: string) => w.length > 3);
       const matchingChunks = allChunks.filter((chunk: string) =>
         topicKeywords.some((kw: string) => chunk.toLowerCase().includes(kw)),
       );
-      const pool = matchingChunks.length > 0 ? matchingChunks : allChunks;
-      // Advance through pool so every question gets a different slice of the document
-      const startIndex = (existingStems.length + step * 2) % Math.max(1, pool.length);
+      
+      // Advance through the entire PDF progressively so every question explores a different page range
+      const totalChunks = allChunks.length;
+      const globalChunkIndex = ((existingStems.length + step) * 2) % Math.max(1, totalChunks);
+      const pool = matchingChunks.length >= 3 ? matchingChunks : allChunks;
+      const startIndex = globalChunkIndex % Math.max(1, pool.length);
       const chunksSelected = [
         pool[startIndex],
         pool[(startIndex + 1) % pool.length],
@@ -1024,10 +1043,10 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
         ...authoredItems.map((ai) => ai.objective ?? ""),
       ]);
 
-      // Check external literature questions count
+      // Check external literature questions count (persisted across batches)
       const externalTargetCount = Number(job.external_questions_count ?? 0);
-      const currentExternalCount = authoredItems.filter((i) => i.isExternal).length;
-      const isExternalStep = externalTargetCount > 0 && currentExternalCount < externalTargetCount;
+      const totalExternalSoFar = existingExternalCount + authoredItems.filter((i) => i.isExternal).length;
+      const isExternalStep = externalTargetCount > 0 && totalExternalSoFar < externalTargetCount;
 
       // Image: use image_target_count (absolute number) if set; otherwise fall back to frequency string
       const imageTargetCount: number | null =
@@ -1041,11 +1060,11 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
             (job.image_frequency === "half" && (step + existingStems.length) % 2 === 0) ||
             (step + existingStems.length) % 3 === 0);
 
-      // Anti-repetition forbidden concepts list
+      // Anti-repetition forbidden concepts and previous answers
       const forbiddenConcepts = [
-        ...existingStems.slice(-6).map((s) => s.slice(0, 80)),
-        ...existingAnswers.slice(-10),
-        ...authoredItems.map((ai) => ai.stem.slice(0, 80)),
+        ...existingAnswers.slice(-25).map((a) => `Correct answer: "${a}"`),
+        ...existingStems.slice(-15).map((s) => `Stem: "${s.slice(0, 100)}..."`),
+        ...authoredItems.map((ai) => `Stem: "${ai.stem.slice(0, 100)}..."`),
       ];
 
       // Pre-search real medical image if needed so AI can write stem directly about it
@@ -1157,18 +1176,19 @@ Return STRICT JSON.`;
         }
 
         // Answer-level deduplication: reject if answer text concept matches an existing answer in this job
-        const newCorrectOption = Array.isArray(questionJson.options) && Array.isArray(questionJson.answer_labels)
-          ? questionJson.options.find((o: any) => questionJson.answer_labels.includes(o.label))?.text
+        const correctOptObj = Array.isArray(questionJson.options) && Array.isArray(questionJson.answer_labels)
+          ? questionJson.options.find((o: any) => questionJson.answer_labels.includes(o.label))
           : null;
+        const newCorrectOption = String(correctOptObj?.body || correctOptObj?.text || "").trim();
         if (newCorrectOption) {
           const isAnswerDuplicate = existingAnswers.some(
-            (ans) => calculateSimilarity(ans.toLowerCase(), newCorrectOption.toLowerCase()) > 70,
+            (ans) => calculateSimilarity(ans.toLowerCase(), newCorrectOption.toLowerCase()) > 60,
           );
           if (isAnswerDuplicate) {
             failures.push(`Rejected duplicate answer concept: "${newCorrectOption}" already tested.`);
             continue;
           }
-          existingAnswers.push(newCorrectOption.trim());
+          existingAnswers.push(newCorrectOption);
         }
 
         // Real medical image retrieval (Wikimedia Commons scientific repository)

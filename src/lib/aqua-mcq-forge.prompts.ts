@@ -161,16 +161,19 @@ export function buildGenerationSystemPrompt(config: {
   const antiRepetitionBlock =
     config.forbiddenConcepts && config.forbiddenConcepts.length > 0
       ? `\nANTI-REPETITION SHIELD (CRITICAL - DO NOT DUPLICATE):
-The following concepts, questions, and correct answers have ALREADY been authored for this topic:
-${config.forbiddenConcepts.slice(-10).map((c) => `* "${c}"`).join("\n")}
-MANDATORY INSTRUCTION: You MUST author a question on a COMPLETELY DIFFERENT mechanism, anatomical/pathological detail, or clinical scenario. It is strictly forbidden to test the same concept or have the same correct answer as any item listed above!\n`
+The following concepts, questions, and correct answers have ALREADY been authored for this topic across previous questions:
+${config.forbiddenConcepts.slice(-40).map((c) => `* "${c}"`).join("\n")}
+MANDATORY INSTRUCTION: You MUST author a question on a COMPLETELY DIFFERENT mechanism, anatomical/pathological detail, or clinical scenario.
+STRICT ANTI-SIMILARITY MANDATE: It is strictly forbidden to test the same mechanism, clinical condition, or have the same or closely related correct answer as any item listed above!\n`
       : "";
 
   const externalModeBlock = isExternal
-    ? `\nEXTERNAL MEDICAL LITERATURE & BOARD-EXAM SOURCING MODE:
-Draw upon authentic international medical board question banks (such as USMLE Step 1, Robbins Review of Pathology, PreTest, or BRS Pathology) testing the exact same medical topic covered in the excerpt.
-- Formulate an authentic, multi-step clinical vignette or laboratory experiment.
-- In "source_fidelity", record the medical literature origin (e.g. "USMLE Step 1 Board Review / General Pathology" or "Robbins Pathology Review").\n`
+    ? `\nEXTERNAL MEDICAL LITERATURE & BOARD-EXAM SOURCING MODE (UWORLD / USMLE / AMBOSS / ROBBINS):
+You are tasked with sourcing and adapting an authentic international medical board question in the gold-standard style of UWorld Medical Question Bank, USMLE Step 1 / Step 2 CK, AMBOSS, and Robbins Pathology Review on this specific medical topic:
+- Structure: Realistic multi-step clinical presentation (patient demographics, chief complaint, vital signs, physical exam findings, and laboratory/diagnostic data).
+- Clinical Reasoning: The question must test multi-step pathophysiology or pharmacology (e.g. underlying enzyme defect, cellular cascade, diagnostic confirmation, or next best step), not isolated surface memorization.
+- Educational Objective: The explanation MUST conclude with a crisp, high-yield pearl: "Educational Objective: [Key high-yield board concept]".
+- In "source_fidelity", record the medical literature origin (e.g. "UWorld / USMLE Step 1 Clinical Concept — General Pathology" or "Robbins Pathology Board Review").\n`
     : "";
 
   const criticalThinkingBlock = `\nGENUINE CRITICAL THINKING MANDATE (NO SHALLOW QUESTIONS):

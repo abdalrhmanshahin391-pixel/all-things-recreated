@@ -223,7 +223,7 @@ function AquaMcqForgeStudio() {
 
         if (res.newItems?.length) {
           for (const item of res.newItems) {
-            const imgBadge = item.hasImage ? " 🎨 [Pure AI Medical Diagram]" : "";
+            const imgBadge = item.hasImage ? " 🔬 [Real Medical Literature Image]" : "";
             setRunnerLog((prev) => [
               `✅ Authored #${item.order}: [${item.form === "B" ? "Combined" : "Standard"}] ${item.difficulty.toUpperCase()} — "${item.stem.slice(0, 60)}..."${imgBadge}`,
               ...prev.slice(0, 50),
@@ -761,30 +761,80 @@ function AquaMcqForgeStudio() {
 
                   </div>
 
-                  {/* External Medical Literature & Web Questions */}
-                  <div className="space-y-3 p-4 rounded-xl border border-slate-200 bg-slate-50">
-                    <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-                      <div>
-                        <Label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                          <Globe size={14} className="text-indigo-600" /> External Web &amp; Book Sourced Questions
-                        </Label>
-                        <p className="text-slate-500 mt-0.5">
-                          How many questions should be sourced &amp; adapted from medical board question banks (USMLE Step 1, Robbins, PreTest) on this topic?
-                          Set to 0 to only synthesize from the uploaded PDF text.
-                        </p>
+                  {/* Question Source Split: Internet (UWorld/USMLE) vs. PDF AI Synthesis */}
+                  <div className="space-y-4 p-4 rounded-xl border border-indigo-200 bg-indigo-50/40">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                        <Globe size={15} className="text-indigo-600" /> Question Source Split (Internet vs. AI)
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                          🌐 {job.external_questions_count ?? 0} Internet / UWorld
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          🤖 {Math.max(0, (job.total_questions ?? 20) - (job.external_questions_count ?? 0))} PDF AI Synthesis
+                        </span>
                       </div>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={500}
-                        className="w-20 h-8 text-sm text-center font-bold border-indigo-300 focus:ring-indigo-500"
-                        value={job.external_questions_count ?? 0}
-                        onChange={async (e) => {
-                          const val = parseInt(e.target.value) || 0;
-                          await updateJob({ data: { jobId, patch: { external_questions_count: val } } });
-                          await refresh();
-                        }}
-                      />
+                    </div>
+
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Control exactly how many questions are sourced &amp; adapted from real international medical question banks (UWorld, USMLE Step 1/2, Robbins, AMBOSS) versus synthesized directly by AI from your uploaded textbook PDF.
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div className="p-3 rounded-lg border border-indigo-200 bg-white shadow-xs">
+                        <div className="flex justify-between items-center mb-1 text-xs">
+                          <span className="font-bold text-indigo-700 flex items-center gap-1">
+                            <Globe size={13} /> Sourced from Internet / UWorld
+                          </span>
+                          <span className="font-mono font-bold text-indigo-600">
+                            {job.total_questions ? Math.round(((job.external_questions_count ?? 0) / job.total_questions) * 100) : 0}%
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={job.total_questions ?? 100}
+                            className="w-24 h-8 text-sm text-center font-bold border-indigo-300 focus:ring-indigo-500"
+                            value={job.external_questions_count ?? 0}
+                            onChange={async (e) => {
+                              const val = Math.max(0, parseInt(e.target.value) || 0);
+                              await updateJob({ data: { jobId, patch: { external_questions_count: val } } });
+                              await refresh();
+                            }}
+                          />
+                          <span className="text-xs text-slate-500">questions</span>
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-lg border border-emerald-200 bg-white shadow-xs">
+                        <div className="flex justify-between items-center mb-1 text-xs">
+                          <span className="font-bold text-emerald-700 flex items-center gap-1">
+                            <Sparkles size={13} /> Synthesized from PDF / AI
+                          </span>
+                          <span className="font-mono font-bold text-emerald-600">
+                            {job.total_questions ? 100 - Math.round(((job.external_questions_count ?? 0) / job.total_questions) * 100) : 100}%
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={job.total_questions ?? 100}
+                            className="w-24 h-8 text-sm text-center font-bold border-emerald-300 focus:ring-emerald-500"
+                            value={Math.max(0, (job.total_questions ?? 20) - (job.external_questions_count ?? 0))}
+                            onChange={async (e) => {
+                              const pdfVal = Math.max(0, parseInt(e.target.value) || 0);
+                              const total = job.total_questions ?? 20;
+                              const newExt = Math.max(0, total - pdfVal);
+                              await updateJob({ data: { jobId, patch: { external_questions_count: newExt } } });
+                              await refresh();
+                            }}
+                          />
+                          <span className="text-xs text-slate-500">questions</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
