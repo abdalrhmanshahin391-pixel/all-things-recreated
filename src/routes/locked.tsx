@@ -77,7 +77,7 @@ function LockedPage() {
       }
     };
     void check();
-    const timer = window.setInterval(() => void check(), 15_000);
+    const timer = window.setInterval(() => { if (!document.hidden) void check(); }, 60_000);
     const onVisibility = () => {
       if (document.visibilityState === "visible") void check();
     };

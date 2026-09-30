@@ -101,7 +101,7 @@ function Page() {
       setCourses(((c ?? []) as any[]).map((r) => ({ id: r.id, title: r.title })));
     })();
     refreshJobs();
-    const t = setInterval(refreshJobs, 8000);
+    const t = setInterval(() => { if (!document.hidden) refreshJobs(); }, 20_000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

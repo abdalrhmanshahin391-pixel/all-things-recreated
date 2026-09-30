@@ -24,6 +24,7 @@ export const Route = createFileRoute("/api/public/push-dispatch")({
         for (const m of (data ?? []) as any[]) {
           await (supabaseAdmin.from as any)("push_messages").update({ status: "sending" }).eq("id", m.id);
           await deliverMessage(m.id, m, m.audience_group_ids ?? []);
+          await (supabaseAdmin.rpc as any)("unschedule_push_job", { _id: m.id });
           handled++;
         }
         return Response.json({ handled });

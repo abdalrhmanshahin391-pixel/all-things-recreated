@@ -185,7 +185,7 @@ function Page() {
         say(`poll error: ${e?.message || e}`);
       }
     };
-    pollRef.current = window.setInterval(tick, 20_000);
+    pollRef.current = window.setInterval(() => { if (!document.hidden) void tick(); }, 20_000);
     void tick();
     return () => { if (pollRef.current) window.clearInterval(pollRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps

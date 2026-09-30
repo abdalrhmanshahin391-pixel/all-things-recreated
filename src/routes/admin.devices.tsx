@@ -176,7 +176,7 @@ function AdminDevicesPage() {
         // The full-page refresh reports errors; background synchronization stays silent.
       }
     };
-    const timer = window.setInterval(() => void refreshLocks(), 15_000);
+    const timer = window.setInterval(() => { if (!document.hidden) void refreshLocks(); }, 60_000);
     const onVisibility = () => {
       if (document.visibilityState === "visible") void refreshLocks();
     };

@@ -6214,6 +6214,7 @@ export type Database = {
       }
       sync_golden_user: { Args: { _user_id: string }; Returns: undefined }
       university_id_by_slug: { Args: { _slug: string }; Returns: string }
+      unschedule_push_job: { Args: { _id: string }; Returns: undefined }
       user_in_group: {
         Args: { _group_id: string; _user_id: string }
         Returns: boolean
