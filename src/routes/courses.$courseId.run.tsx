@@ -212,9 +212,39 @@ function RunPage() {
         }
 
         if (!hasPkg && !allFree) {
-          setAccessDenied(accessKey);
-          navigate({ to: "/courses/$courseId/checkout", params: { courseId } });
-          return;
+          // Check if student owns a lecture course that links to this course as test or homework
+          let hasLectureAccess = false;
+          try {
+            const { data: userLec } = await (supabase.from as any)("user_lecture_courses")
+              .select("course_id")
+              .eq("user_id", user.id);
+            const { data: staffLec } = await (supabase.from as any)("lecture_staff")
+              .select("course_id")
+              .eq("user_id", user.id);
+            const userCourseIds = Array.from(new Set([
+              ...((userLec ?? []).map((l: any) => l.course_id)),
+              ...((staffLec ?? []).map((s: any) => s.course_id)),
+            ]));
+
+            if (userCourseIds.length > 0) {
+              const { data: matchingItems } = await (supabase.from as any)("lecture_items")
+                .select("id, link_url, lecture_subjects!inner(course_id)")
+                .in("lecture_subjects.course_id", userCourseIds)
+                .ilike("link_url", `%"linked_course_id":"${courseId}"%`)
+                .limit(1);
+              if (matchingItems && matchingItems.length > 0) {
+                hasLectureAccess = true;
+              }
+            }
+          } catch (err) {
+            console.warn("Could not check lecture linked access:", err);
+          }
+
+          if (!hasLectureAccess) {
+            setAccessDenied(accessKey);
+            navigate({ to: "/courses/$courseId/checkout", params: { courseId } });
+            return;
+          }
         }
       }
       setAccessReady(accessKey);

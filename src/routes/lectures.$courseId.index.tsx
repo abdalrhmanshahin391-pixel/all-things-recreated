@@ -13,6 +13,10 @@ import {
   FileText,
   Sparkles,
   CheckCircle2,
+  Crown,
+  BookOpen,
+  ExternalLink,
+  HelpCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -24,6 +28,7 @@ import { LecturePdfModal } from "@/components/lectures/LecturePdfModal";
 import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
 import { CourseMaterialsList, LiveClassesList } from "@/components/lectures/LectureExtras";
 import { ensureFreeEnrollment } from "@/lib/course-access";
+import { LectureOwnersModal } from "@/components/lectures/LectureOwnersModal";
 
 export const Route = createFileRoute("/lectures/$courseId/")({
   loader: async ({ params }) => {
@@ -74,6 +79,24 @@ type Course = {
   intro_free: boolean;
 };
 
+type ItemMeta = {
+  poster_url?: string;
+  description?: string;
+  materials?: { id: string; title: string; url: string }[];
+  quiz_type?: "test" | "homework" | "quiz";
+  source_type?: "course" | "manual";
+  linked_course_id?: string;
+  linked_course_title?: string;
+};
+
+function parseItemMeta(raw?: string | null): ItemMeta {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { poster_url: raw };
+  }
+}
 
 type Subject = { id: string; title: string; position: number; hidden?: boolean };
 type Item = {
@@ -86,6 +109,7 @@ type Item = {
   video_storage_path: string | null;
   pdf_url: string | null;
   pdf_storage_path: string | null;
+  link_url?: string | null;
   duration_seconds: number | null;
   is_free: boolean;
 };
@@ -109,12 +133,15 @@ function LectureCoursePage() {
   const [activePdf, setActivePdf] = useState<{ src: string; title: string } | null>(null);
   const [pdfLoading, setPdfLoading] = useState<string | null>(null);
   const [isCourseStaff, setIsCourseStaff] = useState(false);
+  const [isHeadStaff, setIsHeadStaff] = useState(false);
+  const [showOwnersModal, setShowOwnersModal] = useState(false);
 
-  const owns = enrolled || isAdmin || isCourseStaff;
+  const owns = enrolled || isAdmin || isCourseStaff || isHeadStaff;
 
   useEffect(() => {
     if (!user) {
       setIsCourseStaff(false);
+      setIsHeadStaff(false);
       return;
     }
     let cancelled = false;
@@ -125,11 +152,21 @@ function LectureCoursePage() {
         .eq("course_id", courseId)
         .limit(1);
       if (!cancelled) setIsCourseStaff(((data ?? []) as unknown[]).length > 0);
+
+      // Check if caller is designated Head of Staff
+      const { data: headRow } = await (supabase.from as any)("site_content")
+        .select("value_en")
+        .eq("key", `lecture_head_staff_${courseId}`)
+        .maybeSingle();
+      const headIds = headRow?.value_en ? headRow.value_en.split(",").map((s: string) => s.trim()) : [];
+      if (!cancelled) {
+        setIsHeadStaff(isAdmin || headIds.includes(user.id));
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [user, courseId]);
+  }, [user, courseId, isAdmin]);
 
 
   useEffect(() => {
@@ -159,12 +196,12 @@ function LectureCoursePage() {
       const subjList = (((subs ?? []) as Subject[])).filter((s) => isAdmin || !s.hidden);
       if (!cancelled) {
         setSubjects(subjList);
-        if (subjList.length && openSubject === null) setOpenSubject(subjList[0].id);
+        // Note: Classes remain collapsed by default on initial page load as requested
       }
 
       if (subjList.length) {
         const { data: its } = await (supabase.from as any)("lecture_items")
-          .select("id,subject_id,kind,title,position,video_url,video_storage_path,pdf_url,pdf_storage_path,duration_seconds,is_free")
+          .select("id,subject_id,kind,title,position,video_url,video_storage_path,pdf_url,pdf_storage_path,link_url,duration_seconds,is_free")
           .in("subject_id", subjList.map((s) => s.id))
           .order("position");
         if (!cancelled) setItems((its ?? []) as Item[]);
@@ -439,29 +476,44 @@ function LectureCoursePage() {
 
 
 
-        {(isAdmin || isCourseStaff) && (
+        {(isAdmin || isCourseStaff || isHeadStaff) && (
           <div className="mt-10 rounded-lg border border-border bg-card p-5 flex flex-wrap items-center justify-between gap-4">
             <div>
-              <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-widest">
-                {isAdmin ? "Admin" : "Teaching staff"}
+              <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1.5">
+                {isAdmin ? "Admin" : isHeadStaff ? "👑 Head of Staff" : "Teaching staff"}
               </div>
               <div className="text-foreground font-semibold">Manage this lecture course</div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link
-                to="/admin/lectures/$courseId"
-                params={{ courseId }}
-                className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90"
-              >
-                Topics &amp; lessons →
-              </Link>
+              {(isAdmin || isHeadStaff) && (
+                <button
+                  type="button"
+                  onClick={() => setShowOwnersModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-amber-500/10 text-amber-700 border border-amber-500/30 text-xs font-bold hover:bg-amber-500/20 transition-colors shadow-2xs"
+                >
+                  <Crown size={14} className="text-amber-600" />
+                  Course Owners Dashboard
+                </button>
+              )}
 
-              <Link
-                to="/admin/lecture-centre"
-                className="px-4 py-2 rounded-md border border-border text-sm font-semibold hover:border-accent"
-              >
-                Material, questions &amp; classes →
-              </Link>
+              {(isAdmin || isCourseStaff) && (
+                <>
+                  <Link
+                    to="/admin/lectures/$courseId"
+                    params={{ courseId }}
+                    className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90"
+                  >
+                    Topics &amp; lessons →
+                  </Link>
+
+                  <Link
+                    to="/admin/lecture-centre"
+                    className="px-4 py-2 rounded-md border border-border text-sm font-semibold hover:border-accent"
+                  >
+                    Material, questions &amp; classes →
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -484,6 +536,14 @@ function LectureCoursePage() {
             setActiveVideo(null);
             setIntroOpen(false);
           }}
+        />
+      )}
+
+      {showOwnersModal && course && (
+        <LectureOwnersModal
+          courseId={course.id}
+          courseTitle={course.title}
+          onClose={() => setShowOwnersModal(false)}
         />
       )}
     </div>
@@ -510,10 +570,20 @@ function ItemRow({
   onOpenPdf?: () => void;
 }) {
   const isLecture = item.kind === "lecture";
+  const isQuiz = item.kind === "quiz";
+  const meta = parseItemMeta(item.link_url);
+  const quizType = meta.quiz_type || "test";
+  const typeLabel = quizType === "homework" ? "Homework" : quizType === "quiz" ? "Practice" : "Test";
+  const hasLinkedCourse = isQuiz && !!meta.linked_course_id;
   const hasVideo = !!(item.video_url || item.video_storage_path);
   const hasPdf = !!(item.pdf_url || item.pdf_storage_path);
-  const Icon = isLecture ? (hasVideo ? PlayCircle : FileText) : ListChecks;
   const unlocked = owns || item.is_free;
+
+  const Icon = isLecture
+    ? (hasVideo ? PlayCircle : FileText)
+    : quizType === "homework"
+      ? BookOpen
+      : ListChecks;
 
   const kindLabel = isLecture
     ? hasVideo && hasPdf
@@ -521,23 +591,40 @@ function ItemRow({
       : hasPdf
         ? "Lecture PDF"
         : "Lecture video"
-    : "Quiz · session mode";
+    : hasLinkedCourse
+      ? `Linked Question Bank · "${meta.linked_course_title || "Course"}" (Standard Mode)`
+      : `${typeLabel} · Standard Mode (Immediate Answers & Explanations)`;
 
   const content = (
     <>
-      <span className="grid place-items-center h-9 w-9 rounded-md bg-muted text-primary shrink-0">
+      <span className={`grid place-items-center h-9 w-9 rounded-md shrink-0 ${
+        isQuiz
+          ? quizType === "homework"
+            ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+            : "bg-indigo-500/10 text-indigo-600 border border-indigo-500/20"
+          : "bg-muted text-primary"
+      }`}>
         <Icon size={18} />
       </span>
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-foreground truncate flex items-center gap-2">
           {item.title}
+          {isQuiz && (
+            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+              quizType === "homework"
+                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                : "bg-indigo-500/10 text-indigo-600 border-indigo-500/30"
+            }`}>
+              {typeLabel}
+            </span>
+          )}
           {item.is_free && (
             <span className="text-[9px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/30">
               Free
             </span>
           )}
         </div>
-        <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mt-0.5">
+        <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mt-0.5 truncate">
           {kindLabel}
         </div>
       </div>
@@ -566,7 +653,7 @@ function ItemRow({
             <button
               onClick={onPlay}
               disabled={loadingId === item.id}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-md bg-primary text-primary-foreground disabled:opacity-70"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-md bg-primary text-primary-foreground disabled:opacity-70 cursor-pointer"
             >
               {loadingId === item.id ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -580,7 +667,7 @@ function ItemRow({
             <button
               onClick={onOpenPdf}
               disabled={pdfLoadingId === item.id}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-md bg-accent text-accent-foreground disabled:opacity-70"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-md bg-accent text-accent-foreground disabled:opacity-70 cursor-pointer"
             >
               {pdfLoadingId === item.id ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -598,6 +685,24 @@ function ItemRow({
     );
   }
 
+  // Quiz / Test / Homework Solving in Standard Mode:
+  if (hasLinkedCourse) {
+    return (
+      <div className={cls}>
+        {content}
+        <Link
+          to="/courses/$courseId/run"
+          params={{ courseId: meta.linked_course_id! }}
+          search={{ mode: "study" }}
+          className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition shadow-xs shrink-0 cursor-pointer"
+        >
+          <BookOpen size={13} />
+          Solve (Standard Mode) →
+        </Link>
+      </div>
+    );
+  }
+
   if (quizId) {
     return (
       <Link
@@ -606,12 +711,14 @@ function ItemRow({
         className={cls}
       >
         {content}
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-md bg-accent text-accent-foreground shrink-0">
-          Start →
+        <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-xs shrink-0">
+          <ListChecks size={13} />
+          Solve (Standard Mode) →
         </span>
       </Link>
     );
   }
+
   return (
     <div className={cls}>
       {content}

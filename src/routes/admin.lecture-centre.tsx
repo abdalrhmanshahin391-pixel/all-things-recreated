@@ -14,6 +14,7 @@ import {
   Settings2,
   Upload,
   UserCog,
+  Users,
   Video,
   X,
 } from "lucide-react";
@@ -25,6 +26,8 @@ import { CourseMaterialsCard } from "@/components/lectures/CourseMaterialsCard";
 import { LectureQuestionsCard } from "@/components/lectures/LectureQuestionsCard";
 import { LiveClassesCard } from "@/components/lectures/LiveClassesCard";
 import { resolveCourseImageUrl } from "@/lib/course-image";
+
+import { LectureCourseOwnersDashboard } from "@/components/lectures/LectureCourseOwnersDashboard";
 
 export const Route = createFileRoute("/admin/lecture-centre")({
   head: () => ({
@@ -53,14 +56,15 @@ type Course = {
 };
 type University = { id: string; name: string };
 
-type Tab = "course" | "materials" | "questions" | "live" | "staff";
+type Tab = "course" | "materials" | "questions" | "live" | "staff" | "owners";
 
 const TABS: { id: Tab; label: string; icon: typeof Settings2 }[] = [
   { id: "course", label: "Course", icon: Settings2 },
   { id: "materials", label: "Material", icon: FileText },
   { id: "questions", label: "Questions", icon: HelpCircle },
   { id: "live", label: "Live classes", icon: CalendarClock },
-  { id: "staff", label: "Staff", icon: UserCog },
+  { id: "staff", label: "Staff & Leadership", icon: UserCog },
+  { id: "owners", label: "Course Owners", icon: Users },
 ];
 
 function LectureCentrePage() {
@@ -246,7 +250,21 @@ function LectureCentrePage() {
               {tab === "materials" && <CourseMaterialsCard courseId={active.id} />}
               {tab === "questions" && <LectureQuestionsCard courseId={active.id} />}
               {tab === "live" && <LiveClassesCard courseId={active.id} />}
-              {tab === "staff" && <LectureStaffCard courseId={active.id} canManage={canManageCourse} />}
+              {tab === "staff" && (
+                <LectureStaffCard
+                  courseId={active.id}
+                  canManage={canManageCourse}
+                  courseTitle={active.title}
+                />
+              )}
+              {tab === "owners" && (
+                <LectureCourseOwnersDashboard
+                  courseId={active.id}
+                  courseTitle={active.title}
+                  isAdmin={canManageCourse}
+                  isHead={true}
+                />
+              )}
             </div>
           </>
         )}

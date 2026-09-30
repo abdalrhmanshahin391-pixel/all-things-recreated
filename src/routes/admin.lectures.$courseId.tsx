@@ -26,6 +26,9 @@ import {
   Layers,
   GraduationCap,
   ListChecks,
+  Crown,
+  Users,
+  BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,6 +38,7 @@ import { compressImage } from "@/lib/image-compress";
 import { resolveCourseImageUrl } from "@/lib/course-image";
 import { resolveLectureVideoUrl, resolveLecturePdfUrl } from "@/lib/lecture-video";
 import { IntroVideoModal } from "@/components/lectures/IntroVideoModal";
+import { LectureOwnersModal } from "@/components/lectures/LectureOwnersModal";
 
 export const Route = createFileRoute("/admin/lectures/$courseId")({
   head: () => ({ meta: [{ title: "Course Topics & Lessons — Admin" }] }),
@@ -68,6 +72,10 @@ type ItemMeta = {
   poster_url?: string;
   description?: string;
   materials?: { id: string; title: string; url: string }[];
+  quiz_type?: "test" | "homework" | "quiz";
+  source_type?: "course" | "manual";
+  linked_course_id?: string;
+  linked_course_title?: string;
 };
 
 type Item = {
@@ -130,6 +138,10 @@ function AdminCourseLessonsPage() {
   const [options, setOptions] = useState<QOption[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [isStaff, setIsStaff] = useState<boolean | null>(null);
+  const [isHeadStaff, setIsHeadStaff] = useState(false);
+  const [ownersCount, setOwnersCount] = useState<number>(0);
+  const [showOwnersModal, setShowOwnersModal] = useState(false);
+  const [questionCourses, setQuestionCourses] = useState<{ id: string; title: string; year: number }[]>([]);
 
   // Overview editor states
   const [introVideoUrl, setIntroVideoUrl] = useState("");
@@ -176,13 +188,12 @@ function AdminCourseLessonsPage() {
       setIsStaff(true);
       return;
     }
-    supabase
-      .from("lecture_staff")
-      .select("id")
+    (supabase.from as any)("lecture_staff")
+      .select("course_id")
       .eq("course_id", courseId)
       .eq("user_id", user.id)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data }: any) => {
         if (!data) guardRedirect(navigate);
         else setIsStaff(true);
       });
@@ -269,6 +280,32 @@ function AdminCourseLessonsPage() {
         }
       }
     }
+
+    // Load available question bank courses for linking
+    const { data: qCourses } = await supabase
+      .from("courses")
+      .select("id,title,year")
+      .eq("kind", "questions")
+      .order("year", { ascending: true })
+      .order("title", { ascending: true });
+    if (qCourses) setQuestionCourses(qCourses);
+
+    // Count enrolled course owners
+    const { count: owCount } = await (supabase.from as any)("user_lecture_courses")
+      .select("*", { count: "exact", head: true })
+      .eq("course_id", courseId);
+    setOwnersCount(owCount ?? 0);
+
+    // Check if caller is designated Head of Staff
+    const { data: headRow } = await (supabase.from as any)("site_content")
+      .select("value_en")
+      .eq("key", `lecture_head_staff_${courseId}`)
+      .maybeSingle();
+    const headIds = headRow?.value_en ? headRow.value_en.split(",").map((s: string) => s.trim()) : [];
+    if (user) {
+      setIsHeadStaff(isAdmin || isRealAdmin || headIds.includes(user.id));
+    }
+
     setLoadingData(false);
   }
 
@@ -407,10 +444,19 @@ function AdminCourseLessonsPage() {
     }
   }
 
-  // Add Lesson to Subject
-  async function handleAddItem(subjectId: string, kind: "lecture" | "quiz") {
+  // Add Lesson / Test / Homework to Subject
+  async function handleAddItem(subjectId: string, kind: "lecture" | "quiz", quizType?: "test" | "homework" | "quiz") {
     const existing = itemsBySubject.get(subjectId) ?? [];
-    const title = kind === "lecture" ? `Lesson ${existing.length + 1}` : `Quiz ${existing.length + 1}`;
+    let title = `Lesson ${existing.length + 1}`;
+    let initialMeta: ItemMeta = {};
+
+    if (kind === "quiz") {
+      const qType = quizType || "test";
+      const typeLabel = qType === "homework" ? "Homework" : qType === "test" ? "Test" : "Quiz";
+      title = `${typeLabel} ${existing.filter((i) => i.kind === "quiz").length + 1}`;
+      initialMeta = { quiz_type: qType, source_type: "manual" };
+    }
+
     const { data, error } = await (supabase.from as any)("lecture_items")
       .insert({
         subject_id: subjectId,
@@ -418,12 +464,18 @@ function AdminCourseLessonsPage() {
         title,
         position: existing.length,
         is_free: false,
+        link_url: Object.keys(initialMeta).length ? serializeItemMeta(initialMeta) : null,
       })
       .select()
       .single();
-    if (error) toast.error(error.message);
-    else {
-      toast.success(`${kind === "lecture" ? "Lesson" : "Quiz"} added`);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      if (data && kind === "quiz") {
+        await (supabase.from as any)("lecture_quizzes").insert({ item_id: data.id });
+      }
+      toast.success(`${kind === "lecture" ? "Lesson" : (quizType === "homework" ? "Homework" : "Test")} added`);
       await loadData();
       if (data) openItemEditor(data as Item);
     }
@@ -672,6 +724,18 @@ function AdminCourseLessonsPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {(isAdmin || isRealAdmin || isHeadStaff || isStaff) && (
+              <button
+                type="button"
+                onClick={() => setShowOwnersModal(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500/10 text-amber-700 border border-amber-500/30 text-xs font-bold hover:bg-amber-500/20 transition-colors shadow-2xs"
+              >
+                <Crown size={13} className="text-amber-600" />
+                <Users size={13} />
+                Course Owners ({ownersCount})
+              </button>
+            )}
+
             <Link
               to="/lectures/$courseId"
               params={{ courseId }}
@@ -985,10 +1049,18 @@ function AdminCourseLessonsPage() {
                           <Plus size={13} /> Add Video
                         </button>
                         <button
-                          onClick={() => handleAddItem(sub.id, "quiz")}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border text-xs font-semibold hover:bg-muted transition-colors"
+                          onClick={() => handleAddItem(sub.id, "quiz", "test")}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition-colors"
+                          title="Add a test for this topic (solve in standard mode)"
                         >
-                          <ListChecks size={13} /> Add Quiz
+                          <ListChecks size={13} /> + Test
+                        </button>
+                        <button
+                          onClick={() => handleAddItem(sub.id, "quiz", "homework")}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition-colors"
+                          title="Add homework for this topic (solve in standard mode)"
+                        >
+                          <BookOpen size={13} /> + Homework
                         </button>
                       </div>
                     </div>
@@ -996,16 +1068,18 @@ function AdminCourseLessonsPage() {
                     {/* Lessons / Items in Topic */}
                     {subItems.length === 0 ? (
                       <div className="p-4 text-center text-xs text-muted-foreground">
-                        No videos or lessons in this topic yet. Click &quot;+ Add Video&quot; above.
+                        No videos or questions in this topic yet. Click &quot;+ Add Video&quot;, &quot;+ Test&quot; or &quot;+ Homework&quot; above.
                       </div>
                     ) : (
                       <div className="divide-y divide-border">
                         {subItems.map((item, itemIdx) => {
                           const meta = parseItemMeta(item.link_url);
+                          const isQuiz = item.kind === "quiz";
                           const hasVideo = !!(item.video_url || item.video_storage_path);
                           const hasPdf = !!(item.pdf_url || item.pdf_storage_path);
                           const quiz = quizByItemId.get(item.id);
                           const qCount = quiz ? (questionsByQuizId.get(quiz.id) ?? []).length : 0;
+                          const hasLinkedCourse = isQuiz && !!meta.linked_course_id;
 
                           return (
                             <div
@@ -1016,11 +1090,17 @@ function AdminCourseLessonsPage() {
                                 <span className="text-xs text-muted-foreground font-mono w-5">
                                   {itemIdx + 1}.
                                 </span>
-                                <div className="grid place-items-center h-8 w-8 rounded-lg bg-card border border-border text-primary shrink-0">
-                                  {item.kind === "lecture" ? (
-                                    <Video size={15} />
+                                <div className={`grid place-items-center h-8 w-8 rounded-lg border shrink-0 ${
+                                  isQuiz
+                                    ? meta.quiz_type === "homework"
+                                      ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                                      : "bg-indigo-50 text-indigo-600 border-indigo-200"
+                                    : "bg-card border-border text-primary"
+                                }`}>
+                                  {isQuiz ? (
+                                    meta.quiz_type === "homework" ? <BookOpen size={15} /> : <ListChecks size={15} />
                                   ) : (
-                                    <ListChecks size={15} />
+                                    <Video size={15} />
                                   )}
                                 </div>
                                 <div className="min-w-0 flex-1">
@@ -1028,6 +1108,15 @@ function AdminCourseLessonsPage() {
                                     <span className="font-semibold text-sm text-foreground truncate">
                                       {item.title}
                                     </span>
+                                    {isQuiz && (
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                                        meta.quiz_type === "homework"
+                                          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                                          : "bg-indigo-500/10 text-indigo-600 border-indigo-500/30"
+                                      }`}>
+                                        {meta.quiz_type || "Test"}
+                                      </span>
+                                    )}
                                     {item.is_free && (
                                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
                                         Free Preview
@@ -1035,35 +1124,41 @@ function AdminCourseLessonsPage() {
                                     )}
                                   </div>
                                   <div className="flex flex-wrap items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
-                                    <span
-                                      className={
-                                        hasVideo ? "text-emerald-600 font-medium" : "text-muted-foreground"
-                                      }
-                                    >
-                                      {hasVideo ? "✓ Video Linked" : "No video"}
-                                    </span>
-                                    <span>·</span>
-                                    <span
-                                      className={
-                                        hasPdf ? "text-emerald-600 font-medium" : "text-muted-foreground"
-                                      }
-                                    >
-                                      {hasPdf ? "✓ PDF Attached" : "No PDF"}
-                                    </span>
-                                    <span>·</span>
-                                    <span
-                                      className={
-                                        qCount > 0 ? "text-emerald-600 font-medium" : "text-muted-foreground"
-                                      }
-                                    >
-                                      {qCount} practice question{qCount === 1 ? "" : "s"}
-                                    </span>
-                                    {meta.description && (
-                                      <>
-                                        <span>·</span>
-                                        <span className="text-primary truncate max-w-xs">
-                                          &quot;{meta.description.slice(0, 40)}…&quot;
+                                    {isQuiz ? (
+                                      hasLinkedCourse ? (
+                                        <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                                          <BookOpen size={11} /> Linked Question Bank: &quot;{meta.linked_course_title || "Course"}&quot; (Standard Mode)
                                         </span>
+                                      ) : (
+                                        <span className="text-indigo-600 font-medium flex items-center gap-1">
+                                          <HelpCircle size={11} /> {qCount} Manual Question{qCount === 1 ? "" : "s"} (Standard Mode)
+                                        </span>
+                                      )
+                                    ) : (
+                                      <>
+                                        <span
+                                          className={
+                                            hasVideo ? "text-emerald-600 font-medium" : "text-muted-foreground"
+                                          }
+                                        >
+                                          {hasVideo ? "✓ Video Linked" : "No video"}
+                                        </span>
+                                        <span>·</span>
+                                        <span
+                                          className={
+                                            hasPdf ? "text-emerald-600 font-medium" : "text-muted-foreground"
+                                          }
+                                        >
+                                          {hasPdf ? "✓ PDF Attached" : "No PDF"}
+                                        </span>
+                                        {qCount > 0 && (
+                                          <>
+                                            <span>·</span>
+                                            <span className="text-emerald-600 font-medium">
+                                              {qCount} practice question{qCount === 1 ? "" : "s"}
+                                            </span>
+                                          </>
+                                        )}
                                       </>
                                     )}
                                   </div>
@@ -1071,6 +1166,31 @@ function AdminCourseLessonsPage() {
                               </div>
 
                               <div className="flex items-center gap-2">
+                                {isQuiz && hasLinkedCourse && (
+                                  <Link
+                                    to="/courses/$courseId/run"
+                                    params={{ courseId: meta.linked_course_id! }}
+                                    search={{ mode: "study" }}
+                                    target="_blank"
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition-colors"
+                                    title="Solve linked course in standard mode"
+                                  >
+                                    <ExternalLink size={12} className="text-emerald-600" /> Solve (Standard Mode)
+                                  </Link>
+                                )}
+
+                                {isQuiz && !hasLinkedCourse && quiz && qCount > 0 && (
+                                  <Link
+                                    to="/lectures/$courseId/quiz/$quizId"
+                                    params={{ courseId: course.id, quizId: quiz.id }}
+                                    target="_blank"
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition-colors"
+                                    title="Solve manual questions in standard mode"
+                                  >
+                                    <ExternalLink size={12} className="text-indigo-600" /> Solve (Standard Mode)
+                                  </Link>
+                                )}
+
                                 {hasVideo && (
                                   <button
                                     onClick={async () => {
@@ -1093,7 +1213,7 @@ function AdminCourseLessonsPage() {
                                   onClick={() => openItemEditor(item)}
                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-colors shadow-sm"
                                 >
-                                  <Pencil size={13} /> Edit Video &amp; Content
+                                  <Pencil size={13} /> {isQuiz ? "Edit Questions & Settings" : "Edit Video & Content"}
                                 </button>
                               </div>
                             </div>
@@ -1130,302 +1250,597 @@ function AdminCourseLessonsPage() {
 
               {/* Modal Body */}
               <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
-                {/* 1. Basic Info */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                      Lesson Title
-                    </label>
-                    <input
-                      value={activeItem.title}
-                      onChange={(e) => setActiveItem({ ...activeItem, title: e.target.value })}
-                      className="w-full rounded-xl border border-border bg-background px-3.5 py-2 text-sm outline-none focus:border-primary"
-                    />
-                  </div>
-                  <div className="flex items-center gap-4 pt-6">
-                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-foreground">
-                      <input
-                        type="checkbox"
-                        checked={activeItem.is_free}
-                        onChange={(e) => setActiveItem({ ...activeItem, is_free: e.target.checked })}
-                        className="rounded border-border text-primary focus:ring-primary h-4 w-4"
-                      />
-                      Free Preview (Watch without purchasing)
-                    </label>
-                  </div>
-                </div>
-
-                {/* 2. Video Source (Protected Google Drive / YouTube / Storage) */}
-                <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
-                  <div className="flex items-center gap-2 font-bold text-sm text-foreground">
-                    <Video size={16} className="text-primary" />
-                    Video Source
-                  </div>
-                  <div>
-                    <label className="block text-xs text-muted-foreground mb-1">
-                      Video URL (Google Drive / YouTube / Vimeo / MP4 link)
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        value={activeItem.video_url ?? ""}
-                        onChange={(e) => setActiveItem({ ...activeItem, video_url: e.target.value })}
-                        placeholder="https://drive.google.com/file/d/... or direct stream link"
-                        className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-                      />
-                      <label className="shrink-0 cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-card text-xs font-semibold hover:border-primary transition-colors">
-                        {uploadingVideo ? (
-                          <Loader2 size={13} className="animate-spin text-primary" />
-                        ) : (
-                          <Upload size={13} />
-                        )}
-                        Upload File
+                {activeItem.kind === "quiz" ? (
+                  /* Dedicated Test & Homework Manager */
+                  <div className="space-y-6">
+                    {/* Basic Assessment Info */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                          Assessment Title
+                        </label>
                         <input
-                          type="file"
-                          accept="video/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) handleUploadVideo(f);
-                          }}
-                          disabled={uploadingVideo}
+                          value={activeItem.title}
+                          onChange={(e) => setActiveItem({ ...activeItem, title: e.target.value })}
+                          className="w-full rounded-xl border border-border bg-background px-3.5 py-2 text-sm outline-none focus:border-primary font-bold"
+                          placeholder="e.g. Topic 1 Exam or Weekly Homework"
                         />
-                      </label>
-                    </div>
-                  </div>
-                  {activeItem.video_storage_path && (
-                    <div className="text-xs text-emerald-600 font-mono">
-                      ✓ Uploaded to protected storage: {activeItem.video_storage_path}
-                    </div>
-                  )}
-                  <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                    <Shield size={12} className="text-emerald-500" />
-                    Protected by pop-out shielding and dynamic forensic watermark.
-                  </p>
-                </div>
+                      </div>
 
-                {/* 3. Description for that video only */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                    Description &amp; Learning Objectives for this Video
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={editingMeta.description ?? ""}
-                    onChange={(e) => setEditingMeta({ ...editingMeta, description: e.target.value })}
-                    placeholder="Provide a comprehensive summary, key clinical pearls, and high-yield notes for this video..."
-                    className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-primary"
-                  />
-                </div>
-
-                {/* 4. Attached PDFs & Materials */}
-                <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-4">
-                  <div className="flex items-center gap-2 font-bold text-sm text-foreground">
-                    <FileText size={16} className="text-primary" />
-                    Lecture PDFs &amp; Slides
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
-                    <div>
-                      <label className="block text-xs text-muted-foreground mb-1">PDF URL</label>
-                      <input
-                        value={activeItem.pdf_url ?? ""}
-                        onChange={(e) => setActiveItem({ ...activeItem, pdf_url: e.target.value })}
-                        placeholder="https://.../lecture-slides.pdf"
-                        className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-muted-foreground mb-1">Or Upload PDF Document</label>
-                      <label className="w-full cursor-pointer inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-card text-xs font-semibold hover:border-primary transition-colors">
-                        {uploadingPdf ? (
-                          <Loader2 size={13} className="animate-spin text-primary" />
-                        ) : (
-                          <Upload size={13} />
-                        )}
-                        Select &amp; Upload PDF
-                        <input
-                          type="file"
-                          accept=".pdf"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) handleUploadPdf(f);
-                          }}
-                          disabled={uploadingPdf}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                  {activeItem.pdf_storage_path && (
-                    <div className="text-xs text-emerald-600 font-mono">
-                      ✓ Uploaded to private vault: {activeItem.pdf_storage_path}
-                    </div>
-                  )}
-                </div>
-
-                {/* 5. Additional Materials for that video */}
-                <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 font-bold text-sm text-foreground">
-                      <Paperclip size={16} className="text-primary" />
-                      Additional Materials &amp; External Links
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const cur = editingMeta.materials ?? [];
-                        setEditingMeta({
-                          ...editingMeta,
-                          materials: [
-                            ...cur,
-                            { id: crypto.randomUUID(), title: "", url: "" },
-                          ],
-                        });
-                      }}
-                      className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
-                    >
-                      <Plus size={13} /> Add Material Link
-                    </button>
-                  </div>
-                  {(editingMeta.materials ?? []).length === 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      No additional materials added. Click &quot;Add Material Link&quot; to attach reference links.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {editingMeta.materials!.map((mat, mIdx) => (
-                        <div key={mat.id} className="flex items-center gap-2">
-                          <input
-                            value={mat.title}
-                            onChange={(e) => {
-                              const updated = [...editingMeta.materials!];
-                              updated[mIdx].title = e.target.value;
-                              setEditingMeta({ ...editingMeta, materials: updated });
-                            }}
-                            placeholder="Material Title (e.g. Reference Paper)"
-                            className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-primary"
-                          />
-                          <input
-                            value={mat.url}
-                            onChange={(e) => {
-                              const updated = [...editingMeta.materials!];
-                              updated[mIdx].url = e.target.value;
-                              setEditingMeta({ ...editingMeta, materials: updated });
-                            }}
-                            placeholder="https://..."
-                            className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-primary"
-                          />
+                      <div>
+                        <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                          Assessment Classification
+                        </label>
+                        <div className="grid grid-cols-3 gap-2">
                           <button
                             type="button"
-                            onClick={() => {
-                              setEditingMeta({
-                                ...editingMeta,
-                                materials: editingMeta.materials!.filter((_, i) => i !== mIdx),
-                              });
-                            }}
-                            className="h-7 w-7 grid place-items-center rounded text-muted-foreground hover:text-red-500"
+                            onClick={() => setEditingMeta({ ...editingMeta, quiz_type: "test" })}
+                            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
+                              (editingMeta.quiz_type || "test") === "test"
+                                ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                                : "bg-card border-border text-muted-foreground hover:border-foreground"
+                            }`}
                           >
-                            <Trash2 size={13} />
+                            <ListChecks size={13} className="inline mr-1 -mt-0.5" /> Test
                           </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 6. Practice Questions Attached to this Video (Standard & Exam Mode) */}
-                <div className="rounded-xl border border-border bg-card p-4 space-y-4 shadow-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
-                    <div className="flex items-center gap-2">
-                      <HelpCircle size={16} className="text-primary" />
-                      <div>
-                        <div className="font-bold text-sm text-foreground">
-                          Practice Questions for this Video
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Questions for Standard practice mode &amp; Exam mode.
+                          <button
+                            type="button"
+                            onClick={() => setEditingMeta({ ...editingMeta, quiz_type: "homework" })}
+                            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
+                              editingMeta.quiz_type === "homework"
+                                ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                : "bg-card border-border text-muted-foreground hover:border-foreground"
+                            }`}
+                          >
+                            <BookOpen size={13} className="inline mr-1 -mt-0.5" /> Homework
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingMeta({ ...editingMeta, quiz_type: "quiz" })}
+                            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
+                              editingMeta.quiz_type === "quiz"
+                                ? "bg-violet-600 text-white border-violet-600 shadow-xs"
+                                : "bg-card border-border text-muted-foreground hover:border-foreground"
+                            }`}
+                          >
+                            <HelpCircle size={13} className="inline mr-1 -mt-0.5" /> Practice
+                          </button>
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {activeQuiz && activeQuestions.length > 0 && (
-                        <Link
-                          to="/lectures/$courseId/quiz/$quizId"
-                          params={{ courseId: course.id, quizId: activeQuiz.id }}
-                          target="_blank"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:border-primary transition-colors"
-                        >
-                          <ExternalLink size={12} /> Test Practice Mode
-                        </Link>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenQuestionModal()}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20 text-xs font-bold hover:bg-primary/20 transition-colors"
-                      >
-                        <Plus size={13} /> Add Question
-                      </button>
-                    </div>
-                  </div>
 
-                  {activeQuestions.length === 0 ? (
-                    <div className="py-6 text-center text-xs text-muted-foreground">
-                      No questions attached to this video yet. Click &quot;Add Question&quot; above to add self-assessment questions.
+                    <div className="flex items-center gap-4 pt-1">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={activeItem.is_free}
+                          onChange={(e) => setActiveItem({ ...activeItem, is_free: e.target.checked })}
+                          className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                        />
+                        Free Preview (Allow unregistered or unenrolled students to solve)
+                      </label>
                     </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {activeQuestions.map((q, qIdx) => {
-                        const qOpts = optionsByQuestionId.get(q.id) ?? [];
-                        return (
-                          <div
-                            key={q.id}
-                            className="rounded-lg border border-border p-3 bg-muted/20 flex items-start justify-between gap-3 text-xs"
-                          >
-                            <div className="space-y-1 min-w-0 flex-1">
-                              <div className="font-bold text-foreground">
-                                Q{qIdx + 1}. {q.prompt}
-                              </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 pt-1">
-                                {qOpts.map((o, oIdx) => (
-                                  <div
-                                    key={o.id}
-                                    className={`px-2 py-0.5 rounded text-[11px] ${
-                                      o.is_correct
-                                        ? "bg-emerald-500/10 text-emerald-600 font-bold border border-emerald-500/30"
-                                        : "text-muted-foreground"
-                                    }`}
-                                  >
-                                    {String.fromCharCode(65 + oIdx)}. {o.body}
-                                  </div>
-                                ))}
-                              </div>
-                              {q.explanation && (
-                                <div className="text-[11px] text-muted-foreground pt-1 italic">
-                                  Explanation: {q.explanation}
-                                </div>
-                              )}
+
+                    {/* Question Source Selection */}
+                    <div className="rounded-2xl border border-border bg-muted/20 p-5 space-y-4">
+                      <div>
+                        <span className="text-xs font-bold uppercase tracking-wider text-primary">Question Source</span>
+                        <h4 className="text-sm font-bold text-foreground">How should questions be provided for this assessment?</h4>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setEditingMeta({ ...editingMeta, source_type: "course" })}
+                          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                            editingMeta.source_type === "course"
+                              ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                              : "border-border bg-card hover:border-muted-foreground/40"
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-2 font-bold text-sm text-foreground mb-1">
+                              <BookOpen size={16} className="text-primary" />
+                              Link Question Bank Course
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
+                            <p className="text-xs text-muted-foreground">
+                              Select an existing course from your Question Bank. Students solve in Standard Mode with instant feedback.
+                            </p>
+                          </div>
+                          <span className={`inline-block mt-3 text-[11px] font-bold ${
+                            editingMeta.source_type === "course" ? "text-primary" : "text-muted-foreground"
+                          }`}>
+                            {editingMeta.source_type === "course" ? "● Selected Source" : "○ Select"}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setEditingMeta({ ...editingMeta, source_type: "manual" })}
+                          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                            (editingMeta.source_type || "manual") === "manual"
+                              ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                              : "border-border bg-card hover:border-muted-foreground/40"
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-2 font-bold text-sm text-foreground mb-1">
+                              <HelpCircle size={16} className="text-primary" />
+                              Add Questions Manually
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Write and customize specific questions right here with custom distractors, correct answers, and explanations.
+                            </p>
+                          </div>
+                          <span className={`inline-block mt-3 text-[11px] font-bold ${
+                            (editingMeta.source_type || "manual") === "manual" ? "text-primary" : "text-muted-foreground"
+                          }`}>
+                            {(editingMeta.source_type || "manual") === "manual" ? "● Selected Source" : "○ Select"}
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Source Option A: Linked Course */}
+                      {editingMeta.source_type === "course" && (
+                        <div className="mt-4 p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-3">
+                          <label className="block text-xs font-bold text-foreground">
+                            Choose Question Bank Course to Link:
+                          </label>
+                          <select
+                            value={editingMeta.linked_course_id || ""}
+                            onChange={(e) => {
+                              const selId = e.target.value;
+                              const match = questionCourses.find((c) => c.id === selId);
+                              setEditingMeta({
+                                ...editingMeta,
+                                linked_course_id: selId || undefined,
+                                linked_course_title: match?.title || undefined,
+                              });
+                            }}
+                            className="w-full rounded-xl border border-border bg-background px-3.5 py-2 text-sm outline-none focus:border-primary font-medium"
+                          >
+                            <option value="">-- Choose a Question Bank Course --</option>
+                            {questionCourses.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                Year {c.year} — {c.title}
+                              </option>
+                            ))}
+                          </select>
+
+                          {editingMeta.linked_course_id ? (
+                            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                              <div className="text-xs text-emerald-600 font-semibold flex items-center gap-1.5">
+                                <CheckCircle2 size={14} />
+                                Students will solve &quot;{editingMeta.linked_course_title || "Linked Course"}&quot; in Standard Mode.
+                              </div>
+                              <Link
+                                to="/courses/$courseId/run"
+                                params={{ courseId: editingMeta.linked_course_id }}
+                                search={{ mode: "study" }}
+                                target="_blank"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/30 bg-card text-xs font-bold text-primary hover:bg-primary/10 transition-colors shadow-2xs"
+                              >
+                                <ExternalLink size={12} /> Test Solving (Standard Mode)
+                              </Link>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-amber-600 font-medium">
+                              Please select a question bank course from the dropdown above.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Source Option B: Manual Questions */}
+                      {(editingMeta.source_type || "manual") === "manual" && (
+                        <div className="mt-4 rounded-xl border border-border bg-card p-4 space-y-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+                            <div>
+                              <div className="font-bold text-sm text-foreground">
+                                Manual Assessment Questions
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Students will solve these questions in Standard Study Mode with immediate answers.
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {activeQuiz && activeQuestions.length > 0 && (
+                                <Link
+                                  to="/lectures/$courseId/quiz/$quizId"
+                                  params={{ courseId: course.id, quizId: activeQuiz.id }}
+                                  target="_blank"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:border-primary transition-colors"
+                                >
+                                  <ExternalLink size={12} /> Test Practice Mode
+                                </Link>
+                              )}
                               <button
                                 type="button"
-                                onClick={() => handleOpenQuestionModal(q)}
-                                className="h-7 w-7 grid place-items-center rounded border border-border text-muted-foreground hover:text-foreground"
+                                onClick={() => handleOpenQuestionModal()}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20 text-xs font-bold hover:bg-primary/20 transition-colors"
                               >
-                                <Pencil size={12} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteQuestion(q.id)}
-                                className="h-7 w-7 grid place-items-center rounded border border-border text-muted-foreground hover:text-red-500"
-                              >
-                                <Trash2 size={12} />
+                                <Plus size={13} /> Add Question
                               </button>
                             </div>
                           </div>
-                        );
-                      })}
+
+                          {activeQuestions.length === 0 ? (
+                            <div className="py-6 text-center text-xs text-muted-foreground">
+                              No questions added yet. Click &quot;Add Question&quot; above to add questions manually.
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {activeQuestions.map((q, qIdx) => {
+                                const qOpts = optionsByQuestionId.get(q.id) ?? [];
+                                return (
+                                  <div
+                                    key={q.id}
+                                    className="rounded-lg border border-border p-3 bg-muted/20 flex items-start justify-between gap-3 text-xs"
+                                  >
+                                    <div className="space-y-1 min-w-0 flex-1">
+                                      <div className="font-bold text-foreground">
+                                        Q{qIdx + 1}. {q.prompt}
+                                      </div>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 pt-1">
+                                        {qOpts.map((o, oIdx) => (
+                                          <div
+                                            key={o.id}
+                                            className={`px-2 py-0.5 rounded text-[11px] ${
+                                              o.is_correct
+                                                ? "bg-emerald-500/10 text-emerald-600 font-bold border border-emerald-500/30"
+                                                : "text-muted-foreground"
+                                            }`}
+                                          >
+                                            {String.fromCharCode(65 + oIdx)}. {o.body}
+                                          </div>
+                                        ))}
+                                      </div>
+                                      {q.explanation && (
+                                        <div className="text-[11px] text-muted-foreground pt-1 italic">
+                                          Explanation: {q.explanation}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenQuestionModal(q)}
+                                        className="h-7 w-7 grid place-items-center rounded border border-border text-muted-foreground hover:text-foreground"
+                                      >
+                                        <Pencil size={12} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteQuestion(q.id)}
+                                        className="h-7 w-7 grid place-items-center rounded border border-border text-muted-foreground hover:text-red-500"
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+
+                    {/* Assessment Instructions & Guidelines */}
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                        Instructions / Guidelines for Students
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={editingMeta.description ?? ""}
+                        onChange={(e) => setEditingMeta({ ...editingMeta, description: e.target.value })}
+                        placeholder="Explain to students the goals of this test or homework, time expectations, or key concepts tested..."
+                        className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-primary"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  /* Standard Lecture Video & Materials Manager */
+                  <div className="space-y-6">
+                    {/* 1. Basic Info */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                          Lesson Title
+                        </label>
+                        <input
+                          value={activeItem.title}
+                          onChange={(e) => setActiveItem({ ...activeItem, title: e.target.value })}
+                          className="w-full rounded-xl border border-border bg-background px-3.5 py-2 text-sm outline-none focus:border-primary"
+                        />
+                      </div>
+                      <div className="flex items-center gap-4 pt-6">
+                        <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={activeItem.is_free}
+                            onChange={(e) => setActiveItem({ ...activeItem, is_free: e.target.checked })}
+                            className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                          />
+                          Free Preview (Watch without purchasing)
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* 2. Video Source (Protected Google Drive / YouTube / Storage) */}
+                    <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
+                      <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                        <Video size={16} className="text-primary" />
+                        Video Source
+                      </div>
+                      <div>
+                        <label className="block text-xs text-muted-foreground mb-1">
+                          Video URL (Google Drive / YouTube / Vimeo / MP4 link)
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={activeItem.video_url ?? ""}
+                            onChange={(e) => setActiveItem({ ...activeItem, video_url: e.target.value })}
+                            placeholder="https://drive.google.com/file/d/... or direct stream link"
+                            className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                          />
+                          <label className="shrink-0 cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-card text-xs font-semibold hover:border-primary transition-colors">
+                            {uploadingVideo ? (
+                              <Loader2 size={13} className="animate-spin text-primary" />
+                            ) : (
+                              <Upload size={13} />
+                            )}
+                            Upload File
+                            <input
+                              type="file"
+                              accept="video/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) handleUploadVideo(f);
+                              }}
+                              disabled={uploadingVideo}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                      {activeItem.video_storage_path && (
+                        <div className="text-xs text-emerald-600 font-mono">
+                          ✓ Uploaded to protected storage: {activeItem.video_storage_path}
+                        </div>
+                      )}
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <Shield size={12} className="text-emerald-500" />
+                        Protected by pop-out shielding and dynamic forensic watermark.
+                      </p>
+                    </div>
+
+                    {/* 3. Description for that video only */}
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                        Description &amp; Learning Objectives for this Video
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={editingMeta.description ?? ""}
+                        onChange={(e) => setEditingMeta({ ...editingMeta, description: e.target.value })}
+                        placeholder="Provide a comprehensive summary, key clinical pearls, and high-yield notes for this video..."
+                        className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-primary"
+                      />
+                    </div>
+
+                    {/* 4. Attached PDFs & Materials */}
+                    <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-4">
+                      <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                        <FileText size={16} className="text-primary" />
+                        Lecture PDFs &amp; Slides
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
+                        <div>
+                          <label className="block text-xs text-muted-foreground mb-1">PDF URL</label>
+                          <input
+                            value={activeItem.pdf_url ?? ""}
+                            onChange={(e) => setActiveItem({ ...activeItem, pdf_url: e.target.value })}
+                            placeholder="https://.../lecture-slides.pdf"
+                            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-muted-foreground mb-1">Or Upload PDF Document</label>
+                          <label className="w-full cursor-pointer inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-card text-xs font-semibold hover:border-primary transition-colors">
+                            {uploadingPdf ? (
+                              <Loader2 size={13} className="animate-spin text-primary" />
+                            ) : (
+                              <Upload size={13} />
+                            )}
+                            Select &amp; Upload PDF
+                            <input
+                              type="file"
+                              accept=".pdf"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) handleUploadPdf(f);
+                              }}
+                              disabled={uploadingPdf}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                      {activeItem.pdf_storage_path && (
+                        <div className="text-xs text-emerald-600 font-mono">
+                          ✓ Uploaded to private vault: {activeItem.pdf_storage_path}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 5. Additional Materials for that video */}
+                    <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                          <Paperclip size={16} className="text-primary" />
+                          Additional Materials &amp; External Links
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const cur = editingMeta.materials ?? [];
+                            setEditingMeta({
+                              ...editingMeta,
+                              materials: [
+                                ...cur,
+                                { id: crypto.randomUUID(), title: "", url: "" },
+                              ],
+                            });
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+                        >
+                          <Plus size={13} /> Add Material Link
+                        </button>
+                      </div>
+                      {(editingMeta.materials ?? []).length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No additional materials added. Click &quot;Add Material Link&quot; to attach reference links.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {editingMeta.materials!.map((mat, mIdx) => (
+                            <div key={mat.id} className="flex items-center gap-2">
+                              <input
+                                value={mat.title}
+                                onChange={(e) => {
+                                  const updated = [...editingMeta.materials!];
+                                  updated[mIdx].title = e.target.value;
+                                  setEditingMeta({ ...editingMeta, materials: updated });
+                                }}
+                                placeholder="Material Title (e.g. Reference Paper)"
+                                className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-primary"
+                              />
+                              <input
+                                value={mat.url}
+                                onChange={(e) => {
+                                  const updated = [...editingMeta.materials!];
+                                  updated[mIdx].url = e.target.value;
+                                  setEditingMeta({ ...editingMeta, materials: updated });
+                                }}
+                                placeholder="https://..."
+                                className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-primary"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingMeta({
+                                    ...editingMeta,
+                                    materials: editingMeta.materials!.filter((_, i) => i !== mIdx),
+                                  });
+                                }}
+                                className="h-7 w-7 grid place-items-center rounded text-muted-foreground hover:text-red-500"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 6. Practice Questions Attached to this Video */}
+                    <div className="rounded-xl border border-border bg-card p-4 space-y-4 shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+                        <div className="flex items-center gap-2">
+                          <HelpCircle size={16} className="text-primary" />
+                          <div>
+                            <div className="font-bold text-sm text-foreground">
+                              Practice Questions for this Video
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              Questions for Standard practice mode &amp; Exam mode.
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {activeQuiz && activeQuestions.length > 0 && (
+                            <Link
+                              to="/lectures/$courseId/quiz/$quizId"
+                              params={{ courseId: course.id, quizId: activeQuiz.id }}
+                              target="_blank"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:border-primary transition-colors"
+                            >
+                              <ExternalLink size={12} /> Test Practice Mode
+                            </Link>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenQuestionModal()}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20 text-xs font-bold hover:bg-primary/20 transition-colors"
+                          >
+                            <Plus size={13} /> Add Question
+                          </button>
+                        </div>
+                      </div>
+
+                      {activeQuestions.length === 0 ? (
+                        <div className="py-6 text-center text-xs text-muted-foreground">
+                          No questions attached to this video yet. Click &quot;Add Question&quot; above to add self-assessment questions.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {activeQuestions.map((q, qIdx) => {
+                            const qOpts = optionsByQuestionId.get(q.id) ?? [];
+                            return (
+                              <div
+                                key={q.id}
+                                className="rounded-lg border border-border p-3 bg-muted/20 flex items-start justify-between gap-3 text-xs"
+                              >
+                                <div className="space-y-1 min-w-0 flex-1">
+                                  <div className="font-bold text-foreground">
+                                    Q{qIdx + 1}. {q.prompt}
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 pt-1">
+                                    {qOpts.map((o, oIdx) => (
+                                      <div
+                                        key={o.id}
+                                        className={`px-2 py-0.5 rounded text-[11px] ${
+                                          o.is_correct
+                                            ? "bg-emerald-500/10 text-emerald-600 font-bold border border-emerald-500/30"
+                                            : "text-muted-foreground"
+                                        }`}
+                                      >
+                                        {String.fromCharCode(65 + oIdx)}. {o.body}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {q.explanation && (
+                                    <div className="text-[11px] text-muted-foreground pt-1 italic">
+                                      Explanation: {q.explanation}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenQuestionModal(q)}
+                                    className="h-7 w-7 grid place-items-center rounded border border-border text-muted-foreground hover:text-foreground"
+                                  >
+                                    <Pencil size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteQuestion(q.id)}
+                                    className="h-7 w-7 grid place-items-center rounded border border-border text-muted-foreground hover:text-red-500"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Modal Footer */}
@@ -1571,6 +1986,15 @@ function AdminCourseLessonsPage() {
           src={previewVideo.src}
           title={previewVideo.title}
           onClose={() => setPreviewVideo(null)}
+        />
+      )}
+
+      {/* Course Owners Dashboard Modal (For Admin & Head of Staff) */}
+      {showOwnersModal && (
+        <LectureOwnersModal
+          courseId={course.id}
+          courseTitle={course.title}
+          onClose={() => setShowOwnersModal(false)}
         />
       )}
     </div>

@@ -72,6 +72,22 @@ function LectureQuizPage() {
           _course_id: courseId,
         });
         allow = !!ownsData;
+        if (!allow) {
+          const { data: enr } = await (supabase.from as any)("user_lecture_courses")
+            .select("course_id")
+            .eq("user_id", user.id)
+            .eq("course_id", courseId)
+            .maybeSingle();
+          if (enr) allow = true;
+        }
+        if (!allow) {
+          const { data: staff } = await (supabase.from as any)("lecture_staff")
+            .select("course_id")
+            .eq("user_id", user.id)
+            .eq("course_id", courseId)
+            .maybeSingle();
+          if (staff) allow = true;
+        }
       }
       if (cancelled) return;
       if (!allow) {
