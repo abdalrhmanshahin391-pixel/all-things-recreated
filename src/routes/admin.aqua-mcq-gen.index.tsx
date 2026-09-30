@@ -143,7 +143,7 @@ function AquaMcqGenPro() {
         else if (res.state === "failed") { toast.error("The batch run failed."); await refreshActive(active.id); }
       } catch { /* keep waiting */ }
     };
-    const t = setInterval(tick, 20_000);
+    const t = setInterval(() => { if (!document.hidden) void tick(); }, 20_000);
     void tick();
     return () => { cancelled = true; clearInterval(t); };
   }, [active?.batch_name, active?.id, pollBatch, refreshActive, refreshGroups]);

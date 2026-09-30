@@ -1540,7 +1540,7 @@ function PoolStatusPanel({ active }: { active: boolean }) {
       getStatus().then((d) => { if (alive) setData(d as any); }).catch(() => {});
     };
     refresh();
-    const interval = setInterval(refresh, active ? 2000 : 8000);
+    const interval = setInterval(() => { if (!document.hidden) refresh(); }, active ? 5000 : 30000);
     return () => { alive = false; clearInterval(interval); };
   }, [getStatus, active]);
 
