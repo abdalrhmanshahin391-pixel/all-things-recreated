@@ -583,6 +583,556 @@ function QuestionSourceSplitEditor({
   );
 }
 
+function DifficultyRatiosEditor({
+  job,
+  onUpdate,
+}: {
+  job: any;
+  onUpdate: (patch: Record<string, any>) => void;
+}) {
+  const easy = Number(job.difficulty_easy ?? 34);
+  const med = Number(job.difficulty_medium ?? 33);
+  const hard = Number(job.difficulty_hard ?? 33);
+
+  const [easyText, setEasyText] = useState(String(easy));
+  const [medText, setMedText] = useState(String(med));
+  const [hardText, setHardText] = useState(String(hard));
+
+  const focusedField = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (focusedField.current !== "easy") setEasyText(String(easy));
+    if (focusedField.current !== "med") setMedText(String(med));
+    if (focusedField.current !== "hard") setHardText(String(hard));
+  }, [easy, med, hard]);
+
+  const commit = (field: "difficulty_easy" | "difficulty_medium" | "difficulty_hard", val: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(val)));
+    if (field === "difficulty_easy") setEasyText(String(clamped));
+    if (field === "difficulty_medium") setMedText(String(clamped));
+    if (field === "difficulty_hard") setHardText(String(clamped));
+    onUpdate({ [field]: clamped });
+  };
+
+  const applyPreset = (eVal: number, mVal: number, hVal: number) => {
+    setEasyText(String(eVal));
+    setMedText(String(mVal));
+    setHardText(String(hVal));
+    onUpdate({
+      difficulty_easy: eVal,
+      difficulty_medium: mVal,
+      difficulty_hard: hVal,
+    });
+  };
+
+  const total = easy + med + hard;
+
+  return (
+    <div className="space-y-4 p-4 rounded-xl border border-slate-200 bg-slate-50">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Label className="text-xs font-bold uppercase tracking-wider text-slate-700">Difficulty Ratios</Label>
+        <span
+          className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full border ${
+            total === 100
+              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+              : "bg-amber-50 text-amber-700 border-amber-200"
+          }`}
+        >
+          Total: {total}% {total === 100 ? "✓" : ""}
+        </span>
+      </div>
+
+      {/* Quick Presets */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-200 bg-white shadow-2xs">
+        <span className="text-slate-500 font-medium text-xs">Quick Presets:</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-indigo-50 hover:text-indigo-700 border-slate-200"
+            onClick={() => applyPreset(34, 33, 33)}
+          >
+            ⚖️ Balanced (34/33/33)
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-emerald-50 hover:text-emerald-700 border-slate-200"
+            onClick={() => applyPreset(20, 40, 40)}
+          >
+            🎯 Clinical USMLE (20/40/40)
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-rose-50 hover:text-rose-700 border-slate-200"
+            onClick={() => applyPreset(10, 30, 60)}
+          >
+            🔥 High Challenge (10/30/60)
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-amber-50 hover:text-amber-700 border-slate-200"
+            onClick={() => applyPreset(50, 35, 15)}
+          >
+            📖 Foundational (50/35/15)
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+        {/* Easy */}
+        <div className="p-3.5 rounded-xl border border-emerald-200 bg-white shadow-2xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-emerald-700 font-bold text-xs">🟢 Easy (Recall)</span>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-7 w-7 rounded-md border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                onClick={() => commit("difficulty_easy", easy - 5)}
+                disabled={easy <= 0}
+              >
+                <Minus size={11} />
+              </Button>
+              <div className="relative flex items-center">
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={5}
+                  className="w-14 h-7 text-xs text-center font-bold pr-4 border-emerald-300 focus:ring-emerald-500"
+                  value={easyText}
+                  onFocus={() => {
+                    focusedField.current = "easy";
+                  }}
+                  onChange={(e) => {
+                    setEasyText(e.target.value);
+                    const v = parseInt(e.target.value);
+                    if (!isNaN(v) && v >= 0) commit("difficulty_easy", Math.min(100, v));
+                  }}
+                  onBlur={() => {
+                    focusedField.current = null;
+                    const v = parseInt(easyText);
+                    commit("difficulty_easy", isNaN(v) ? 0 : Math.min(100, v));
+                  }}
+                />
+                <span className="absolute right-1 text-[9px] font-bold text-slate-400 pointer-events-none">%</span>
+              </div>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-7 w-7 rounded-md border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                onClick={() => commit("difficulty_easy", easy + 5)}
+                disabled={easy >= 100}
+              >
+                <Plus size={11} />
+              </Button>
+            </div>
+          </div>
+          <Slider
+            value={[easy]}
+            min={0}
+            max={100}
+            step={5}
+            onValueChange={([val]) => commit("difficulty_easy", val)}
+          />
+        </div>
+
+        {/* Medium */}
+        <div className="p-3.5 rounded-xl border border-amber-200 bg-white shadow-2xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-amber-700 font-bold text-xs">🟡 Medium (2-step)</span>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-7 w-7 rounded-md border-amber-200 text-amber-700 hover:bg-amber-50"
+                onClick={() => commit("difficulty_medium", med - 5)}
+                disabled={med <= 0}
+              >
+                <Minus size={11} />
+              </Button>
+              <div className="relative flex items-center">
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={5}
+                  className="w-14 h-7 text-xs text-center font-bold pr-4 border-amber-300 focus:ring-amber-500"
+                  value={medText}
+                  onFocus={() => {
+                    focusedField.current = "med";
+                  }}
+                  onChange={(e) => {
+                    setMedText(e.target.value);
+                    const v = parseInt(e.target.value);
+                    if (!isNaN(v) && v >= 0) commit("difficulty_medium", Math.min(100, v));
+                  }}
+                  onBlur={() => {
+                    focusedField.current = null;
+                    const v = parseInt(medText);
+                    commit("difficulty_medium", isNaN(v) ? 0 : Math.min(100, v));
+                  }}
+                />
+                <span className="absolute right-1 text-[9px] font-bold text-slate-400 pointer-events-none">%</span>
+              </div>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-7 w-7 rounded-md border-amber-200 text-amber-700 hover:bg-amber-50"
+                onClick={() => commit("difficulty_medium", med + 5)}
+                disabled={med >= 100}
+              >
+                <Plus size={11} />
+              </Button>
+            </div>
+          </div>
+          <Slider
+            value={[med]}
+            min={0}
+            max={100}
+            step={5}
+            onValueChange={([val]) => commit("difficulty_medium", val)}
+          />
+        </div>
+
+        {/* Hard */}
+        <div className="p-3.5 rounded-xl border border-rose-200 bg-white shadow-2xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-rose-700 font-bold text-xs">🔴 Hard (Multi-step)</span>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-7 w-7 rounded-md border-rose-200 text-rose-700 hover:bg-rose-50"
+                onClick={() => commit("difficulty_hard", hard - 5)}
+                disabled={hard <= 0}
+              >
+                <Minus size={11} />
+              </Button>
+              <div className="relative flex items-center">
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={5}
+                  className="w-14 h-7 text-xs text-center font-bold pr-4 border-rose-300 focus:ring-rose-500"
+                  value={hardText}
+                  onFocus={() => {
+                    focusedField.current = "hard";
+                  }}
+                  onChange={(e) => {
+                    setHardText(e.target.value);
+                    const v = parseInt(e.target.value);
+                    if (!isNaN(v) && v >= 0) commit("difficulty_hard", Math.min(100, v));
+                  }}
+                  onBlur={() => {
+                    focusedField.current = null;
+                    const v = parseInt(hardText);
+                    commit("difficulty_hard", isNaN(v) ? 0 : Math.min(100, v));
+                  }}
+                />
+                <span className="absolute right-1 text-[9px] font-bold text-slate-400 pointer-events-none">%</span>
+              </div>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-7 w-7 rounded-md border-rose-200 text-rose-700 hover:bg-rose-50"
+                onClick={() => commit("difficulty_hard", hard + 5)}
+                disabled={hard >= 100}
+              >
+                <Plus size={11} />
+              </Button>
+            </div>
+          </div>
+          <Slider
+            value={[hard]}
+            min={0}
+            max={100}
+            step={5}
+            onValueChange={([val]) => commit("difficulty_hard", val)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const QUESTION_OBJECTIVES_CONFIG = [
+  { id: "recall", label: "Direct Recall", icon: "🧠", color: "text-slate-700", border: "border-slate-200", bg: "bg-slate-50/50" },
+  { id: "understanding", label: "Understanding / Mechanism", icon: "⚙️", color: "text-blue-700", border: "border-blue-200", bg: "bg-blue-50/30" },
+  { id: "clinical_vignette", label: "Clinical Vignette (Case Scenario)", icon: "🏥", color: "text-emerald-700", border: "border-emerald-200", bg: "bg-emerald-50/30" },
+  { id: "tricky", label: "Tricky / Red-Herring", icon: "🪤", color: "text-rose-700", border: "border-rose-200", bg: "bg-rose-50/30" },
+  { id: "comparison", label: "Comparison / Differentiation", icon: "⚖️", color: "text-purple-700", border: "border-purple-200", bg: "bg-purple-50/30" },
+  { id: "application", label: "Application of Concepts", icon: "💡", color: "text-amber-700", border: "border-amber-200", bg: "bg-amber-50/30" },
+  { id: "identification", label: "Identification / Diagnosis", icon: "🔍", color: "text-indigo-700", border: "border-indigo-200", bg: "bg-indigo-50/30" },
+  { id: "clinical_reasoning", label: "Clinical Case Reasoning", icon: "🩺", color: "text-teal-700", border: "border-teal-200", bg: "bg-teal-50/30" },
+  { id: "sequence", label: "Sequence / Step Progression", icon: "🔢", color: "text-orange-700", border: "border-orange-200", bg: "bg-orange-50/30" },
+  { id: "classification", label: "Classification / Taxonomy", icon: "🏷️", color: "text-cyan-700", border: "border-cyan-200", bg: "bg-cyan-50/30" },
+] as const;
+
+function QuestionTypeRatiosEditor({
+  job,
+  onUpdate,
+}: {
+  job: any;
+  onUpdate: (patch: Record<string, any>) => void;
+}) {
+  const currentRatios = job.objective_ratios ?? {};
+  const [localValues, setLocalValues] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const obj of QUESTION_OBJECTIVES_CONFIG) {
+      init[obj.id] = String(Number(currentRatios[obj.id] ?? 0));
+    }
+    return init;
+  });
+
+  const focusedField = useRef<string | null>(null);
+
+  useEffect(() => {
+    const ratios = job.objective_ratios ?? {};
+    setLocalValues((prev) => {
+      const next = { ...prev };
+      for (const obj of QUESTION_OBJECTIVES_CONFIG) {
+        if (focusedField.current !== obj.id) {
+          next[obj.id] = String(Number(ratios[obj.id] ?? 0));
+        }
+      }
+      return next;
+    });
+  }, [job.objective_ratios]);
+
+  const commitRatio = (id: string, val: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(val)));
+    setLocalValues((prev) => ({ ...prev, [id]: String(clamped) }));
+    const newRatios = { ...(job.objective_ratios ?? {}), [id]: clamped };
+    onUpdate({ objective_ratios: newRatios });
+  };
+
+  const handleTextChange = (id: string, text: string) => {
+    setLocalValues((prev) => ({ ...prev, [id]: text }));
+    const parsed = parseInt(text);
+    if (!isNaN(parsed) && parsed >= 0) {
+      const clamped = Math.min(100, parsed);
+      const newRatios = { ...(job.objective_ratios ?? {}), [id]: clamped };
+      onUpdate({ objective_ratios: newRatios });
+    }
+  };
+
+  const handleBlur = (id: string) => {
+    focusedField.current = null;
+    const currentText = localValues[id] ?? "";
+    const parsed = parseInt(currentText);
+    const valid = isNaN(parsed) || parsed < 0 ? 0 : Math.min(100, parsed);
+    commitRatio(id, valid);
+  };
+
+  const applyPreset = (type: "clinical" | "usmle" | "concepts" | "balanced" | "reset") => {
+    let preset: Record<string, number> = {};
+    switch (type) {
+      case "clinical":
+        preset = { clinical_vignette: 50, clinical_reasoning: 25, understanding: 15, tricky: 10 };
+        break;
+      case "usmle":
+        preset = { clinical_vignette: 40, clinical_reasoning: 20, understanding: 15, application: 15, tricky: 10 };
+        break;
+      case "concepts":
+        preset = { understanding: 40, application: 30, comparison: 20, recall: 10 };
+        break;
+      case "balanced":
+        preset = {
+          recall: 10,
+          understanding: 10,
+          clinical_vignette: 10,
+          tricky: 10,
+          comparison: 10,
+          application: 10,
+          identification: 10,
+          clinical_reasoning: 10,
+          sequence: 10,
+          classification: 10,
+        };
+        break;
+      case "reset":
+        preset = {};
+        break;
+    }
+    const newLocal: Record<string, string> = {};
+    for (const obj of QUESTION_OBJECTIVES_CONFIG) {
+      newLocal[obj.id] = String(preset[obj.id] ?? 0);
+    }
+    setLocalValues(newLocal);
+    onUpdate({ objective_ratios: preset });
+  };
+
+  const total = Object.values(job.objective_ratios ?? {}).reduce(
+    (a: number, b: unknown) => a + (Number(b) || 0),
+    0,
+  );
+
+  return (
+    <div className="space-y-4 p-4 rounded-xl border border-slate-200 bg-slate-50">
+      {/* Header with Title and Total status */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <Label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+            <Wand2 size={15} className="text-indigo-600" /> Question Type Ratios
+          </Label>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Control what % of questions are clinical vignettes, tricky, recall, etc. Set all to 0 for fully random. Values are relative (auto-normalized).
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {total === 0 ? (
+            <Badge variant="outline" className="bg-slate-100 text-slate-700 font-bold border-slate-300 text-xs">
+              🎲 Random (All 0%)
+            </Badge>
+          ) : (
+            <Badge className="bg-indigo-100 text-indigo-800 font-bold border border-indigo-200 text-xs">
+              Total Weight: {total}%
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Quick Presets Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-200 bg-white shadow-2xs">
+        <span className="text-slate-500 font-medium text-xs">Quick Presets:</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-emerald-50 hover:text-emerald-700 border-slate-200"
+            onClick={() => applyPreset("clinical")}
+          >
+            🏥 Clinical Vignettes Focus
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-indigo-50 hover:text-indigo-700 border-slate-200"
+            onClick={() => applyPreset("usmle")}
+          >
+            📚 USMLE / Board Exam
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-blue-50 hover:text-blue-700 border-slate-200"
+            onClick={() => applyPreset("concepts")}
+          >
+            ⚙️ Concepts &amp; Mechanisms
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-purple-50 hover:text-purple-700 border-slate-200"
+            onClick={() => applyPreset("balanced")}
+          >
+            ⚖️ Equal 10% Each
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-rose-50 hover:text-rose-700 border-slate-200 text-slate-600"
+            onClick={() => applyPreset("reset")}
+          >
+            🔄 Reset All (0%)
+          </Button>
+        </div>
+      </div>
+
+      {/* 2-Column Responsive Grid of Ratios */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+        {QUESTION_OBJECTIVES_CONFIG.map(({ id, label, icon, color, border, bg }) => {
+          const currentVal = Number((job.objective_ratios ?? {})[id] ?? 0);
+          const textVal = localValues[id] ?? String(currentVal);
+
+          return (
+            <div
+              key={id}
+              className={`p-3 rounded-xl border ${border} ${bg} bg-white shadow-2xs space-y-2 transition-all hover:shadow-xs`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className={`font-bold text-xs flex items-center gap-1.5 ${color}`}>
+                  <span>{icon}</span> {label}
+                </span>
+
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="h-7 w-7 rounded-md border-slate-200 text-slate-600 hover:bg-slate-100"
+                    onClick={() => commitRatio(id, currentVal - 5)}
+                    disabled={currentVal <= 0}
+                  >
+                    <Minus size={11} />
+                  </Button>
+                  <div className="relative flex items-center">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={5}
+                      className="w-14 h-7 text-xs text-center font-bold pr-4 border-slate-300 focus:ring-indigo-500"
+                      value={textVal}
+                      onFocus={() => {
+                        focusedField.current = id;
+                      }}
+                      onChange={(e) => handleTextChange(id, e.target.value)}
+                      onBlur={() => handleBlur(id)}
+                    />
+                    <span className="absolute right-1.5 text-[10px] font-bold text-slate-400 pointer-events-none">
+                      %
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="h-7 w-7 rounded-md border-slate-200 text-slate-600 hover:bg-slate-100"
+                    onClick={() => commitRatio(id, currentVal + 5)}
+                    disabled={currentVal >= 100}
+                  >
+                    <Plus size={11} />
+                  </Button>
+                </div>
+              </div>
+
+              <Slider
+                value={[currentVal]}
+                min={0}
+                max={100}
+                step={5}
+                onValueChange={([val]) => commitRatio(id, val)}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AquaMcqForgeStudio() {
   const { jobId } = Route.useParams();
   const { user, loading } = useAuth();
@@ -1262,57 +1812,7 @@ function AquaMcqForgeStudio() {
                   <QuestionSourceSplitEditor job={job} onUpdate={patchJobQuietly} />
 
                   {/* Difficulty Ratios */}
-                  <div className="space-y-4 p-4 rounded-xl border border-slate-200 bg-slate-50">
-
-                    <div className="flex justify-between items-center">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-700">Difficulty Ratios</Label>
-                      <span className="text-xs font-mono font-bold text-indigo-600">
-                        Total: {job.difficulty_easy + job.difficulty_medium + job.difficulty_hard}%
-                      </span>
-                    </div>
-
-                    <div className="space-y-4 text-xs">
-                      <div>
-                        <div className="flex justify-between font-semibold mb-1">
-                          <span className="text-emerald-700">Easy (Direct Recall, 1-step):</span>
-                          <span>{job.difficulty_easy}%</span>
-                        </div>
-                        <Slider
-                          value={[job.difficulty_easy]}
-                          min={0}
-                          max={100}
-                          step={5}
-                          onValueChange={([val]) => patchJobQuietly({ difficulty_easy: val })}
-                        />
-                      </div>
-                      <div>
-                        <div className="flex justify-between font-semibold mb-1">
-                          <span className="text-amber-700">Medium (Understanding, 2-step):</span>
-                          <span>{job.difficulty_medium}%</span>
-                        </div>
-                        <Slider
-                          value={[job.difficulty_medium]}
-                          min={0}
-                          max={100}
-                          step={5}
-                          onValueChange={([val]) => patchJobQuietly({ difficulty_medium: val })}
-                        />
-                      </div>
-                      <div>
-                        <div className="flex justify-between font-semibold mb-1">
-                          <span className="text-rose-700">Hard (Multi-step Clinical Reasoning):</span>
-                          <span>{job.difficulty_hard}%</span>
-                        </div>
-                        <Slider
-                          value={[job.difficulty_hard]}
-                          min={0}
-                          max={100}
-                          step={5}
-                          onValueChange={([val]) => patchJobQuietly({ difficulty_hard: val })}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  <DifficultyRatiosEditor job={job} onUpdate={patchJobQuietly} />
 
                   {/* Dedup threshold */}
                   <div className="p-4 rounded-xl border border-slate-200 space-y-2">
@@ -1333,62 +1833,7 @@ function AquaMcqForgeStudio() {
                   </div>
 
                   {/* Question Type Ratios */}
-                  <div className="space-y-4 p-4 rounded-xl border border-slate-200 bg-slate-50">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <Label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                          <Wand2 size={14} className="text-indigo-600" /> Question Type Ratios
-                        </Label>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          Control what % of questions are clinical vignettes, tricky, recall, etc.
-                          Set all to 0 for fully random. Values are relative (auto-normalized).
-                        </p>
-                      </div>
-                      <span className="text-xs font-mono font-bold text-indigo-600">
-                        Total:{" "}
-                        {Object.values(job.objective_ratios ?? {}).reduce(
-                          (a: number, b: unknown) => a + (Number(b) || 0),
-                          0,
-                        )}
-                        %
-                      </span>
-                    </div>
-
-                    <div className="space-y-3 text-xs">
-                      {[
-                        { id: "recall", label: "Direct Recall", color: "text-slate-700" },
-                        { id: "understanding", label: "Understanding / Mechanism", color: "text-blue-700" },
-                        { id: "clinical_vignette", label: "🏥 Clinical Vignette (Case Scenario)", color: "text-emerald-700" },
-                        { id: "tricky", label: "🪤 Tricky / Red-Herring", color: "text-rose-700" },
-                        { id: "comparison", label: "Comparison / Differentiation", color: "text-purple-700" },
-                        { id: "application", label: "Application of Concepts", color: "text-amber-700" },
-                        { id: "identification", label: "Identification / Diagnosis", color: "text-indigo-700" },
-                        { id: "clinical_reasoning", label: "Clinical Case Reasoning", color: "text-teal-700" },
-                        { id: "sequence", label: "Sequence / Step Progression", color: "text-orange-700" },
-                        { id: "classification", label: "Classification / Taxonomy", color: "text-cyan-700" },
-                      ].map(({ id, label, color }) => {
-                        const currentVal = Number((job.objective_ratios ?? {})[id] ?? 0);
-                        return (
-                          <div key={id}>
-                            <div className="flex justify-between font-semibold mb-1">
-                              <span className={color}>{label}:</span>
-                              <span>{currentVal}%</span>
-                            </div>
-                            <Slider
-                              value={[currentVal]}
-                              min={0}
-                              max={100}
-                              step={5}
-                              onValueChange={([val]) => {
-                                const newRatios = { ...(job.objective_ratios ?? {}), [id]: val };
-                                patchJobQuietly({ objective_ratios: newRatios });
-                              }}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  <QuestionTypeRatiosEditor job={job} onUpdate={patchJobQuietly} />
                 </CardContent>
               </Card>
             </TabsContent>
