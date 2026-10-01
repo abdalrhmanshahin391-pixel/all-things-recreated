@@ -27,7 +27,7 @@ import {
 } from "@/utils/payments.functions";
 import { toast } from "sonner";
 
-function CheckoutErrorFallback({ error, reset }: { error: Error; reset: () => void }) {
+function CheckoutErrorFallback({ error, reset }: { error: any; reset: () => void }) {
   return (
     <div className="min-h-screen bg-[#06080F] text-white">
       <SiteHeader />

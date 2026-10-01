@@ -1170,7 +1170,7 @@ function AdminCourseLessonsPage() {
                                   <Link
                                     to="/courses/$courseId/run"
                                     params={{ courseId: meta.linked_course_id! }}
-                                    search={{ mode: "study" }}
+                                    search={{ mode: "study" } as any}
                                     target="_blank"
                                     className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition-colors"
                                     title="Solve linked course in standard mode"
@@ -1416,7 +1416,7 @@ function AdminCourseLessonsPage() {
                               <Link
                                 to="/courses/$courseId/run"
                                 params={{ courseId: editingMeta.linked_course_id }}
-                                search={{ mode: "study" }}
+                                search={{ mode: "study" } as any}
                                 target="_blank"
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/30 bg-card text-xs font-bold text-primary hover:bg-primary/10 transition-colors shadow-2xs"
                               >

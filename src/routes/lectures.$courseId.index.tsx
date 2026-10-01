@@ -703,7 +703,7 @@ function ItemRow({
         <Link
           to="/courses/$courseId/run"
           params={{ courseId: meta.linked_course_id! }}
-          search={{ mode: "study" }}
+          search={{ mode: "study" } as any}
           className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition shadow-xs shrink-0 cursor-pointer"
         >
           <BookOpen size={13} />

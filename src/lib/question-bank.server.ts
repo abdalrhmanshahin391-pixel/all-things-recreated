@@ -145,6 +145,7 @@ export async function pourIntoCourse(opts: {
         explanation: q.explanation,
         answer_mode: q.answer_mode ?? "single",
         sort_order: order++,
+        image_url: q.image_url ?? null,
       })
       .select("id")
       .single();

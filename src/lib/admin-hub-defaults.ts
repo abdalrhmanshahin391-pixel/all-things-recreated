@@ -71,6 +71,7 @@ export const DEFAULT_LAYOUT: HubLayout = {
         t("/admin/questions", "Questions", "ListPlus"),
         t("/admin/question-generator", "Questions Generator", "Sparkles"),
         t("/admin/question-bank", "Question Bank", "Library"),
+        t("/admin/question-requests", "Questions Request", "ListChecks"),
 
         t("/admin/packages", "Packages Center", "Package", "مركز الباقات"),
         t("/admin/committee", "Committee Hub", "FolderTree"),

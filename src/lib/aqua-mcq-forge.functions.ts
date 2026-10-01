@@ -1661,11 +1661,11 @@ Return STRICT JSON.`;
             answer_mode: "single",
             status: initialStatus,
             flagged: !validationPassed,
-            flag_reason: validationPassed ? "" : (validationReport?.failures ?? []).join("; ").slice(0, 300),
+            flag_reason: validationPassed ? "" : "Validation failed",
             dup_hash: dupHash(stemFormatted),
             explanation: {
               explanation: explanationMarkdown,
-              validation_report: validationReport ?? {},
+              validation_report: {},
               validation_passed: validationPassed,
               difficulty,
               objective,

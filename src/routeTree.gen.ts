@@ -71,6 +71,7 @@ import { Route as AdminPeopleRouteImport } from './routes/admin.people'
 import { Route as AdminQuestionBankRouteImport } from './routes/admin.question-bank'
 import { Route as AdminQuestionGeneratorRouteImport } from './routes/admin.question-generator'
 import { Route as AdminQuestionReportsRouteImport } from './routes/admin.question-reports'
+import { Route as AdminQuestionRequestsRouteImport } from './routes/admin.question-requests'
 import { Route as AdminQuestionsRouteImport } from './routes/admin.questions'
 import { Route as AdminRolesRouteImport } from './routes/admin.roles'
 import { Route as AdminServersRouteImport } from './routes/admin.servers'
@@ -102,6 +103,8 @@ import { Route as MyCoursesRouteImport } from './routes/my.courses'
 import { Route as MyLecturesRouteImport } from './routes/my.lectures'
 import { Route as PSlugRouteImport } from './routes/p.$slug'
 import { Route as PackagesIndexRouteImport } from './routes/packages.index'
+import { Route as QuestionsIndexRouteImport } from './routes/questions.index'
+import { Route as QuestionsGroupIdRouteImport } from './routes/questions.$groupId'
 import { Route as StudyHubIndexRouteImport } from './routes/study-hub.index'
 import { Route as StudyHubExamsRouteImport } from './routes/study-hub.exams'
 import { Route as StudyHubFocusRouteImport } from './routes/study-hub.focus'
@@ -470,6 +473,11 @@ const AdminQuestionReportsRoute = AdminQuestionReportsRouteImport.update({
   path: '/admin/question-reports',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminQuestionRequestsRoute = AdminQuestionRequestsRouteImport.update({
+  id: '/admin/question-requests',
+  path: '/admin/question-requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminQuestionsRoute = AdminQuestionsRouteImport.update({
   id: '/admin/questions',
   path: '/admin/questions',
@@ -623,6 +631,16 @@ const PSlugRoute = PSlugRouteImport.update({
 const PackagesIndexRoute = PackagesIndexRouteImport.update({
   id: '/packages/',
   path: '/packages/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QuestionsIndexRoute = QuestionsIndexRouteImport.update({
+  id: '/questions/',
+  path: '/questions/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QuestionsGroupIdRoute = QuestionsGroupIdRouteImport.update({
+  id: '/questions/$groupId',
+  path: '/questions/$groupId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StudyHubIndexRoute = StudyHubIndexRouteImport.update({
@@ -969,6 +987,7 @@ export interface FileRoutesByFullPath {
   '/admin/question-bank': typeof AdminQuestionBankRoute
   '/admin/question-generator': typeof AdminQuestionGeneratorRoute
   '/admin/question-reports': typeof AdminQuestionReportsRoute
+  '/admin/question-requests': typeof AdminQuestionRequestsRoute
   '/admin/questions': typeof AdminQuestionsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/servers': typeof AdminServersRoute
@@ -995,6 +1014,7 @@ export interface FileRoutesByFullPath {
   '/my/courses': typeof MyCoursesRoute
   '/my/lectures': typeof MyLecturesRoute
   '/p/$slug': typeof PSlugRoute
+  '/questions/$groupId': typeof QuestionsGroupIdRoute
   '/study-hub/exams': typeof StudyHubExamsRoute
   '/study-hub/focus': typeof StudyHubFocusRoute
   '/study-hub/todo': typeof StudyHubTodoRoute
@@ -1007,6 +1027,7 @@ export interface FileRoutesByFullPath {
   '/guides/': typeof GuidesIndexRoute
   '/lectures/': typeof LecturesIndexRoute
   '/packages/': typeof PackagesIndexRoute
+  '/questions/': typeof QuestionsIndexRoute
   '/study-hub/': typeof StudyHubIndexRoute
   '/summaries/': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -1110,6 +1131,7 @@ export interface FileRoutesByTo {
   '/admin/question-bank': typeof AdminQuestionBankRoute
   '/admin/question-generator': typeof AdminQuestionGeneratorRoute
   '/admin/question-reports': typeof AdminQuestionReportsRoute
+  '/admin/question-requests': typeof AdminQuestionRequestsRoute
   '/admin/questions': typeof AdminQuestionsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/servers': typeof AdminServersRoute
@@ -1133,6 +1155,7 @@ export interface FileRoutesByTo {
   '/my/courses': typeof MyCoursesRoute
   '/my/lectures': typeof MyLecturesRoute
   '/p/$slug': typeof PSlugRoute
+  '/questions/$groupId': typeof QuestionsGroupIdRoute
   '/study-hub/exams': typeof StudyHubExamsRoute
   '/study-hub/focus': typeof StudyHubFocusRoute
   '/study-hub/todo': typeof StudyHubTodoRoute
@@ -1145,6 +1168,7 @@ export interface FileRoutesByTo {
   '/guides': typeof GuidesIndexRoute
   '/lectures': typeof LecturesIndexRoute
   '/packages': typeof PackagesIndexRoute
+  '/questions': typeof QuestionsIndexRoute
   '/study-hub': typeof StudyHubIndexRoute
   '/summaries': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -1255,6 +1279,7 @@ export interface FileRoutesById {
   '/admin/question-bank': typeof AdminQuestionBankRoute
   '/admin/question-generator': typeof AdminQuestionGeneratorRoute
   '/admin/question-reports': typeof AdminQuestionReportsRoute
+  '/admin/question-requests': typeof AdminQuestionRequestsRoute
   '/admin/questions': typeof AdminQuestionsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/servers': typeof AdminServersRoute
@@ -1281,6 +1306,7 @@ export interface FileRoutesById {
   '/my/courses': typeof MyCoursesRoute
   '/my/lectures': typeof MyLecturesRoute
   '/p/$slug': typeof PSlugRoute
+  '/questions/$groupId': typeof QuestionsGroupIdRoute
   '/study-hub/exams': typeof StudyHubExamsRoute
   '/study-hub/focus': typeof StudyHubFocusRoute
   '/study-hub/todo': typeof StudyHubTodoRoute
@@ -1293,6 +1319,7 @@ export interface FileRoutesById {
   '/guides/': typeof GuidesIndexRoute
   '/lectures/': typeof LecturesIndexRoute
   '/packages/': typeof PackagesIndexRoute
+  '/questions/': typeof QuestionsIndexRoute
   '/study-hub/': typeof StudyHubIndexRoute
   '/summaries/': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -1406,6 +1433,7 @@ export interface FileRouteTypes {
     | '/admin/question-bank'
     | '/admin/question-generator'
     | '/admin/question-reports'
+    | '/admin/question-requests'
     | '/admin/questions'
     | '/admin/roles'
     | '/admin/servers'
@@ -1432,6 +1460,7 @@ export interface FileRouteTypes {
     | '/my/courses'
     | '/my/lectures'
     | '/p/$slug'
+    | '/questions/$groupId'
     | '/study-hub/exams'
     | '/study-hub/focus'
     | '/study-hub/todo'
@@ -1444,6 +1473,7 @@ export interface FileRouteTypes {
     | '/guides/'
     | '/lectures/'
     | '/packages/'
+    | '/questions/'
     | '/study-hub/'
     | '/summaries/'
     | '/.lovable/oauth/consent'
@@ -1547,6 +1577,7 @@ export interface FileRouteTypes {
     | '/admin/question-bank'
     | '/admin/question-generator'
     | '/admin/question-reports'
+    | '/admin/question-requests'
     | '/admin/questions'
     | '/admin/roles'
     | '/admin/servers'
@@ -1570,6 +1601,7 @@ export interface FileRouteTypes {
     | '/my/courses'
     | '/my/lectures'
     | '/p/$slug'
+    | '/questions/$groupId'
     | '/study-hub/exams'
     | '/study-hub/focus'
     | '/study-hub/todo'
@@ -1582,6 +1614,7 @@ export interface FileRouteTypes {
     | '/guides'
     | '/lectures'
     | '/packages'
+    | '/questions'
     | '/study-hub'
     | '/summaries'
     | '/.lovable/oauth/consent'
@@ -1691,6 +1724,7 @@ export interface FileRouteTypes {
     | '/admin/question-bank'
     | '/admin/question-generator'
     | '/admin/question-reports'
+    | '/admin/question-requests'
     | '/admin/questions'
     | '/admin/roles'
     | '/admin/servers'
@@ -1717,6 +1751,7 @@ export interface FileRouteTypes {
     | '/my/courses'
     | '/my/lectures'
     | '/p/$slug'
+    | '/questions/$groupId'
     | '/study-hub/exams'
     | '/study-hub/focus'
     | '/study-hub/todo'
@@ -1729,6 +1764,7 @@ export interface FileRouteTypes {
     | '/guides/'
     | '/lectures/'
     | '/packages/'
+    | '/questions/'
     | '/study-hub/'
     | '/summaries/'
     | '/.lovable/oauth/consent'
@@ -1841,6 +1877,7 @@ export interface RootRouteChildren {
   AdminQuestionBankRoute: typeof AdminQuestionBankRoute
   AdminQuestionGeneratorRoute: typeof AdminQuestionGeneratorRoute
   AdminQuestionReportsRoute: typeof AdminQuestionReportsRoute
+  AdminQuestionRequestsRoute: typeof AdminQuestionRequestsRoute
   AdminQuestionsRoute: typeof AdminQuestionsRoute
   AdminRolesRoute: typeof AdminRolesRoute
   AdminServersRoute: typeof AdminServersRoute
@@ -1861,12 +1898,14 @@ export interface RootRouteChildren {
   MyCoursesRoute: typeof MyCoursesRoute
   MyLecturesRoute: typeof MyLecturesRoute
   PSlugRoute: typeof PSlugRoute
+  QuestionsGroupIdRoute: typeof QuestionsGroupIdRoute
   SummariesSummaryIdRoute: typeof SummariesSummaryIdRoute
   SummariesNewRoute: typeof SummariesNewRoute
   UUniSlugRoute: typeof UUniSlugRoute
   AdminIndexRoute: typeof AdminIndexRoute
   GuidesIndexRoute: typeof GuidesIndexRoute
   PackagesIndexRoute: typeof PackagesIndexRoute
+  QuestionsIndexRoute: typeof QuestionsIndexRoute
   SummariesIndexRoute: typeof SummariesIndexRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -2329,6 +2368,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminQuestionReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/question-requests': {
+      id: '/admin/question-requests'
+      path: '/admin/question-requests'
+      fullPath: '/admin/question-requests'
+      preLoaderRoute: typeof AdminQuestionRequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/questions': {
       id: '/admin/questions'
       path: '/admin/questions'
@@ -2544,6 +2590,20 @@ declare module '@tanstack/react-router' {
       path: '/packages'
       fullPath: '/packages/'
       preLoaderRoute: typeof PackagesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/questions/': {
+      id: '/questions/'
+      path: '/questions'
+      fullPath: '/questions/'
+      preLoaderRoute: typeof QuestionsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/questions/$groupId': {
+      id: '/questions/$groupId'
+      path: '/questions/$groupId'
+      fullPath: '/questions/$groupId'
+      preLoaderRoute: typeof QuestionsGroupIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/study-hub/': {
@@ -3199,6 +3259,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminQuestionBankRoute: AdminQuestionBankRoute,
   AdminQuestionGeneratorRoute: AdminQuestionGeneratorRoute,
   AdminQuestionReportsRoute: AdminQuestionReportsRoute,
+  AdminQuestionRequestsRoute: AdminQuestionRequestsRoute,
   AdminQuestionsRoute: AdminQuestionsRoute,
   AdminRolesRoute: AdminRolesRoute,
   AdminServersRoute: AdminServersRoute,
@@ -3219,12 +3280,14 @@ const rootRouteChildren: RootRouteChildren = {
   MyCoursesRoute: MyCoursesRoute,
   MyLecturesRoute: MyLecturesRoute,
   PSlugRoute: PSlugRoute,
+  QuestionsGroupIdRoute: QuestionsGroupIdRoute,
   SummariesSummaryIdRoute: SummariesSummaryIdRoute,
   SummariesNewRoute: SummariesNewRoute,
   UUniSlugRoute: UUniSlugRoute,
   AdminIndexRoute: AdminIndexRoute,
   GuidesIndexRoute: GuidesIndexRoute,
   PackagesIndexRoute: PackagesIndexRoute,
+  QuestionsIndexRoute: QuestionsIndexRoute,
   SummariesIndexRoute: SummariesIndexRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,

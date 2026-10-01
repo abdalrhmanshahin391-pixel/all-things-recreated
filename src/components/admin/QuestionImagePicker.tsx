@@ -8,7 +8,9 @@ import { uploadQuestionImage } from "@/lib/question-image";
 export function QuestionImagePicker({
   path,
   onChange,
+  prefix,
 }: {
+  prefix?: string;
   path: string | null;
   onChange: (path: string | null) => void;
 }) {
@@ -20,7 +22,7 @@ export function QuestionImagePicker({
     setBusy(true);
     try {
       // The old picture is only deleted after the question is saved.
-      const next = await uploadQuestionImage(file);
+      const next = await uploadQuestionImage(file, prefix);
       onChange(next);
     } catch (e: any) {
       toast.error(e?.message ?? "Could not upload that picture.");
@@ -36,7 +38,7 @@ export function QuestionImagePicker({
 
   return (
     <div className="space-y-2">
-      <span className="text-xs font-bold uppercase tracking-widest text-white/50">Picture (optional)</span>
+      <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Picture (optional)</span>
       {path && (
         <div className="rounded-xl border border-white/10 bg-black/30 p-3">
           <QuestionImage path={path} />
