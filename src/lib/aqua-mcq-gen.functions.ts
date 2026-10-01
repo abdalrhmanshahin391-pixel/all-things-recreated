@@ -993,9 +993,17 @@ function buildNewExplanation(json: any, opts: any[], correctLabels: string[]): s
 }
 
 function relevantSourceText(chunks: string[], question: string): string {
-  const words = new Set(question.toLowerCase().match(/[a-z]{4,}/g) ?? []);
-  return chunks.map((text) => ({ text, score: (text.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((word) => words.has(word)).length }))
-    .sort((a, b) => b.score - a.score).slice(0, 8).map((entry) => entry.text).join("\n\n").slice(0, 28000);
+  const words = new Set(question.toLowerCase().match(/[a-zA-Z\u0600-\u06FF0-9]{3,}/g) ?? []);
+  return chunks
+    .map((text) => ({
+      text,
+      score: (text.toLowerCase().match(/[a-zA-Z\u0600-\u06FF0-9]{3,}/g) ?? []).filter((word) => words.has(word)).length,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .map((entry) => entry.text)
+    .join("\n\n")
+    .slice(0, 28000);
 }
 
 async function callGoogleText(apiKey: string, model: string, system: string, prompt: string): Promise<string> {
@@ -1090,8 +1098,9 @@ export const amgSolveBatch = createServerFn({ method: "POST" })
           ? `OFFICIAL ANSWER KEY: the correct option(s) for this question are ${given.join(", ")}. You MUST mark exactly these and explain why they are right.\n`
           : "";
         const selectedSource = [sourceText, relevantSourceText(sourceChunks, `${item.stem}\n${optText}`)].filter(Boolean).join("\n\n");
-        const sourceBlock = selectedSource && (answerSource === "source" || group.prefer_source)
-          ? `REFERENCE SOURCE (base the answer and explanation on this text; use it carefully and do not contradict it):\n${selectedSource.slice(0, 30000)}\n\n`
+        const isSourceMode = answerSource === "source" || Boolean(group.prefer_source);
+        const sourceBlock = selectedSource && isSourceMode
+          ? `REFERENCE SOURCE (CRITICAL MANDATE: You MUST base your answer and explanation strictly and directly on this reference source. Identify the matching concept in this text and derive the correct option from it; do not contradict it):\n${selectedSource.slice(0, 30000)}\n\n`
           : "";
         const comboBlock = sets.length
           ? `ALLOWED ANSWER SETS (printed on the paper — choose exactly one):\n${sets.map((s) => s.join(",")).join("\n")}\n`
@@ -1231,19 +1240,25 @@ export const amgImportGroup = createServerFn({ method: "POST" })
 export const amgAddPdfSource = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({
-    groupId: z.string().uuid(), fileName: z.string().min(1).max(200), storagePath: z.string().min(1).max(500),
-    pages: z.array(z.string().max(120000)).min(1).max(1000),
+    groupId: z.string().uuid(),
+    fileName: z.string().min(1).max(250),
+    storagePath: z.string().min(1).max(500),
+    pages: z.array(z.string().max(120000)).min(1).max(2000),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = await ensureAdmin(context);
+    const { supabase, userId } = await ensureStaff(context);
     const chunks: string[] = [];
     for (const page of data.pages) {
       const text = page.replace(/\s+\n/g, "\n").trim();
-      for (let start = 0; start < text.length; start += 6000) chunks.push(text.slice(start, start + 7000));
+      for (let start = 0; start < text.length; start += 5000) chunks.push(text.slice(start, start + 6000));
     }
     const { data: row, error } = await supabase.from(SOURCES).insert({
-      group_id: data.groupId, file_name: data.fileName, storage_path: data.storagePath,
-      extracted_text: data.pages.join("\n\n").slice(0, 1_000_000), chunks, created_by: userId,
+      group_id: data.groupId,
+      file_name: data.fileName,
+      storage_path: data.storagePath,
+      extracted_text: data.pages.join("\n\n").slice(0, 1_000_000),
+      chunks,
+      created_by: userId,
     }).select("id,file_name,created_at").single();
     if (error) throw new Error(error.message);
     return row;
@@ -1253,7 +1268,7 @@ export const amgListPdfSources = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ groupId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureAdmin(context);
+    const { supabase } = await ensureStaff(context);
     const { data: rows, error } = await supabase.from(SOURCES).select("id,file_name,created_at").eq("group_id", data.groupId).order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return rows ?? [];
@@ -1263,9 +1278,14 @@ export const amgDeletePdfSource = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ sourceId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureAdmin(context);
+    const { supabase } = await ensureStaff(context);
     const { data: row } = await supabase.from(SOURCES).select("storage_path").eq("id", data.sourceId).maybeSingle();
-    if (row?.storage_path) await supabase.storage.from(SOURCE_BUCKET).remove([row.storage_path]);
+    if (row?.storage_path) {
+      await Promise.allSettled([
+        supabase.storage.from("amf-sources").remove([row.storage_path]),
+        supabase.storage.from("amg-sources").remove([row.storage_path]),
+      ]);
+    }
     const { error } = await supabase.from(SOURCES).delete().eq("id", data.sourceId);
     if (error) throw new Error(error.message);
     return { ok: true };

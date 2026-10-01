@@ -183,23 +183,39 @@ function SolveScreen() {
   }
 
   async function uploadSourcePdf(file: File) {
-    if (file.size > 20 * 1024 * 1024) { toast.error("The PDF must be 20 MB or smaller."); return; }
+    if (file.size > 30 * 1024 * 1024) { toast.error("The PDF must be 30 MB or smaller."); return; }
     setBusy(true);
-    const storagePath = `${groupId}/${crypto.randomUUID()}.pdf`;
+    const storagePath = `${groupId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
     try {
+      toast.info("Extracting text from PDF in browser...");
       const { loadPdfForText, getPageText, clearPdfRenderCache } = await import("@/lib/pdf-page-render");
       const doc = await loadPdfForText(file);
       const pages: string[] = [];
       for (let page = 1; page <= Number(doc.numPages || 0); page++) pages.push(await getPageText(doc, page));
       clearPdfRenderCache();
-      if (!pages.some((page) => page.trim())) throw new Error("No selectable text was found in this PDF.");
-      const { error: uploadError } = await supabase.storage.from(SOURCE_BUCKET).upload(storagePath, file, { contentType: "application/pdf" });
-      if (uploadError) throw uploadError;
+      if (!pages.some((page) => page.trim())) {
+        throw new Error("No selectable text was found in this PDF. Please ensure it is not scanned images only.");
+      }
+
+      // Try uploading to storage with fallback (amf-sources, then amg-sources)
+      try {
+        const res1 = await supabase.storage.from("amf-sources").upload(storagePath, file, { contentType: "application/pdf" });
+        if (res1.error) {
+          await supabase.storage.from("amg-sources").upload(storagePath, file, { contentType: "application/pdf" });
+        }
+      } catch (storageErr) {
+        console.warn("Storage upload failed, proceeding with extracted text directly:", storageErr);
+      }
+
+      // Save extracted text & chunks to database so AI can immediately use it
       await addPdfSource({ data: { groupId, fileName: file.name, storagePath, pages } });
       setPdfSources(await listPdfSources({ data: { groupId } }) as any);
-      toast.success("Source PDF added. The AI will find the relevant sections for each question.");
+      toast.success(`Source PDF added (${pages.length} pages). The AI will answer based on this source.`);
     } catch (e: any) {
-      await supabase.storage.from(SOURCE_BUCKET).remove([storagePath]);
+      await Promise.allSettled([
+        supabase.storage.from("amf-sources").remove([storagePath]),
+        supabase.storage.from("amg-sources").remove([storagePath]),
+      ]);
       toast.error(e?.message || "Could not read this PDF");
     } finally { setBusy(false); }
   }
@@ -209,6 +225,7 @@ function SolveScreen() {
     try {
       await deletePdfSource({ data: { sourceId: id } });
       setPdfSources(await listPdfSources({ data: { groupId } }) as any);
+      toast.success("Source removed");
     } catch (e: any) { toast.error(e?.message || "Could not remove the source"); }
     finally { setBusy(false); }
   }

@@ -1,37 +1,81 @@
 import { supabase } from "@/integrations/supabase/client";
+import { resolveLectureVideoUrlServer, resolveLecturePdfUrlServer } from "./lecture-video.functions";
 
 /**
  * Resolve a lecture video reference into a playable URL.
- * If a storage path is set we generate a signed URL from the private bucket
- * (which RLS gates to admins + course owners). Otherwise we use the external URL.
+ * Handles external URLs directly (YouTube, Vimeo, Drive, etc.).
+ * For storage paths (including course intro/preview videos), uses the server resolver
+ * so private bucket RLS does not block intro previews or students.
  */
 export async function resolveLectureVideoUrl(
   videoUrl: string | null,
   storagePath: string | null,
+  options?: { courseId?: string; itemId?: string },
 ): Promise<string | null> {
-  if (storagePath) {
-    const { data } = await supabase.storage
-      .from("lecture-videos")
-      .createSignedUrl(storagePath, 60 * 60 * 2);
-    if (data?.signedUrl) return data.signedUrl;
+  // If external URL without storage path, return directly
+  if (!storagePath && videoUrl) {
+    return videoUrl;
   }
+
+  if (storagePath) {
+    try {
+      const res = await resolveLectureVideoUrlServer({
+        data: {
+          videoUrl: videoUrl ?? null,
+          storagePath,
+          courseId: options?.courseId,
+          itemId: options?.itemId,
+        },
+      });
+      if (res?.url) return res.url;
+    } catch (err) {
+      console.warn("[resolveLectureVideoUrl] Server resolver error, falling back to client:", err);
+    }
+
+    // Client fallback
+    try {
+      const { data } = await supabase.storage
+        .from("lecture-videos")
+        .createSignedUrl(storagePath, 60 * 60 * 2);
+      if (data?.signedUrl) return data.signedUrl;
+    } catch {}
+  }
+
   return videoUrl ?? null;
 }
 
 /**
  * Resolve a lecture PDF reference into a short-lived viewable URL.
- * Uploaded files live in the private "lecture-pdfs" bucket (RLS gated to
- * admins, course owners and free lessons); links are used as-is.
  */
 export async function resolveLecturePdfUrl(
   pdfUrl: string | null,
   storagePath: string | null,
 ): Promise<string | null> {
-  if (storagePath) {
-    const { data } = await supabase.storage
-      .from("lecture-pdfs")
-      .createSignedUrl(storagePath, 60 * 30);
-    if (data?.signedUrl) return data.signedUrl;
+  if (!storagePath && pdfUrl) {
+    return pdfUrl;
   }
+
+  if (storagePath) {
+    try {
+      const res = await resolveLecturePdfUrlServer({
+        data: {
+          pdfUrl: pdfUrl ?? null,
+          storagePath,
+        },
+      });
+      if (res?.url) return res.url;
+    } catch (err) {
+      console.warn("[resolveLecturePdfUrl] Server resolver error, falling back to client:", err);
+    }
+
+    // Client fallback
+    try {
+      const { data } = await supabase.storage
+        .from("lecture-pdfs")
+        .createSignedUrl(storagePath, 60 * 30);
+      if (data?.signedUrl) return data.signedUrl;
+    } catch {}
+  }
+
   return pdfUrl ?? null;
 }

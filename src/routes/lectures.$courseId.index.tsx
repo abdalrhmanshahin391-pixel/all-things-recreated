@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   PlayCircle,
@@ -280,11 +281,20 @@ function LectureCoursePage() {
 
   async function openIntro() {
     if (!course) return;
-    if (!owns && !course.intro_free) return;
-    const url = await resolveLectureVideoUrl(course.intro_video_url, course.intro_video_storage_path);
-    if (url) {
-      setActiveVideo({ src: url, title: `${course.title} — Intro` });
-      setIntroOpen(true);
+    try {
+      const url = await resolveLectureVideoUrl(
+        course.intro_video_url,
+        course.intro_video_storage_path,
+        { courseId: course.id }
+      );
+      if (url) {
+        setActiveVideo({ src: url, title: `${course.title} — Intro` });
+        setIntroOpen(true);
+      } else {
+        toast.info("No preview video has been uploaded for this course yet.");
+      }
+    } catch {
+      toast.error("Could not load preview video.");
     }
   }
 
@@ -314,7 +324,7 @@ function LectureCoursePage() {
   }
 
   const hasIntro = !!(course.intro_video_url || course.intro_video_storage_path);
-  const introPlayable = hasIntro && (owns || course.intro_free);
+  const introPlayable = hasIntro;
 
   return (
     <div className="min-h-screen bg-background text-foreground">

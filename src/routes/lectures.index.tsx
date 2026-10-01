@@ -1,5 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   PlayCircle,
   Video,
@@ -143,9 +144,19 @@ function LecturesPage() {
   const [activeVideo, setActiveVideo] = useState<{ src: string; title: string } | null>(null);
 
   async function handlePlayIntro(c: Course) {
-    const url = await resolveLectureVideoUrl(c.intro_video_url ?? null, c.intro_video_storage_path ?? null);
-    if (url) {
-      setActiveVideo({ src: url, title: `${c.title} — Overview` });
+    try {
+      const url = await resolveLectureVideoUrl(
+        c.intro_video_url ?? null,
+        c.intro_video_storage_path ?? null,
+        { courseId: c.id }
+      );
+      if (url) {
+        setActiveVideo({ src: url, title: `${c.title} — Overview` });
+      } else {
+        toast.info("No preview video has been uploaded for this course yet.");
+      }
+    } catch {
+      toast.error("Could not load preview video.");
     }
   }
 
@@ -398,6 +409,7 @@ function LectureCard({
   active: boolean;
   onPlayIntro: (c: Course) => void;
 }) {
+  const navigate = useNavigate();
   const [imgUrl, setImgUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -423,11 +435,14 @@ function LectureCard({
           e.stopPropagation();
           if (hasIntro) {
             onPlayIntro(course);
+          } else {
+            navigate({
+              to: "/lectures/$courseId",
+              params: { courseId: course.id },
+            });
           }
         }}
-        className={`relative aspect-video overflow-hidden block bg-muted ${
-          hasIntro ? "cursor-pointer" : ""
-        }`}
+        className="relative aspect-video overflow-hidden block bg-muted cursor-pointer"
       >
         {imgUrl ? (
           <img
