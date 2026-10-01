@@ -8,7 +8,7 @@ import {
   buildFactExtractionPrompt,
   buildGenerationSystemPrompt,
   buildBatchGenerationSystemPrompt,
-  buildValidatorSystemPrompt,
+  inlineValidateQuestion,
   QUESTION_OBJECTIVES,
 } from "@/lib/aqua-mcq-forge.prompts";
 import {
@@ -1161,12 +1161,66 @@ export async function getJobExistingItems(supabase: any, jobId: string): Promise
   return [];
 }
 
+/**
+ * Selects question length/style based on user-configured job.length_ratios.
+ * Falls back to default ratios (40% short, 40% medium, 10% long, 10% tricky) if not set.
+ * Fully decoupled from objective — users control these independently.
+ */
+function selectQuotaLengthStyle(
+  lengthRatios: Record<string, number> | null | undefined,
+  existingLengthStyles: string[],
+  totalQuestions: number = 20,
+): "short_direct" | "medium_case" | "long_vignette" | "tricky_trap" {
+  const defaults: Record<string, number> = {
+    short_direct: 40,
+    medium_case: 40,
+    long_vignette: 10,
+    tricky_trap: 10,
+  };
+
+  const ratios = (lengthRatios && Object.keys(lengthRatios).length > 0) ? lengthRatios : defaults;
+  const validKeys = ["short_direct", "medium_case", "long_vignette", "tricky_trap"] as const;
+
+  const positiveEntries = validKeys
+    .map((k) => [k, Number(ratios[k] ?? 0)] as const)
+    .filter(([, v]) => v > 0);
+
+  if (positiveEntries.length === 0) {
+    // Fallback: simple rotation
+    const cycle: Array<typeof validKeys[number]> = ["short_direct", "medium_case", "short_direct", "medium_case", "long_vignette", "tricky_trap"];
+    return cycle[existingLengthStyles.length % cycle.length];
+  }
+
+  const totalWeight = positiveEntries.reduce((a, [, v]) => a + v, 0);
+
+  // Count existing length styles
+  const counts: Record<string, number> = {};
+  for (const ls of existingLengthStyles) {
+    counts[ls] = (counts[ls] ?? 0) + 1;
+  }
+
+  let bestKey: typeof validKeys[number] = positiveEntries[0][0];
+  let bestDeficit = -Infinity;
+
+  for (const [key, weight] of positiveEntries) {
+    const targetCount = Math.max(1, Math.round((weight / totalWeight) * totalQuestions));
+    const currentCount = counts[key] ?? 0;
+    const deficit = targetCount - currentCount;
+    if (deficit > bestDeficit) {
+      bestDeficit = deficit;
+      bestKey = key;
+    }
+  }
+
+  return bestKey;
+}
+
 export const amfGenerateBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
     z.object({
       jobId: z.string().uuid(),
-      batchSize: z.number().int().min(1).max(5).default(2),
+      batchSize: z.number().int().min(1).max(8).default(5),
     }),
   )
   .handler(async ({ data, context }) => {
@@ -1255,9 +1309,8 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
       const chunksSelected = [
         pool[startIndex],
         pool[(startIndex + 1) % pool.length],
-        pool[(startIndex + 2) % pool.length],
       ].filter(Boolean);
-      const textToUse = chunksSelected.join("\n\n").slice(0, 24000);
+      const textToUse = chunksSelected.join("\n\n").slice(0, 16000);
 
       // Quota-enforced difficulty determination
       const currentDifficulties = [...existingDifficulties, ...authoredItems.map((ai) => ai.difficulty)];
@@ -1323,30 +1376,14 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
         ...authoredItems.map((ai) => `Stem: "${ai.stem.slice(0, 100)}..."`),
       ];
 
-      // Balanced pacing and length style rotation:
-      const lengthCycle: Array<"short_direct" | "medium_case" | "long_vignette" | "tricky_trap"> = [
-        "short_direct",
-        "medium_case",
-        "short_direct",
-        "long_vignette",
-        "medium_case",
-        "tricky_trap",
-        "short_direct",
-        "medium_case",
-        "long_vignette",
-        "medium_case",
-      ];
-      const cycleIdx = (existingStems.length + step) % lengthCycle.length;
-      let lengthStyle: "short_direct" | "medium_case" | "long_vignette" | "tricky_trap" = lengthCycle[cycleIdx];
-
-      // If the quota objective specifically demands recall, force short_direct; if tricky, force tricky_trap
-      if (objective === "recall") {
-        lengthStyle = "short_direct";
-      } else if (objective === "tricky") {
-        lengthStyle = "tricky_trap";
-      } else if (objective === "clinical_vignette") {
-        lengthStyle = "long_vignette";
-      }
+      // User-configured length style quota — fully decoupled from objective
+      const lengthRatios: Record<string, number> | null =
+        job.length_ratios && typeof job.length_ratios === "object" ? job.length_ratios : null;
+      const existingLengthStyles: string[] = existingItems
+        .map((i: any) => i.length_style || "")
+        .filter(Boolean);
+      const currentLengthStyles = [...existingLengthStyles, ...authoredItems.map((ai) => ai.lengthStyle ?? "").filter(Boolean)];
+      const lengthStyle = selectQuotaLengthStyle(lengthRatios, currentLengthStyles, totalQuestionsTarget);
 
       // Pre-search real medical image ONLY if shouldIncludeImage is strictly true
       let preSearchedImage: any = null;
@@ -1403,12 +1440,11 @@ Return STRICT JSON.`;
 
       try {
         let questionJson: any = null;
-        let validationReport: any = null;
         let validationPassed = false;
         let attempts = 0;
 
-        // Validation & regeneration loop (max 3 attempts)
-        while (attempts < 3 && !validationPassed) {
+        // Fast inline generation loop (max 2 attempts) — NO 2nd AI validator call
+        while (attempts < 2 && !validationPassed) {
           attempts++;
           const genText =
             job.provider === "google"
@@ -1417,17 +1453,12 @@ Return STRICT JSON.`;
 
           questionJson = parseJson(genText);
 
-          // 7-Point Validator
-          const validatorPrompt = buildValidatorSystemPrompt(stepSourceMode === "strict");
-          const valInput = `QUESTION TO VALIDATE:\n${JSON.stringify(questionJson, null, 2)}\n\nSOURCE EXCERPT:\n${textToUse}`;
-
-          const valText =
-            job.provider === "google"
-              ? await callGoogleText(apiKey, job.model, validatorPrompt, valInput)
-              : await callOpenAiText(apiKey, job.model, validatorPrompt, valInput);
-
-          validationReport = parseJson(valText);
-          validationPassed = validationReport?.pass === true;
+          // Inline structural validator (no extra AI call)
+          const inlineResult = inlineValidateQuestion(questionJson);
+          validationPassed = inlineResult.pass;
+          if (!validationPassed) {
+            console.warn(`[amfGenerateBatch] Inline validation failed (attempt ${attempts}):`, inlineResult.failures.join(", "));
+          }
         }
 
         // Check if question is combination (Form B, questionJson.form B, or has combo options)
@@ -1464,21 +1495,51 @@ Return STRICT JSON.`;
         const { maxScore } = checkDuplicate(stemFormatted, existingStems);
 
         if (maxScore >= job.dup_threshold) {
-          failures.push(`Generated question rejected: ${maxScore}% similar to existing question.`);
-          continue;
+          // RETRY with different chunk instead of silently skipping
+          const retryChunkIdx = (globalChunkIndex + 3) % Math.max(1, pool.length);
+          const retryText = [pool[retryChunkIdx], pool[(retryChunkIdx + 1) % pool.length]].filter(Boolean).join("\n\n").slice(0, 16000);
+          console.warn(`[amfGenerateBatch] Step ${step}: Stem ${maxScore}% similar — retrying with different chunk.`);
+          failures.push(`Retry: stem ${maxScore}% similar to existing. Retried with different source chunk.`);
+
+          // Quick single retry with different chunk
+          try {
+            const retryPrompt = userPrompt.replace(textToUse, retryText);
+            const retryText2 =
+              job.provider === "google"
+                ? await callGoogleText(apiKey, job.model, systemPrompt, retryPrompt)
+                : await callOpenAiText(apiKey, job.model, systemPrompt, retryPrompt);
+            const retryJson = parseJson(retryText2);
+            if (retryJson) {
+              questionJson = retryJson;
+              const retryStem = formatQuestionStem(
+                isCombo && Array.isArray(retryJson.statements) && retryJson.statements.length > 0
+                  ? buildCombinedStem(String(retryJson.stem ?? ""), retryJson.statements)
+                  : ensureCombinedStemWithStatements(cleanQuestionPreamble(String(retryJson.stem ?? "")), null, retryJson.options)
+              );
+              const retryScore = checkDuplicate(retryStem, existingStems).maxScore;
+              if (retryScore >= job.dup_threshold) {
+                failures.push(`Retry also rejected (${retryScore}% similar). Skipping this step.`);
+                continue;
+              }
+            }
+          } catch (retryErr) {
+            console.warn("[amfGenerateBatch] Retry failed:", retryErr);
+            continue;
+          }
         }
 
-        // Answer-level deduplication: reject if answer text concept matches an existing answer in this job
+        // Answer-level deduplication: reject if correct answer matches existing at >75% similarity
         const correctOptObj = Array.isArray(questionJson.options) && Array.isArray(questionJson.answer_labels)
           ? questionJson.options.find((o: any) => questionJson.answer_labels.includes(o.label))
           : null;
         const newCorrectOption = String(correctOptObj?.body || correctOptObj?.text || "").trim();
         if (newCorrectOption) {
           const isAnswerDuplicate = existingAnswers.some(
-            (ans) => calculateSimilarity(ans.toLowerCase(), newCorrectOption.toLowerCase()) > 60,
+            (ans) => calculateSimilarity(ans.toLowerCase(), newCorrectOption.toLowerCase()) > 75,
           );
           if (isAnswerDuplicate) {
             failures.push(`Rejected duplicate answer concept: "${newCorrectOption}" already tested.`);
+            console.warn(`[amfGenerateBatch] Step ${step}: Answer duplicate rejected — "${newCorrectOption}"`);
             continue;
           }
           existingAnswers.push(newCorrectOption);
@@ -1563,6 +1624,7 @@ Return STRICT JSON.`;
             answer_mode: form === "B" ? "single" : "single",
             difficulty,
             objective,
+            length_style: lengthStyle,
             explanation: explanationMarkdown,
             raw_explanation: explanationData,
             source_fidelity: questionJson.source_fidelity ?? null,
@@ -1571,12 +1633,12 @@ Return STRICT JSON.`;
             has_image: !!imageUrl,
             dup_hash: dupHash(stemFormatted),
             dup_score: maxScore,
-            validation_report: validationReport ?? {},
+            validation_report: { inline_pass: validationPassed, attempts },
             validation_attempts: attempts,
             validation_passed: validationPassed,
             status: initialStatus,
             flagged: !validationPassed,
-            flag_reason: validationPassed ? "" : (validationReport?.failures ?? []).join("; ").slice(0, 300),
+            flag_reason: validationPassed ? "" : `Inline validation (${attempts} attempts)`,
             order_index: nextOrder,
           });
           if (!amfErr) stored = true;
@@ -1630,6 +1692,7 @@ Return STRICT JSON.`;
           form,
           difficulty,
           objective,
+          lengthStyle,
           imageUrl,
           hasImage: !!imageUrl,
           topicName: selectedTopic.name,

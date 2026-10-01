@@ -1159,6 +1159,153 @@ function QuestionTypeRatiosEditor({
   );
 }
 
+const LENGTH_STYLES_CONFIG = [
+  { id: "short_direct", label: "Short & Direct (1-2 sentences)", icon: "⚡", color: "text-emerald-700", border: "border-emerald-200", bg: "bg-emerald-50/30", desc: "Core definitions, hallmarks, recall. Fast-paced." },
+  { id: "medium_case", label: "Medium / Clinical (2-4 sentences)", icon: "🔬", color: "text-blue-700", border: "border-blue-200", bg: "bg-blue-50/30", desc: "Focused clinical presentations or mechanistic problems." },
+  { id: "long_vignette", label: "Long Board Vignette (5-7 sentences)", icon: "🏥", color: "text-rose-700", border: "border-rose-200", bg: "bg-rose-50/30", desc: "Full USMLE-style case with demographics, vitals, labs." },
+  { id: "tricky_trap", label: "Tricky / Confusing (Cognitive Trap)", icon: "🪤", color: "text-amber-700", border: "border-amber-200", bg: "bg-amber-50/30", desc: "One alluring wrong option. Requires careful reading." },
+] as const;
+
+function LengthRatiosEditor({
+  job,
+  onUpdate,
+}: {
+  job: any;
+  onUpdate: (patch: Record<string, any>) => void;
+}) {
+  const currentRatios = job.length_ratios ?? { short_direct: 40, medium_case: 40, long_vignette: 10, tricky_trap: 10 };
+  const [localValues, setLocalValues] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const s of LENGTH_STYLES_CONFIG) {
+      init[s.id] = String(Number(currentRatios[s.id] ?? 0));
+    }
+    return init;
+  });
+
+  const focusedField = useRef<string | null>(null);
+
+  useEffect(() => {
+    const ratios = job.length_ratios ?? { short_direct: 40, medium_case: 40, long_vignette: 10, tricky_trap: 10 };
+    setLocalValues((prev) => {
+      const next = { ...prev };
+      for (const s of LENGTH_STYLES_CONFIG) {
+        if (focusedField.current !== s.id) {
+          next[s.id] = String(Number(ratios[s.id] ?? 0));
+        }
+      }
+      return next;
+    });
+  }, [job.length_ratios]);
+
+  const commitRatio = (id: string, val: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(val)));
+    setLocalValues((prev) => ({ ...prev, [id]: String(clamped) }));
+    const newRatios = { ...(job.length_ratios ?? {}), [id]: clamped };
+    onUpdate({ length_ratios: newRatios });
+  };
+
+  const applyPreset = (type: "balanced" | "short_heavy" | "clinical" | "reset") => {
+    let preset: Record<string, number> = {};
+    switch (type) {
+      case "balanced": preset = { short_direct: 40, medium_case: 40, long_vignette: 10, tricky_trap: 10 }; break;
+      case "short_heavy": preset = { short_direct: 60, medium_case: 30, long_vignette: 5, tricky_trap: 5 }; break;
+      case "clinical": preset = { short_direct: 10, medium_case: 30, long_vignette: 50, tricky_trap: 10 }; break;
+      case "reset": preset = { short_direct: 25, medium_case: 25, long_vignette: 25, tricky_trap: 25 }; break;
+    }
+    const newLocal: Record<string, string> = {};
+    for (const s of LENGTH_STYLES_CONFIG) newLocal[s.id] = String(preset[s.id] ?? 0);
+    setLocalValues(newLocal);
+    onUpdate({ length_ratios: preset });
+  };
+
+  const total = LENGTH_STYLES_CONFIG.reduce((a, s) => a + (Number((job.length_ratios ?? {})[s.id] ?? 0)), 0);
+
+  return (
+    <div className="space-y-4 p-4 rounded-xl border border-purple-200 bg-purple-50/30">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <Label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+            <Layers size={15} className="text-purple-600" /> Question Length Mix
+          </Label>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Control what % of questions are short, medium, long, or tricky. Independent of Question Type. Default: 40/40/10/10.
+          </p>
+        </div>
+        <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full border ${total === 100 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+          Total: {total}% {total === 100 ? "✓" : ""}
+        </span>
+      </div>
+
+      {/* Quick Presets */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg border border-purple-100 bg-white shadow-2xs">
+        <span className="text-slate-500 font-medium text-xs">Quick Presets:</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[11px] font-semibold hover:bg-purple-50 hover:text-purple-700 border-slate-200" onClick={() => applyPreset("balanced")}>
+            ⚖️ Balanced (40/40/10/10)
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[11px] font-semibold hover:bg-emerald-50 hover:text-emerald-700 border-slate-200" onClick={() => applyPreset("short_heavy")}>
+            ⚡ Short-Heavy (60/30/5/5)
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[11px] font-semibold hover:bg-rose-50 hover:text-rose-700 border-slate-200" onClick={() => applyPreset("clinical")}>
+            🏥 Clinical-Heavy (10/30/50/10)
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[11px] font-semibold hover:bg-slate-100 border-slate-200 text-slate-600" onClick={() => applyPreset("reset")}>
+            🔄 Equal 25% Each
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+        {LENGTH_STYLES_CONFIG.map(({ id, label, icon, color, border, bg, desc }) => {
+          const currentVal = Number((job.length_ratios ?? {})[id] ?? 0);
+          const textVal = localValues[id] ?? String(currentVal);
+
+          return (
+            <div key={id} className={`p-3 rounded-xl border ${border} ${bg} bg-white shadow-2xs space-y-2 transition-all hover:shadow-xs`}>
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <span className={`font-bold text-xs flex items-center gap-1.5 ${color}`}>
+                    <span>{icon}</span> {label}
+                  </span>
+                  <p className="text-[10px] text-slate-400 mt-0.5">{desc}</p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button type="button" size="icon" variant="outline" className="h-7 w-7 rounded-md border-slate-200 text-slate-600 hover:bg-slate-100" onClick={() => commitRatio(id, currentVal - 5)} disabled={currentVal <= 0}>
+                    <Minus size={11} />
+                  </Button>
+                  <div className="relative flex items-center">
+                    <Input
+                      type="number" min={0} max={100} step={5}
+                      className="w-14 h-7 text-xs text-center font-bold pr-4 border-slate-300 focus:ring-purple-500"
+                      value={textVal}
+                      onFocus={() => { focusedField.current = id; }}
+                      onChange={(e) => {
+                        setLocalValues((prev) => ({ ...prev, [id]: e.target.value }));
+                        const parsed = parseInt(e.target.value);
+                        if (!isNaN(parsed) && parsed >= 0) commitRatio(id, Math.min(100, parsed));
+                      }}
+                      onBlur={() => {
+                        focusedField.current = null;
+                        const parsed = parseInt(textVal);
+                        commitRatio(id, isNaN(parsed) ? 0 : Math.min(100, parsed));
+                      }}
+                    />
+                    <span className="absolute right-1.5 text-[10px] font-bold text-slate-400 pointer-events-none">%</span>
+                  </div>
+                  <Button type="button" size="icon" variant="outline" className="h-7 w-7 rounded-md border-slate-200 text-slate-600 hover:bg-slate-100" onClick={() => commitRatio(id, currentVal + 5)} disabled={currentVal >= 100}>
+                    <Plus size={11} />
+                  </Button>
+                </div>
+              </div>
+              <Slider value={[currentVal]} min={0} max={100} step={5} onValueChange={([val]) => commitRatio(id, val)} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AquaMcqForgeStudio() {
   const { jobId } = Route.useParams();
   const { user, loading } = useAuth();
@@ -1252,6 +1399,7 @@ function AquaMcqForgeStudio() {
           strict_questions_count: strictCount,
           source_mode: strictCount === 0 ? "reasoning" : "strict",
           objective_ratios: job.objective_ratios ?? {},
+          length_ratios: job.length_ratios ?? { short_direct: 40, medium_case: 40, long_vignette: 10, tricky_trap: 10 },
           difficulty_easy: Number(job.difficulty_easy ?? 34),
           difficulty_medium: Number(job.difficulty_medium ?? 33),
           difficulty_hard: Number(job.difficulty_hard ?? 33),
@@ -1403,7 +1551,7 @@ function AquaMcqForgeStudio() {
 
     try {
       const targetCount = job.coverageMode ? 50 : (job.total_questions ?? 20);
-      const batchSize = job?.api_mode === "batch" ? 4 : 2;
+      const batchSize = job?.api_mode === "batch" ? 6 : 5;
 
       while (!stopRunnerRef.current) {
         setRunnerLog((prev) => [`[${new Date().toLocaleTimeString()}] Authoring next question batch...`, ...prev.slice(0, 50)]);
@@ -1988,6 +2136,9 @@ function AquaMcqForgeStudio() {
                   {/* Question Type Ratios */}
                   <QuestionTypeRatiosEditor job={job} onUpdate={patchJobQuietly} />
 
+                  {/* Question Length Mix */}
+                  <LengthRatiosEditor job={job} onUpdate={patchJobQuietly} />
+
                   {/* Save Configuration Footer Bar */}
                   <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/70 flex flex-wrap items-center justify-between gap-3 shadow-xs">
                     <div>
@@ -2038,7 +2189,7 @@ function AquaMcqForgeStudio() {
                     Live Question Authoring Engine
                   </CardTitle>
                   <CardDescription>
-                    Runs source extraction, question authoring, deduplication, and 7-point validation.
+                    Runs source extraction, question authoring, deduplication, and structural validation.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
