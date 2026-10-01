@@ -396,6 +396,9 @@ export const amfListJobs = createServerFn({ method: "GET" })
           external_questions_count: meta.external_questions_count ?? 0,
           source_fidelity_enabled: meta.source_fidelity_enabled ?? true,
           objective_ratios: meta.objective_ratios ?? {},
+          strict_questions_count: typeof meta.strict_questions_count === "number"
+            ? meta.strict_questions_count
+            : (meta.source_mode === "reasoning" ? 0 : (meta.total_questions ?? 20)),
         };
       });
       jobs = parsedJobs;
@@ -452,6 +455,7 @@ export const amfCreateJob = createServerFn({ method: "POST" })
       imageCount: z.number().int().min(0).max(100).default(0),
       imageFrequency: z.string().default("auto").optional(),
       externalQuestionsCount: z.number().int().min(0).max(500).default(0).optional(),
+      strictQuestionsCount: z.number().int().min(0).max(500).optional(),
       apiMode: z.enum(["standard", "batch"]).default("standard").optional(),
       sourceFidelityEnabled: z.boolean().default(true),
     }),
@@ -459,6 +463,9 @@ export const amfCreateJob = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = await ensureStaff(context);
     const jobName = data.name.trim() || "Cell Injury — Pathophysiology Generation";
+    const strictCount = typeof data.strictQuestionsCount === "number"
+      ? data.strictQuestionsCount
+      : (data.sourceMode === "reasoning" ? 0 : data.totalQuestions);
 
     // 1. Try amf_jobs
     try {
@@ -484,6 +491,7 @@ export const amfCreateJob = createServerFn({ method: "POST" })
           image_count: data.imageCount,
           image_target_count: data.imageCount,
           external_questions_count: data.externalQuestionsCount || 0,
+          strict_questions_count: strictCount,
           source_fidelity_enabled: data.sourceFidelityEnabled,
           status: "draft",
           created_by: userId,
@@ -518,6 +526,7 @@ export const amfCreateJob = createServerFn({ method: "POST" })
       image_count: data.imageCount,
       image_target_count: data.imageCount,
       external_questions_count: data.externalQuestionsCount || 0,
+      strict_questions_count: strictCount,
       source_fidelity_enabled: data.sourceFidelityEnabled,
       objective_ratios: {},
       topics: [],
@@ -577,6 +586,9 @@ export async function fetchJobData(supabase: any, jobId: string) {
       external_questions_count: jRow.external_questions_count ?? 0,
       source_fidelity_enabled: jRow.source_fidelity_enabled ?? true,
       objective_ratios: jRow.objective_ratios ?? {},
+      strict_questions_count: typeof jRow.strict_questions_count === "number"
+        ? jRow.strict_questions_count
+        : (jRow.source_mode === "reasoning" ? 0 : (jRow.total_questions ?? 20)),
     };
     const [{ data: s }, { data: t }, { data: i }] = await Promise.all([
       supabase.from(SOURCES).select("*").eq("job_id", jobId).order("created_at"),
@@ -631,6 +643,9 @@ export async function fetchJobData(supabase: any, jobId: string) {
       external_questions_count: meta.external_questions_count ?? 0,
       source_fidelity_enabled: meta.source_fidelity_enabled ?? true,
       objective_ratios: meta.objective_ratios ?? {},
+      strict_questions_count: typeof meta.strict_questions_count === "number"
+        ? meta.strict_questions_count
+        : (meta.source_mode === "reasoning" ? 0 : (meta.total_questions ?? 20)),
     };
 
     topics = Array.isArray(meta.topics) ? meta.topics : [];
@@ -1270,6 +1285,23 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
       const currentObjectives = [...existingObjectives, ...authoredItems.map((ai) => ai.objective ?? "")];
       const objective = selectQuotaObjective(objectiveRatios, currentObjectives, totalQuestionsTarget);
 
+      // Source Fidelity Quota: Strict PDF vs AI Reasoning Split
+      const strictTargetCount = typeof job.strict_questions_count === "number"
+        ? Math.min(totalQuestionsTarget, Math.max(0, job.strict_questions_count))
+        : (job.source_mode === "reasoning" ? 0 : totalQuestionsTarget);
+
+      const existingStrictCount = existingItems.filter(
+        (i: any) =>
+          i.source_fidelity?.source_mode === "strict" ||
+          i.source_mode === "strict" ||
+          i.raw_explanation?.source_fidelity?.source_mode === "strict" ||
+          (!i.source_mode && job.source_mode === "strict"),
+      ).length;
+
+      const totalStrictSoFar = existingStrictCount + authoredItems.filter((ai) => ai.sourceMode === "strict").length;
+      const isStrictStep = totalStrictSoFar < strictTargetCount;
+      const stepSourceMode: "strict" | "reasoning" = isStrictStep ? "strict" : "reasoning";
+
       // Check external literature questions count (persisted across batches)
       const externalTargetCount = Number(job.external_questions_count ?? 0);
       const totalExternalSoFar = existingExternalCount + authoredItems.filter((i) => i.isExternal).length;
@@ -1338,7 +1370,7 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
 
       // Build generation prompt
       const systemPrompt = buildGenerationSystemPrompt({
-        sourceMode: job.source_mode,
+        sourceMode: stepSourceMode,
         form,
         difficulty,
         objective,
@@ -1359,7 +1391,9 @@ ${textToUse}
 ${
   isExternalStep
     ? `TASK: Author ONE pristine ${difficulty.toUpperCase()} board-exam standard multiple choice question (USMLE / Robbins / PreTest style) testing the same core medical principles as the source text above. Adapt from authentic medical literature & board question banks.`
-    : `Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Combined" : "Standard"} medical MCQ based directly on this source text.`
+    : isStrictStep
+    ? `TASK: Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Combined" : "Standard"} medical MCQ strictly and directly grounded in the provided source text. Zero outside facts.`
+    : `TASK: Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Combined" : "Standard"} medical MCQ using the source text as foundational authority, enhanced with AI clinical reasoning.`
 }
 MANDATORY CONSTRAINTS:
 1. Start the question directly with the clinical vignette or core question. Do NOT write "In the classification of...", "According to...", or echo the topic title in the stem!
@@ -1384,7 +1418,7 @@ Return STRICT JSON.`;
           questionJson = parseJson(genText);
 
           // 7-Point Validator
-          const validatorPrompt = buildValidatorSystemPrompt(job.source_mode === "strict");
+          const validatorPrompt = buildValidatorSystemPrompt(stepSourceMode === "strict");
           const valInput = `QUESTION TO VALIDATE:\n${JSON.stringify(questionJson, null, 2)}\n\nSOURCE EXCERPT:\n${textToUse}`;
 
           const valText =
@@ -1583,6 +1617,11 @@ Return STRICT JSON.`;
           if (gErr) throw new Error(gErr.message);
         }
 
+        const finalSourceFidelity = {
+          ...(questionJson.source_fidelity && typeof questionJson.source_fidelity === "object" ? questionJson.source_fidelity : {}),
+          source_mode: stepSourceMode,
+        };
+
         existingStems.push(stemFormatted);
         generatedCount++;
         authoredItems.push({
@@ -1595,6 +1634,7 @@ Return STRICT JSON.`;
           hasImage: !!imageUrl,
           topicName: selectedTopic.name,
           isExternal: isExternalStep,
+          sourceMode: stepSourceMode,
         });
       } catch (err: any) {
         failures.push(`Generation attempt error: ${String(err?.message ?? err).slice(0, 160)}`);

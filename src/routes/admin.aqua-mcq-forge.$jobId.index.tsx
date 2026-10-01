@@ -225,77 +225,87 @@ function QuestionSourceSplitEditor({
   onUpdate: (patch: Record<string, any>) => void;
 }) {
   const total = Number(job.total_questions ?? 20);
-  const ext = Math.max(0, Math.min(total, Number(job.external_questions_count ?? 0)));
-  const ai = Math.max(0, total - ext);
+  const strict = typeof job.strict_questions_count === "number"
+    ? Math.max(0, Math.min(total, job.strict_questions_count))
+    : (job.source_mode === "reasoning" ? 0 : total);
+  const reasoning = Math.max(0, total - strict);
 
   const [totalText, setTotalText] = useState(String(total));
-  const [extText, setExtText] = useState(String(ext));
-  const [aiText, setAiText] = useState(String(ai));
+  const [strictText, setStrictText] = useState(String(strict));
+  const [reasoningText, setReasoningText] = useState(String(reasoning));
 
   const isTotalFocused = useRef(false);
-  const isExtFocused = useRef(false);
-  const isAiFocused = useRef(false);
+  const isStrictFocused = useRef(false);
+  const isReasoningFocused = useRef(false);
 
   // Sync from props when not actively editing
   useEffect(() => {
     if (!isTotalFocused.current) setTotalText(String(total));
-    if (!isExtFocused.current) setExtText(String(ext));
-    if (!isAiFocused.current) setAiText(String(ai));
-  }, [total, ext, ai]);
+    if (!isStrictFocused.current) setStrictText(String(strict));
+    if (!isReasoningFocused.current) setReasoningText(String(reasoning));
+  }, [total, strict, reasoning]);
 
   const commitTotal = (newTot: number) => {
     const validTot = Math.max(1, Math.min(500, newTot));
-    const newExt = Math.min(ext, validTot);
-    const newAi = validTot - newExt;
+    const validStrict = Math.min(strict, validTot);
+    const validReasoning = validTot - validStrict;
     setTotalText(String(validTot));
-    setExtText(String(newExt));
-    setAiText(String(newAi));
-    onUpdate({ total_questions: validTot, external_questions_count: newExt });
+    setStrictText(String(validStrict));
+    setReasoningText(String(validReasoning));
+    onUpdate({
+      total_questions: validTot,
+      strict_questions_count: validStrict,
+      source_mode: validStrict === 0 ? "reasoning" : "strict",
+      external_questions_count: validReasoning,
+    });
   };
 
-  const commitExt = (newExtVal: number) => {
-    const validExt = Math.max(0, Math.min(total, newExtVal));
-    const newAi = total - validExt;
-    setExtText(String(validExt));
-    setAiText(String(newAi));
-    onUpdate({ external_questions_count: validExt });
+  const commitStrict = (newStrictVal: number) => {
+    const validStrict = Math.max(0, Math.min(total, newStrictVal));
+    const validReasoning = total - validStrict;
+    setStrictText(String(validStrict));
+    setReasoningText(String(validReasoning));
+    onUpdate({
+      strict_questions_count: validStrict,
+      source_mode: validStrict === 0 ? "reasoning" : "strict",
+      external_questions_count: validReasoning,
+    });
   };
 
-  const commitAi = (newAiVal: number) => {
-    const validAi = Math.max(0, Math.min(total, newAiVal));
-    const newExt = total - validAi;
-    setAiText(String(validAi));
-    setExtText(String(newExt));
-    onUpdate({ external_questions_count: newExt });
+  const commitReasoning = (newReasoningVal: number) => {
+    const validReasoning = Math.max(0, Math.min(total, newReasoningVal));
+    const validStrict = total - validReasoning;
+    setReasoningText(String(validReasoning));
+    setStrictText(String(validStrict));
+    onUpdate({
+      strict_questions_count: validStrict,
+      source_mode: validStrict === 0 ? "reasoning" : "strict",
+      external_questions_count: validReasoning,
+    });
   };
 
-  const applyPreset = (extRatio: number) => {
-    const targetExt = Math.round(total * extRatio);
-    commitExt(targetExt);
-  };
-
-  const extPct = total > 0 ? Math.round((ext / total) * 100) : 0;
-  const aiPct = 100 - extPct;
+  const strictPct = total > 0 ? Math.round((strict / total) * 100) : 0;
+  const reasoningPct = 100 - strictPct;
 
   return (
     <div className="space-y-4 p-4 rounded-xl border border-indigo-200 bg-indigo-50/40">
       {/* Header with live count badges */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Label className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-          <Globe size={15} className="text-indigo-600" /> Question Source Split (Internet vs. AI)
+          <ShieldCheck size={15} className="text-emerald-600" /> Source Fidelity System (Strict PDF vs. AI Reasoning)
         </Label>
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-            🌐 {ext} Internet / UWorld ({extPct}%)
-          </span>
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-            🤖 {ai} PDF AI Synthesis ({aiPct}%)
+            🔒 {strict} Strict PDF ({strictPct}%)
+          </span>
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+            🧠 {reasoning} AI Reasoning ({reasoningPct}%)
           </span>
         </div>
       </div>
 
       <p className="text-xs text-slate-600 leading-relaxed">
-        Control exactly how many questions are sourced &amp; adapted from real international medical question banks (UWorld, USMLE Step 1/2, Robbins, AMBOSS) versus synthesized directly by AI from your uploaded textbook PDF.
+        Choose how many questions must strictly quote and rely 100% on textbook PDF facts (zero outside claims) versus how many allow AI clinical synthesis &amp; reasoning.
       </p>
 
       {/* Total Questions Config Row */}
@@ -326,11 +336,16 @@ function QuestionSourceSplitEditor({
                 setTotalText(e.target.value);
                 const val = parseInt(e.target.value);
                 if (!isNaN(val) && val >= 1) {
-                  const newExt = Math.min(ext, val);
-                  const newAi = val - newExt;
-                  setExtText(String(newExt));
-                  setAiText(String(newAi));
-                  onUpdate({ total_questions: val, external_questions_count: newExt });
+                  const validStrict = Math.min(strict, val);
+                  const validReasoning = val - validStrict;
+                  setStrictText(String(validStrict));
+                  setReasoningText(String(validReasoning));
+                  onUpdate({
+                    total_questions: val,
+                    strict_questions_count: validStrict,
+                    source_mode: validStrict === 0 ? "reasoning" : "strict",
+                    external_questions_count: validReasoning,
+                  });
                 }
               }}
               onBlur={() => {
@@ -376,14 +391,14 @@ function QuestionSourceSplitEditor({
 
       {/* Side-by-Side Split Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-        {/* Card 1: Internet / UWorld */}
-        <div className="p-3.5 rounded-xl border border-indigo-200 bg-white shadow-xs space-y-2">
+        {/* Card 1: Strictly from PDF (Strict Source Mode) */}
+        <div className={`p-3.5 rounded-xl border transition shadow-xs space-y-2 ${strict > 0 ? "border-emerald-300 bg-white" : "border-slate-200 bg-slate-50/50"}`}>
           <div className="flex justify-between items-center text-xs">
-            <span className="font-bold text-indigo-700 flex items-center gap-1.5">
-              <Globe size={14} /> Sourced from Internet / UWorld
+            <span className="font-bold text-emerald-800 flex items-center gap-1.5">
+              🔒 Strictly from PDF (Strict Mode)
             </span>
-            <Badge variant="outline" className="font-mono font-bold text-indigo-600 bg-indigo-50 border-indigo-200">
-              {extPct}%
+            <Badge variant="outline" className="font-mono font-bold text-emerald-700 bg-emerald-50 border-emerald-300">
+              {strictPct}%
             </Badge>
           </div>
 
@@ -392,74 +407,9 @@ function QuestionSourceSplitEditor({
               type="button"
               size="icon"
               variant="outline"
-              className="h-8 w-8 rounded-lg border-indigo-200 hover:bg-indigo-50 text-indigo-700"
-              onClick={() => commitExt(ext - 1)}
-              disabled={ext <= 0}
-            >
-              <Minus size={13} />
-            </Button>
-            <Input
-              type="number"
-              min={0}
-              max={total}
-              className="w-20 h-8 text-sm text-center font-bold border-indigo-300 focus:ring-indigo-500"
-              value={extText}
-              onFocus={() => {
-                isExtFocused.current = true;
-              }}
-              onChange={(e) => {
-                setExtText(e.target.value);
-                const val = parseInt(e.target.value);
-                if (!isNaN(val) && val >= 0) {
-                  const clamped = Math.min(total, val);
-                  const newAi = total - clamped;
-                  setAiText(String(newAi));
-                  onUpdate({ external_questions_count: clamped });
-                }
-              }}
-              onBlur={() => {
-                isExtFocused.current = false;
-                const val = parseInt(extText);
-                commitExt(isNaN(val) || val < 0 ? 0 : val);
-              }}
-            />
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              className="h-8 w-8 rounded-lg border-indigo-200 hover:bg-indigo-50 text-indigo-700"
-              onClick={() => commitExt(ext + 1)}
-              disabled={ext >= total}
-            >
-              <Plus size={13} />
-            </Button>
-            <span className="text-xs text-slate-500 font-medium">questions</span>
-          </div>
-
-          <p className="text-[11px] text-slate-500">
-            Real clinical vignettes adapted from USMLE Step 1/2, UWorld &amp; AMBOSS.
-          </p>
-        </div>
-
-        {/* Card 2: PDF AI Synthesis */}
-        <div className="p-3.5 rounded-xl border border-emerald-200 bg-white shadow-xs space-y-2">
-          <div className="flex justify-between items-center text-xs">
-            <span className="font-bold text-emerald-700 flex items-center gap-1.5">
-              <Sparkles size={14} /> Synthesized from PDF / AI
-            </span>
-            <Badge variant="outline" className="font-mono font-bold text-emerald-600 bg-emerald-50 border-emerald-200">
-              {aiPct}%
-            </Badge>
-          </div>
-
-          <div className="flex items-center gap-2 pt-1">
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              className="h-8 w-8 rounded-lg border-emerald-200 hover:bg-emerald-50 text-emerald-700"
-              onClick={() => commitAi(ai - 1)}
-              disabled={ai <= 0}
+              className="h-8 w-8 rounded-lg border-emerald-300 hover:bg-emerald-50 text-emerald-700"
+              onClick={() => commitStrict(strict - 1)}
+              disabled={strict <= 0}
             >
               <Minus size={13} />
             </Button>
@@ -468,33 +418,37 @@ function QuestionSourceSplitEditor({
               min={0}
               max={total}
               className="w-20 h-8 text-sm text-center font-bold border-emerald-300 focus:ring-emerald-500"
-              value={aiText}
+              value={strictText}
               onFocus={() => {
-                isAiFocused.current = true;
+                isStrictFocused.current = true;
               }}
               onChange={(e) => {
-                setAiText(e.target.value);
+                setStrictText(e.target.value);
                 const val = parseInt(e.target.value);
                 if (!isNaN(val) && val >= 0) {
                   const clamped = Math.min(total, val);
-                  const newExt = total - clamped;
-                  setExtText(String(newExt));
-                  onUpdate({ external_questions_count: newExt });
+                  const newReasoning = total - clamped;
+                  setReasoningText(String(newReasoning));
+                  onUpdate({
+                    strict_questions_count: clamped,
+                    source_mode: clamped === 0 ? "reasoning" : "strict",
+                    external_questions_count: newReasoning,
+                  });
                 }
               }}
               onBlur={() => {
-                isAiFocused.current = false;
-                const val = parseInt(aiText);
-                commitAi(isNaN(val) || val < 0 ? 0 : val);
+                isStrictFocused.current = false;
+                const val = parseInt(strictText);
+                commitStrict(isNaN(val) || val < 0 ? 0 : val);
               }}
             />
             <Button
               type="button"
               size="icon"
               variant="outline"
-              className="h-8 w-8 rounded-lg border-emerald-200 hover:bg-emerald-50 text-emerald-700"
-              onClick={() => commitAi(ai + 1)}
-              disabled={ai >= total}
+              className="h-8 w-8 rounded-lg border-emerald-300 hover:bg-emerald-50 text-emerald-700"
+              onClick={() => commitStrict(strict + 1)}
+              disabled={strict >= total}
             >
               <Plus size={13} />
             </Button>
@@ -502,7 +456,76 @@ function QuestionSourceSplitEditor({
           </div>
 
           <p className="text-[11px] text-slate-500">
-            Original questions created directly from your textbook PDF content.
+            Zero outside claims. 100% textbook facts only.
+          </p>
+        </div>
+
+        {/* Card 2: Source + AI Reasoning */}
+        <div className={`p-3.5 rounded-xl border transition shadow-xs space-y-2 ${reasoning > 0 ? "border-blue-300 bg-white" : "border-slate-200 bg-slate-50/50"}`}>
+          <div className="flex justify-between items-center text-xs">
+            <span className="font-bold text-blue-800 flex items-center gap-1.5">
+              🧠 Source + AI Reasoning
+            </span>
+            <Badge variant="outline" className="font-mono font-bold text-blue-700 bg-blue-50 border-blue-300">
+              {reasoningPct}%
+            </Badge>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-8 w-8 rounded-lg border-blue-300 hover:bg-blue-50 text-blue-700"
+              onClick={() => commitReasoning(reasoning - 1)}
+              disabled={reasoning <= 0}
+            >
+              <Minus size={13} />
+            </Button>
+            <Input
+              type="number"
+              min={0}
+              max={total}
+              className="w-20 h-8 text-sm text-center font-bold border-blue-300 focus:ring-blue-500"
+              value={reasoningText}
+              onFocus={() => {
+                isReasoningFocused.current = true;
+              }}
+              onChange={(e) => {
+                setReasoningText(e.target.value);
+                const val = parseInt(e.target.value);
+                if (!isNaN(val) && val >= 0) {
+                  const clamped = Math.min(total, val);
+                  const newStrict = total - clamped;
+                  setStrictText(String(newStrict));
+                  onUpdate({
+                    strict_questions_count: newStrict,
+                    source_mode: newStrict === 0 ? "reasoning" : "strict",
+                    external_questions_count: clamped,
+                  });
+                }
+              }}
+              onBlur={() => {
+                isReasoningFocused.current = false;
+                const val = parseInt(reasoningText);
+                commitReasoning(isNaN(val) || val < 0 ? 0 : val);
+              }}
+            />
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-8 w-8 rounded-lg border-blue-300 hover:bg-blue-50 text-blue-700"
+              onClick={() => commitReasoning(reasoning + 1)}
+              disabled={reasoning >= total}
+            >
+              <Plus size={13} />
+            </Button>
+            <span className="text-xs text-slate-500 font-medium">questions</span>
+          </div>
+
+          <p className="text-[11px] text-slate-500">
+            Textbook remains authoritative base + AI adds clinical synthesis.
           </p>
         </div>
       </div>
@@ -510,24 +533,24 @@ function QuestionSourceSplitEditor({
       {/* Visual Slider */}
       <div className="space-y-1.5 p-3 rounded-lg border border-slate-200 bg-white">
         <div className="flex justify-between items-center text-xs font-semibold">
-          <span className="text-indigo-700 flex items-center gap-1">
-            🌐 {ext} Internet ({extPct}%)
-          </span>
           <span className="text-emerald-700 flex items-center gap-1">
-            🤖 {ai} PDF AI ({aiPct}%)
+            🔒 {strict} Strict PDF ({strictPct}%)
+          </span>
+          <span className="text-blue-700 flex items-center gap-1">
+            🧠 {reasoning} AI Reasoning ({reasoningPct}%)
           </span>
         </div>
         <Slider
-          value={[ext]}
+          value={[strict]}
           min={0}
           max={total}
           step={1}
-          onValueChange={([val]) => commitExt(val)}
+          onValueChange={([val]) => commitStrict(val)}
         />
         <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-          <span>0% Internet (100% PDF)</span>
+          <span>0% Strict (100% Reasoning)</span>
           <span>50% / 50%</span>
-          <span>100% Internet (0% PDF)</span>
+          <span>100% Strict PDF</span>
         </div>
       </div>
 
@@ -540,25 +563,25 @@ function QuestionSourceSplitEditor({
             size="sm"
             variant="outline"
             className="h-6 px-2 text-[11px] font-semibold hover:bg-emerald-50 hover:text-emerald-700 border-slate-200"
-            onClick={() => applyPreset(0)}
+            onClick={() => commitStrict(total)}
           >
-            🤖 100% PDF / AI
+            🔒 100% Strict PDF
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-emerald-50 hover:text-emerald-700 border-slate-200"
+            onClick={() => commitStrict(Math.round(total * 0.75))}
+          >
+            🔒 75% PDF / 25% AI
           </Button>
           <Button
             type="button"
             size="sm"
             variant="outline"
             className="h-6 px-2 text-[11px] font-semibold hover:bg-indigo-50 hover:text-indigo-700 border-slate-200"
-            onClick={() => applyPreset(0.25)}
-          >
-            🌐 25% Web / 75% PDF
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-6 px-2 text-[11px] font-semibold hover:bg-indigo-50 hover:text-indigo-700 border-slate-200"
-            onClick={() => applyPreset(0.5)}
+            onClick={() => commitStrict(Math.round(total * 0.5))}
           >
             ⚖️ 50% / 50% Balanced
           </Button>
@@ -566,19 +589,19 @@ function QuestionSourceSplitEditor({
             type="button"
             size="sm"
             variant="outline"
-            className="h-6 px-2 text-[11px] font-semibold hover:bg-indigo-50 hover:text-indigo-700 border-slate-200"
-            onClick={() => applyPreset(0.75)}
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-blue-50 hover:text-blue-700 border-slate-200"
+            onClick={() => commitStrict(Math.round(total * 0.25))}
           >
-            🌐 75% Web / 25% PDF
+            🧠 25% PDF / 75% AI
           </Button>
           <Button
             type="button"
             size="sm"
             variant="outline"
-            className="h-6 px-2 text-[11px] font-semibold hover:bg-indigo-50 hover:text-indigo-700 border-slate-200"
-            onClick={() => applyPreset(1)}
+            className="h-6 px-2 text-[11px] font-semibold hover:bg-blue-50 hover:text-blue-700 border-slate-200"
+            onClick={() => commitStrict(0)}
           >
-            🌐 100% Internet / UWorld
+            🧠 100% AI Reasoning
           </Button>
         </div>
       </div>
@@ -1212,13 +1235,22 @@ function AquaMcqForgeStudio() {
   );
 
   const [savingRules, setSavingRules] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const justSavedTimerRef = useRef<any>(null);
 
   const handleSaveAllRules = useCallback(
     async (silent = false) => {
       if (!job) return;
       setSavingRules(true);
       try {
+        const strictCount = typeof job.strict_questions_count === "number"
+          ? Math.min(Number(job.total_questions ?? 20), Math.max(0, job.strict_questions_count))
+          : (job.source_mode === "reasoning" ? 0 : Number(job.total_questions ?? 20));
+
         const patch = {
+          strict_questions_count: strictCount,
+          source_mode: strictCount === 0 ? "reasoning" : "strict",
           objective_ratios: job.objective_ratios ?? {},
           difficulty_easy: Number(job.difficulty_easy ?? 34),
           difficulty_medium: Number(job.difficulty_medium ?? 33),
@@ -1234,14 +1266,21 @@ function AquaMcqForgeStudio() {
           image_frequency: job.image_frequency || "auto",
           dup_threshold: Number(job.dup_threshold ?? 87),
           api_mode: job.api_mode || "standard",
-          source_mode: job.source_mode || "strict",
         };
         const res: any = await updateJob({ data: { jobId, patch } });
         if (res && typeof res === "object" && !res.error) {
-          setJob((prev: any) => (prev ? { ...prev, ...res } : prev));
+          setJob((prev: any) => (prev ? { ...prev, ...patch, ...res } : prev));
         }
+        const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        setLastSavedTime(timeStr);
+        setJustSaved(true);
+        if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
+        justSavedTimerRef.current = setTimeout(() => {
+          setJustSaved(false);
+        }, 4000);
+
         if (!silent) {
-          toast.success("Authoring rules & quotas saved successfully!");
+          toast.success(`Authoring rules & quotas saved successfully at ${timeStr}!`);
         }
       } catch (err: any) {
         console.error("Failed to save rules:", err);
@@ -1776,15 +1815,32 @@ function AquaMcqForgeStudio() {
                       Adjust difficulty splits, deduplication sensitivity, and question formats.
                     </CardDescription>
                   </div>
-                  <Button
-                    type="button"
-                    onClick={() => handleSaveAllRules(false)}
-                    disabled={savingRules}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 font-bold shadow-xs shrink-0"
-                  >
-                    {savingRules ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    Save Authoring Rules & Options
-                  </Button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {lastSavedTime && (
+                      <span className="text-[11px] font-mono font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200 flex items-center gap-1 shadow-2xs">
+                        <CheckCircle2 size={12} className="text-emerald-600" /> Saved {lastSavedTime}
+                      </span>
+                    )}
+                    <Button
+                      type="button"
+                      onClick={() => handleSaveAllRules(false)}
+                      disabled={savingRules}
+                      className={`transition-all duration-300 font-bold shadow-xs gap-2 shrink-0 ${
+                        justSaved
+                          ? "bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400/50"
+                          : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                      }`}
+                    >
+                      {savingRules ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : justSaved ? (
+                        <CheckCircle2 size={16} className="text-white animate-in zoom-in" />
+                      ) : (
+                        <Save size={16} />
+                      )}
+                      {justSaved ? "Saved! (Options Applied)" : "Save Authoring Rules & Options"}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {/* API Mode Selector: Standard vs 50% Batch */}
@@ -1942,15 +1998,32 @@ function AquaMcqForgeStudio() {
                         Guarantees and persists your exact image limits ({job.include_images ? `${job.image_target_count ?? 0} images` : "Images OFF"}), source splits, and question type quotas before authoring.
                       </p>
                     </div>
-                    <Button
-                      type="button"
-                      onClick={() => handleSaveAllRules(false)}
-                      disabled={savingRules}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 font-bold px-6 shadow-sm"
-                    >
-                      {savingRules ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                      Save Authoring Rules &amp; Options
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {lastSavedTime && (
+                        <span className="text-[11px] font-mono font-semibold text-emerald-800 bg-emerald-100/80 px-2.5 py-1 rounded-md border border-emerald-300 shadow-2xs">
+                          ✓ Saved at {lastSavedTime}
+                        </span>
+                      )}
+                      <Button
+                        type="button"
+                        onClick={() => handleSaveAllRules(false)}
+                        disabled={savingRules}
+                        className={`transition-all duration-300 font-bold px-6 shadow-sm gap-2 ${
+                          justSaved
+                            ? "bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400/50"
+                            : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                        }`}
+                      >
+                        {savingRules ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : justSaved ? (
+                          <CheckCircle2 size={16} className="text-white animate-in zoom-in" />
+                        ) : (
+                          <Save size={16} />
+                        )}
+                        {justSaved ? "Saved! (Options Applied)" : "Save Authoring Rules & Options"}
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -2040,17 +2113,34 @@ function AquaMcqForgeStudio() {
                         <ShieldCheck className="text-indigo-600" size={18} />
                         <span className="font-bold text-sm text-indigo-950">Active Authoring Rules &amp; Enforced Quotas</span>
                       </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleSaveAllRules(false)}
-                        disabled={savingRules}
-                        className="h-7 text-xs font-bold border-indigo-300 text-indigo-700 hover:bg-indigo-100 gap-1.5"
-                      >
-                        {savingRules ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                        Save &amp; Lock In Options
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {lastSavedTime && (
+                          <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
+                            Saved {lastSavedTime}
+                          </span>
+                        )}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSaveAllRules(false)}
+                          disabled={savingRules}
+                          className={`h-7 text-xs font-bold gap-1.5 transition-all ${
+                            justSaved
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 ring-1 ring-emerald-400"
+                              : "border-indigo-300 text-indigo-700 hover:bg-indigo-100"
+                          }`}
+                        >
+                          {savingRules ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : justSaved ? (
+                            <CheckCircle2 size={13} className="text-white" />
+                          ) : (
+                            <Save size={13} />
+                          )}
+                          {justSaved ? "Saved! (Options Applied)" : "Save & Lock In Options"}
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
@@ -2069,13 +2159,13 @@ function AquaMcqForgeStudio() {
                         </p>
                       </div>
 
-                      {/* Source Split */}
+                      {/* Source Fidelity Split */}
                       <div className="p-2.5 rounded-lg bg-white border border-indigo-100 shadow-2xs">
                         <div className="text-slate-500 font-semibold flex items-center gap-1">
-                          <Globe size={13} className="text-indigo-600" /> Source Split
+                          <Globe size={13} className="text-indigo-600" /> Source Fidelity Split
                         </div>
                         <div className="text-sm font-bold text-slate-800 mt-1">
-                          {Number(job.external_questions_count ?? 0)} Web / {Math.max(0, Number(job.total_questions ?? 20) - Number(job.external_questions_count ?? 0))} PDF
+                          🔒 {job.strict_questions_count ?? (job.source_mode === "reasoning" ? 0 : (job.total_questions ?? 20))} Strict PDF / 🧠 {Math.max(0, (job.total_questions ?? 20) - (job.strict_questions_count ?? (job.source_mode === "reasoning" ? 0 : (job.total_questions ?? 20))))} AI Reasoning
                         </div>
                         <p className="text-[11px] text-slate-500 mt-0.5">
                           Total target: {job.total_questions ?? 20} questions

@@ -18,6 +18,7 @@ import {
   Play,
   UploadCloud,
   KeyRound,
+  Minus,
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
@@ -94,6 +95,7 @@ function AquaMcqForgeDashboard() {
     typeCombined: 50,
     aiDecidesType: false,
     totalQuestions: 20,
+    strictQuestionsCount: 20,
     coverageMode: false,
     dupThreshold: 87,
     includeImages: false,
@@ -128,6 +130,7 @@ function AquaMcqForgeDashboard() {
           provider: form.provider,
           model: form.model,
           sourceMode: form.sourceMode,
+          strictQuestionsCount: form.strictQuestionsCount,
           styleMode: form.styleMode,
           difficultyEasy: form.difficultyEasy,
           difficultyMedium: form.difficultyMedium,
@@ -363,45 +366,200 @@ function AquaMcqForgeDashboard() {
                     </div>
                   </div>
 
-                  {/* Source Fidelity Mode */}
-                  <div className="space-y-2 p-3.5 rounded-xl border border-slate-200 bg-slate-50">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">
-                      <span>Source Fidelity System</span>
-                      <Badge className={form.sourceMode === "strict" ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"}>
-                        {form.sourceMode === "strict" ? "🔒 Strict Source Mode" : "🧠 Source + Reasoning"}
-                      </Badge>
-                    </Label>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setForm({ ...form, sourceMode: "strict" })}
-                        className={`p-2.5 rounded-lg border text-left transition ${
-                          form.sourceMode === "strict"
-                            ? "border-emerald-500 bg-emerald-50/60 font-semibold text-emerald-950"
-                            : "border-slate-200 bg-white text-slate-600"
-                        }`}
-                      >
-                        <div className="font-bold">🔒 Strict Source Mode</div>
-                        <div className="text-[11px] text-slate-500 mt-0.5">
-                          Zero outside claims. Model only uses direct facts from your textbook.
+                  {/* Source Fidelity Mode (Strict PDF vs AI Reasoning Split) */}
+                  {(() => {
+                    const total = form.totalQuestions || 20;
+                    const strictCount = Math.max(0, Math.min(total, form.strictQuestionsCount ?? total));
+                    const reasoningCount = Math.max(0, total - strictCount);
+                    const strictPct = total > 0 ? Math.round((strictCount / total) * 100) : 0;
+                    const reasoningPct = 100 - strictPct;
+
+                    const setStrict = (val: number) => {
+                      const clamped = Math.max(0, Math.min(total, val));
+                      setForm({
+                        ...form,
+                        strictQuestionsCount: clamped,
+                        sourceMode: clamped === 0 ? "reasoning" : "strict",
+                      });
+                    };
+
+                    const setReasoning = (val: number) => {
+                      const clamped = Math.max(0, Math.min(total, val));
+                      const newStrict = total - clamped;
+                      setForm({
+                        ...form,
+                        strictQuestionsCount: newStrict,
+                        sourceMode: newStrict === 0 ? "reasoning" : "strict",
+                      });
+                    };
+
+                    return (
+                      <div className="space-y-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <Label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                            <ShieldCheck size={14} className="text-emerald-600" />
+                            <span>Source Fidelity System</span>
+                          </Label>
+                          <div className="flex items-center gap-1.5">
+                            <Badge className="bg-emerald-600 text-white font-mono text-[11px]">
+                              🔒 {strictCount} Strict PDF ({strictPct}%)
+                            </Badge>
+                            <Badge className="bg-blue-600 text-white font-mono text-[11px]">
+                              🧠 {reasoningCount} AI Reasoning ({reasoningPct}%)
+                            </Badge>
+                          </div>
                         </div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setForm({ ...form, sourceMode: "reasoning" })}
-                        className={`p-2.5 rounded-lg border text-left transition ${
-                          form.sourceMode === "reasoning"
-                            ? "border-blue-500 bg-blue-50/60 font-semibold text-blue-950"
-                            : "border-slate-200 bg-white text-slate-600"
-                        }`}
-                      >
-                        <div className="font-bold">🧠 Source + AI Reasoning</div>
-                        <div className="text-[11px] text-slate-500 mt-0.5">
-                          Textbook remains authoritative, but AI adds clinical synthesis.
+
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          Choose how many questions are authored strictly from your textbook PDF facts versus how many allow AI clinical reasoning &amp; synthesis.
+                        </p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          {/* Card 1: Strict PDF */}
+                          <div className={`p-2.5 rounded-lg border transition ${strictCount > 0 ? "border-emerald-500 bg-emerald-50/70" : "border-slate-200 bg-white"}`}>
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-emerald-950 flex items-center gap-1">
+                                🔒 Strict Source Mode
+                              </span>
+                              <span className="font-mono font-bold text-emerald-700 text-xs">{strictPct}%</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-2">
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7 rounded-md border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                                onClick={() => setStrict(strictCount - 1)}
+                                disabled={strictCount <= 0}
+                              >
+                                <Minus size={12} />
+                              </Button>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={total}
+                                className="w-16 h-7 text-xs text-center font-bold border-emerald-300"
+                                value={strictCount}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value);
+                                  if (!isNaN(val)) setStrict(val);
+                                }}
+                              />
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7 rounded-md border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                                onClick={() => setStrict(strictCount + 1)}
+                                disabled={strictCount >= total}
+                              >
+                                <Plus size={12} />
+                              </Button>
+                              <span className="text-[11px] text-slate-500 font-medium">questions</span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-1.5">
+                              Zero outside claims. Model only uses direct facts from your textbook.
+                            </div>
+                          </div>
+
+                          {/* Card 2: Source + AI Reasoning */}
+                          <div className={`p-2.5 rounded-lg border transition ${reasoningCount > 0 ? "border-blue-500 bg-blue-50/70" : "border-slate-200 bg-white"}`}>
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-blue-950 flex items-center gap-1">
+                                🧠 Source + AI Reasoning
+                              </span>
+                              <span className="font-mono font-bold text-blue-700 text-xs">{reasoningPct}%</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-2">
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7 rounded-md border-blue-300 text-blue-700 hover:bg-blue-100"
+                                onClick={() => setReasoning(reasoningCount - 1)}
+                                disabled={reasoningCount <= 0}
+                              >
+                                <Minus size={12} />
+                              </Button>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={total}
+                                className="w-16 h-7 text-xs text-center font-bold border-blue-300"
+                                value={reasoningCount}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value);
+                                  if (!isNaN(val)) setReasoning(val);
+                                }}
+                              />
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7 rounded-md border-blue-300 text-blue-700 hover:bg-blue-100"
+                                onClick={() => setReasoning(reasoningCount + 1)}
+                                disabled={reasoningCount >= total}
+                              >
+                                <Plus size={12} />
+                              </Button>
+                              <span className="text-[11px] text-slate-500 font-medium">questions</span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-1.5">
+                              Textbook remains authoritative, but AI adds clinical synthesis.
+                            </div>
+                          </div>
                         </div>
-                      </button>
-                    </div>
-                  </div>
+
+                        {/* Visual Slider */}
+                        <div className="space-y-1 pt-1">
+                          <Slider
+                            value={[strictCount]}
+                            min={0}
+                            max={total}
+                            step={1}
+                            onValueChange={([val]) => setStrict(val)}
+                          />
+                          <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                            <span>0% Strict (100% AI Reasoning)</span>
+                            <span>50% / 50%</span>
+                            <span>100% Strict PDF</span>
+                          </div>
+                        </div>
+
+                        {/* Quick Presets */}
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          <span className="text-[10px] text-slate-400 font-medium mr-1">Presets:</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-5 px-1.5 text-[10px] font-bold border-slate-200 hover:bg-emerald-50 text-emerald-700"
+                            onClick={() => setStrict(total)}
+                          >
+                            🔒 100% Strict PDF
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-5 px-1.5 text-[10px] font-bold border-slate-200 hover:bg-indigo-50 text-indigo-700"
+                            onClick={() => setStrict(Math.round(total * 0.5))}
+                          >
+                            ⚖️ 50/50 Balanced
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-5 px-1.5 text-[10px] font-bold border-slate-200 hover:bg-blue-50 text-blue-700"
+                            onClick={() => setStrict(0)}
+                          >
+                            🧠 100% AI Reasoning
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Difficulty Distribution Sliders */}
                   <div className="space-y-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50">
