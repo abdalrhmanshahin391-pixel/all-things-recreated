@@ -34,6 +34,8 @@ import { RaziWordmark } from "@/components/brand/RaziWordmark";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { resolveHeaderSkin } from "@/components/header/header-designs";
 import { InstallAppButton } from "@/components/InstallAppButton";
+import { useIsContributor } from "@/lib/question-requests";
+import { ListChecks } from "lucide-react";
 import {
   useNavItems,
   canSee,
@@ -55,6 +57,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useTranslation();
   const { user, profile, isAdmin, isRealAdmin, isGolden, isTeacher, isQa, isCommittee, isCommitteeEn, isCommitteeAr, isCommitteeHead, adminMode, setAdminMode, loading: authLoading } = useAuth();
+  const isContributor = useIsContributor(user?.id);
   const { lang, toggle: toggleLang } = useLang();
   const settings = useSiteSettings();
   const skin = resolveHeaderSkin(settings.header_style);
@@ -289,6 +292,11 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
               <MenuLink to="/packages" icon={<PackageIcon size={16} />} onClick={() => setOpen(false)}>
                 {t("cms.header.packages", { defaultValue: "Packages" })}
               </MenuLink>
+              {(isContributor || isRealAdmin) && (
+                <MenuLink to="/questions" icon={<ListChecks size={16} />} onClick={() => setOpen(false)}>
+                  {t("cms.header.questions", { defaultValue: "Questions" })}
+                </MenuLink>
+              )}
               <InstallAppButton />
               {isQa && !isAdmin && (
                 <>

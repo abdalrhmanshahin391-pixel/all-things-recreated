@@ -118,7 +118,7 @@ export const listLectureCourseOwnersServerFn = createServerFn({ method: "POST" }
     if (userIds.length > 0) {
       const { data: profs } = await supabaseAdmin
         .from("profiles")
-        .select("id, username, full_name, email, avatar_url")
+        .select("id, username, full_name, email")
         .in("id", userIds);
       (profs ?? []).forEach((p) => profilesMap.set(p.id, p));
     }

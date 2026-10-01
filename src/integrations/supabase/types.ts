@@ -4141,6 +4141,21 @@ export type Database = {
           },
         ]
       }
+      question_contributors: {
+        Row: {
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       question_flags: {
         Row: {
           created_at: string
@@ -4325,6 +4340,112 @@ export type Database = {
             columns: ["subject_id"]
             isOneToOne: false
             referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      request_groups: {
+        Row: {
+          completed: boolean
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      request_question_options: {
+        Row: {
+          id: string
+          is_correct: boolean
+          label: string
+          question_id: string
+          sort_order: number
+          text: string
+        }
+        Insert: {
+          id?: string
+          is_correct?: boolean
+          label: string
+          question_id: string
+          sort_order?: number
+          text: string
+        }
+        Update: {
+          id?: string
+          is_correct?: boolean
+          label?: string
+          question_id?: string
+          sort_order?: number
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_question_options_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "request_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      request_questions: {
+        Row: {
+          answer_mode: string
+          created_at: string
+          explanation: string | null
+          group_id: string
+          id: string
+          image_url: string | null
+          sort_order: number
+          stem: string
+          updated_at: string
+        }
+        Insert: {
+          answer_mode?: string
+          created_at?: string
+          explanation?: string | null
+          group_id: string
+          id?: string
+          image_url?: string | null
+          sort_order?: number
+          stem: string
+          updated_at?: string
+        }
+        Update: {
+          answer_mode?: string
+          created_at?: string
+          explanation?: string | null
+          group_id?: string
+          id?: string
+          image_url?: string | null
+          sort_order?: number
+          stem?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_questions_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "request_groups"
             referencedColumns: ["id"]
           },
         ]
@@ -5972,6 +6093,15 @@ export type Database = {
           username: string
         }[]
       }
+      admin_list_question_contributors: {
+        Args: never
+        Returns: {
+          email: string
+          full_name: string
+          user_id: string
+          username: string
+        }[]
+      }
       admin_list_role_members: {
         Args: { _role: Database["public"]["Enums"]["app_role"] }
         Returns: {
@@ -6069,6 +6199,7 @@ export type Database = {
         Args: { _course_id: string }
         Returns: boolean
       }
+      can_edit_request_group: { Args: { _group_id: string }; Returns: boolean }
       can_manage_committee: { Args: { _user_id: string }; Returns: boolean }
       can_manage_committee_members: {
         Args: { _user_id: string }
@@ -6152,6 +6283,7 @@ export type Database = {
         Args: { _course_id: string; _user_id: string }
         Returns: boolean
       }
+      is_question_contributor: { Args: { _user_id: string }; Returns: boolean }
       lecture_staff_list: {
         Args: { _course_id: string }
         Returns: {
