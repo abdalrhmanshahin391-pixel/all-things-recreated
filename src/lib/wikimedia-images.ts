@@ -24,10 +24,28 @@ export interface MedicalImageResult {
  * @param excludeUrls Array of already used image URLs in this job to prevent duplicates
  * @param preferredIndex Index offset to rotate through different valid candidates
  */
+export interface MedicalImageOptions {
+  excludeUrls?: string[];
+  preferredIndex?: number;
+  targetAnswer?: string;
+  isEasy?: boolean;
+}
+
+/**
+ * Searches Wikimedia Commons for verified medical imagery matching the query.
+ * Guarantees NO duplicate images across the course and rejects antique drawings,
+ * laboratory animal surgery photos, and spoiler diagrams.
+ *
+ * @param query Specific medical concept (e.g. "pyknosis histopathology H&E")
+ * @param excludeUrls Array of already used image URLs in this job to prevent duplicates
+ * @param preferredIndex Index offset to rotate through different valid candidates
+ * @param options Additional search tuning (target answer to prevent giveaways, easy mode)
+ */
 export async function searchRealMedicalImage(
   query: string,
   excludeUrls: string[] = [],
   preferredIndex: number = 0,
+  options?: { targetAnswer?: string; isEasy?: boolean },
 ): Promise<MedicalImageResult | null> {
   // Strip non-alphanumeric characters and meta-instruction words
   const cleanQuery = query
@@ -38,12 +56,19 @@ export async function searchRealMedicalImage(
 
   if (!cleanQuery) return null;
 
-  // Normalized list of excluded URLs (query strings stripped and lowercased)
+  // Normalized list of excluded URLs and titles (lowercased)
   const cleanExcluded = new Set(
     excludeUrls
       .filter(Boolean)
       .map((u) => u.split("?")[0].trim().toLowerCase()),
   );
+
+  const queryKeywords = cleanQuery
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length >= 4 && !/micrograph|histology|pathology|specimen|biopsy|human|stain|photo|image|view/i.test(w));
+
+  const targetAnswerClean = options?.targetAnswer ? options.targetAnswer.trim().toLowerCase() : "";
 
   const coreWords = cleanQuery.split(" ").filter((w) => w.length > 2);
   const core3 = coreWords.slice(0, 3).join(" ");
@@ -63,7 +88,7 @@ export async function searchRealMedicalImage(
     try {
       const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(
         q,
-      )}&gsrnamespace=6&gsrlimit=12&prop=imageinfo&iiprop=url|size|mime|extmetadata&format=json&origin=*`;
+      )}&gsrnamespace=6&gsrlimit=16&prop=imageinfo&iiprop=url|size|mime|extmetadata&format=json&origin=*`;
 
       const res = await fetch(url, {
         headers: {
@@ -88,6 +113,7 @@ export async function searchRealMedicalImage(
         const imgUrl = String(info.url);
         const cleanPath = imgUrl.split("?")[0].toLowerCase();
         const title = String(item.title || "");
+        const cleanTitle = title.toLowerCase().replace(/^file:/i, "").trim();
 
         // 1. Strict MIME verification: Must be an actual image
         const mime = String(info.mime || "").toLowerCase();
@@ -96,8 +122,8 @@ export async function searchRealMedicalImage(
         // 2. Strict extension verification (strip query parameters first)
         if (!/\.(jpe?g|png|webp)$/i.test(cleanPath)) continue;
 
-        // 3. Reject already used images in this course (ZERO duplicates)
-        if (cleanExcluded.has(cleanPath)) continue;
+        // 3. Reject already used images in this course (ZERO duplicates by URL or title)
+        if (cleanExcluded.has(cleanPath) || cleanExcluded.has(cleanTitle)) continue;
 
         // 4. Strict exclusion of antique book scans, woodcuts, engravings, sepia sketches
         const extMeta = info.extmetadata ?? {};
@@ -118,16 +144,55 @@ export async function searchRealMedicalImage(
 
         if (isAntiqueOrDrawing) continue;
 
+        // 4b. Strict exclusion of laboratory animal experiments (anesthetized rats, rodents, stereotaxic frames)
+        const isAnimalExperiment =
+          /\b(anesthetized rat|laboratory rat|rat prepared for|neurosurgery on rat|stereotaxic|rodent model|mouse model|murine model|guinea pig|rabbit under|craniotomy on)\b/i.test(
+            combinedText,
+          );
+        if (isAnimalExperiment) continue;
+
+        // 4c. Exclude flagellated/enteric bacteria unless specifically searched for
+        if (
+          !/bacteri|helicobacter|flagell|infection/i.test(cleanQuery) &&
+          /\b(helicobacter|salmonella|escherichia|pseudomonas|flagellum|flagella|bacterial culture)\b/i.test(combinedText)
+        ) {
+          continue;
+        }
+
+        // 4d. Anti-giveaway filter: If this is a diagram with the answer printed directly as the main subject, reject!
+        if (targetAnswerClean && targetAnswerClean.length > 3) {
+          const isDiagramOrSchematic = /\b(diagram|schematic|pathway|chart|infographic|flowchart)\b/i.test(combinedText);
+          if (isDiagramOrSchematic && combinedText.includes(targetAnswerClean)) {
+            // The diagram explicitly labels the answer — skip it so it doesn't give away the question!
+            continue;
+          }
+        }
+
         // 5. Exclude tiny icons or corrupted files
         if ((info.width && info.width < 320) || (info.height && info.height < 240)) continue;
 
-        // 6. Medical relevance scoring: Prioritize authentic modern photomicrographs
+        // 6. Medical relevance scoring: Prioritize authentic modern photomicrographs matching query keywords
         let score = 0;
-        if (/micrograph|photomicrograph/i.test(combinedText)) score += 10;
-        if (/histopathology|histology|biopsy|h&e|hematoxylin|staining/i.test(combinedText)) score += 8;
-        if (/gross\s+pathology|pathological\s+specimen|resection|macroscopic/i.test(combinedText)) score += 7;
-        if (/microscopy|pathology|lesion|carcinoma|necrosis|infarct/i.test(combinedText)) score += 5;
-        if (/diagram|schematic/i.test(combinedText)) score -= 2;
+
+        // Keyword relevance check: Must match at least one core medical topic keyword
+        let matchesQueryKeyword = queryKeywords.length === 0;
+        for (const kw of queryKeywords) {
+          if (combinedText.includes(kw)) {
+            matchesQueryKeyword = true;
+            score += 25;
+          }
+        }
+        if (!matchesQueryKeyword) continue; // Skip images that don't match the query concepts!
+
+        if (/micrograph|photomicrograph/i.test(combinedText)) score += 15;
+        if (/histopathology|histology|biopsy|h&e|hematoxylin|staining/i.test(combinedText)) score += 12;
+        if (/gross\s+pathology|pathological\s+specimen|resection|macroscopic/i.test(combinedText)) score += 10;
+        if (/microscopy|pathology|lesion|carcinoma|necrosis|infarct|apoptosis|swelling/i.test(combinedText)) score += 8;
+
+        // Penalize labeled diagrams to prefer real tissue slides, unless easy mode
+        if (/diagram|schematic|illustration/i.test(combinedText)) {
+          score -= options?.isEasy ? 2 : 12;
+        }
 
         validImages.push({
           url: imgUrl,
@@ -145,12 +210,12 @@ export async function searchRealMedicalImage(
         // Sort highest scored medical micrographs first
         validImages.sort((a, b) => b.score - a.score);
 
-        // Pick distinct candidate using preferredIndex rotation
-        const pickedIdx = preferredIndex % validImages.length;
-        const candidate = validImages[pickedIdx];
+        // Pick highest scored candidate that is not excluded
+        const candidate = validImages[0];
 
-        // Remember this URL to prevent reuse in the same session
+        // Remember this URL & Title to prevent reuse in the same session
         cleanExcluded.add(candidate.url.split("?")[0].toLowerCase());
+        cleanExcluded.add(candidate.title.toLowerCase().replace(/^file:/i, "").trim());
         return candidate;
       }
     } catch (err) {
@@ -184,10 +249,11 @@ export async function searchRealMedicalImage(
         if (!fInfo?.url) continue;
 
         const fClean = String(fInfo.url).split("?")[0].toLowerCase();
-        if (cleanExcluded.has(fClean)) continue;
-
         const fTitle = String(p.title || "").toLowerCase();
-        if (/\b(drawing|engraving|woodcut|vintage|18\d\d|190\d|191\d|plate\s*\d+)\b/i.test(fTitle)) continue;
+        const fCleanTitle = fTitle.replace(/^file:/i, "").trim();
+        if (cleanExcluded.has(fClean) || cleanExcluded.has(fCleanTitle)) continue;
+
+        if (/\b(drawing|engraving|woodcut|vintage|18\d\d|190\d|191\d|plate\s*\d+|rat|rats|mouse|mice|rodent|murine|stereotaxic)\b/i.test(fTitle)) continue;
 
         if (/\.(jpe?g|png|webp)$/i.test(fClean) && fInfo?.mime?.startsWith("image/")) {
           const resObj = {
@@ -200,6 +266,7 @@ export async function searchRealMedicalImage(
             height: fInfo.height || 600,
           };
           cleanExcluded.add(fClean);
+          cleanExcluded.add(fCleanTitle);
           return resObj;
         }
       }

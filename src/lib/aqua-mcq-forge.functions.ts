@@ -285,10 +285,11 @@ export async function generateMedicalDiagram(
   prompt: string,
   jobId: string,
   excludeUrls: string[] = [],
+  options?: { targetAnswer?: string; isEasy?: boolean },
 ): Promise<string> {
   // 1. Search authentic medical literature on Wikimedia Commons with specific clinical prompt
   try {
-    const realImg = await searchRealMedicalImage(prompt, excludeUrls);
+    const realImg = await searchRealMedicalImage(prompt, excludeUrls, 0, options);
     if (realImg?.url) {
       return realImg.url;
     }
@@ -301,19 +302,21 @@ export async function generateMedicalDiagram(
     const cleanTokens = prompt
       .replace(/[^a-zA-Z0-9\s]/g, " ")
       .split(" ")
-      .filter((w) => w.length > 3)
+      .filter((w) => w.length > 3 && !/micrograph|histology|pathology|specimen|biopsy/i.test(w))
       .slice(0, 3)
       .join(" ");
-    const broaderImg = await searchRealMedicalImage(`${cleanTokens} pathology`, excludeUrls);
-    if (broaderImg?.url) {
-      return broaderImg.url;
+    if (cleanTokens) {
+      const broaderImg = await searchRealMedicalImage(`${cleanTokens} pathology histology H&E`, excludeUrls, 0, options);
+      if (broaderImg?.url) {
+        return broaderImg.url;
+      }
     }
   } catch (e) {
     console.warn("[generateMedicalDiagram] Broader medical search error:", e);
   }
 
   // 3. High-res real scientific diagram fallback from open medical literature
-  const fallback = await searchRealMedicalImage("cellular pathology histology specimen H&E", excludeUrls);
+  const fallback = await searchRealMedicalImage("cellular pathology tissue histology specimen H&E", excludeUrls, 0, options);
   return fallback?.url || "https://upload.wikimedia.org/wikipedia/commons/4/48/Biological_cell.svg";
 }
 
@@ -551,7 +554,30 @@ export async function fetchJobData(supabase: any, jobId: string) {
   // 1. Check amf_jobs
   const { data: jRow } = await supabase.from(JOBS).select("*").eq("id", jobId).maybeSingle();
   if (jRow) {
-    job = jRow;
+    job = {
+      ...jRow,
+      api_mode: jRow.api_mode || "standard",
+      topics_optional: jRow.topics_optional ?? true,
+      source_mode: jRow.source_mode || "strict",
+      style_mode: jRow.style_mode || "ai",
+      style_course_id: jRow.style_course_id ?? null,
+      difficulty_easy: jRow.difficulty_easy ?? 34,
+      difficulty_medium: jRow.difficulty_medium ?? 33,
+      difficulty_hard: jRow.difficulty_hard ?? 33,
+      type_standard: jRow.type_standard ?? 50,
+      type_combined: jRow.type_combined ?? 50,
+      ai_decides_type: jRow.ai_decides_type ?? false,
+      total_questions: jRow.total_questions ?? 20,
+      coverage_mode: jRow.coverage_mode ?? false,
+      dup_threshold: jRow.dup_threshold ?? 87,
+      include_images: jRow.include_images ?? false,
+      image_frequency: jRow.image_frequency ?? "auto",
+      image_count: jRow.image_count ?? 0,
+      image_target_count: jRow.image_target_count ?? jRow.image_count ?? 0,
+      external_questions_count: jRow.external_questions_count ?? 0,
+      source_fidelity_enabled: jRow.source_fidelity_enabled ?? true,
+      objective_ratios: jRow.objective_ratios ?? {},
+    };
     const [{ data: s }, { data: t }, { data: i }] = await Promise.all([
       supabase.from(SOURCES).select("*").eq("job_id", jobId).order("created_at"),
       supabase.from(TOPICS).select("*").eq("job_id", jobId).order("created_at"),
@@ -650,8 +676,6 @@ export async function fetchJobData(supabase: any, jobId: string) {
     });
   }
 
-  // Read-only: live course questions are never modified when a job is opened.
-
   return {
     job,
     sources,
@@ -687,13 +711,25 @@ export const amfUpdateJob = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = await ensureStaff(context);
 
-    // Try amf_jobs
-    try {
-      const { data: row, error: jErr } = await supabase.from(JOBS).update(data.patch).eq("id", data.jobId).select("*").maybeSingle();
-      if (!jErr && row) return row;
-    } catch {}
+    // 1. Try amf_jobs with known columns only to avoid PostgreSQL column errors
+    const amfJobColumns = [
+      "name", "provider", "model", "source_mode", "style_mode", "style_course_id",
+      "style_sample_text", "difficulty_easy", "difficulty_medium", "difficulty_hard",
+      "type_standard", "type_combined", "ai_decides_type", "total_questions",
+      "coverage_mode", "dup_threshold", "include_images", "image_count",
+      "source_fidelity_enabled", "status", "error"
+    ];
+    const amfPatch: Record<string, any> = {};
+    for (const [k, v] of Object.entries(data.patch)) {
+      if (amfJobColumns.includes(k)) amfPatch[k] = v;
+    }
+    if (Object.keys(amfPatch).length > 0) {
+      try {
+        await supabase.from(JOBS).update(amfPatch).eq("id", data.jobId);
+      } catch {}
+    }
 
-    // Fallback to amg_groups
+    // 2. Always persist full metadata in amg_groups instructions
     const { data: gRow } = await supabase.from(AMG_GROUPS).select("*").eq("id", data.jobId).maybeSingle();
     if (gRow) {
       let meta: any = {};
@@ -721,7 +757,7 @@ export const amfUpdateJob = createServerFn({ method: "POST" })
       };
     }
 
-    return { ok: true };
+    return { ok: true, ...data.patch };
   });
 
 export const amfDeleteJob = createServerFn({ method: "POST" })
@@ -930,64 +966,102 @@ export const amfUpdateTopic = createServerFn({ method: "POST" })
 
 // ============================================================== GENERATION ==
 
-function selectWeightedDifficulty(easyPct: number, medPct: number, hardPct: number): "easy" | "medium" | "hard" {
-  const rand = Math.random() * 100;
-  if (rand < easyPct) return "easy";
-  if (rand < easyPct + medPct) return "medium";
+function selectQuotaDifficulty(
+  easyPct: number,
+  medPct: number,
+  hardPct: number,
+  existingDifficulties: string[],
+  totalQuestions: number = 20,
+): "easy" | "medium" | "hard" {
+  const tot = (easyPct || 0) + (medPct || 0) + (hardPct || 0) || 100;
+  const targetEasy = Math.round(((easyPct || 0) / tot) * totalQuestions);
+  const targetMed = Math.round(((medPct || 0) / tot) * totalQuestions);
+  const targetHard = Math.max(0, totalQuestions - targetEasy - targetMed);
+
+  const countEasy = existingDifficulties.filter((d) => d === "easy").length;
+  const countMed = existingDifficulties.filter((d) => d === "medium").length;
+  const countHard = existingDifficulties.filter((d) => d === "hard").length;
+
+  const deficitEasy = targetEasy - countEasy;
+  const deficitMed = targetMed - countMed;
+  const deficitHard = targetHard - countHard;
+
+  if (deficitEasy >= deficitMed && deficitEasy >= deficitHard && deficitEasy > 0) return "easy";
+  if (deficitMed >= deficitEasy && deficitMed >= deficitHard && deficitMed > 0) return "medium";
+  if (deficitHard > 0) return "hard";
+
+  // If quotas satisfied, use proportional selection
+  const rand = Math.random() * tot;
+  if (rand < (easyPct || 0)) return "easy";
+  if (rand < (easyPct || 0) + (medPct || 0)) return "medium";
   return "hard";
 }
 
-function selectQuestionForm(stdPct: number, combPct: number, aiDecides: boolean): "A" | "B" {
+function selectQuotaForm(
+  stdPct: number,
+  combPct: number,
+  aiDecides: boolean,
+  existingForms: string[],
+  totalQuestions: number = 20,
+): "A" | "B" {
   if (aiDecides) return Math.random() < 0.6 ? "A" : "B";
-  const total = (stdPct || 50) + (combPct || 50);
-  const normalizedStd = ((stdPct || 50) / total) * 100;
+  const tot = (stdPct || 50) + (combPct || 50);
+  const targetA = Math.round(((stdPct || 50) / tot) * totalQuestions);
+  const targetB = Math.max(0, totalQuestions - targetA);
+
+  const countA = existingForms.filter((f) => f === "A").length;
+  const countB = existingForms.filter((f) => f === "B").length;
+
+  const deficitA = targetA - countA;
+  const deficitB = targetB - countB;
+
+  if (deficitA > deficitB && deficitA > 0) return "A";
+  if (deficitB > 0) return "B";
+
+  const normalizedStd = ((stdPct || 50) / tot) * 100;
   return Math.random() * 100 < normalizedStd ? "A" : "B";
 }
 
-
 /**
- * Selects a question objective based on the job's configured ratios.
- * Falls back to purely random if no ratios configured.
- *
- * @param ratios  Object like { recall: 20, clinical_vignette: 30, tricky: 15, ... }
- * @param existingObjectives  Array of objectives already generated this batch/job
+ * Selects a question objective based on the job's configured ratios and quotas.
+ * Enforces strict tracking so that user configured quotas (e.g. 3 recall, 3 tricky/cognitive trap)
+ * are definitively authored.
  */
 function selectQuotaObjective(
   ratios: Record<string, number> | null | undefined,
   existingObjectives: string[],
+  totalQuestions: number = 20,
 ): string {
   const allObjectiveIds = QUESTION_OBJECTIVES.map((o) => o.id);
 
-  // If no ratios configured, fall back to random
+  // If no ratios configured, fall back to balanced rotation
   if (!ratios || Object.keys(ratios).length === 0) {
-    return allObjectiveIds[Math.floor(Math.random() * allObjectiveIds.length)];
+    return allObjectiveIds[existingObjectives.length % allObjectiveIds.length];
   }
 
-  // Normalize ratios to sum to 100
-  const total = Object.values(ratios).reduce((a, b) => a + (Number(b) || 0), 0);
-  if (total === 0) return allObjectiveIds[Math.floor(Math.random() * allObjectiveIds.length)];
-
-  const normalizedRatios: Record<string, number> = {};
-  for (const [k, v] of Object.entries(ratios)) {
-    normalizedRatios[k] = ((Number(v) || 0) / total) * 100;
+  // Filter positive entries
+  const positiveEntries = Object.entries(ratios).filter(([_, v]) => Number(v) > 0);
+  if (positiveEntries.length === 0) {
+    return allObjectiveIds[existingObjectives.length % allObjectiveIds.length];
   }
+
+  const totalWeight = positiveEntries.reduce((a, [_, v]) => a + Number(v), 0);
 
   // Count existing objectives
   const counts: Record<string, number> = {};
   for (const obj of existingObjectives) {
     counts[obj] = (counts[obj] ?? 0) + 1;
   }
-  const totalExisting = existingObjectives.length || 1;
 
-  // Find the objective furthest below its target ratio
-  let bestObjective: string = allObjectiveIds[0];
+  // Calculate target question counts for each objective based on job's total questions
+  let bestObjective: string = positiveEntries[0][0];
   let bestDeficit = -Infinity;
 
+  for (const [obj, weight] of positiveEntries) {
+    const targetCount = Math.max(1, Math.round((Number(weight) / totalWeight) * totalQuestions));
+    const currentCount = counts[obj] ?? 0;
+    const deficit = targetCount - currentCount;
 
-  for (const [obj, targetPct] of Object.entries(normalizedRatios)) {
-    if (targetPct <= 0) continue;
-    const currentPct = ((counts[obj] ?? 0) / totalExisting) * 100;
-    const deficit = targetPct - currentPct;
     if (deficit > bestDeficit) {
       bestDeficit = deficit;
       bestObjective = obj;
@@ -997,6 +1071,80 @@ function selectQuotaObjective(
   return bestObjective;
 }
 
+/**
+ * Robust helper to fetch and normalize all existing items for a job,
+ * safely handling both amf_items and amg_items schemas.
+ */
+export async function getJobExistingItems(supabase: any, jobId: string): Promise<any[]> {
+  // 1. Try amf_items
+  try {
+    const { data: amfItems, error } = await supabase
+      .from(ITEMS)
+      .select("id, stem, form, options, answer_labels, objective, difficulty, explanation, raw_explanation, source_fidelity, has_image, image_url, order_index")
+      .eq("job_id", jobId)
+      .eq("archived", false)
+      .order("order_index");
+    if (!error && amfItems) {
+      return amfItems.map((i: any) => ({
+        ...i,
+        job_id: jobId,
+        stem: formatQuestionStem(i.stem),
+        has_image: Boolean(i.has_image || i.image_url),
+        source_origin: i.source_fidelity?.origin || "textbook_pdf",
+      }));
+    }
+  } catch {}
+
+  // 2. Fallback to amg_items (only query columns that actually exist!)
+  try {
+    const { data: gItems, error } = await supabase
+      .from(AMG_ITEMS)
+      .select("id, stem, form, number_label, options, answer_labels, explanation, order_index")
+      .eq("group_id", jobId)
+      .order("order_index");
+
+    if (!error && gItems) {
+      return gItems.map((i: any) => {
+        let exp: any = {};
+        if (i.explanation && typeof i.explanation === "object") {
+          exp = i.explanation;
+        } else if (typeof i.explanation === "string") {
+          try {
+            exp = JSON.parse(i.explanation);
+          } catch {
+            exp = { explanation: i.explanation };
+          }
+        }
+
+        const imgUrl = exp.image_url ?? null;
+        const srcFid = exp.source_fidelity ?? null;
+        const origin = srcFid?.origin || "textbook_pdf";
+
+        return {
+          id: i.id,
+          job_id: jobId,
+          stem: formatQuestionStem(i.stem),
+          form: i.form || "A",
+          options: Array.isArray(i.options) ? i.options : [],
+          answer_labels: Array.isArray(i.answer_labels) ? i.answer_labels : [],
+          objective: exp.objective || "recall",
+          difficulty: exp.difficulty || "medium",
+          explanation: exp.explanation || "",
+          raw_explanation: exp,
+          source_fidelity: srcFid,
+          source_origin: origin,
+          image_url: imgUrl,
+          has_image: Boolean(imgUrl),
+          order_index: i.order_index || 0,
+        };
+      });
+    }
+  } catch (err) {
+    console.warn("[getJobExistingItems] Error querying amg_items:", err);
+  }
+
+  return [];
+}
 
 export const amfGenerateBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1030,17 +1178,7 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
     const apiKey = await getKey(supabase, job.provider);
 
     // Existing items — collect objectives, stems and answers for quota & anti-repetition tracking
-    let existingItems: any[] = [];
-    const { data: amfItems } = await supabase
-      .from(ITEMS)
-      .select("stem, topic_id, objective, answer_labels, options, raw_explanation, source_fidelity, has_image, image_url")
-      .eq("job_id", data.jobId);
-    if (amfItems) {
-      existingItems = amfItems;
-    } else {
-      const { data: amgItems } = await supabase.from(AMG_ITEMS).select("stem, options, answer_labels, explanation, image_url").eq("group_id", data.jobId);
-      existingItems = amgItems ?? [];
-    }
+    const existingItems = await getJobExistingItems(supabase, data.jobId);
 
     const existingStems = existingItems.map((i: any) => String(i.stem ?? ""));
     const existingAnswers: string[] = [];
@@ -1060,20 +1198,18 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
       (i: any) =>
         i.source_origin === "external_literature" ||
         (typeof i.source_fidelity === "string" && /usmle|uworld|robbins|external|board/i.test(i.source_fidelity)) ||
-        (typeof i.raw_explanation?.source_fidelity === "string" && /usmle|uworld|robbins|external|board/i.test(i.raw_explanation.source_fidelity)) ||
-        (typeof i.explanation?.source_fidelity === "string" && /usmle|uworld|robbins|external|board/i.test(i.explanation.source_fidelity)),
+        (typeof i.source_fidelity?.source === "string" && /usmle|uworld|robbins|external|board/i.test(i.source_fidelity.source)),
     ).length;
 
-    // Track objectives of existing questions for quota-based selection
+    // Track parameters of existing questions for quota-based selection
     const existingObjectives: string[] = existingItems.map((i: any) => String(i.objective ?? "")).filter(Boolean);
-    // Track how many image questions already exist
-    const existingImageCount = existingItems.filter(
-      (i: any) => i.has_image || Boolean(i.image_url) || Boolean(i.explanation?.image_url),
-    ).length;
+    const existingDifficulties: string[] = existingItems.map((i: any) => String(i.difficulty ?? "")).filter(Boolean);
+    const existingForms: string[] = existingItems.map((i: any) => String(i.form ?? "A")).filter(Boolean);
+    const existingImageCount = existingItems.filter((i: any) => i.has_image || Boolean(i.image_url)).length;
 
     // Collect all previously assigned image URLs to prevent ANY duplicate images across the course
     const usedImageUrls: string[] = existingItems
-      .map((i: any) => i.image_url || i.raw_explanation?.image_url || i.explanation?.image_url)
+      .map((i: any) => i.image_url)
       .filter((u: any): u is string => typeof u === "string" && u.trim().length > 0);
 
     let generatedCount = 0;
@@ -1084,6 +1220,8 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
     if (!allChunks.length) {
       allChunks.push(String(sources[0]?.extracted_text || "").slice(0, 30000));
     }
+
+    const totalQuestionsTarget = Number(job.total_questions ?? 20);
 
     for (let step = 0; step < data.batchSize; step++) {
       const selectedTopic = activeTopics[step % activeTopics.length];
@@ -1106,34 +1244,45 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
       ].filter(Boolean);
       const textToUse = chunksSelected.join("\n\n").slice(0, 24000);
 
-      // Determine parameters for this question
-      const difficulty = selectWeightedDifficulty(job.difficulty_easy, job.difficulty_medium, job.difficulty_hard);
-      const form = selectQuestionForm(job.type_standard, job.type_combined, job.ai_decides_type);
+      // Quota-enforced difficulty determination
+      const currentDifficulties = [...existingDifficulties, ...authoredItems.map((ai) => ai.difficulty)];
+      const difficulty = selectQuotaDifficulty(
+        job.difficulty_easy ?? 34,
+        job.difficulty_medium ?? 33,
+        job.difficulty_hard ?? 33,
+        currentDifficulties,
+        totalQuestionsTarget,
+      );
 
-      // Quota-based objective selection using job.objective_ratios
+      // Quota-enforced question form determination
+      const currentForms = [...existingForms, ...authoredItems.map((ai) => ai.form)];
+      const form = selectQuotaForm(
+        job.type_standard ?? 50,
+        job.type_combined ?? 50,
+        job.ai_decides_type,
+        currentForms,
+        totalQuestionsTarget,
+      );
+
+      // Quota-enforced objective selection using job.objective_ratios
       const objectiveRatios: Record<string, number> | null =
         job.objective_ratios && typeof job.objective_ratios === "object" ? job.objective_ratios : null;
-      const objective = selectQuotaObjective(objectiveRatios, [
-        ...existingObjectives,
-        ...authoredItems.map((ai) => ai.objective ?? ""),
-      ]);
+      const currentObjectives = [...existingObjectives, ...authoredItems.map((ai) => ai.objective ?? "")];
+      const objective = selectQuotaObjective(objectiveRatios, currentObjectives, totalQuestionsTarget);
 
       // Check external literature questions count (persisted across batches)
       const externalTargetCount = Number(job.external_questions_count ?? 0);
       const totalExternalSoFar = existingExternalCount + authoredItems.filter((i) => i.isExternal).length;
       const isExternalStep = externalTargetCount > 0 && totalExternalSoFar < externalTargetCount;
 
-      // Image: use image_target_count (absolute number) if set; otherwise fall back to frequency string
-      const imageTargetCount: number | null =
-        typeof job.image_target_count === "number" ? job.image_target_count : null;
-      const alreadyHasImage = existingImageCount + authoredItems.filter((ai) => ai.hasImage).length;
+      // STRICT Image Limit Enforcement:
+      // If user set image_target_count (e.g. 3), once 3 questions have images, NEVER add any more!
+      const imageTargetCount = Number(job.image_target_count ?? job.image_count ?? 0);
+      const totalImagesSoFar = existingImageCount + authoredItems.filter((ai) => ai.hasImage).length;
       const shouldIncludeImage =
-        job.include_images &&
-        (imageTargetCount !== null
-          ? alreadyHasImage < imageTargetCount
-          : job.image_frequency === "every" ||
-            (job.image_frequency === "half" && (step + existingStems.length) % 2 === 0) ||
-            (step + existingStems.length) % 3 === 0);
+        Boolean(job.include_images) &&
+        imageTargetCount > 0 &&
+        totalImagesSoFar < imageTargetCount;
 
       // Anti-repetition forbidden concepts and previous answers
       const forbiddenConcepts = [
@@ -1143,7 +1292,6 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
       ];
 
       // Balanced pacing and length style rotation:
-      // ~35% short_direct (1-2 sentences), ~35% medium_case (2-4 sentences), ~20% long_vignette, ~10% tricky_trap
       const lengthCycle: Array<"short_direct" | "medium_case" | "long_vignette" | "tricky_trap"> = [
         "short_direct",
         "medium_case",
@@ -1168,7 +1316,7 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
         lengthStyle = "long_vignette";
       }
 
-      // Pre-search real medical image if needed so AI can write stem directly about it
+      // Pre-search real medical image ONLY if shouldIncludeImage is strictly true
       let preSearchedImage: any = null;
       if (shouldIncludeImage) {
         try {
@@ -1180,7 +1328,8 @@ export const amfGenerateBatch = createServerFn({ method: "POST" })
           preSearchedImage = await searchRealMedicalImage(
             specificConcept,
             currentExcludedUrls,
-            existingStems.length + step,
+            0,
+            { isEasy: difficulty === "easy" },
           );
         } catch (e) {
           console.warn("[amfGenerateBatch] Pre-search real medical image error:", e);
@@ -1210,14 +1359,13 @@ ${textToUse}
 ${
   isExternalStep
     ? `TASK: Author ONE pristine ${difficulty.toUpperCase()} board-exam standard multiple choice question (USMLE / Robbins / PreTest style) testing the same core medical principles as the source text above. Adapt from authentic medical literature & board question banks.`
-    : `Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Combined" : "Standard"} medical MCQ based on this source text.`
+    : `Author ONE pristine ${difficulty.toUpperCase()} difficulty ${form === "B" ? "Combined" : "Standard"} medical MCQ based directly on this source text.`
 }
 MANDATORY CONSTRAINTS:
 1. Start the question directly with the clinical vignette or core question. Do NOT write "In the classification of...", "According to...", or echo the topic title in the stem!
 2. Do NOT include source citations, book titles, or page numbers in the explanation text.
-${shouldIncludeImage ? "3. The question stem MUST reference the attached real medical image and require visual inspection to answer." : ""}
+${shouldIncludeImage ? "3. The question stem MUST reference the attached real medical image and require visual inspection to answer." : "3. DO NOT include or reference any image in the question."}
 Return STRICT JSON.`;
-
 
       try {
         let questionJson: any = null;
@@ -1302,19 +1450,41 @@ Return STRICT JSON.`;
           existingAnswers.push(newCorrectOption);
         }
 
-        // Real medical image retrieval (Wikimedia Commons scientific repository)
-        let imageUrl: string | null = preSearchedImage?.url ?? null;
-        if (!imageUrl && (shouldIncludeImage || (questionJson.image_needed && questionJson.image_prompt))) {
-          const currentExcludedUrls = [
-            ...usedImageUrls,
-            ...authoredItems.map((ai) => ai.imageUrl).filter(Boolean),
-          ];
-          const query = questionJson.image_prompt || extractSpecificPathologyEntity(textToUse, selectedTopic.name);
-          try {
-            imageUrl = await generateMedicalDiagram(supabase, job.provider, apiKey, query, job.id, currentExcludedUrls);
-          } catch (imgErr) {
-            console.warn("Medical image search error:", imgErr);
+        // Real medical image retrieval (STRICT: only if shouldIncludeImage is true)
+        let imageUrl: string | null = null;
+        if (shouldIncludeImage) {
+          imageUrl = preSearchedImage?.url ?? null;
+          if (!imageUrl) {
+            const currentExcludedUrls = [
+              ...usedImageUrls,
+              ...authoredItems.map((ai) => ai.imageUrl).filter(Boolean),
+            ];
+            const query = questionJson.image_prompt || extractSpecificPathologyEntity(textToUse, selectedTopic.name);
+            try {
+              imageUrl = await generateMedicalDiagram(
+                supabase,
+                job.provider,
+                apiKey,
+                query,
+                job.id,
+                currentExcludedUrls,
+                {
+                  targetAnswer: newCorrectOption,
+                  isEasy: difficulty === "easy",
+                },
+              );
+            } catch (imgErr) {
+              console.warn("Medical image search error:", imgErr);
+            }
           }
+          if (imageUrl) {
+            usedImageUrls.push(imageUrl);
+          }
+        } else {
+          // STRICT RULE: If shouldIncludeImage is false, never attach image!
+          imageUrl = null;
+          questionJson.image_needed = false;
+          questionJson.image_prompt = null;
         }
 
 

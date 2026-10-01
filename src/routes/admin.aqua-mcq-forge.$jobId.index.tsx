@@ -26,6 +26,9 @@ import {
   Image as ImageIcon,
   Minus,
   Plus,
+  Save,
+  Target,
+  ShieldCheck,
 } from "lucide-react";
 
 import { SiteHeader } from "@/components/SiteHeader";
@@ -1208,6 +1211,50 @@ function AquaMcqForgeStudio() {
     [updateTopic],
   );
 
+  const [savingRules, setSavingRules] = useState(false);
+
+  const handleSaveAllRules = useCallback(
+    async (silent = false) => {
+      if (!job) return;
+      setSavingRules(true);
+      try {
+        const patch = {
+          objective_ratios: job.objective_ratios ?? {},
+          difficulty_easy: Number(job.difficulty_easy ?? 34),
+          difficulty_medium: Number(job.difficulty_medium ?? 33),
+          difficulty_hard: Number(job.difficulty_hard ?? 33),
+          type_standard: Number(job.type_standard ?? 50),
+          type_combined: Number(job.type_combined ?? 50),
+          ai_decides_type: Boolean(job.ai_decides_type),
+          total_questions: Number(job.total_questions ?? 20),
+          external_questions_count: Number(job.external_questions_count ?? 0),
+          include_images: Boolean(job.include_images),
+          image_target_count: Number(job.image_target_count ?? job.image_count ?? 0),
+          image_count: Number(job.image_target_count ?? job.image_count ?? 0),
+          image_frequency: job.image_frequency || "auto",
+          dup_threshold: Number(job.dup_threshold ?? 87),
+          api_mode: job.api_mode || "standard",
+          source_mode: job.source_mode || "strict",
+        };
+        const res: any = await updateJob({ data: { jobId, patch } });
+        if (res && typeof res === "object" && !res.error) {
+          setJob((prev: any) => (prev ? { ...prev, ...res } : prev));
+        }
+        if (!silent) {
+          toast.success("Authoring rules & quotas saved successfully!");
+        }
+      } catch (err: any) {
+        console.error("Failed to save rules:", err);
+        if (!silent) {
+          toast.error(err?.message || "Failed to save options.");
+        }
+      } finally {
+        setSavingRules(false);
+      }
+    },
+    [job, updateJob, jobId],
+  );
+
   // PDF Text Extraction & Upload
   async function handleSourceUpload(file: File) {
     if (file.size > 80 * 1024 * 1024) {
@@ -1297,6 +1344,10 @@ function AquaMcqForgeStudio() {
       toast.error("Please upload at least one textbook PDF before starting generation.");
       return;
     }
+    // Auto-save any active rules to ensure database state is completely synced
+    try {
+      await handleSaveAllRules(true);
+    } catch {}
     stopRunnerRef.current = false;
     setRunning(true);
     patchJobQuietly({ status: "generating" });
@@ -1715,14 +1766,25 @@ function AquaMcqForgeStudio() {
             {/* TAB 3: TUNING */}
             <TabsContent value="tuning" className="space-y-6">
               <Card className="bg-white border-slate-200 shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-lg font-bold flex items-center gap-2">
-                    <Sliders className="text-indigo-600" size={20} />
-                    Parameters & Authoring Rules
-                  </CardTitle>
-                  <CardDescription>
-                    Adjust difficulty splits, deduplication sensitivity, and question formats.
-                  </CardDescription>
+                <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">
+                      <Sliders className="text-indigo-600" size={20} />
+                      Parameters & Authoring Rules
+                    </CardTitle>
+                    <CardDescription>
+                      Adjust difficulty splits, deduplication sensitivity, and question formats.
+                    </CardDescription>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => handleSaveAllRules(false)}
+                    disabled={savingRules}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 font-bold shadow-xs shrink-0"
+                  >
+                    {savingRules ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    Save Authoring Rules & Options
+                  </Button>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {/* API Mode Selector: Standard vs 50% Batch */}
@@ -1869,6 +1931,27 @@ function AquaMcqForgeStudio() {
 
                   {/* Question Type Ratios */}
                   <QuestionTypeRatiosEditor job={job} onUpdate={patchJobQuietly} />
+
+                  {/* Save Configuration Footer Bar */}
+                  <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/70 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                    <div>
+                      <h4 className="font-bold text-sm text-indigo-950 flex items-center gap-2">
+                        <Save size={16} className="text-indigo-600" /> Save Authoring Rules &amp; Quotas
+                      </h4>
+                      <p className="text-xs text-indigo-800 mt-0.5">
+                        Guarantees and persists your exact image limits ({job.include_images ? `${job.image_target_count ?? 0} images` : "Images OFF"}), source splits, and question type quotas before authoring.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => handleSaveAllRules(false)}
+                      disabled={savingRules}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 font-bold px-6 shadow-sm"
+                    >
+                      {savingRules ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                      Save Authoring Rules &amp; Options
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -1950,14 +2033,92 @@ function AquaMcqForgeStudio() {
                     </div>
                   </div>
 
-                  {job.api_mode === "batch" && (
-                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2.5">
-                      <span className="text-base">💰</span>
-                      <div>
-                        <strong>50% Batch API Background Mode:</strong> All questions are saved continuously to the cloud database. You can leave this page, switch tabs, or close your browser at any time — when you return, your progress is safely preserved and generation will automatically continue.
+                  {/* Active Authoring Rules Summary Card */}
+                  <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/40 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-100 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="text-indigo-600" size={18} />
+                        <span className="font-bold text-sm text-indigo-950">Active Authoring Rules &amp; Enforced Quotas</span>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleSaveAllRules(false)}
+                        disabled={savingRules}
+                        className="h-7 text-xs font-bold border-indigo-300 text-indigo-700 hover:bg-indigo-100 gap-1.5"
+                      >
+                        {savingRules ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                        Save &amp; Lock In Options
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                      {/* Images */}
+                      <div className="p-2.5 rounded-lg bg-white border border-indigo-100 shadow-2xs">
+                        <div className="text-slate-500 font-semibold flex items-center gap-1">
+                          <ImageIcon size={13} className="text-indigo-600" /> Image Limit
+                        </div>
+                        <div className="text-sm font-bold text-slate-800 mt-1">
+                          {job.include_images
+                            ? `Exactly ${job.image_target_count ?? 0} Image Qs`
+                            : "Images Disabled (0)"}
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Strict cap • Zero duplicate images • No spoiler answers
+                        </p>
+                      </div>
+
+                      {/* Source Split */}
+                      <div className="p-2.5 rounded-lg bg-white border border-indigo-100 shadow-2xs">
+                        <div className="text-slate-500 font-semibold flex items-center gap-1">
+                          <Globe size={13} className="text-indigo-600" /> Source Split
+                        </div>
+                        <div className="text-sm font-bold text-slate-800 mt-1">
+                          {Number(job.external_questions_count ?? 0)} Web / {Math.max(0, Number(job.total_questions ?? 20) - Number(job.external_questions_count ?? 0))} PDF
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Total target: {job.total_questions ?? 20} questions
+                        </p>
+                      </div>
+
+                      {/* Difficulty */}
+                      <div className="p-2.5 rounded-lg bg-white border border-indigo-100 shadow-2xs">
+                        <div className="text-slate-500 font-semibold flex items-center gap-1">
+                          <Sliders size={13} className="text-indigo-600" /> Difficulty Split
+                        </div>
+                        <div className="text-sm font-bold text-slate-800 mt-1">
+                          {job.difficulty_easy}% E / {job.difficulty_medium}% M / {job.difficulty_hard}% H
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Strict quota-enforced balance
+                        </p>
+                      </div>
+
+                      {/* Objectives */}
+                      <div className="p-2.5 rounded-lg bg-white border border-indigo-100 shadow-2xs">
+                        <div className="text-slate-500 font-semibold flex items-center gap-1">
+                          <Target size={13} className="text-indigo-600" /> Objective Roles
+                        </div>
+                        <div className="text-sm font-bold text-slate-800 mt-1 truncate" title={
+                          Object.entries(job.objective_ratios ?? {})
+                            .filter(([_, v]) => Number(v) > 0)
+                            .map(([k, v]) => `${k}: ${v}%`)
+                            .join(", ")
+                        }>
+                          {(() => {
+                            const active = Object.entries(job.objective_ratios ?? {})
+                              .filter(([_, v]) => Number(v) > 0)
+                              .map(([k, v]) => `${k} (${v}%)`);
+                            return active.length > 0 ? active.slice(0, 2).join(", ") + (active.length > 2 ? ` +${active.length - 2} more` : "") : "Standard / Balanced";
+                          })()}
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Follows exact user % weights
+                        </p>
                       </div>
                     </div>
-                  )}
+                  </div>
 
                   {/* Actions */}
                   <div className="flex flex-wrap items-center gap-3">

@@ -39,11 +39,11 @@ export function buildObjectivePromptBlock(objective: string, includeImage: boole
   switch (objective) {
     case "recall":
       return `
-OBJECTIVE — DIRECT RECALL & CORE DEFINITIONS (FAST-PACED):
-- Directly test a key definition, morphological hallmark, criterion, or classification directly from the source textbook.
-- Keep the stem SHORT and CONCISE (1 to 2 sentences max).
+OBJECTIVE — DIRECT SOURCE RECALL & CORE DEFINITIONS (100% DIRECT FROM SOURCE):
+- Directly test a key definition, morphological hallmark, criterion, classification, or core mechanism directly stated in the textbook source excerpt.
+- Keep the stem SHORT, CRISP, and PUNCHY (1 to 2 sentences max).
 - Directly ask: e.g. "Which cellular change is the definitive hallmark of irreversible cell injury?", "What type of necrosis is characterized by...", "Which enzyme catalyzes the rate-limiting step in..."
-- Options must be concise, focused terms or short phrases.
+- Options must be concise, focused terms or short phrases directly derived from the source text.
 - Fast-paced and direct — do NOT pad with an artificial lengthy patient case.`;
 
     case "clinical_vignette":
@@ -57,12 +57,12 @@ ${includeImage ? '- The question MUST explicitly reference the image: "Based on 
 
     case "tricky":
       return `
-OBJECTIVE — TRICKY / COGNITIVE TRAP (STUDENT THINKS WRONG OPTION IS RIGHT):
-- Design the question so that ONE incorrect option is a highly alluring "Cognitive Trap" — a classic medical misconception or near-miss that an unprepared student will mistake as the correct answer.
-- Include a specific pivot detail in the stem (timeline, age, organ-specific exception, or subtle histological clue) that invalidates the tempting trap option.
-- The correct answer should initially surprise students who skim, but be 100% scientifically defensible upon close reading.
-- In the explanation, include a dedicated breakdown: "⚠️ Cognitive Trap: Why Option [X] is tempting, and why it is actually incorrect."
-- DO NOT telegraph that this is a trick question. Write it as a standard professional question.
+OBJECTIVE — CRITICAL THINKING & CONFUSING ANSWERS / COGNITIVE TRAP:
+- Design the question so that ONE incorrect option is a highly alluring "Cognitive Trap" — a classic medical misconception, near-miss, or confusing distractor that an unprepared student will mistake as the correct answer.
+- Requires genuine CRITICAL THINKING: Include a specific pivot detail in the stem (timeline, age, organ-specific exception, or subtle histological clue) that definitively invalidates the tempting trap option.
+- The correct answer should initially surprise students who skim, but be 100% scientifically defensible upon careful analysis.
+- In the explanation, include a dedicated breakdown: "⚠️ Cognitive Trap / Critical Distinction: Why Option [X] is tempting, and why it is actually incorrect."
+- DO NOT telegraph that this is a trick question. Write it as a standard professional board-level question.
 ${includeImage ? '- If including an image, the image must contain a specific visual detail (e.g. an unexpected finding, an arrow pointing to a subtle lesion) that resolves the ambiguity in the stem.\n- Explicitly reference the image: "Refer to the image provided." or "Based on the finding shown above..."' : ""}`;
 
     case "identification":
@@ -220,15 +220,23 @@ An authentic real medical photograph/micrograph from the medical literature is a
 - Visual Finding / Description: "${config.imageInfo.description}"
 RULES:
 1. The question "stem" MUST explicitly reference this image (e.g., "Referring to the histological micrograph shown above...", "Based on the gross specimen displayed...").
-2. The student must NEED to inspect the visual findings in this image to determine the correct answer.
-3. Set "image_needed": true, "image_prompt": "${config.imageInfo.title} - ${config.imageInfo.description}".`
+2. The student must NEED to inspect the visual morphological findings in this image to determine the correct answer.
+3. ANTI-SPOILER MANDATE: The correct answer MUST NOT be printed as text or a visible label on the image! The student must identify the pathology from morphological tissue features.
+4. Set "image_needed": true, "image_prompt": "${config.imageInfo.title} - ${config.imageInfo.description}".`
       : `\nREAL MEDICAL IMAGE SEARCH REQUIREMENT:
 This question must be paired with an authentic medical image from the scientific literature.
 Provide:
 - "image_needed": true
 - "image_prompt": "Specific medical search query (3-5 words) to find real histology/pathology on Wikimedia Commons (e.g. 'coagulative necrosis kidney histology', 'myocardial infarction gross pathology', 'mitochondria cristae electron micrograph')."
-- The question stem MUST reference the image (e.g. "Refer to the image shown above...").`
-    : `\n"image_needed": false, "image_prompt": ""`;
+- The question stem MUST reference the image (e.g. "Refer to the image shown above...").
+- ZERO GIVEAWAY / ANTI-SPOILER MANDATE: The correct answer MUST NOT be printed as text or a visible label on the image! The student must deduce the answer from visual morphological findings.
+- DIFFICULTY-ALIGNED VISUAL COMPLEXITY:
+  * EASY Questions: The image should depict a classic, pristine, unmistakable textbook hallmark.
+  * MEDIUM / HARD Questions: The image must require multi-step analysis or differentiating between similar pathological mimics.`
+    : `\nNO IMAGE DIRECTIVE (MANDATORY):
+- This question does NOT have an image.
+- DO NOT mention, refer to, or require an image (NEVER write "Referring to the image above", "As shown in the diagram", "In the micrograph above").
+- Set "image_needed": false and "image_prompt": "".`;
 
   return `You are Aqua MCQ Forge, the world's most rigorous medical multiple-choice question author.
 Your task is to author ONE pristine, board-exam standard medical MCQ based on the supplied source knowledge.
@@ -289,23 +297,6 @@ SOURCE FIDELITY OBJECT:
 - "section": Relevant sub-heading or board review domain
 - "evidence": Exact verbatim quote or core board medical fact supporting the answer
 - "origin": "${isExternal ? "external_literature" : "textbook_pdf"}"
-
-
-${config.includeImage ? `IMAGE REQUIREMENT (CRITICAL):
-This question MUST include an image that the student CANNOT answer without examining.
-Rules:
-- Set "image_needed": true
-- The question "stem" MUST explicitly reference the image. Use phrases like:
-  * "Based on the image shown above, what is the most likely diagnosis?"
-  * "Refer to the diagram provided. What does the labeled structure represent?"
-  * "Looking at the histological slide shown, identify the type of necrosis depicted."
-  * "The graph above shows a patient's values over time. What is the most likely cause?"
-- NEVER make the image purely decorative — the correct answer must depend on visual information in the image.
-- For "image_prompt": write a DETAILED, SPECIFIC description of exactly what the image should show:
-  * Good: "A photomicrograph of hepatic tissue showing nuclear pyknosis, cellular swelling, and eosinophilic cytoplasm consistent with coagulative necrosis"
-  * Good: "A labeled anatomical diagram of the nephron highlighting the loop of Henle with countercurrent multiplier arrows"
-  * Bad: "A medical diagram" (too vague)` : `"image_needed": false, "image_prompt": ""`}
-
 
 Return STRICT JSON only, matching this exact shape:
 {
