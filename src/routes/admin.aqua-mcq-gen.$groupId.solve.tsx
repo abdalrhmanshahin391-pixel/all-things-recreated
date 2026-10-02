@@ -1,4 +1,5 @@
 // Aqua MCQ Gen Pro — Station 3 & 4: Solve & Explain, then Import.
+import { AmgAdminOnly } from "@/components/AmgAdminOnly";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -30,7 +31,7 @@ export const Route = createFileRoute("/admin/aqua-mcq-gen/$groupId/solve")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
-  component: SolveScreen,
+  component: () => <AmgAdminOnly><SolveScreen /></AmgAdminOnly>,
 });
 
 type Progress = { total: number; pending: number; approved: number; imported: number; solved: number; failed: number };

@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { AmgAdminOnly } from "@/components/AmgAdminOnly";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Loader2, Plus, Trash2, PlayCircle, PauseCircle, KeyRound, FileUp, AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -36,7 +37,7 @@ export const Route = createFileRoute("/admin/aqua-mcq-gen/")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
-  component: AquaMcqGenPro,
+  component: () => <AmgAdminOnly><AquaMcqGenPro /></AmgAdminOnly>,
 });
 
 type GroupRow = {
