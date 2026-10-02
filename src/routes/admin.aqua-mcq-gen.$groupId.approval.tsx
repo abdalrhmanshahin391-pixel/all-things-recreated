@@ -295,8 +295,8 @@ function ApprovalScreen() {
     <div className="min-h-screen bg-background">
       <SiteHeader />
       <main className="container mx-auto max-w-[1500px] px-3 py-6">
-        <Link to="/admin/aqua-mcq-gen" className="mb-3 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" /> Back to groups
+        <Link to="/admin/aqua-mcq-gen/approval" className="mb-3 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> Back to question approval
         </Link>
         <h1 className="text-2xl font-bold">Final question approval{group ? ` — ${group.name}` : ""}</h1>
 
