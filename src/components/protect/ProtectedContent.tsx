@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSharedConsent } from "./consent-store";
 import { useServerFn } from "@tanstack/react-start";
 import { ShieldAlert, Eye, Fingerprint, Lock } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -38,6 +39,7 @@ export function ProtectedContent({
   context,
   scope = "page",
   className = "",
+  consentScope = "global",
   children,
 }: {
   context: string;
@@ -45,6 +47,8 @@ export function ProtectedContent({
   scope?: "page" | "card";
   /** Extra classes for the wrapper (e.g. h-full for full-height viewers). */
   className?: string;
+  /** Where the agreement is remembered, e.g. "course:<id>" to ask once per course. */
+  consentScope?: string;
   children: React.ReactNode;
 }) {
   const settings = useSiteSettings();
@@ -55,7 +59,6 @@ export function ProtectedContent({
 
   const [blurred, setBlurred] = useState(false);
   const [alarm, setAlarm] = useState<string | null>(null);
-  const [consented, setConsented] = useState<boolean | null>(null);
   const [checked, setChecked] = useState(false);
   const [tick, setTick] = useState(0);
   const flips = useRef<number[]>([]);
@@ -105,25 +108,12 @@ export function ProtectedContent({
     [log],
   );
 
-  // Consent check
-  useEffect(() => {
-    if (!active || !settings.protect_consent_required || !user) {
-      setConsented(true);
-      return;
-    }
-    let alive = true;
-    (async () => {
-      const { data } = await (supabase.from as any)("content_consents")
-        .select("user_id")
-        .eq("user_id", user.id)
-        .eq("scope", "global")
-        .maybeSingle();
-      if (alive) setConsented(!!data);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [active, settings.protect_consent_required, user]);
+  // Agreement: shared by every protected block on the page, remembered per user and per consentScope
+  const { value: consented, markAgreed } = useSharedConsent(
+    user?.id ?? null,
+    consentScope,
+    Boolean(active && settings.protect_consent_required && user),
+  );
 
   // Watermark redraw ticker — deleting the layer in devtools also blanks content.
   useEffect(() => {
@@ -246,8 +236,8 @@ export function ProtectedContent({
 
   async function accept() {
     if (!checked) return;
-    await acceptTerms({ data: { scope: "global" } });
-    setConsented(true);
+    await acceptTerms({ data: { scope: consentScope } });
+    markAgreed();
   }
 
   if (!active && !watermarked) return <>{children}</>;
