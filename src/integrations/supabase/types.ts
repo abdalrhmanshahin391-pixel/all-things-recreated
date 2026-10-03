@@ -800,6 +800,106 @@ export type Database = {
           },
         ]
       }
+      challenge_answers: {
+        Row: {
+          answered_at: string
+          elapsed_ms: number
+          is_correct: boolean
+          participant_id: string
+          points: number
+          question_id: string
+          selected_option_ids: string[]
+          timed_out: boolean
+        }
+        Insert: {
+          answered_at?: string
+          elapsed_ms: number
+          is_correct: boolean
+          participant_id: string
+          points: number
+          question_id: string
+          selected_option_ids?: string[]
+          timed_out?: boolean
+        }
+        Update: {
+          answered_at?: string
+          elapsed_ms?: number
+          is_correct?: boolean
+          participant_id?: string
+          points?: number
+          question_id?: string
+          selected_option_ids?: string[]
+          timed_out?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_answers_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_participants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_participants: {
+        Row: {
+          correct_count: number
+          course_id: string
+          created_at: string
+          current_question_id: string | null
+          current_served_at: string | null
+          display_name: string | null
+          finished_at: string | null
+          id: string
+          score: number
+          started_at: string | null
+          status: string
+          total_questions: number
+          total_time_ms: number
+          user_id: string
+        }
+        Insert: {
+          correct_count?: number
+          course_id: string
+          created_at?: string
+          current_question_id?: string | null
+          current_served_at?: string | null
+          display_name?: string | null
+          finished_at?: string | null
+          id?: string
+          score?: number
+          started_at?: string | null
+          status: string
+          total_questions?: number
+          total_time_ms?: number
+          user_id: string
+        }
+        Update: {
+          correct_count?: number
+          course_id?: string
+          created_at?: string
+          current_question_id?: string | null
+          current_served_at?: string | null
+          display_name?: string | null
+          finished_at?: string | null
+          id?: string
+          score?: number
+          started_at?: string | null
+          status?: string
+          total_questions?: number
+          total_time_ms?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_participants_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       committee_activity_log: {
         Row: {
           action: string
@@ -1546,6 +1646,44 @@ export type Database = {
           used_count?: number
         }
         Relationships: []
+      }
+      course_challenges: {
+        Row: {
+          course_id: string
+          enabled: boolean
+          question_count: number
+          question_ids: string[]
+          seconds_per_question: number
+          subject_ids: string[]
+          updated_at: string
+        }
+        Insert: {
+          course_id: string
+          enabled?: boolean
+          question_count?: number
+          question_ids?: string[]
+          seconds_per_question?: number
+          subject_ids?: string[]
+          updated_at?: string
+        }
+        Update: {
+          course_id?: string
+          enabled?: boolean
+          question_count?: number
+          question_ids?: string[]
+          seconds_per_question?: number
+          subject_ids?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_challenges_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: true
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       course_options: {
         Row: {
