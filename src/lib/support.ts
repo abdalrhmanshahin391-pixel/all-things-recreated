@@ -199,18 +199,10 @@ export function validateDraft(d: SupportDraft): string | null {
 }
 
 export async function submitSupportRequest(d: SupportDraft): Promise<number | null> {
-  const { data, error } = await (supabase.from as any)("support_requests")
-    .insert({
-      user_id: d.userId,
-      name: d.name.trim(),
-      email: d.email.trim(),
-      category: d.category,
-      subject: d.subject.trim(),
-      message: d.message.trim(),
-    })
-    .select("ticket_no")
-    .maybeSingle();
-  if (error) throw error;
+  const { submitSupportRequestServerFn } = await import("./support.functions");
+  const { ticketNo } = await submitSupportRequestServerFn({
+    data: { name: d.name, email: d.email, category: d.category, subject: d.subject, message: d.message },
+  });
   markSent();
-  return (data?.ticket_no as number | undefined) ?? null;
+  return ticketNo;
 }
