@@ -15,7 +15,8 @@ export function challengePoints(correct: boolean, elapsedMs: number, limitMs: nu
   return Math.round(CHALLENGE_MIN_CORRECT_POINTS + (CHALLENGE_MAX_POINTS - CHALLENGE_MIN_CORRECT_POINTS) * (1 - used));
 }
 
-export type ChallengeState = "off" | "none" | "declined" | "active" | "finished";
+/** "preview" is what an admin sees: the challenge is on, but admins don't play. */
+export type ChallengeState = "off" | "none" | "declined" | "active" | "finished" | "preview";
 
 export type ChallengeStatus = {
   state: ChallengeState;

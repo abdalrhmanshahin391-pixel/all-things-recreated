@@ -26,6 +26,8 @@ export function ChallengeAdminCard({ courseId }: { courseId: string }) {
   const [subjectIds, setSubjectIds] = useState<string[]>([]);
   const [count, setCount] = useState(0);
   const [seconds, setSeconds] = useState(30);
+  // Shown inside the card until the next action, so a failure can never go unnoticed.
+  const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -37,7 +39,9 @@ export function ChallengeAdminCard({ courseId }: { courseId: string }) {
       setCount(d.requestedCount);
       setSeconds(d.secondsPerQuestion);
     } catch (e: any) {
-      toast.error(e?.message || "Could not load the challenge settings");
+      const text = e?.message || "Could not load the challenge settings";
+      setNotice({ kind: "error", text });
+      toast.error(text);
     } finally {
       setLoading(false);
     }
@@ -51,12 +55,19 @@ export function ChallengeAdminCard({ courseId }: { courseId: string }) {
 
   async function save() {
     setSaving(true);
+    setNotice(null);
     try {
       const r = await saveFn({ data: { courseId, enabled, subjectIds, count, secondsPerQuestion: seconds } });
-      toast.success(r.frozen ? "Saved. The questions are frozen because students already played." : `Saved. ${r.selected} question(s) selected.`);
+      const text = r.frozen
+        ? `Saved. The questions are frozen because students already played. The challenge is now ${enabled ? "ON" : "OFF"}.`
+        : `Saved. ${r.selected} question(s) selected. The challenge is now ${enabled ? "ON: students see it next to the question groups" : "OFF"}.`;
       await load();
+      setNotice({ kind: "ok", text });
+      toast.success(text);
     } catch (e: any) {
-      toast.error(e?.message || "Could not save");
+      const text = e?.message || "Could not save";
+      setNotice({ kind: "error", text });
+      toast.error(text);
     } finally {
       setSaving(false);
     }
@@ -93,9 +104,16 @@ export function ChallengeAdminCard({ courseId }: { courseId: string }) {
 
       {open && (
         <div className="space-y-4 border-t border-border p-4 text-sm">
+          {notice && (
+            <div className={`rounded-xl border p-3 text-xs font-semibold ${notice.kind === "ok" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700" : "border-destructive/40 bg-destructive/10 text-destructive"}`}>
+              {notice.text}
+            </div>
+          )}
           {loading && !data ? (
             <div className="grid place-items-center py-6"><Loader2 className="animate-spin text-primary" /></div>
-          ) : data ? (
+          ) : !data ? (
+            <button onClick={() => { setNotice(null); void load(); }} className="rounded-xl border border-border px-4 py-2 text-xs font-bold hover:bg-muted">Try again</button>
+          ) : (
             <>
               {data.locked && (
                 <div className="flex gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
@@ -173,7 +191,7 @@ export function ChallengeAdminCard({ courseId }: { courseId: string }) {
                 )}
               </div>
             </>
-          ) : null}
+          )}
         </div>
       )}
     </div>

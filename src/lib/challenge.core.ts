@@ -26,8 +26,20 @@ const chunk = <T,>(list: T[], size: number): T[][] => {
   return out;
 };
 
+export const MISSING_TABLES_MESSAGE =
+  "The challenge database tables are not installed yet. In Lovable, run the SQL from supabase/migrations/20261003180000_challenge_mode.sql, then reload this page.";
+
+/** Turns a database error into a message a person can act on (missing tables are the common first-run case). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function friendlyDbError(error: any): Error {
+  const text = String(error?.message ?? error ?? "");
+  const missing = error?.code === "PGRST205" || error?.code === "42P01" || /could not find the table|does not exist|schema cache/i.test(text);
+  return new Error(missing ? MISSING_TABLES_MESSAGE : text || "Database error");
+}
+
 export async function getConfig(db: Db, courseId: string) {
-  const { data } = await db.from("course_challenges").select("*").eq("course_id", courseId).maybeSingle();
+  const { data, error } = await db.from("course_challenges").select("*").eq("course_id", courseId).maybeSingle();
+  if (error) throw friendlyDbError(error);
   return data as null | {
     course_id: string;
     enabled: boolean;
@@ -142,9 +154,11 @@ async function recordAnswer(
 export async function getStatus(db: Db, who: { userId: string | null; isAdmin: boolean }, courseId: string): Promise<ChallengeStatus> {
   const off: ChallengeStatus = { state: "off", total: 0, secondsPerQuestion: 30, displayName: null };
   const cfg = await getConfig(db, courseId);
-  if (!cfg?.enabled || !cfg.question_ids?.length || !who.userId || who.isAdmin) return off;
-  if (!(await hasCourseAccess(db, who.userId, courseId))) return off;
+  if (!cfg?.enabled || !cfg.question_ids?.length || !who.userId) return off;
   const base = { total: cfg.question_ids.length, secondsPerQuestion: cfg.seconds_per_question };
+  // Admins never play (it would skew the ranking), but they can see what students will see.
+  if (who.isAdmin) return { ...base, state: "preview", displayName: null };
+  if (!(await hasCourseAccess(db, who.userId, courseId))) return off;
   const part = await getParticipant(db, courseId, who.userId);
   if (!part) return { ...base, state: "none", displayName: null };
   return { ...base, state: part.status, displayName: part.display_name ?? null };
@@ -471,7 +485,7 @@ export async function adminSave(
       .from("course_challenges")
       .update({ enabled: input.enabled, updated_at: new Date().toISOString() })
       .eq("course_id", input.courseId);
-    if (error) throw new Error(error.message);
+    if (error) throw friendlyDbError(error);
     return { ok: true, frozen: true, selected: cfg.question_ids.length };
   }
 
@@ -517,18 +531,18 @@ export async function adminSave(
     },
     { onConflict: "course_id" },
   );
-  if (error) throw new Error(error.message);
+  if (error) throw friendlyDbError(error);
   return { ok: true, frozen: false, selected: questionIds.length };
 }
 
 export async function adminReset(db: Db, courseId: string) {
   const { error } = await db.from("challenge_participants").delete().eq("course_id", courseId);
-  if (error) throw new Error(error.message);
+  if (error) throw friendlyDbError(error);
   return { ok: true };
 }
 
 export async function adminRemoveParticipant(db: Db, courseId: string, participantId: string) {
   const { error } = await db.from("challenge_participants").delete().eq("id", participantId).eq("course_id", courseId);
-  if (error) throw new Error(error.message);
+  if (error) throw friendlyDbError(error);
   return { ok: true };
 }

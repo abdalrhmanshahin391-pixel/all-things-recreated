@@ -670,6 +670,8 @@ function CourseDetailPage() {
               </div>
             )}
 
+            <ChallengeBanner courseId={courseId} />
+
             <div className="flex items-end justify-between mb-4">
               <div>
                 <div className="text-[11px] uppercase tracking-widest font-bold text-indigo-600">Curriculum</div>
@@ -869,7 +871,7 @@ function CourseDetailPage() {
 
           {/* RIGHT — session panel */}
           <aside className="lg:sticky lg:top-24 self-start">
-            {isAdmin ? <ChallengeAdminCard courseId={courseId} /> : <ChallengeBanner courseId={courseId} />}
+            {isAdmin && <ChallengeAdminCard courseId={courseId} />}
             <div className="medical-card overflow-hidden">
               <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
