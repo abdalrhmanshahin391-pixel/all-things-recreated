@@ -94,6 +94,23 @@ export function LectureStaffCard({
     load();
   }
 
+  // One step: staff access (topics, lessons, materials) + Head of Staff (the dashboard). The server adds the staff row.
+  async function addAsOwner(userId: string) {
+    setBusy(userId);
+    setErr(null);
+    try {
+      await setHeadStaffFn({ data: { courseId, userId, isHead: true } });
+      toast.success("Added as course owner 👑");
+      setQuery("");
+      setHits([]);
+      load();
+    } catch (e: any) {
+      setErr(e?.message || "Could not add the course owner");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function remove(userId: string) {
     setBusy(userId);
     const { error } = await (supabase.from as any)("lecture_staff")
@@ -144,7 +161,7 @@ export function LectureStaffCard({
           <div>
             <h2 className="font-bold text-base text-foreground">Lecture Staff &amp; Leadership</h2>
             <p className="text-xs text-muted-foreground">
-              Staff can edit topics, lessons, materials, questions and classes. The designated Head of Staff can view the Course Owners Dashboard.
+              Staff can edit topics, lessons, materials, questions and classes. A course owner (Head of Staff) can do all of that and also opens the Course Owners Dashboard, which shows only anonymous student totals.
             </p>
           </div>
         </div>
@@ -187,18 +204,29 @@ export function LectureStaffCard({
           {hits.length > 0 && (
             <div className="mt-2 rounded-xl border border-border bg-background divide-y divide-border max-h-48 overflow-y-auto">
               {hits.map((h) => (
-                <button
-                  key={h.id}
-                  onClick={() => add(h.id)}
-                  disabled={busy === h.id}
-                  className="w-full text-left px-3.5 py-2 hover:bg-muted flex items-center justify-between gap-2 disabled:opacity-50"
-                >
+                <div key={h.id} className="w-full px-3.5 py-2 hover:bg-muted flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="text-sm font-semibold text-foreground truncate">{h.username}</div>
                     <div className="text-[11px] text-muted-foreground truncate">{h.full_name || h.email}</div>
                   </div>
-                  <span className="text-[11px] font-semibold text-primary shrink-0">Add to Staff →</span>
-                </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => add(h.id)}
+                      disabled={busy === h.id}
+                      className="text-[11px] font-semibold text-primary px-2 py-1 rounded-lg border border-border hover:border-primary disabled:opacity-50"
+                    >
+                      Add to Staff
+                    </button>
+                    <button
+                      onClick={() => addAsOwner(h.id)}
+                      disabled={busy === h.id}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 px-2 py-1 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 disabled:opacity-50"
+                      title="Staff access plus the Course Owners Dashboard (anonymous student totals)"
+                    >
+                      <Crown size={11} /> Add as course owner
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
           )}

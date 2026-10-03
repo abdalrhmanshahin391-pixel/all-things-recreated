@@ -444,6 +444,48 @@ function AdminCourseLessonsPage() {
     }
   }
 
+  // Reorder a lesson / test / homework inside its topic. The whole topic is renumbered 0..n-1, so
+  // the order is correct even when older rows share the same position number.
+  async function moveItem(subjectId: string, idx: number, dir: -1 | 1) {
+    const list = itemsBySubject.get(subjectId) ?? [];
+    const target = idx + dir;
+    if (target < 0 || target >= list.length) return;
+    const next = [...list];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    const results = await Promise.all(
+      next.map((it, i) =>
+        it.position === i ? null : (supabase.from as any)("lecture_items").update({ position: i }).eq("id", it.id),
+      ),
+    );
+    const failed = results.find((r: any) => r?.error);
+    if (failed) toast.error(failed.error.message);
+    loadData();
+  }
+
+  // Delete one lesson / test / homework (its quiz questions go with it; uploaded files are removed too).
+  async function handleDeleteItem(item: Item) {
+    const what = item.kind === "quiz" ? "test/homework and all of its questions" : "lesson";
+    if (!confirm(`Delete "${item.title}"?\n\nThis removes the ${what}. This cannot be undone.`)) return;
+    const { error } = await (supabase.from as any)("lecture_items").delete().eq("id", item.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    // Best-effort cleanup of the files uploaded for this lesson (their paths always contain the lesson id).
+    const owned = (p: string | null) => (p && p.startsWith(`lesson/${item.id}/`) ? p : null);
+    const videoPath = owned(item.video_storage_path);
+    const pdfPath = owned(item.pdf_storage_path);
+    try {
+      if (videoPath) await supabase.storage.from("lecture-videos").remove([videoPath]);
+      if (pdfPath) await supabase.storage.from("lecture-pdfs").remove([pdfPath]);
+    } catch {
+      /* the lesson is already gone; leftover files are harmless */
+    }
+    if (activeItem?.id === item.id) setActiveItem(null);
+    toast.success("Deleted");
+    loadData();
+  }
+
   // Add Lesson / Test / Homework to Subject
   async function handleAddItem(subjectId: string, kind: "lecture" | "quiz", quizType?: "test" | "homework" | "quiz") {
     const existing = itemsBySubject.get(subjectId) ?? [];
@@ -1215,6 +1257,32 @@ function AdminCourseLessonsPage() {
                                 >
                                   <Pencil size={13} /> {isQuiz ? "Edit Questions & Settings" : "Edit Video & Content"}
                                 </button>
+
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => moveItem(sub.id, itemIdx, -1)}
+                                    disabled={itemIdx === 0}
+                                    className="h-7 w-7 grid place-items-center rounded border border-border text-muted-foreground hover:text-foreground disabled:opacity-30"
+                                    title="Move up"
+                                  >
+                                    <ChevronUp size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => moveItem(sub.id, itemIdx, 1)}
+                                    disabled={itemIdx === subItems.length - 1}
+                                    className="h-7 w-7 grid place-items-center rounded border border-border text-muted-foreground hover:text-foreground disabled:opacity-30"
+                                    title="Move down"
+                                  >
+                                    <ChevronDown size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteItem(item)}
+                                    className="h-7 w-7 grid place-items-center rounded border border-border text-muted-foreground hover:text-red-500"
+                                    title={isQuiz ? "Delete this test / homework" : "Delete this lesson"}
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           );

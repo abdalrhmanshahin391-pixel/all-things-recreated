@@ -11,6 +11,19 @@ export type LectureCourseOwner = {
   granted_reason: string | null;
 };
 
+/** How a student came to own the course. Course owners (Head of Staff) only ever see these, never who the students are. */
+export type LectureMemberSource = "purchase" | "golden" | "coupon" | "package" | "granted";
+export type AnonymousLectureMember = { label: "User"; source: LectureMemberSource };
+
+function memberSource(reason: string | null | undefined): LectureMemberSource {
+  const r = (reason ?? "").toLowerCase();
+  if (!r || r === "purchase" || r === "checkout") return "purchase";
+  if (r === "golden") return "golden";
+  if (r.includes("coupon")) return "coupon";
+  if (r.includes("package")) return "package";
+  return "granted";
+}
+
 export type QuestionBankCourseOption = {
   id: string;
   title: string;
@@ -76,8 +89,8 @@ async function resolveCallerAndPermissions(courseId?: string) {
 }
 
 /**
- * List all users who own / are enrolled in a lecture course.
- * Authorized for Site Admins and designated Head of Staff.
+ * List the users who own / are enrolled in a lecture course.
+ * Site admins get the full roster. Head of Staff / staff get an anonymous summary (count + how they got the course).
  */
 export const listLectureCourseOwnersServerFn = createServerFn({ method: "POST" })
   .inputValidator((data: { courseId: string }) => {
@@ -112,6 +125,26 @@ export const listLectureCourseOwnersServerFn = createServerFn({ method: "POST" }
     }
 
     const ownersList: any[] = rows ?? [];
+
+    const breakdown: Record<LectureMemberSource, number> = { purchase: 0, golden: 0, coupon: 0, package: 0, granted: 0 };
+    for (const r of ownersList) breakdown[memberSource(r.granted_reason)] += 1;
+
+    // Only site admins may see who the students are. Course owners (Head of Staff) and staff get a
+    // count plus how each student got the course, and nothing that identifies anyone. This is enforced
+    // here on the server, not just hidden in the page.
+    if (!isAdmin) {
+      const members: AnonymousLectureMember[] = ownersList.map((r) => ({ label: "User", source: memberSource(r.granted_reason) }));
+      return {
+        owners: [] as LectureCourseOwner[],
+        members,
+        breakdown,
+        totalCount: members.length,
+        anonymous: true,
+        isAdmin,
+        isHead,
+      };
+    }
+
     const userIds = ownersList.map((r) => r.user_id).filter(Boolean);
 
     let profilesMap = new Map<string, any>();
@@ -138,7 +171,10 @@ export const listLectureCourseOwnersServerFn = createServerFn({ method: "POST" }
 
     return {
       owners,
+      members: [] as AnonymousLectureMember[],
+      breakdown,
       totalCount: owners.length,
+      anonymous: false,
       isAdmin,
       isHead,
     };
@@ -157,8 +193,9 @@ export const grantLectureCourseAccessServerFn = createServerFn({ method: "POST" 
     const { courseId, targetUserId, reason } = data;
     const { isAdmin, isHead, supabaseAdmin } = await resolveCallerAndPermissions(courseId);
 
-    if (!isAdmin && !isHead) {
-      throw new Error("Unauthorized: Only Admins and Head of Staff can grant course access.");
+    // Picking a student means searching people by name/email, which course owners must not see.
+    if (!isAdmin) {
+      throw new Error("Unauthorized: Only Admins can grant course access.");
     }
 
     const { error } = await (supabaseAdmin.from as any)("user_lecture_courses").upsert(
@@ -186,10 +223,10 @@ export const revokeLectureCourseAccessServerFn = createServerFn({ method: "POST"
   })
   .handler(async ({ data }) => {
     const { courseId, targetUserId } = data;
-    const { isAdmin, isHead, supabaseAdmin } = await resolveCallerAndPermissions(courseId);
+    const { isAdmin, supabaseAdmin } = await resolveCallerAndPermissions(courseId);
 
-    if (!isAdmin && !isHead) {
-      throw new Error("Unauthorized: Only Admins and Head of Staff can revoke course access.");
+    if (!isAdmin) {
+      throw new Error("Unauthorized: Only Admins can revoke course access.");
     }
 
     const { error } = await (supabaseAdmin.from as any)("user_lecture_courses")
@@ -266,6 +303,15 @@ export const setLectureHeadStaffServerFn = createServerFn({ method: "POST" })
       currentHeads = currentHeads.filter((id) => id !== targetUserId);
     }
 
+    // A course owner (Head of Staff) must also be staff, otherwise they could not edit topics and lessons.
+    if (isHead) {
+      const { error: staffErr } = await (supabaseAdmin.from as any)("lecture_staff").upsert(
+        { course_id: courseId, user_id: targetUserId },
+        { onConflict: "course_id,user_id" },
+      );
+      if (staffErr) throw new Error(staffErr.message);
+    }
+
     if (currentHeads.length > 0) {
       const { error } = await (supabaseAdmin.from as any)("site_content").upsert(
         {
@@ -285,6 +331,35 @@ export const setLectureHeadStaffServerFn = createServerFn({ method: "POST" })
     }
 
     return { ok: true, headUserIds: currentHeads };
+  });
+
+/**
+ * Makes sure a designated course owner (Head of Staff) is also in the course's staff list, so the
+ * "Topics & lessons" editor and its permissions work for them. Safe to call on every page load.
+ */
+export const syncHeadStaffServerFn = createServerFn({ method: "POST" })
+  .inputValidator((data: { courseId: string }) => {
+    if (!data?.courseId) throw new Error("courseId is required");
+    return data;
+  })
+  .handler(async ({ data }) => {
+    const { courseId } = data;
+    const { userId, supabaseAdmin } = await resolveCallerAndPermissions(courseId);
+    if (!userId) return { ok: false };
+
+    const { data: row } = await (supabaseAdmin.from as any)("site_content")
+      .select("value_en")
+      .eq("key", `lecture_head_staff_${courseId}`)
+      .maybeSingle();
+    const headIds: string[] = row?.value_en ? row.value_en.split(",").map((s: string) => s.trim()) : [];
+    if (!headIds.includes(userId)) return { ok: false };
+
+    const { error } = await (supabaseAdmin.from as any)("lecture_staff").upsert(
+      { course_id: courseId, user_id: userId },
+      { onConflict: "course_id,user_id" },
+    );
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 /**

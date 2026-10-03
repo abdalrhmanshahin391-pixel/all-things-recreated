@@ -30,6 +30,8 @@ import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
 import { CourseMaterialsList, LiveClassesList } from "@/components/lectures/LectureExtras";
 import { ensureFreeEnrollment } from "@/lib/course-access";
 import { LectureOwnersModal } from "@/components/lectures/LectureOwnersModal";
+import { useServerFn } from "@tanstack/react-start";
+import { syncHeadStaffServerFn } from "@/lib/lecture-management.functions";
 
 export const Route = createFileRoute("/lectures/$courseId/")({
   loader: async ({ params }) => {
@@ -136,6 +138,7 @@ function LectureCoursePage() {
   const [isCourseStaff, setIsCourseStaff] = useState(false);
   const [isHeadStaff, setIsHeadStaff] = useState(false);
   const [showOwnersModal, setShowOwnersModal] = useState(false);
+  const syncHeadStaff = useServerFn(syncHeadStaffServerFn);
 
   const owns = enrolled || isAdmin || isCourseStaff || isHeadStaff;
 
@@ -162,6 +165,15 @@ function LectureCoursePage() {
       const headIds = headRow?.value_en ? headRow.value_en.split(",").map((s: string) => s.trim()) : [];
       if (!cancelled) {
         setIsHeadStaff(isAdmin || headIds.includes(user.id));
+      }
+      // A course owner (Head of Staff) is always staff too, so they can open "Topics & lessons".
+      if (!isAdmin && headIds.includes(user.id) && (data ?? []).length === 0) {
+        try {
+          await syncHeadStaff({ data: { courseId } });
+          if (!cancelled) setIsCourseStaff(true);
+        } catch (e) {
+          console.warn("Could not sync course owner staff access:", e);
+        }
       }
     })();
     return () => {
@@ -490,7 +502,7 @@ function LectureCoursePage() {
           <div className="mt-10 rounded-lg border border-border bg-card p-5 flex flex-wrap items-center justify-between gap-4">
             <div>
               <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1.5">
-                {isAdmin ? "Admin" : isHeadStaff ? "👑 Head of Staff" : "Teaching staff"}
+                {isAdmin ? "Admin" : isHeadStaff ? "👑 Course owner (Head of Staff)" : "Teaching staff"}
               </div>
               <div className="text-foreground font-semibold">Manage this lecture course</div>
             </div>
@@ -506,7 +518,7 @@ function LectureCoursePage() {
                 </button>
               )}
 
-              {(isAdmin || isCourseStaff) && (
+              {(isAdmin || isCourseStaff || isHeadStaff) && (
                 <>
                   <Link
                     to="/admin/lectures/$courseId"

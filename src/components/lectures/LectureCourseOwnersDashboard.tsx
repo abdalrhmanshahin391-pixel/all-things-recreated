@@ -21,8 +21,18 @@ import {
   listLectureCourseOwnersServerFn,
   grantLectureCourseAccessServerFn,
   revokeLectureCourseAccessServerFn,
+  type AnonymousLectureMember,
   type LectureCourseOwner,
+  type LectureMemberSource,
 } from "@/lib/lecture-management.functions";
+
+const SOURCE_LABELS: Record<LectureMemberSource, string> = {
+  purchase: "Purchased",
+  golden: "Golden membership",
+  coupon: "Coupon",
+  package: "Package",
+  granted: "Granted by staff",
+};
 
 type UserHit = { id: string; username: string; full_name: string; email: string };
 
@@ -46,6 +56,11 @@ export function LectureCourseOwnersDashboard({
   const revokeAccessFn = useServerFn(revokeLectureCourseAccessServerFn);
 
   const [owners, setOwners] = useState<LectureCourseOwner[]>([]);
+  // Course owners (Head of Staff) never see who the students are: only a count and how each got the course.
+  const [anonymous, setAnonymous] = useState(!isAdmin);
+  const [members, setMembers] = useState<AnonymousLectureMember[]>([]);
+  const [breakdown, setBreakdown] = useState<Record<LectureMemberSource, number> | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -68,6 +83,10 @@ export function LectureCourseOwnersDashboard({
     try {
       const res = await listOwnersFn({ data: { courseId } });
       setOwners(res.owners ?? []);
+      setAnonymous(Boolean(res.anonymous));
+      setMembers(res.members ?? []);
+      setBreakdown(res.breakdown ?? null);
+      setTotalCount(res.totalCount ?? 0);
     } catch (err: any) {
       console.error("Failed to load course owners:", err);
       setError(err?.message || "Failed to load course owners");
@@ -181,7 +200,7 @@ export function LectureCourseOwnersDashboard({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="font-bold text-lg md:text-xl text-foreground">
-                Course Owners &amp; Enrolled Students
+                {anonymous ? "Course members" : "Course Owners & Enrolled Students"}
               </h2>
               {isHead && (
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/30">
@@ -190,7 +209,9 @@ export function LectureCourseOwnersDashboard({
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Roster of students with active ownership of {courseTitle ? `"${courseTitle}"` : "this lecture course"}.
+              {anonymous
+                ? `How many students are in ${courseTitle ? `"${courseTitle}"` : "this lecture course"} and how they got it. Student identities are private.`
+                : `Roster of students with active ownership of ${courseTitle ? `"${courseTitle}"` : "this lecture course"}.`}
             </p>
           </div>
         </div>
@@ -204,12 +225,14 @@ export function LectureCourseOwnersDashboard({
           >
             <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
           </button>
-          <button
-            onClick={() => setShowGrantModal(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all shadow-xs"
-          >
-            <UserPlus size={14} /> Grant Student Access
-          </button>
+          {!anonymous && (
+            <button
+              onClick={() => setShowGrantModal(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all shadow-xs"
+            >
+              <UserPlus size={14} /> Grant Student Access
+            </button>
+          )}
           {onClose && (
             <button
               onClick={onClose}
@@ -221,7 +244,60 @@ export function LectureCourseOwnersDashboard({
         </div>
       </div>
 
-      {/* Stats summary */}
+      {/* Anonymous summary for course owners: totals by how the student got the course, no identities */}
+      {anonymous && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="p-4 rounded-xl border border-border bg-card col-span-2 sm:col-span-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total students</div>
+              <div className="text-3xl font-black text-foreground mt-1 tabular-nums">{loading ? "…" : totalCount}</div>
+            </div>
+            {(Object.keys(SOURCE_LABELS) as LectureMemberSource[]).map((key) => (
+              <div key={key} className="p-4 rounded-xl border border-border bg-card">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{SOURCE_LABELS[key]}</div>
+                <div className="text-2xl font-black text-foreground mt-1 tabular-nums">{loading ? "…" : (breakdown?.[key] ?? 0)}</div>
+              </div>
+            ))}
+          </div>
+
+          {error && (
+            <div className="p-4 rounded-xl border border-destructive/30 bg-destructive/5 text-xs text-destructive flex items-center gap-2">
+              <AlertCircle size={16} className="shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xs">
+            {loading ? (
+              <div className="py-12 text-center text-muted-foreground flex flex-col items-center gap-2">
+                <Loader2 size={22} className="animate-spin text-primary" />
+              </div>
+            ) : members.length === 0 ? (
+              <div className="py-12 text-center text-sm text-muted-foreground">No students own this course yet.</div>
+            ) : (
+              <div className="divide-y divide-border max-h-[50vh] overflow-y-auto">
+                {members.map((m, i) => (
+                  <div key={i} className="px-5 py-2.5 flex items-center justify-between gap-3 text-sm">
+                    <span className="flex items-center gap-2 font-semibold text-foreground">
+                      <span className="h-7 w-7 rounded-full bg-muted text-muted-foreground grid place-items-center text-xs">
+                        <Users size={13} />
+                      </span>
+                      {m.label}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider border bg-indigo-500/10 text-indigo-600 border-indigo-500/20">
+                      {SOURCE_LABELS[m.source]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Stats, search and the full roster (site admins only) */}
+      {!anonymous && (
+      <>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="p-4 rounded-xl border border-border bg-card">
           <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -373,8 +449,11 @@ export function LectureCourseOwnersDashboard({
         )}
       </div>
 
+      </>
+      )}
+
       {/* Grant Student Access Modal */}
-      {showGrantModal && (
+      {!anonymous && showGrantModal && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 backdrop-blur-xs p-4">
           <div className="w-full max-w-lg bg-card border border-border rounded-2xl p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-3">

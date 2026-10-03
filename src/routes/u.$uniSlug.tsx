@@ -144,12 +144,17 @@ function UniversityHubPage() {
 
   const { data: counts } = useQuery({
     enabled: !!uni,
-    queryKey: ["university-counts", uni?.id],
+    queryKey: ["university-counts", uni?.id, isAdmin],
     queryFn: async () => {
       if (!uni) return { courses: 0, lectures: 0, committee: 0 };
       const [{ count: courses }, { count: lectures }, { count: committee }] = await Promise.all([
         supabase.from("courses").select("id", { count: "exact", head: true }).eq("university_id", uni.id).eq("published", true).eq("kind", "questions").eq("admin_only", false),
-        supabase.from("lecture_subjects").select("id", { count: "exact", head: true }).eq("university_id", uni.id),
+        // "Lectures" counts the lecture subjects (courses of kind "lectures"), not the topics inside them.
+        (() => {
+          let q = supabase.from("courses").select("id", { count: "exact", head: true }).eq("university_id", uni.id).eq("published", true).eq("kind", "lectures");
+          if (!isAdmin) q = q.eq("admin_only", false);
+          return q;
+        })(),
         supabase.from("committee_years").select("id", { count: "exact", head: true }).eq("university_id", uni.id),
       ]);
       return { courses: courses ?? 0, lectures: lectures ?? 0, committee: committee ?? 0 };
@@ -264,7 +269,7 @@ function UniversityHubPage() {
 
   function countFor(kind: TileKind) {
     if (kind === "courses") return { count: counts?.courses ?? 0, label: `course${(counts?.courses ?? 0) === 1 ? "" : "s"}` };
-    if (kind === "lectures") return { count: counts?.lectures ?? 0, label: "subjects" };
+    if (kind === "lectures") return { count: counts?.lectures ?? 0, label: `subject${(counts?.lectures ?? 0) === 1 ? "" : "s"}` };
     if (kind === "resources") return { count: counts?.committee ?? 0, label: `year${(counts?.committee ?? 0) === 1 ? "" : "s"} available` };
     return null;
   }
