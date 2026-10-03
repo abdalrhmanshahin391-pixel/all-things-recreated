@@ -30,6 +30,12 @@ function fmtPrice(price: number | null | undefined, currency: string | null | un
   return `${sym}${Number(price).toFixed(0)}`;
 }
 
+/** Shows a course name with a capital first letter ("anatomy" becomes "Anatomy") and leaves the rest as typed. */
+function capitalizeFirst(s: string) {
+  const t = (s ?? "").trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+}
+
 export function CourseCard({
   course,
   counts,
@@ -163,7 +169,7 @@ export function CourseCard({
         </div>
 
         <h3 className="font-display font-black text-lg md:text-xl text-foreground leading-tight lowercase line-clamp-2 min-h-[2.4em]">
-          {course.title}
+          {capitalizeFirst(course.title)}
         </h3>
 
         {showPrice && !unlocked && wasText && (
