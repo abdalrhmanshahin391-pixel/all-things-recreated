@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Clock, ListChecks, Trophy } from "lucide-react";
+import { BarChart3, Clock, ListChecks, Trophy } from "lucide-react";
 import type { ChallengeStatus } from "@/lib/challenge";
 import { challengeIsVisible } from "@/components/challenge/useChallengeStatus";
 
@@ -20,7 +20,16 @@ export function ChallengeTag() {
  * Students get the button that fits where they are (join / resume / results). Admins see a preview of
  * what students see.
  */
-export function ChallengeBanner({ courseId, status }: { courseId: string; status: ChallengeStatus | null }) {
+export function ChallengeBanner({
+  courseId,
+  status,
+  onShowDashboard,
+}: {
+  courseId: string;
+  status: ChallengeStatus | null;
+  /** Admins only: opens the participants dashboard. */
+  onShowDashboard?: () => void;
+}) {
   if (!challengeIsVisible(status)) return null;
 
   const copy = {
@@ -60,7 +69,18 @@ export function ChallengeBanner({ courseId, status }: { courseId: string; status
             {status.state === "none" && <span>one attempt only · محاولة واحدة فقط</span>}
           </div>
         </div>
-        {cta}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {status.state === "preview" && onShowDashboard && (
+            <button
+              type="button"
+              onClick={onShowDashboard}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/60 bg-background px-4 py-2.5 text-sm font-bold text-amber-700 hover:bg-amber-500/10"
+            >
+              <BarChart3 size={15} /> Show dashboard · لوحة النتائج
+            </button>
+          )}
+          {cta}
+        </div>
       </div>
     </div>
   );

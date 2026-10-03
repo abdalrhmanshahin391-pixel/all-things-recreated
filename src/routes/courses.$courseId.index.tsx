@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ChallengeAdminCard } from "@/components/challenge/ChallengeAdminCard";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ChallengeBanner, ChallengeTag } from "@/components/challenge/ChallengeBanner";
 import { challengeIsVisible, useChallengeStatus } from "@/components/challenge/useChallengeStatus";
 import { restrictedSubjectIds } from "@/lib/challenge";
@@ -131,6 +132,7 @@ function CourseDetailPage() {
   const { lang } = useLang();
   const isArabic = lang === "ar";
   const [liveTourOpen, setLiveTourOpen] = useState(false);
+  const [challengeDashOpen, setChallengeDashOpen] = useState(false);
   const updateAccess = useServerFn(setSubjectAccess);
   const updateOrdered = useServerFn(setSubjectOrdered);
 
@@ -707,7 +709,15 @@ function CourseDetailPage() {
               </div>
             )}
 
-            <ChallengeBanner courseId={courseId} status={challengeStatus} />
+            <ChallengeBanner courseId={courseId} status={challengeStatus} onShowDashboard={isAdmin ? () => setChallengeDashOpen(true) : undefined} />
+            {isAdmin && (
+              <Dialog open={challengeDashOpen} onOpenChange={setChallengeDashOpen}>
+                <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+                  <DialogTitle className="sr-only">Challenge dashboard</DialogTitle>
+                  <ChallengeAdminCard courseId={courseId} />
+                </DialogContent>
+              </Dialog>
+            )}
 
             <div className="flex items-end justify-between mb-4">
               <div>
