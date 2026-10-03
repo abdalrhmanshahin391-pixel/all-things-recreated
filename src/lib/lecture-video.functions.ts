@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { canOpenLectureFile, getCaller } from "@/lib/auth-guards.server";
 
 /**
  * Server function to securely resolve playable URLs for lecture videos.
@@ -27,7 +28,8 @@ export const resolveLectureVideoUrlServer = createServerFn({ method: "POST" })
       return { url: null };
     }
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const caller = await getCaller();
+    const { supabaseAdmin } = caller;
 
     // Intro/Preview videos (path starts with "intro/" or matched to a course intro)
     const isIntro = storagePath.startsWith("intro/") || storagePath.includes("/intro/");
@@ -45,7 +47,10 @@ export const resolveLectureVideoUrlServer = createServerFn({ method: "POST" })
         console.warn("[resolveLectureVideoUrlServer] Error signing intro video:", error.message);
       }
     } else {
-      // Lesson video from lecture_items — signed with admin client
+      // Lesson video: only people who may watch the course get a link
+      if (!(await canOpenLectureFile(caller, storagePath, "video", data.courseId))) {
+        return { url: null };
+      }
       const { data: signed, error } = await supabaseAdmin.storage
         .from("lecture-videos")
         .createSignedUrl(storagePath, 60 * 60 * 4);
@@ -82,7 +87,11 @@ export const resolveLecturePdfUrlServer = createServerFn({ method: "POST" })
       return { url: null };
     }
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const caller = await getCaller();
+    const { supabaseAdmin } = caller;
+    if (!(await canOpenLectureFile(caller, storagePath, "pdf"))) {
+      return { url: null };
+    }
 
     const { data: signed, error } = await supabaseAdmin.storage
       .from("lecture-pdfs")

@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireSignedInCaller } from "@/lib/auth-guards.server";
 
 const Input = z.object({
   pairs: z
@@ -20,6 +21,7 @@ Rules:
 export const generateEnglishDistractors = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => Input.parse(d))
   .handler(async ({ data }) => {
+    await requireSignedInCaller();
     const key = process.env.LOVABLE_API_KEY;
     if (!key) throw new Error("LOVABLE_API_KEY is not configured");
 

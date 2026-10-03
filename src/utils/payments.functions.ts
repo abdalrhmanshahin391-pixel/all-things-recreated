@@ -9,6 +9,7 @@ import {
   type PaddleEnv,
 } from "@/lib/paddle.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireAdminCaller, requireSignedInCaller } from "@/lib/auth-guards.server";
 
 let _adminSupabase: ReturnType<typeof createClient> | null = null;
 function getAdminSupabase() {
@@ -41,9 +42,7 @@ export interface SyncPaddlePriceInput {
  * Automatically creates a Product and Price in Paddle via API and saves the generated
  * paddle_price_id ("pri_...") directly onto the course.
  */
-export const syncPaddleCoursePrice = createServerFn({ method: "POST" })
-  .inputValidator((data: SyncPaddlePriceInput) => data)
-  .handler(async ({ data }) => {
+async function syncPaddleCoursePriceCore(data: SyncPaddlePriceInput) {
     const env: PaddleEnv = data.environment || "live";
     const title = (data.title || "Course").trim();
     const paddleProductName = title.startsWith("AquaQBank") ? title : `AquaQBank — ${title}`;
@@ -174,6 +173,13 @@ export const syncPaddleCoursePrice = createServerFn({ method: "POST" })
     }
 
     return { ok: true, paddlePriceId, productId };
+}
+
+export const syncPaddleCoursePrice = createServerFn({ method: "POST" })
+  .inputValidator((data: SyncPaddlePriceInput) => data)
+  .handler(async ({ data }) => {
+    await requireAdminCaller();
+    return syncPaddleCoursePriceCore(data);
   });
 
 /**
@@ -184,6 +190,7 @@ export const syncPaddleCoursePrice = createServerFn({ method: "POST" })
 export const autoReconcileCoursesToPaddle = createServerFn({ method: "POST" })
   .inputValidator((data?: { environment?: PaddleEnv; force?: boolean }) => data || {})
   .handler(async ({ data }) => {
+    await requireAdminCaller();
     const env: PaddleEnv = data?.environment || "live";
     const supabase = getAdminSupabase();
     const { data: courses, error } = await (supabase.from("courses") as any)
@@ -213,14 +220,12 @@ export const autoReconcileCoursesToPaddle = createServerFn({ method: "POST" })
 
     for (const c of needSync) {
       try {
-        const syncRes = await syncPaddleCoursePrice({
-          data: {
+        const syncRes = await syncPaddleCoursePriceCore({
             courseId: (c as any).id,
             title: (c as any).title,
             price: Number((c as any).price),
             currency: (c as any).currency || "USD",
             environment: env,
-          },
         });
         reconciled.push({ id: (c as any).id, title: (c as any).title, paddlePriceId: syncRes.paddlePriceId });
       } catch (err: any) {
@@ -248,6 +253,7 @@ export const autoReconcileCoursesToPaddle = createServerFn({ method: "POST" })
 export const syncAllCoursesToPaddle = createServerFn({ method: "POST" })
   .inputValidator((data?: { environment?: PaddleEnv; force?: boolean }) => data || {})
   .handler(async ({ data }) => {
+    await requireAdminCaller();
     return autoReconcileCoursesToPaddle({ data: { ...data, force: true } });
   });
 
@@ -261,6 +267,7 @@ export const syncAllCoursesToPaddle = createServerFn({ method: "POST" })
 export const resolvePaddlePrice = createServerFn({ method: "GET" })
   .inputValidator((data: { priceId: string; environment: PaddleEnv }) => data)
   .handler(async ({ data }) => {
+    await requireSignedInCaller();
     const wanted = (data.priceId ?? "").trim();
     if (!wanted) throw new Error("Missing price id");
     if (wanted.startsWith("pri_")) return wanted;
@@ -570,19 +577,17 @@ export const getCustomerPortalUrl = createServerFn({ method: "POST" })
  * Resolves or dynamically syncs a Paddle price for checkout.
  * If a coupon reduces the price, this ensures Paddle charges the exact discounted amount.
  */
-export const resolvePaddleCheckoutPrice = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: {
-      courseId: string;
-      title: string;
-      finalPrice: number;
-      originalPrice: number;
-      couponCode?: string;
-      currency?: string;
-      environment?: PaddleEnv;
-    }) => data,
-  )
-  .handler(async ({ data }) => {
+type ResolveCheckoutInput = {
+  courseId: string;
+  title: string;
+  finalPrice: number;
+  originalPrice: number;
+  couponCode?: string;
+  currency?: string;
+  environment?: PaddleEnv;
+};
+
+async function resolveCheckoutPriceCore(data: ResolveCheckoutInput) {
     const env: PaddleEnv = data.environment || "live";
     const finalPrice = Number(data.finalPrice);
     const originalPrice = Number(data.originalPrice);
@@ -621,18 +626,24 @@ export const resolvePaddleCheckoutPrice = createServerFn({ method: "POST" })
       ? `${data.title} (${data.couponCode} Discount)`
       : data.title;
 
-    const syncRes = await syncPaddleCoursePrice({
-      data: {
-        courseId: data.courseId,
-        title: discountedTitle,
-        price: finalPrice,
-        currency: data.currency || "USD",
-        environment: env,
-        persist: !isCoupon,
-      },
+    const syncRes = await syncPaddleCoursePriceCore({
+      courseId: data.courseId,
+      title: discountedTitle,
+      price: finalPrice,
+      currency: data.currency || "USD",
+      environment: env,
+      persist: !isCoupon,
     });
 
     return { paddlePriceId: syncRes.paddlePriceId };
+}
+
+/** Admin-only: the amounts are supplied by the caller, so students go through createCheckoutTransaction instead. */
+export const resolvePaddleCheckoutPrice = createServerFn({ method: "POST" })
+  .inputValidator((data: ResolveCheckoutInput) => data)
+  .handler(async ({ data }) => {
+    await requireAdminCaller();
+    return resolveCheckoutPriceCore(data);
   });
 
 export const syncPaddlePackagePrice = createServerFn({ method: "POST" })
@@ -646,6 +657,7 @@ export const syncPaddlePackagePrice = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data }) => {
+    await requireAdminCaller();
     const env: PaddleEnv = data.environment || "live";
     const title = data.name.trim();
     const paddleProductName = title.startsWith("AquaQBank")
@@ -776,18 +788,34 @@ export const createCheckoutTransaction = createServerFn({ method: "POST" })
     }
 
     // 2. Resolve genuine Paddle Price ID (must start with pri_)
-    let paddlePriceId = data.priceId;
-    if (!paddlePriceId || !paddlePriceId.startsWith("pri_")) {
-      const resolved = await resolvePaddleCheckoutPrice({
-        data: {
-          courseId: course.id,
-          title: course.title,
-          finalPrice: data.finalPrice ?? Number(course.price),
-          originalPrice: data.originalPrice ?? Number(course.price),
-          couponCode: data.couponCode,
-          currency: data.currency || course.currency || "USD",
-          environment: env,
-        },
+    // The amount always comes from the database (and a coupon checked on the server), never from the browser.
+    const originalPrice = Number(course.price);
+    let finalPrice = originalPrice;
+    let couponCode: string | undefined;
+    if (data.couponCode) {
+      const { data: v } = await (context as any).supabase.rpc("validate_coupon", {
+        _code: String(data.couponCode).trim(),
+        _course_id: course.id,
+      });
+      if (v?.valid && Number.isFinite(Number(v.price_after))) {
+        finalPrice = Number(v.price_after);
+        couponCode = v.code || String(data.couponCode).trim();
+      }
+    }
+    if (!(originalPrice > 0)) throw new Error("This course is free.");
+
+    // A price id from the browser is only used when it is this course's own full-price id.
+    let paddlePriceId: string | undefined =
+      !couponCode && data.priceId && data.priceId === course.paddle_price_id ? data.priceId : undefined;
+    if (!paddlePriceId) {
+      const resolved = await resolveCheckoutPriceCore({
+        courseId: course.id,
+        title: course.title,
+        finalPrice,
+        originalPrice,
+        couponCode,
+        currency: course.currency || "USD",
+        environment: env,
       });
       paddlePriceId = resolved.paddlePriceId;
     }
@@ -811,7 +839,7 @@ export const createCheckoutTransaction = createServerFn({ method: "POST" })
       customData: {
         userId,
         courseId: course.id,
-        ...(data.couponCode ? { couponCode: data.couponCode } : {}),
+        ...(couponCode ? { couponCode } : {}),
       },
       checkoutSuccessUrl,
     });

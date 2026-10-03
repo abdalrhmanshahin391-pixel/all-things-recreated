@@ -153,9 +153,11 @@ async function speakWithHighQualityGerman(text: string, rate: number): Promise<b
       return true;
     }
     activeTtsAbort = new AbortController();
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { data: sess } = await supabase.auth.getSession();
     const response = await fetch("/api/german/tts", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(sess.session ? { Authorization: `Bearer ${sess.session.access_token}` } : {}) },
       body: JSON.stringify({ text: trimmed, rate }),
       signal: activeTtsAbort.signal,
     });

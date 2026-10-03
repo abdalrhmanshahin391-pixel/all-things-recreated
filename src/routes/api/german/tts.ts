@@ -6,6 +6,8 @@ export const Route = createFileRoute("/api/german/tts")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        const { getCaller } = await import("@/lib/auth-guards.server");
+        if (!(await getCaller()).userId) return new Response("Sign in required", { status: 401 });
         let payload: { text?: string; rate?: number } = {};
         try {
           payload = await request.json();
