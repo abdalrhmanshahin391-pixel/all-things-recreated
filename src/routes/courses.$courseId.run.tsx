@@ -888,7 +888,7 @@ function RunPageInner() {
             </div>
           </div>
           <ProtectionNotice className="mb-6" />
-          <ProtectedContent context="exam" scope="card">
+          <ProtectedContent context="exam" scope="card" consentScope={courseId ? `course:${courseId}` : "global"}>
             <ReviewCard
               q={q}
               userAnswer={answers[q.id]}
@@ -1233,7 +1233,7 @@ function QuestionCard({
           )}
         </div>
       </div>
-      <ProtectedContent context="quiz" scope="card">
+      <ProtectedContent context="quiz" scope="card" consentScope={courseId ? `course:${courseId}` : "global"}>
       {q.image_url && <div className="px-6 pt-6"><QuestionImage path={q.image_url} /></div>}
       {(q.stem?.trim() || !q.image_url) && (
         <div
@@ -1340,34 +1340,42 @@ function QuestionCard({
 }
 
 /**
- * Mounts its children only once they are near the screen (and then keeps them), so a long exam paper does not
- * build every question card, its protection layers and its picture at once.
+ * Keeps only the question cards that are near the screen mounted. A long exam paper (this one has dozens of
+ * pictures) would otherwise keep every card, its protection layers and its picture alive at once. Cards that
+ * scroll far away are replaced by a spacer of the same height, so the page does not jump. Answers and flags
+ * live in the page state, so nothing is lost when a card unmounts.
  */
-function LazyMount({ children, minHeight = 520 }: { children: React.ReactNode; minHeight?: number }) {
+function LazyMount({ children, estimate = 520 }: { children: React.ReactNode; estimate?: number }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [near, setNear] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [height, setHeight] = useState(estimate);
   useEffect(() => {
     const el = ref.current;
-    if (!el || near) return;
+    if (!el) return;
     if (typeof IntersectionObserver === "undefined") {
-      setNear(true);
+      setVisible(true);
       return;
     }
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setNear(true);
-          io.disconnect();
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setVisible(true);
+          } else {
+            const measured = el.getBoundingClientRect().height;
+            if (measured > 50) setHeight(measured); // remember the real height for the spacer
+            setVisible(false);
+          }
         }
       },
-      { rootMargin: "1200px 0px" },
+      { rootMargin: "1500px 0px" },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [near]);
+  }, []);
   return (
-    <div ref={ref} style={near ? undefined : { minHeight }}>
-      {near ? children : null}
+    <div ref={ref} style={visible ? undefined : { minHeight: height }}>
+      {visible ? children : null}
     </div>
   );
 }
@@ -1426,7 +1434,7 @@ const ExamCard = memo(function ExamCard({
           </div>
         )}
       </div>
-      <ProtectedContent context="exam" scope="card">
+      <ProtectedContent context="exam" scope="card" consentScope={courseId ? `course:${courseId}` : "global"}>
       <div className="px-5 py-5">
         {q.image_url && <div className="mb-4"><QuestionImage path={q.image_url} /></div>}
         {(q.stem?.trim() || !q.image_url) && (

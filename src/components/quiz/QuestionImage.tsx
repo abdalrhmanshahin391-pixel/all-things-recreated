@@ -3,6 +3,30 @@ import { supabase } from "@/integrations/supabase/client";
 
 const BUCKET = "question-images";
 const cache = new Map<string, string>();
+const inflight = new Map<string, Promise<string | null>>();
+
+/**
+ * Signs a storage path once. Questions on a picture test share pictures, and many cards ask for the same one
+ * at the same moment, so concurrent requests for a path share a single call.
+ */
+function signPath(path: string): Promise<string | null> {
+  const cached = cache.get(path);
+  if (cached) return Promise.resolve(cached);
+  let pending = inflight.get(path);
+  if (!pending) {
+    pending = supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(path, 60 * 60)
+      .then(({ data, error }) => {
+        if (error || !data?.signedUrl) return null;
+        cache.set(path, data.signedUrl);
+        return data.signedUrl;
+      })
+      .finally(() => inflight.delete(path));
+    inflight.set(path, pending);
+  }
+  return pending;
+}
 
 /** Renders a question image.
  *
@@ -27,13 +51,11 @@ export function QuestionImage({ path, className = "" }: { path: string; classNam
     const cached = cache.get(path);
     if (cached) { setUrl(cached); return; }
 
-    (async () => {
-      const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60 * 60);
+    void signPath(path).then((signed) => {
       if (cancelled) return;
-      if (error || !data?.signedUrl) { setFailed(true); return; }
-      cache.set(path, data.signedUrl);
-      setUrl(data.signedUrl);
-    })();
+      if (!signed) { setFailed(true); return; }
+      setUrl(signed);
+    });
 
     return () => { cancelled = true; };
   }, [path, isExternal]);
