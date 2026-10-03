@@ -49,6 +49,7 @@ export function QuestionImage({ path, className = "" }: { path: string; classNam
       src={url}
       alt="Medical diagram — refer to this image to answer the question"
       loading="lazy"
+      decoding="async"
       className={`w-full rounded-xl border border-border bg-card ${className}`}
     />
   );

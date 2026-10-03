@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -563,6 +563,16 @@ function RunPageInner() {
     }
   }
 
+  // Stable callbacks, so the exam cards are not re-rendered every second by the timer or by every answer click.
+  const toggleFlagRef = useRef(toggleFlag);
+  toggleFlagRef.current = toggleFlag;
+  const onFlagStable = useCallback((questionId: string) => {
+    void toggleFlagRef.current(questionId);
+  }, []);
+  const onExamSelect = useCallback((question: Question, option: string) => {
+    setAnswers((p) => ({ ...p, [question.id]: toggleSelection(p[question.id], option, question.answer_mode === "multiple") }));
+  }, []);
+
   // Reset question timer on question change
   useEffect(() => {
     setTimeSpentOnQuestion(0);
@@ -960,17 +970,19 @@ function RunPageInner() {
             {mode === "exam" ? (
               <div className="space-y-6">
                 {questions.map((q, i) => (
-                  <ExamCard
-                    key={q.id} q={q} index={i}
-                    selected={answers[q.id]}
-                    onSelect={(opt) => setAnswers((p) => ({ ...p, [q.id]: toggleSelection(p[q.id], opt, q.answer_mode === "multiple") }))}
-                    isFlagged={flags.has(q.id)}
-                    onToggleFlag={() => toggleFlag(q.id)}
-                    isAdmin={isAdmin}
-                    courseId={courseId}
-                    courseSections={courseSections}
-                    onMoveQuestion={handleMoveQuestion}
-                  />
+                  <LazyMount key={q.id}>
+                    <ExamCard
+                      q={q} index={i}
+                      selected={answers[q.id]}
+                      onSelect={onExamSelect}
+                      isFlagged={flags.has(q.id)}
+                      onToggleFlag={onFlagStable}
+                      isAdmin={isAdmin}
+                      courseId={courseId}
+                      courseSections={courseSections}
+                      onMoveQuestion={handleMoveQuestion}
+                    />
+                  </LazyMount>
                 ))}
                 <button onClick={() => setFinished(true)}
                   className="magnetic-cta w-full py-3.5 rounded-xl text-white font-bold">
@@ -1327,12 +1339,45 @@ function QuestionCard({
   );
 }
 
-function ExamCard({
+/**
+ * Mounts its children only once they are near the screen (and then keeps them), so a long exam paper does not
+ * build every question card, its protection layers and its picture at once.
+ */
+function LazyMount({ children, minHeight = 520 }: { children: React.ReactNode; minHeight?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || near) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setNear(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setNear(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "1200px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [near]);
+  return (
+    <div ref={ref} style={near ? undefined : { minHeight }}>
+      {near ? children : null}
+    </div>
+  );
+}
+
+const ExamCard = memo(function ExamCard({
   q, index, selected, onSelect, isFlagged, onToggleFlag,
   isAdmin, courseId, courseSections, onMoveQuestion,
 }: {
   q: Question; index: number; selected: string[] | undefined;
-  onSelect: (label: string) => void; isFlagged: boolean; onToggleFlag: () => void;
+  onSelect: (question: Question, label: string) => void; isFlagged: boolean; onToggleFlag: (questionId: string) => void;
   isAdmin?: boolean; courseId?: string; courseSections?: CourseSectionGroup[];
   onMoveQuestion?: (
     questionId: string,
@@ -1349,7 +1394,7 @@ function ExamCard({
         <div className="font-bold text-foreground">Question {index + 1}</div>
          <div className="text-xs text-muted-foreground mt-1">{selected?.length ? "Answered" : "Not yet answered"}</div>
         <button
-          onClick={onToggleFlag}
+          onClick={() => onToggleFlag(q.id)}
           className={`mt-3 text-xs inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${
             isFlagged
               ? "border-amber-200 bg-amber-50 text-amber-700"
@@ -1404,7 +1449,7 @@ function ExamCard({
             >
               <input
                  type={q.answer_mode === "multiple" ? "checkbox" : "radio"} name={q.id} checked={selected?.includes(o.label) ?? false}
-                onChange={() => onSelect(o.label)}
+                onChange={() => onSelect(q, o.label)}
                 className="accent-indigo-600"
               />
               <span className="font-semibold text-sm w-5 text-muted-foreground">{o.label.toLowerCase()}.</span>
@@ -1418,7 +1463,7 @@ function ExamCard({
       </ProtectedContent>
     </div>
   );
-}
+});
 
 function ReviewCard({
   q,
