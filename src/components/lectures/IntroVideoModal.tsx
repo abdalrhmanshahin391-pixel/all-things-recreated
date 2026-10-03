@@ -95,7 +95,8 @@ export function IntroVideoModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-foreground/70 backdrop-blur-sm p-4 md:p-10 select-none"
+      // No backdrop blur here: a blurred ancestor makes browsers stall the video while it is fullscreen.
+      className="fixed inset-0 z-[100] grid place-items-center bg-foreground/80 p-4 md:p-10 select-none"
       onClick={onClose}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -129,6 +130,8 @@ export function IntroVideoModal({
             src={src}
             controls
             autoPlay
+            playsInline
+            preload="auto"
             controlsList="nodownload nofullscreen noremoteplayback"
             disablePictureInPicture
             onContextMenu={(e) => e.preventDefault()}
@@ -159,7 +162,7 @@ export function IntroVideoModal({
 
         {/* A second badge that moves between the corners */}
         <div
-          className="absolute z-20 pointer-events-none select-none rounded bg-black/20 px-2 py-0.5 text-[10px] sm:text-xs font-mono font-bold text-white/45 whitespace-nowrap transition-all duration-1000"
+          className="absolute z-20 pointer-events-none select-none rounded bg-black/20 px-2 py-0.5 text-[10px] sm:text-xs font-mono font-bold text-white/45 whitespace-nowrap"
           style={{ top: spot < 2 ? "18%" : "74%", left: spot % 2 === 0 ? "6%" : undefined, right: spot % 2 === 1 ? "6%" : undefined }}
           aria-hidden="true"
         >
