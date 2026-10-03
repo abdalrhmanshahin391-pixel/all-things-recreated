@@ -25,7 +25,7 @@ export function ChallengeBanner({ courseId, status }: { courseId: string; status
 
   const copy = {
     none: { en: "Join the challenge", ar: "شارك في التحدي", cta: "Join · شارك" },
-    active: { en: "Your challenge is in progress", ar: "تحدّيك جارٍ الآن", cta: "Resume · متابعة" },
+    active: { en: "Your challenge is in progress — the question you left is skipped", ar: "تحدّيك جارٍ — السؤال الذي غادرته يُتخطّى", cta: "Resume · متابعة" },
     finished: { en: "Challenge finished — see your rank", ar: "انتهى التحدي — شاهد ترتيبك", cta: "Results · النتائج" },
     preview: { en: "Challenge is ON — this is what students see", ar: "التحدي مفعّل — هذا ما يراه الطلاب", cta: "Join · شارك" },
   }[status.state as "none" | "active" | "finished" | "preview"];

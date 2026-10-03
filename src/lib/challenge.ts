@@ -4,6 +4,12 @@ export const CHALLENGE_MAX_POINTS = 1000;
 export const CHALLENGE_MIN_CORRECT_POINTS = 500;
 /** A little slack for network delay before an unanswered question counts as timed out. */
 export const CHALLENGE_GRACE_MS = 2500;
+/**
+ * Coming back to a question that was already on screen longer than this means the student left it (closed or
+ * reloaded the page, or switched away). That question is skipped and marked wrong. The short allowance keeps
+ * a double request or a quick refresh right after a question appears from costing anyone a question.
+ */
+export const CHALLENGE_LEAVE_GRACE_MS = 4000;
 
 /**
  * Points for one question. A wrong or missing answer earns 0. A correct answer earns 500, plus up to 500
@@ -96,7 +102,7 @@ export const CHALLENGE_COPY = {
       `You are about to enter a one-time challenge: ${n} questions, ${sec} seconds each.`,
       "Correct answers earn points, and faster correct answers earn more. Wrong or unanswered questions earn zero.",
       "You choose a display name for the leaderboard. Your real name is never shown.",
-      "The timer keeps running even if you leave the page, and you cannot go back to a question.",
+      "Stay on the page: if you leave it or switch to another tab or window, the question you were on is skipped and marked wrong, and you get the next one. You cannot go back to a question.",
       "The right answers and explanations appear only after you finish.",
       "You can take the challenge only once.",
     ],
@@ -104,7 +110,7 @@ export const CHALLENGE_COPY = {
       `أنت على وشك دخول تحدٍّ لمرة واحدة: ${n} سؤالًا، ولكل سؤال ${sec} ثانية.`,
       "الإجابة الصحيحة تمنحك نقاطًا، وكلما كانت أسرع حصلت على نقاط أكثر. الإجابة الخاطئة أو بدون إجابة لا تمنح نقاطًا.",
       "تختار اسمًا مستعارًا يظهر في لوحة الترتيب، ولن يظهر اسمك الحقيقي أبدًا.",
-      "يستمر العدّاد حتى لو غادرت الصفحة، ولا يمكنك الرجوع إلى سؤال سابق.",
+      "ابقَ في الصفحة: إذا غادرتها أو انتقلت إلى تبويب أو نافذة أخرى يُتخطّى السؤال الذي كنت فيه ويُحتسب خطأً، وتنتقل إلى السؤال التالي. ولا يمكنك الرجوع إلى سؤال سابق.",
       "تظهر الإجابات الصحيحة والشرح بعد أن تنهي التحدي فقط.",
       "يمكنك المشاركة في التحدي مرة واحدة فقط.",
     ],

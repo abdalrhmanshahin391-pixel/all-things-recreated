@@ -2,6 +2,7 @@ import { ensureCombinedStemWithStatements } from "@/lib/question-format";
 import { stripSourceCitation } from "@/lib/aqua-mcq-forge.explanation";
 import {
   CHALLENGE_GRACE_MS,
+  CHALLENGE_LEAVE_GRACE_MS,
   challengePoints,
   validateDisplayName,
   type ChallengeQuestion,
@@ -121,10 +122,13 @@ async function recordAnswer(
   rawElapsedMs: number,
   queueLength: number,
   nowMs: number,
+  forfeit = false,
 ) {
   const limitMs = secondsPerQuestion * 1000;
-  const timedOut = rawElapsedMs > limitMs + CHALLENGE_GRACE_MS;
-  const elapsed = Math.min(Math.max(rawElapsedMs, 0), limitMs);
+  // A skipped question (the student left) is treated like a timed-out one: wrong, 0 points, and the full time,
+  // so leaving never looks faster than answering.
+  const timedOut = forfeit || rawElapsedMs > limitMs + CHALLENGE_GRACE_MS;
+  const elapsed = forfeit ? limitMs : Math.min(Math.max(rawElapsedMs, 0), limitMs);
   const { data: opts } = await db.from("question_options").select("id, is_correct").eq("question_id", questionId);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const valid = new Set((opts ?? []).map((o: any) => o.id));
@@ -215,7 +219,7 @@ export async function nextQuestion(
   userId: string,
   courseId: string,
   nowMs: number,
-): Promise<{ done: true } | { done: false; question: ChallengeQuestion }> {
+): Promise<{ done: true; forfeited?: boolean } | { done: false; question: ChallengeQuestion; forfeited?: boolean }> {
   const cfg = await getConfig(db, courseId);
   const part = await getParticipant(db, courseId, userId);
   if (!cfg || !part || part.status !== "active") throw new Error("You are not in an active challenge.");
@@ -227,21 +231,24 @@ export async function nextQuestion(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const answered = new Set<string>((answeredRows ?? []).map((r: any) => r.question_id));
 
-  // A question served earlier whose time ran out while the student was away counts as unanswered.
+  // Coming back to a question that was already on screen means the student left it (closed or reloaded the
+  // page, or switched away): it is skipped and marked wrong, and the next question is served.
+  let forfeited = false;
   if (part.current_question_id && part.current_served_at && !answered.has(part.current_question_id)) {
     const elapsed = nowMs - new Date(part.current_served_at).getTime();
-    if (elapsed > limitMs + CHALLENGE_GRACE_MS) {
-      await recordAnswer(db, part.id, cfg.seconds_per_question, part.current_question_id, [], elapsed, queue.length, nowMs);
+    if (elapsed > CHALLENGE_LEAVE_GRACE_MS) {
+      await recordAnswer(db, part.id, cfg.seconds_per_question, part.current_question_id, [], elapsed, queue.length, nowMs, true);
       answered.add(part.current_question_id);
       part.current_question_id = null;
       part.current_served_at = null;
+      forfeited = true;
     }
   }
 
   const nextId = queue.find((id) => !answered.has(id));
   if (!nextId) {
     await finishIfDone(db, part.id, queue.length, nowMs);
-    return { done: true };
+    return { done: true, forfeited };
   }
 
   let servedAt = part.current_question_id === nextId && part.current_served_at ? new Date(part.current_served_at).getTime() : 0;
@@ -268,6 +275,7 @@ export async function nextQuestion(
 
   return {
     done: false,
+    forfeited,
     question: {
       id: q.id,
       stem,

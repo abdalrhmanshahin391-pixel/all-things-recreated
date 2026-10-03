@@ -43,6 +43,7 @@ function ChallengePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<ChallengeResults | null>(null);
+  const [skipped, setSkipped] = useState(false);
   const autoSubmitted = useRef<string | null>(null);
 
   const loadResults = useCallback(async () => {
@@ -60,6 +61,7 @@ function ChallengePage() {
     setError(null);
     try {
       const res = await nextFn({ data: { courseId } });
+      if (res.forfeited) setSkipped(true);
       if (res.done) {
         await loadResults();
         return;
@@ -102,6 +104,7 @@ function ChallengePage() {
       if (!question || busy) return;
       setBusy(true);
       setError(null);
+      setSkipped(false);
       try {
         const res = await submitFn({ data: { courseId, questionId: question.id, optionIds } });
         if (res.finished) await loadResults();
@@ -132,6 +135,28 @@ function ChallengePage() {
     const id = window.setInterval(tick, 200);
     return () => window.clearInterval(id);
   }, [phase, question, deadline, submit]);
+
+  // Leaving the page (another tab or window) and coming back: the server skips the question that was open and
+  // marks it wrong, and serves the next one. Asking for the next question is all the page has to do.
+  useEffect(() => {
+    if (phase !== "playing") return;
+    let leftAt = 0;
+    const left = () => { if (!leftAt) leftAt = Date.now(); };
+    const back = () => {
+      const away = leftAt ? Date.now() - leftAt : 0;
+      leftAt = 0;
+      if (away > 3000) void loadNext();
+    };
+    const onVisibility = () => (document.hidden ? left() : back());
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("blur", left);
+    window.addEventListener("focus", back);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("blur", left);
+      window.removeEventListener("focus", back);
+    };
+  }, [phase, loadNext]);
 
   function toggle(optionId: string) {
     if (!question || busy) return;
@@ -176,6 +201,11 @@ function ChallengePage() {
     const seconds = Math.ceil(leftMs / 1000);
     return shell(
       <div className="space-y-4">
+        {skipped && (
+          <div className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm font-semibold text-amber-800 dark:text-amber-300">
+            You left the page, so the question you were on was skipped and marked wrong. · غادرت الصفحة، لذلك تم تخطّي السؤال الذي كنت فيه واحتسابه خطأً.
+          </div>
+        )}
         <div className="flex items-center justify-between text-sm">
           <span className="font-bold flex items-center gap-2"><Trophy size={16} className="text-amber-600" /> Challenge · التحدي</span>
           <span className="text-muted-foreground tabular-nums">
@@ -292,7 +322,7 @@ function ChallengePage() {
                 <span className="text-muted-foreground">Question {i + 1}</span>
                 <span className={`inline-flex items-center gap-1 ${r.isCorrect ? "text-emerald-600" : "text-destructive"}`}>
                   {r.isCorrect ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                  {r.timedOut ? "Time ran out · انتهى الوقت" : r.isCorrect ? "Correct · صحيح" : "Wrong · خطأ"} · {r.points} pts · {(r.elapsedMs / 1000).toFixed(1)}s
+                  {r.timedOut ? "Skipped or time ran out · تخطّي أو انتهى الوقت" : r.isCorrect ? "Correct · صحيح" : "Wrong · خطأ"} · {r.points} pts · {(r.elapsedMs / 1000).toFixed(1)}s
                 </span>
               </div>
               <p className="whitespace-pre-wrap font-semibold leading-relaxed">{r.stem}</p>
