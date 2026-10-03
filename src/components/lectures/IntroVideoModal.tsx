@@ -1,5 +1,5 @@
-import { X, ShieldCheck } from "lucide-react";
-import { useEffect } from "react";
+import { X, ShieldCheck, Maximize2, Minimize2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 
 export function IntroVideoModal({
@@ -12,10 +12,46 @@ export function IntroVideoModal({
   onClose: () => void;
 }) {
   const { user, profile } = useAuth();
+  const frameRef = useRef<HTMLDivElement>(null);
+  // Fullscreen is done on the frame that holds the watermark, never on the video itself, so the watermark stays on screen.
+  const [nativeFull, setNativeFull] = useState(false);
+  const [pseudoFull, setPseudoFull] = useState(false);
+  const isFull = nativeFull || pseudoFull;
+  // The watermark hops to a new spot now and then so it cannot be cropped out of a recording.
+  const [spot, setSpot] = useState(0);
+
+  useEffect(() => {
+    const t = window.setInterval(() => setSpot((s) => (s + 1) % 4), 15000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    const onFs = () => setNativeFull(document.fullscreenElement === frameRef.current);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  async function toggleFullscreen() {
+    const el = frameRef.current;
+    if (!el) return;
+    if (isFull) {
+      setPseudoFull(false);
+      if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+      return;
+    }
+    try {
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else setPseudoFull(true); // iPhone Safari cannot fullscreen a div: fill the screen with CSS instead
+    } catch {
+      setPseudoFull(true);
+    }
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      if (pseudoFull) setPseudoFull(false);
+      else if (!document.fullscreenElement) onClose();
     }
     window.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
@@ -23,7 +59,7 @@ export function IntroVideoModal({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [onClose]);
+  }, [onClose, pseudoFull]);
 
   if (!src) return null;
 
@@ -72,15 +108,19 @@ export function IntroVideoModal({
       </button>
 
       <div
-        className="relative w-full max-w-6xl aspect-video rounded-xl overflow-hidden border border-border shadow-[var(--shadow-card)] bg-black"
+        ref={frameRef}
+        className={
+          isFull
+            ? "fixed inset-0 z-[120] h-full w-full overflow-hidden bg-black"
+            : "relative w-full max-w-6xl aspect-video rounded-xl overflow-hidden border border-border shadow-[var(--shadow-card)] bg-black"
+        }
         onClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => e.preventDefault()}
       >
         {isYouTube || isVimeo || isDrive ? (
           <iframe
             src={embedSrc}
-            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-            allowFullScreen
+            allow="autoplay; encrypted-media"
             className="absolute inset-0 h-full w-full border-0"
             title={title ?? "Video"}
           />
@@ -89,7 +129,8 @@ export function IntroVideoModal({
             src={src}
             controls
             autoPlay
-            controlsList="nodownload"
+            controlsList="nodownload nofullscreen noremoteplayback"
+            disablePictureInPicture
             onContextMenu={(e) => e.preventDefault()}
             className="absolute inset-0 h-full w-full"
           />
@@ -107,6 +148,23 @@ export function IntroVideoModal({
             }}
           />
         )}
+
+        <button
+          onClick={toggleFullscreen}
+          className="absolute top-2 left-2 z-40 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white hover:bg-black/75"
+          aria-label={isFull ? "Exit full screen" : "Full screen"}
+        >
+          {isFull ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
+
+        {/* A second badge that moves between the corners */}
+        <div
+          className="absolute z-20 pointer-events-none select-none rounded bg-black/20 px-2 py-0.5 text-[10px] sm:text-xs font-mono font-bold text-white/45 whitespace-nowrap transition-all duration-1000"
+          style={{ top: spot < 2 ? "18%" : "74%", left: spot % 2 === 0 ? "6%" : undefined, right: spot % 2 === 1 ? "6%" : undefined }}
+          aria-hidden="true"
+        >
+          {watermarkText}
+        </div>
 
         {/* Forensic Watermark Overlay across the video */}
         <div
