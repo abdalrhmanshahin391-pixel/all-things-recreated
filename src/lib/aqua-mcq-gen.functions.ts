@@ -1061,6 +1061,27 @@ function comboSetsFromItem(item: any): string[][] {
   return sets;
 }
 
+/**
+ * When the reader saved a question with its options still inside the question text ("... A) x B) y C) z D) w"),
+ * split them out. Needs the labels A, B, C... in order starting at A; otherwise returns null.
+ */
+function recoverOptionsFromStem(stem: string): { stem: string; options: { label: string; text: string }[] } | null {
+  const text = String(stem ?? "");
+  const found: { label: string; start: number; textStart: number }[] = [];
+  const re = /(?:^|\s)\(?([A-J])[).]\s+/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const next = found.length ? String.fromCharCode(found[found.length - 1].label.charCodeAt(0) + 1) : "A";
+    if (m[1] === next) found.push({ label: m[1], start: m.index, textStart: m.index + m[0].length });
+  }
+  if (found.length < 2) return null;
+  const options = found
+    .map((f, i) => ({ label: f.label, text: text.slice(f.textStart, i + 1 < found.length ? found[i + 1].start : undefined).trim() }))
+    .filter((o) => o.text);
+  if (options.length < 2) return null;
+  return { stem: text.slice(0, found[0].start).trim(), options };
+}
+
 /** Solve a slice of approved questions. Call repeatedly until remaining is 0. */
 export const amgSolveBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1075,6 +1096,8 @@ export const amgSolveBatch = createServerFn({ method: "POST" })
 
     const { data: items } = await supabase.from(ITEMS)
       .select("*").eq("group_id", data.groupId).eq("archived", false).eq("status", "approved").eq("solved", false)
+      // Questions that already failed go last, so a few broken ones never block the rest of the run.
+      .order("solve_error", { ascending: true, nullsFirst: true })
       .order("page_no").order("order_index").limit(data.limit ?? 4);
 
     const answerSource = String(group.answer_source ?? "ai");
@@ -1089,8 +1112,21 @@ export const amgSolveBatch = createServerFn({ method: "POST" })
 
     for (const item of items ?? []) {
       try {
-        const opts = Array.isArray(item.options) ? item.options : [];
-        if (opts.length < 2) throw new Error("It has no options.");
+        let opts: any[] = Array.isArray(item.options) ? item.options : [];
+        if (typeof item.options === "string") {
+          try { const parsed = JSON.parse(item.options); if (Array.isArray(parsed)) opts = parsed; } catch { /* not JSON */ }
+        }
+        if (opts.filter((o: any) => String(o?.text ?? "").trim()).length < 2) {
+          const recovered = recoverOptionsFromStem(item.stem);
+          if (recovered) {
+            opts = recovered.options;
+            item.stem = recovered.stem;
+            await supabase.from(ITEMS).update({ stem: recovered.stem, options: recovered.options }).eq("id", item.id);
+          }
+        }
+        if (opts.filter((o: any) => String(o?.text ?? "").trim()).length < 2) {
+          throw new Error("No options were saved for this question (only the question text). Open it in Final approval, add the options, then continue.");
+        }
         const optText = opts.map((o: any) => `${o.label}. ${o.text}`).join("\n");
         const sets = comboSetsFromItem(item);
         const given = keyMap.get(String(item.number_label ?? "").toUpperCase());
