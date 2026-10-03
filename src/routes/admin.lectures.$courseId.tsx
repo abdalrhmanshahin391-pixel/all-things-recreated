@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { uploadLargeFile } from "@/lib/resumable-upload";
 import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -163,6 +164,7 @@ function AdminCourseLessonsPage() {
   const [savingItem, setSavingItem] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
 
   // Question editing state for the active item
   const [showQuestionModal, setShowQuestionModal] = useState(false);
@@ -576,17 +578,17 @@ function AdminCourseLessonsPage() {
   // Upload Video file for lesson
   async function handleUploadVideo(file: File) {
     if (!activeItem) return;
+    const itemId = activeItem.id;
     setUploadingVideo(true);
+    setVideoProgress(0);
     try {
-      const key = `lesson/${activeItem.id}/${crypto.randomUUID()}-${file.name}`;
-      const { error: upErr } = await supabase.storage
-        .from("lecture-videos")
-        .upload(key, file, { upsert: false, contentType: file.type });
-      if (upErr) throw upErr;
-      setActiveItem({ ...activeItem, video_storage_path: key });
-      toast.success("Video uploaded to protected lecture storage");
+      const key = `lesson/${itemId}/${crypto.randomUUID()}-${file.name}`;
+      await uploadLargeFile("lecture-videos", key, file, { onProgress: setVideoProgress });
+      // A big upload takes minutes: update the lesson as it is now, not as it was when the upload began.
+      setActiveItem((cur) => (cur && cur.id === itemId ? { ...cur, video_storage_path: key } : cur));
+      toast.success("Video uploaded. Press Save All Changes to keep it.");
     } catch (err: any) {
-      toast.error(err.message || "Failed to upload video");
+      toast.error(err.message || "Failed to upload video", { duration: 10000 });
     } finally {
       setUploadingVideo(false);
     }
@@ -1659,7 +1661,7 @@ function AdminCourseLessonsPage() {
                             ) : (
                               <Upload size={13} />
                             )}
-                            Upload File
+                            {uploadingVideo ? `Uploading ${videoProgress}%` : "Upload File"}
                             <input
                               type="file"
                               accept="video/*"

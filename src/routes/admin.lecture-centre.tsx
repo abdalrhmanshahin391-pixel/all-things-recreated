@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { uploadLargeFile } from "@/lib/resumable-upload";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -414,12 +415,11 @@ function CourseSettings({
 
     if (videoFile) {
       const key = `intro/${course.id}-${crypto.randomUUID()}-${videoFile.name}`;
-      const { error } = await supabase.storage
-        .from("lecture-videos")
-        .upload(key, videoFile, { upsert: false, contentType: videoFile.type });
-      if (error) {
+      try {
+        await uploadLargeFile("lecture-videos", key, videoFile);
+      } catch (e: any) {
         setBusy(false);
-        setErr(error.message);
+        setErr(e?.message || "Upload failed");
         return;
       }
       patch.intro_video_storage_path = key;

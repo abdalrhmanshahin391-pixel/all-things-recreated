@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { uploadLargeFile } from "@/lib/resumable-upload";
 import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -279,11 +280,10 @@ function AdminLecturesPage() {
   // --- Item ops ---
   async function uploadTo(bucket: string, subjectId: string, file: File): Promise<string | null> {
     const key = `${subjectId}/${crypto.randomUUID()}-${file.name}`;
-    const { error: upErr } = await supabase.storage
-      .from(bucket)
-      .upload(key, file, { upsert: false, contentType: file.type });
-    if (upErr) {
-      setError(upErr.message);
+    try {
+      await uploadLargeFile(bucket, key, file);
+    } catch (e: any) {
+      setError(e?.message || "Upload failed");
       return null;
     }
     return key;
@@ -426,12 +426,11 @@ function AdminLecturesPage() {
     let storagePath: string | null = activeCourse.intro_video_storage_path;
     if (file) {
       const key = `intro/${activeCourse.id}-${crypto.randomUUID()}-${file.name}`;
-      const { error: upErr } = await supabase.storage
-        .from("lecture-videos")
-        .upload(key, file, { upsert: false, contentType: file.type });
-      if (upErr) {
+      try {
+        await uploadLargeFile("lecture-videos", key, file);
+      } catch (e: any) {
         setBusy(false);
-        setError(upErr.message);
+        setError(e?.message || "Upload failed");
         return;
       }
       storagePath = key;
