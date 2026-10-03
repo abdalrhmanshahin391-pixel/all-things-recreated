@@ -163,7 +163,7 @@ export function CourseCard({
           </span>
         </div>
 
-        <h3 className="font-display font-black text-lg md:text-xl text-foreground leading-tight lowercase line-clamp-2 min-h-[2.4em]">
+        <h3 className="font-display font-black text-lg md:text-xl text-foreground leading-tight line-clamp-2 min-h-[2.4em]">
           {capitalizeFirst(course.title)}
         </h3>
 
