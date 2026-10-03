@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ChallengeAdminCard } from "@/components/challenge/ChallengeAdminCard";
-import { ChallengeBanner } from "@/components/challenge/ChallengeBanner";
+import { ChallengeBanner, ChallengeTag } from "@/components/challenge/ChallengeBanner";
+import { challengeIsVisible, useChallengeStatus } from "@/components/challenge/useChallengeStatus";
 import {
   BookOpen,
   Timer,
@@ -118,6 +119,12 @@ function CourseDetailPage() {
   const { courseId } = Route.useParams();
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
+  // Challenge mode: the banner and the "Challenge" tag on the groups it draws from share one lookup.
+  const challengeStatus = useChallengeStatus(courseId);
+  const challengeSubjects = useMemo(
+    () => new Set(challengeIsVisible(challengeStatus) ? challengeStatus.subjectIds : []),
+    [challengeStatus],
+  );
   const { lang } = useLang();
   const isArabic = lang === "ar";
   const [liveTourOpen, setLiveTourOpen] = useState(false);
@@ -670,7 +677,7 @@ function CourseDetailPage() {
               </div>
             )}
 
-            <ChallengeBanner courseId={courseId} />
+            <ChallengeBanner courseId={courseId} status={challengeStatus} />
 
             <div className="flex items-end justify-between mb-4">
               <div>
@@ -788,7 +795,10 @@ function CourseDetailPage() {
                                 onClick={() => toggleSubject(s)}
                                 className="flex-1 text-left min-w-0"
                               >
-                                <div className="font-semibold text-foreground truncate">{s.name}</div>
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <div className="font-semibold text-foreground truncate">{s.name}</div>
+                                  {challengeSubjects.has(s.id) && <ChallengeTag />}
+                                </div>
                                 <div className="text-xs text-muted-foreground">
                                   {s.question_count} {s.question_count === 1 ? "question" : "questions"}
                                   {!sLocked && user && (flaggedCount > 0 || wrongCount > 0) && (

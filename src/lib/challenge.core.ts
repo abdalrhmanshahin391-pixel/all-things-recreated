@@ -152,10 +152,10 @@ async function recordAnswer(
 // ------------------------------------------------------------------ student side
 
 export async function getStatus(db: Db, who: { userId: string | null; isAdmin: boolean }, courseId: string): Promise<ChallengeStatus> {
-  const off: ChallengeStatus = { state: "off", total: 0, secondsPerQuestion: 30, displayName: null };
+  const off: ChallengeStatus = { state: "off", total: 0, secondsPerQuestion: 30, displayName: null, subjectIds: [] };
   const cfg = await getConfig(db, courseId);
   if (!cfg?.enabled || !cfg.question_ids?.length || !who.userId) return off;
-  const base = { total: cfg.question_ids.length, secondsPerQuestion: cfg.seconds_per_question };
+  const base = { total: cfg.question_ids.length, secondsPerQuestion: cfg.seconds_per_question, subjectIds: cfg.subject_ids ?? [] };
   // Admins never play (it would skew the ranking), but they can see what students will see.
   if (who.isAdmin) return { ...base, state: "preview", displayName: null };
   if (!(await hasCourseAccess(db, who.userId, courseId))) return off;

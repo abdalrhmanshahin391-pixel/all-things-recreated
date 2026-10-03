@@ -23,6 +23,8 @@ export type ChallengeStatus = {
   total: number;
   secondsPerQuestion: number;
   displayName: string | null;
+  /** The subjects (question groups) the challenge draws from, so the course page can mark them. */
+  subjectIds: string[];
 };
 
 export type ChallengeQuestion = {
