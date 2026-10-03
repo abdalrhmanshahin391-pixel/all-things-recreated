@@ -11,6 +11,8 @@ import type { QbIndex, QbMeta, QbQuestion } from "@/lib/question-bank";
  *     course?: { sectionId: string, subjectName?: string } }
  *
  * Admin only. Every group gets a fresh id, so an import can never overwrite an existing group.
+ * A question's image_url may be an https link or a data URL (jpeg/png); data URLs are uploaded to the
+ * question-images bucket and replaced by their storage path.
  */
 
 const MAX_BODY_BYTES = 45 * 1024 * 1024;
@@ -44,6 +46,37 @@ function cleanQuestion(raw: any, index: number): QbQuestion | null {
     options,
     image_url: imageOk ? image : null,
   };
+}
+
+const IMAGE_BUCKET = "question-images";
+
+/**
+ * Pictures arrive as data URLs. Aqua shows a question picture from either an https link or a path in the
+ * private "question-images" bucket (see QuestionImage), so each picture is uploaded there and the question
+ * keeps the storage path. Questions that share a picture share one upload.
+ */
+async function storePictures(questions: QbQuestion[]): Promise<void> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const uploaded = new Map<string, string>();
+  for (const q of questions) {
+    const data = q.image_url;
+    if (!data || !data.startsWith("data:")) continue;
+    let path = uploaded.get(data);
+    if (!path) {
+      const match = /^data:image\/(jpeg|png);base64,(.+)$/.exec(data);
+      if (!match) { q.image_url = null; continue; }
+      const ext = match[1] === "png" ? "png" : "jpg";
+      const binary = atob(match[2]);
+      const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+      path = `manual/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error } = await supabaseAdmin.storage
+        .from(IMAGE_BUCKET)
+        .upload(path, bytes, { contentType: `image/${match[1]}`, cacheControl: "3600", upsert: false });
+      if (error) throw new Error(`Could not store a question picture: ${error.message}`);
+      uploaded.set(data, path);
+    }
+    q.image_url = path;
+  }
 }
 
 export const Route = createFileRoute("/api/question-bank-import")({
@@ -121,6 +154,7 @@ export const Route = createFileRoute("/api/question-bank-import")({
 
         try {
           const qb = await import("@/lib/question-bank.server");
+          for (const group of prepared) await storePictures(group.questions);
           const index: QbIndex = await qb.readIndex();
           for (const group of prepared) {
             group.meta.sort_order = index.groups.length + 1;
