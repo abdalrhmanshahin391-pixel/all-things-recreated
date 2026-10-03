@@ -135,6 +135,7 @@ import { Route as ApiPublicPushDispatchRouteImport } from './routes/api/public/p
 import { Route as CommitteeYearIndexRouteImport } from './routes/committee.$year.index'
 import { Route as CommitteeYearSubjectRouteImport } from './routes/committee.$year.$subject'
 import { Route as CoursesCourseIdIndexRouteImport } from './routes/courses.$courseId.index'
+import { Route as CoursesCourseIdChallengeRouteImport } from './routes/courses.$courseId.challenge'
 import { Route as CoursesCourseIdCheckoutRouteImport } from './routes/courses.$courseId.checkout'
 import { Route as CoursesCourseIdRunRouteImport } from './routes/courses.$courseId.run'
 import { Route as GermanCourseIdIndexRouteImport } from './routes/german.$courseId.index'
@@ -796,6 +797,12 @@ const CoursesCourseIdIndexRoute = CoursesCourseIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => CoursesCourseIdRoute,
 } as any)
+const CoursesCourseIdChallengeRoute =
+  CoursesCourseIdChallengeRouteImport.update({
+    id: '/challenge',
+    path: '/challenge',
+    getParentRoute: () => CoursesCourseIdRoute,
+  } as any)
 const CoursesCourseIdCheckoutRoute = CoursesCourseIdCheckoutRouteImport.update({
   id: '/checkout',
   path: '/checkout',
@@ -1050,6 +1057,7 @@ export interface FileRoutesByFullPath {
   '/api/public/lecture-reminders': typeof ApiPublicLectureRemindersRoute
   '/api/public/push-dispatch': typeof ApiPublicPushDispatchRoute
   '/committee/$year/$subject': typeof CommitteeYearSubjectRoute
+  '/courses/$courseId/challenge': typeof CoursesCourseIdChallengeRoute
   '/courses/$courseId/checkout': typeof CoursesCourseIdCheckoutRoute
   '/courses/$courseId/run': typeof CoursesCourseIdRunRoute
   '/german/$courseId/exam': typeof GermanCourseIdExamRoute
@@ -1191,6 +1199,7 @@ export interface FileRoutesByTo {
   '/api/public/lecture-reminders': typeof ApiPublicLectureRemindersRoute
   '/api/public/push-dispatch': typeof ApiPublicPushDispatchRoute
   '/committee/$year/$subject': typeof CommitteeYearSubjectRoute
+  '/courses/$courseId/challenge': typeof CoursesCourseIdChallengeRoute
   '/courses/$courseId/checkout': typeof CoursesCourseIdCheckoutRoute
   '/courses/$courseId/run': typeof CoursesCourseIdRunRoute
   '/german/$courseId/exam': typeof GermanCourseIdExamRoute
@@ -1344,6 +1353,7 @@ export interface FileRoutesById {
   '/api/public/lecture-reminders': typeof ApiPublicLectureRemindersRoute
   '/api/public/push-dispatch': typeof ApiPublicPushDispatchRoute
   '/committee/$year/$subject': typeof CommitteeYearSubjectRoute
+  '/courses/$courseId/challenge': typeof CoursesCourseIdChallengeRoute
   '/courses/$courseId/checkout': typeof CoursesCourseIdCheckoutRoute
   '/courses/$courseId/run': typeof CoursesCourseIdRunRoute
   '/german/$courseId/exam': typeof GermanCourseIdExamRoute
@@ -1499,6 +1509,7 @@ export interface FileRouteTypes {
     | '/api/public/lecture-reminders'
     | '/api/public/push-dispatch'
     | '/committee/$year/$subject'
+    | '/courses/$courseId/challenge'
     | '/courses/$courseId/checkout'
     | '/courses/$courseId/run'
     | '/german/$courseId/exam'
@@ -1640,6 +1651,7 @@ export interface FileRouteTypes {
     | '/api/public/lecture-reminders'
     | '/api/public/push-dispatch'
     | '/committee/$year/$subject'
+    | '/courses/$courseId/challenge'
     | '/courses/$courseId/checkout'
     | '/courses/$courseId/run'
     | '/german/$courseId/exam'
@@ -1792,6 +1804,7 @@ export interface FileRouteTypes {
     | '/api/public/lecture-reminders'
     | '/api/public/push-dispatch'
     | '/committee/$year/$subject'
+    | '/courses/$courseId/challenge'
     | '/courses/$courseId/checkout'
     | '/courses/$courseId/run'
     | '/german/$courseId/exam'
@@ -2829,6 +2842,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CoursesCourseIdIndexRouteImport
       parentRoute: typeof CoursesCourseIdRoute
     }
+    '/courses/$courseId/challenge': {
+      id: '/courses/$courseId/challenge'
+      path: '/challenge'
+      fullPath: '/courses/$courseId/challenge'
+      preLoaderRoute: typeof CoursesCourseIdChallengeRouteImport
+      parentRoute: typeof CoursesCourseIdRoute
+    }
     '/courses/$courseId/checkout': {
       id: '/courses/$courseId/checkout'
       path: '/checkout'
@@ -3042,12 +3062,14 @@ const CommitteeRouteWithChildren = CommitteeRoute._addFileChildren(
 )
 
 interface CoursesCourseIdRouteChildren {
+  CoursesCourseIdChallengeRoute: typeof CoursesCourseIdChallengeRoute
   CoursesCourseIdCheckoutRoute: typeof CoursesCourseIdCheckoutRoute
   CoursesCourseIdRunRoute: typeof CoursesCourseIdRunRoute
   CoursesCourseIdIndexRoute: typeof CoursesCourseIdIndexRoute
 }
 
 const CoursesCourseIdRouteChildren: CoursesCourseIdRouteChildren = {
+  CoursesCourseIdChallengeRoute: CoursesCourseIdChallengeRoute,
   CoursesCourseIdCheckoutRoute: CoursesCourseIdCheckoutRoute,
   CoursesCourseIdRunRoute: CoursesCourseIdRunRoute,
   CoursesCourseIdIndexRoute: CoursesCourseIdIndexRoute,

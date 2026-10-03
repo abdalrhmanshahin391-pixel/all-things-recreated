@@ -20,6 +20,7 @@ import { MoveQuestionControl, type CourseSectionGroup } from "@/components/cours
 import { moveSingleCourseQuestion } from "@/lib/course-sorter.functions";
 import { ReportQuestionModal } from "@/components/ReportQuestionModal";
 import { loadCourseRunQuestionsServerFn } from "@/lib/course-enrollment.functions";
+import { ChallengeGate } from "@/components/challenge/ChallengeGate";
 import { ensureFreeEnrollment } from "@/lib/course-access";
 import { formatQuestionStem, ensureCombinedStemWithStatements } from "@/lib/question-format";
 import {
@@ -87,7 +88,17 @@ function toggleSelection(current: string[] | undefined, label: string, multiple:
   return [...next];
 }
 
+/** Challenge mode (if the course has one) is offered before any question is shown. */
 function RunPage() {
+  const { courseId } = Route.useParams();
+  return (
+    <ChallengeGate courseId={courseId}>
+      <RunPageInner />
+    </ChallengeGate>
+  );
+}
+
+function RunPageInner() {
   const { courseId } = Route.useParams();
   const { mode, subjects, timed, duration, pool, t } = Route.useSearch();
   const navigate = useNavigate();

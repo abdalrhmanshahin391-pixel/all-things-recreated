@@ -2,6 +2,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
+import { ChallengeAdminCard } from "@/components/challenge/ChallengeAdminCard";
+import { ChallengeBanner } from "@/components/challenge/ChallengeBanner";
 import {
   BookOpen,
   Timer,
@@ -867,6 +869,7 @@ function CourseDetailPage() {
 
           {/* RIGHT — session panel */}
           <aside className="lg:sticky lg:top-24 self-start">
+            {isAdmin ? <ChallengeAdminCard courseId={courseId} /> : <ChallengeBanner courseId={courseId} />}
             <div className="medical-card overflow-hidden">
               <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
