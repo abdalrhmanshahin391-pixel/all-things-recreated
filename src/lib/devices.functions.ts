@@ -106,7 +106,7 @@ export const recordDevice = createServerFn({ method: "POST" })
         .maybeSingle(),
       supabaseAdmin
         .from("user_devices")
-        .select("id, device_id, first_seen_at")
+        .select("id, device_id, first_seen_at, user_agent, ip, last_seen_at")
         .eq("user_id", userId)
         .order("first_seen_at", { ascending: true }),
       isAdminUser(supabase, userId),
@@ -115,6 +115,11 @@ export const recordDevice = createServerFn({ method: "POST" })
 
     const limit = (prof as { device_limit?: number | null } | null)?.device_limit ?? globalLimit;
     const list = (existing ?? []) as DeviceRowLite[];
+
+    // A browser that cannot remember an id (private window, blocked storage) is not counted as a device.
+    if (data.deviceId === "no-storage") {
+      return { ok: true, status: "ok", limit, count: list.length };
+    }
 
     // Admins: unlimited devices, never locked.
     if (admin) {
@@ -133,7 +138,22 @@ export const recordDevice = createServerFn({ method: "POST" })
       lock_until?: string | null;
     } | null;
     let lockReason = profileLock?.lock_reason ?? (profileLock?.lock_kind ? "manual" : null);
-    const index = list.findIndex((d) => d.device_id === data.deviceId);
+    let index = list.findIndex((d) => d.device_id === data.deviceId);
+
+    // Same phone, lost its id (storage cleared, Safari trimmed it after a week away): the account already has a
+    // device with exactly this browser signature that has been quiet for a while, or comes from the same network.
+    // Treat it as that device instead of using up another slot.
+    if (index === -1 && ua) {
+      const sameBrowser = (existing ?? []).filter((d: any) => d.user_agent === ua);
+      const match = sameBrowser.find(
+        (d: any) => d.ip === ip || Date.now() - new Date(d.last_seen_at ?? d.first_seen_at).getTime() > 6 * 24 * 3600 * 1000,
+      );
+      if (match) {
+        await supabaseAdmin.from("user_devices").update({ device_id: data.deviceId, last_seen_at: now, ip }).eq("id", (match as any).id);
+        list[list.findIndex((d) => d.id === (match as any).id)].device_id = data.deviceId;
+        index = list.findIndex((d) => d.device_id === data.deviceId);
+      }
+    }
     const hasSlot = index > -1 ? index < limit : list.length < limit;
 
     if (
@@ -293,6 +313,7 @@ export const redeemUnlockCode = createServerFn({ method: "POST" })
       .from("profiles")
        .update({ locked_at: null, lock_reason: null, lock_kind: null, lock_until: null, lock_message: null })
       .eq("id", userId);
+    await supabaseAdmin.from("content_events").insert({ user_id: userId, kind: "admin_unlock", context: "admin", meta: {} });
 
     if (data.deviceId) {
       await supabaseAdmin.from("user_devices").upsert(
@@ -467,6 +488,9 @@ export const adminSetUserLock = createServerFn({ method: "POST" })
       )
       .eq("id", data.userId);
     if (error) throw new Error(error.message);
+    if (!data.locked) {
+      await supabaseAdmin.from("content_events").insert({ user_id: data.userId, kind: "admin_unlock", context: "admin", meta: {} });
+    }
     return { ok: true };
   });
 
@@ -482,6 +506,7 @@ export const adminUnlockAndReset = createServerFn({ method: "POST" })
       .update({ locked_at: null, lock_reason: null, lock_kind: null, lock_until: null, lock_message: null })
       .eq("id", data.userId);
     if (error) throw new Error(error.message);
+    await supabaseAdmin.from("content_events").insert({ user_id: data.userId, kind: "admin_unlock", context: "admin", meta: {} });
     return { ok: true };
   });
 

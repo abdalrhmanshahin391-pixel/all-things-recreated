@@ -19,6 +19,51 @@ const DEFAULT_TERMS_EN =
   "Screenshots, recordings, printing and copying are detected and logged. " +
   "If any material from your account is shared, your account is permanently banned and your payment is forfeited with no refund.";
 
+/**
+ * Every protected block on a page (exam mode mounts many) hears the same key press, so a signal is counted once
+ * per press: the first block to hear it reports it, the others stay quiet. The warning text reaches all of them.
+ */
+const lastFired: Record<string, number> = {};
+function shouldFire(key: string, gapMs = 2500) {
+  const now = Date.now();
+  if (now - (lastFired[key] ?? 0) < gapMs) return false;
+  lastFired[key] = now;
+  return true;
+}
+const alarmListeners = new Set<(message: string) => void>();
+const broadcastAlarm = (message: string) => alarmListeners.forEach((l) => l(message));
+
+/** One shared wrapper around getDisplayMedia, however many protected blocks are mounted. */
+type DisplayListener = (started: boolean) => void;
+const displayListeners = new Set<DisplayListener>();
+let displayOriginal: MediaDevices["getDisplayMedia"] | null = null;
+function watchDisplayCapture(listener: DisplayListener) {
+  displayListeners.add(listener);
+  if (!displayOriginal && navigator.mediaDevices?.getDisplayMedia) {
+    displayOriginal = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getDisplayMedia = async (...args: any[]) => {
+      displayListeners.forEach((l) => l(false));
+      const stream = await displayOriginal!(...(args as [any]));
+      // The screen was handed over: that is a recording. Stop it and report it.
+      stream.getTracks().forEach((t) => t.stop());
+      displayListeners.forEach((l) => l(true));
+      throw new DOMException("Screen capture is not allowed on protected content", "NotAllowedError");
+    };
+  }
+  return () => {
+    displayListeners.delete(listener);
+    if (!displayListeners.size && displayOriginal) {
+      navigator.mediaDevices.getDisplayMedia = displayOriginal;
+      displayOriginal = null;
+    }
+  };
+}
+
+function isTypingTarget(t: EventTarget | null) {
+  const el = t as HTMLElement | null;
+  return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+}
+
 function useIdentity(): WatermarkIdentity | null {
   const { user, profile } = useAuth();
   return useMemo(() => {
@@ -94,18 +139,44 @@ export function ProtectedContent({
     [active, context, logEvent],
   );
 
+  const showAlarm = useCallback((message: string) => {
+    setAlarm(message);
+    setBlurred(true);
+    if (alarmTimer.current) clearTimeout(alarmTimer.current);
+    alarmTimer.current = setTimeout(() => {
+      setAlarm(null);
+      setBlurred(false);
+    }, 3500);
+  }, []);
+
+  // Warnings raised by any protected block on the page appear on all of them.
+  useEffect(() => {
+    alarmListeners.add(showAlarm);
+    return () => {
+      alarmListeners.delete(showAlarm);
+    };
+  }, [showAlarm]);
+
   const raiseAlarm = useCallback(
-    (message: string, kind: string) => {
-      setAlarm(message);
-      setBlurred(true);
-      log(kind);
-      if (alarmTimer.current) clearTimeout(alarmTimer.current);
-      alarmTimer.current = setTimeout(() => {
-        setAlarm(null);
-        setBlurred(false);
-      }, 3500);
+    (message: string, kind: string, meta: Record<string, unknown> = {}) => {
+      if (!shouldFire(`${kind}:${meta.started ? "started" : "attempt"}`)) return;
+      broadcastAlarm(message);
+      if (!active) return;
+      void logEvent({ data: { kind, context, meta } })
+        .then((res: any) => {
+          if (res?.duplicate) return;
+          if (res?.locked) {
+            broadcastAlarm("Your account has been locked for breaking the content-protection rules.");
+            window.setTimeout(() => window.location.replace("/locked"), 1500);
+          } else if (res?.warning && res.warning.limit > 1 && res.warning.count > 0) {
+            broadcastAlarm(
+              `${message}. Warning ${res.warning.count} of ${res.warning.limit}: at ${res.warning.limit} your account is locked.`,
+            );
+          }
+        })
+        .catch(() => {});
     },
-    [log],
+    [active, context, logEvent],
   );
 
   // Agreement: shared by every protected block on the page, remembered per user and per consentScope
@@ -129,10 +200,15 @@ export function ProtectedContent({
     const onKey = (e: KeyboardEvent) => {
       const k = e.key;
       const isPrintScreen = k === "PrintScreen" || k === "F13";
-      const snip = (e.metaKey || e.ctrlKey) && e.shiftKey && ["3", "4", "5", "S", "s"].includes(k);
+      // Mac shortcuts are Cmd+Shift+3/4/5 (the key is "#", "$" or "%" while Shift is down, so use the key code);
+      // Windows/Firefox use Win+Shift+S or Ctrl+Shift+S.
+      const snip =
+        (e.metaKey && e.shiftKey && ["Digit3", "Digit4", "Digit5"].includes(e.code)) ||
+        ((e.metaKey || e.ctrlKey) && e.shiftKey && (k === "S" || k === "s"));
       if (isPrintScreen || snip) {
         e.preventDefault();
         raiseAlarm("Screenshot attempt recorded", "screenshot_attempt");
+        if (!shouldFire("screenshot-clipboard")) return;
         try {
           const code = identity?.code ?? "";
           const msg = `Protected content — captured by ${identity?.username || identity?.name || "user"} (${code}). This attempt was logged.`;
@@ -144,9 +220,6 @@ export function ProtectedContent({
       if ((e.metaKey || e.ctrlKey) && (k === "p" || k === "P") && settings.protect_block_print) {
         e.preventDefault();
         raiseAlarm("Printing is disabled and this attempt was recorded", "print_attempt");
-      }
-      if ((e.metaKey || e.ctrlKey) && (k === "c" || k === "C") && settings.protect_block_copy) {
-        log("copy_attempt");
       }
       if (k === "F12" && settings.protect_devtools_guard) {
         e.preventDefault();
@@ -175,11 +248,13 @@ export function ProtectedContent({
 
     const onCopy = (e: ClipboardEvent) => {
       if (!settings.protect_block_copy) return;
+      // Copying inside a text box (notes, search) or with nothing selected is not copying content.
+      if (isTypingTarget(e.target) || !window.getSelection()?.toString().trim()) return;
       e.preventDefault();
       const code = identity?.code ?? "";
       const msg = `Copying is disabled. Traced to ${identity?.username || identity?.name || "user"} (${code}).`;
       e.clipboardData?.setData("text/plain", injectZeroWidthFingerprint(msg, code));
-      log("copy_attempt");
+      raiseAlarm("Copying protected content is not allowed", "copy_attempt");
     };
 
     const onBeforePrint = () => {
@@ -210,17 +285,17 @@ export function ProtectedContent({
     };
   }, [active, settings, identity, log, raiseAlarm]);
 
-  // Screen sharing / recording detection
+
+  // Screen sharing / recording detection (desktop browsers; phones expose no such API)
   useEffect(() => {
     if (!active || !navigator.mediaDevices?.getDisplayMedia) return;
-    const original = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
-    navigator.mediaDevices.getDisplayMedia = async (...args: any[]) => {
-      raiseAlarm("Screen recording detected and recorded against your account", "screen_share");
-      return original(...(args as [any]));
-    };
-    return () => {
-      navigator.mediaDevices.getDisplayMedia = original;
-    };
+    return watchDisplayCapture((started) =>
+      raiseAlarm(
+        started ? "Screen recording detected" : "Screen sharing is not allowed on protected content",
+        "screen_share",
+        { started },
+      ),
+    );
   }, [active, raiseAlarm]);
 
   // Rapid page flipping (someone photographing everything)

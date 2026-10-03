@@ -307,6 +307,9 @@ export const adminSetUserBlock = createServerFn({ method: "POST" })
       .update(patch)
       .eq("id", data.userId);
     if (error) throw new Error(error.message);
+    if (data.kind === "none") {
+      await (supabaseAdmin.from as any)("content_events").insert({ user_id: data.userId, kind: "admin_unlock", context: "admin", meta: {} });
+    }
     return { ok: true, ...patch };
   });
 

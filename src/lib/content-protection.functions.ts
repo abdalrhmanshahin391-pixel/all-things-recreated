@@ -36,6 +36,69 @@ const WEIGHTS: Record<string, number> = {
   consent_accepted: 0,
 };
 
+/** Strikes that lock an account. Recording locks at once; the others count since the last unlock. */
+export const PROTECTION_LIMITS = { screenshot: 3, copy: 6 } as const;
+
+export type ProtectionWarning = { kind: "screenshot" | "copy" | "recording"; count: number; limit: number };
+
+async function applyProtectionPolicy(
+  supabaseAdmin: any,
+  context: { supabase: any; userId: string },
+  kind: string,
+  meta: Record<string, unknown>,
+): Promise<{ ok: true; locked: boolean; warning: ProtectionWarning | null }> {
+  const group =
+    kind === "screenshot_attempt" || kind === "print_attempt"
+      ? "screenshot"
+      : kind === "copy_attempt"
+        ? "copy"
+        : kind === "screen_share"
+          ? "recording"
+          : null;
+  if (!group) return { ok: true, locked: false, warning: null };
+
+  // Admins are never locked (they only get here in local test mode).
+  const { data: isAdmin } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
+  if (isAdmin) return { ok: true, locked: false, warning: null };
+
+  let count = 1;
+  let limit = 1;
+  if (group === "recording") {
+    // Asking for the screen is only a warning; actually being handed the screen locks the account.
+    if (meta?.started !== true) return { ok: true, locked: false, warning: { kind: "recording", count: 0, limit: 1 } };
+  } else {
+    limit = PROTECTION_LIMITS[group];
+    const kinds = group === "screenshot" ? ["screenshot_attempt", "print_attempt"] : ["copy_attempt"];
+    // Count since the newest admin unlock (or 90 days), so an unlocked student starts again from zero.
+    const { data: reset } = await supabaseAdmin
+      .from("content_events")
+      .select("created_at")
+      .eq("user_id", context.userId)
+      .eq("kind", "admin_unlock")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const floor = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const since = reset?.created_at && reset.created_at > floor ? reset.created_at : floor;
+    const { count: n } = await supabaseAdmin
+      .from("content_events")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", context.userId)
+      .in("kind", kinds)
+      .gt("created_at", since);
+    count = n ?? 1;
+  }
+
+  const locked = count >= limit;
+  if (locked) {
+    await supabaseAdmin
+      .from("profiles")
+      .update({ locked_at: new Date().toISOString(), lock_reason: "content_protection" })
+      .eq("id", context.userId);
+  }
+  return { ok: true, locked, warning: { kind: group, count: Math.min(count, limit), limit } };
+}
+
 export const logContentEvent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { kind: string; context?: string | null; meta?: Record<string, unknown> }) => {
@@ -53,6 +116,18 @@ export const logContentEvent = createServerFn({ method: "POST" })
     const ip = getRequestIP({ xForwardedFor: true }) ?? null;
     const ua = getRequestHeader("user-agent") ?? null;
 
+    const recentSame =
+      data.meta?.started === true
+        ? { count: 0 }
+        : await (supabaseAdmin.from as any)("content_events")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", context.userId)
+            .eq("kind", data.kind)
+            .gte("created_at", new Date(Date.now() - 3000).toISOString());
+    if ((recentSame.count ?? 0) > 0) {
+      return { ok: true, duplicate: true, locked: false, warning: null as ProtectionWarning | null };
+    }
+
     await (supabaseAdmin.from as any)("content_events").insert({
       user_id: context.userId,
       kind: data.kind,
@@ -62,39 +137,7 @@ export const logContentEvent = createServerFn({ method: "POST" })
       ua,
     });
 
-    // Auto-escalation: too many capture signals in 24h locks the account.
-    const { data: settings } = await (supabaseAdmin.from as any)("site_settings")
-      .select("protect_auto_lock_threshold")
-      .eq("id", true)
-      .maybeSingle();
-    const threshold = Number(settings?.protect_auto_lock_threshold ?? 12);
-
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { data: recent } = await (supabaseAdmin.from as any)("content_events")
-      .select("kind")
-      .eq("user_id", context.userId)
-      .gte("created_at", since);
-
-    const score = (recent ?? []).reduce(
-      (n: number, r: { kind: string }) => n + (WEIGHTS[r.kind] ?? 0),
-      0,
-    );
-
-    let locked = false;
-    if (threshold > 0 && score >= threshold * 10) {
-      const { data: isAdmin } = await context.supabase.rpc("has_role", {
-        _user_id: context.userId,
-        _role: "admin",
-      });
-      if (!isAdmin) {
-        await (supabaseAdmin.from as any)("profiles")
-          .update({ locked_at: new Date().toISOString(), lock_reason: "content_protection" })
-          .eq("id", context.userId);
-        locked = true;
-      }
-    }
-
-    return { ok: true, score, locked };
+    return applyProtectionPolicy(supabaseAdmin, context, data.kind, data.meta);
   });
 
 export const acceptContentTerms = createServerFn({ method: "POST" })
@@ -163,6 +206,7 @@ export const adminContentProtectionOverview = createServerFn({ method: "POST" })
     for (const e of events ?? []) {
       if (
         e.kind === "consent_accepted" ||
+        e.kind === "admin_unlock" ||
         e.kind === "focus_loss" ||
         e.kind === "devtools" ||
         e.kind === "rapid_flip"
@@ -216,6 +260,7 @@ export const adminContentProtectionOverview = createServerFn({ method: "POST" })
     const captureEvents = (events ?? []).filter(
       (e: any) =>
         e.kind !== "consent_accepted" &&
+        e.kind !== "admin_unlock" &&
         e.kind !== "focus_loss" &&
         e.kind !== "devtools" &&
         e.kind !== "rapid_flip",
@@ -288,5 +333,9 @@ export const adminSetContentLock = createServerFn({ method: "POST" })
       )
       .eq("id", data.userId);
     if (error) throw error;
+    // An unlocked student starts counting strikes again from zero.
+    if (!data.locked) {
+      await (supabaseAdmin.from as any)("content_events").insert({ user_id: data.userId, kind: "admin_unlock", context: "admin", meta: {} });
+    }
     return { ok: true };
   });
