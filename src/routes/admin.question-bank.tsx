@@ -248,7 +248,7 @@ function QuestionBankPage() {
         data: { id: target.id, sectionId: targetSection, subjectName: targetName.trim() || target.name },
       });
       const bits = [`${res.saved} added`];
-      if (res.skipped) bits.push(`${res.skipped} already there`);
+      if (res.skipped) bits.push(`${res.skipped} skipped (same question text already in this subject)`);
       if (res.failed) bits.push(`${res.failed} failed`);
       toast.success(bits.join(" · "));
       setTarget(null);

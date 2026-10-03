@@ -17,6 +17,34 @@ export type QbMeta = {
 export type QbGroupFile = { format: string; version: number; meta: QbMeta; questions: QbQuestion[] };
 export type QbIndex = { format: string; version: number; groups: QbMeta[] };
 
+const normStem = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+
+/**
+ * Picture tests reuse one wording over different pictures ("Which of the following ribs are true ribs?").
+ * A subject cannot hold two questions with the same text, so the same wording on a DIFFERENT picture
+ * would be dropped as a duplicate. Those questions get a small "(Picture N)" tag instead, where N is the
+ * order of the picture in this set. The same wording on the SAME picture is left alone (a real duplicate).
+ */
+export function disambiguatePictureStems<T extends { stem: string; image_url?: string | null }>(questions: T[]): T[] {
+  const pictureNo = new Map<string, number>();
+  const picturesByStem = new Map<string, Set<string>>();
+  return questions.map((q) => {
+    const picture = q.image_url ?? "";
+    if (picture && !pictureNo.has(picture)) pictureNo.set(picture, pictureNo.size + 1);
+    const key = normStem(q.stem ?? "");
+    const seen = picturesByStem.get(key);
+    if (!seen) {
+      picturesByStem.set(key, new Set([picture]));
+      return q;
+    }
+    if (seen.has(picture) || !picture) return q; // same picture (or no picture): a true duplicate, handled as before
+    seen.add(picture);
+    const tagged = `${q.stem.trim()} (Picture ${pictureNo.get(picture)})`;
+    picturesByStem.set(normStem(tagged), new Set([picture]));
+    return { ...q, stem: tagged };
+  });
+}
+
 export const QB_YEARS = [
   "Zero year",
   "First year",

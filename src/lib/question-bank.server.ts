@@ -5,6 +5,7 @@ import {
   driveReadTextFile,
   driveWriteTextFile,
 } from "./committee-drive.server";
+import { disambiguatePictureStems } from "./question-bank";
 import type { QbGroupFile, QbIndex, QbMeta, QbOption, QbQuestion } from "./question-bank";
 
 export const QB_ROOT = "QuestionBank";
@@ -135,7 +136,7 @@ export async function pourIntoCourse(opts: {
   let skipped = 0;
   let failed = 0;
   let order = 1;
-  for (const q of opts.questions) {
+  for (const q of disambiguatePictureStems(opts.questions)) {
     if (!q.stem?.trim()) { failed++; continue; }
     const { data: inserted, error: qErr } = await supabaseAdmin
       .from("questions")
