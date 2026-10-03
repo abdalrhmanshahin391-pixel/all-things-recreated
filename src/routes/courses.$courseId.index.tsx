@@ -1,3 +1,4 @@
+import { capitalizeFirst } from "@/lib/text";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -604,7 +605,7 @@ function CourseDetailPage() {
             )}
           </div>
           <h1 className="mt-4 text-4xl md:text-5xl font-semibold tracking-tight capitalize text-foreground">
-            {course.title}
+            {capitalizeFirst(course.title)}
           </h1>
 
           <p className="mt-2 text-muted-foreground max-w-xl">

@@ -1,3 +1,4 @@
+import { capitalizeFirst } from "@/lib/text";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -483,7 +484,7 @@ function LectureCard({
 
       <div className="px-4 py-4 flex flex-col gap-3 flex-1">
         <div className="font-semibold text-base text-foreground text-center capitalize">
-          {course.title}
+          {capitalizeFirst(course.title)}
         </div>
 
         {active ? (

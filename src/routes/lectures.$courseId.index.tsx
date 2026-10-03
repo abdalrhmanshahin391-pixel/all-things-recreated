@@ -1,3 +1,4 @@
+import { capitalizeFirst } from "@/lib/text";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -385,7 +386,7 @@ function LectureCoursePage() {
             <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Year {course.year}{(course as any).semester ? ` · Sem ${(course as any).semester}` : ""}
             </div>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight capitalize text-foreground">{course.title}</h1>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight capitalize text-foreground">{capitalizeFirst(course.title)}</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Recorded lecture course. Watch at your own pace — independent from the question bank.
             </p>

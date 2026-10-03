@@ -1,3 +1,4 @@
+import { capitalizeFirst } from "@/lib/text";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -393,7 +394,7 @@ function CheckoutPage() {
                 Year {course.year}
               </div>
               <h2 className="mt-1.5 text-xl font-extrabold text-white capitalize truncate tracking-tight">
-                {course.title}
+                {capitalizeFirst(course.title)}
               </h2>
               <p className="text-xs text-slate-300 mt-0.5">
                 Full QBank, Exam Archive & Analytics

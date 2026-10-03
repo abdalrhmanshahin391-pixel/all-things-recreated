@@ -1,3 +1,4 @@
+import { capitalizeFirst } from "@/lib/text";
 import { useState, useMemo } from "react";
 import { X, Check, Search, Sparkles, BookOpen, Video, ArrowRight, AlertCircle } from "lucide-react";
 import type { PackageWithCourses } from "@/lib/packages.functions";
@@ -131,7 +132,7 @@ export function StudentChoicePickerModal({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-sm text-foreground truncate">
-                        {c.title}
+                        {capitalizeFirst(c.title)}
                       </span>
                       <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
                         Year {c.year}

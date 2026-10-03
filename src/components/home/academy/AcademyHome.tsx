@@ -1,3 +1,4 @@
+import { capitalizeFirst } from "@/lib/text";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -81,7 +82,7 @@ function AcademyHero() {
               >
                 <span>
                   <span className="block font-display text-base font-black text-foreground">
-                    {c.title}
+                    {capitalizeFirst(c.title)}
                   </span>
                   <span className="block text-sm text-muted-foreground">{c.note}</span>
                 </span>
@@ -152,7 +153,7 @@ function AcademyChips() {
                   className="inline-flex items-center gap-3 rounded-full border border-border bg-card px-5 py-3 text-sm font-bold text-foreground transition-colors hover:border-[color:var(--primary)] hover:bg-muted"
                 >
                   <Icon size={20} style={{ color: g.color }} strokeWidth={2.4} />
-                  {c.title}
+                  {capitalizeFirst(c.title)}
                 </Link>
               </li>
             );
@@ -199,7 +200,7 @@ function AcademyCourses() {
                 className="h-44 w-full rounded-xl object-cover"
               />
               <div className="px-2 pb-2 pt-4">
-                <div className="font-display text-lg font-black text-foreground">{c.title}</div>
+                <div className="font-display text-lg font-black text-foreground">{capitalizeFirst(c.title)}</div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-bold text-foreground">
                     <Star size={12} className="fill-[#f5c518] text-[#f5c518]" /> 4.8

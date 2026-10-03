@@ -1,3 +1,4 @@
+import { capitalizeFirst } from "@/lib/text";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, BookOpen, ListChecks, Lock, Sparkles } from "lucide-react";
 import { CourseImage } from "@/components/common/CourseImage";
@@ -28,12 +29,6 @@ function fmtPrice(price: number | null | undefined, currency: string | null | un
   const cur = currency ?? "USD";
   const sym = SYMBOL[cur] ?? `${cur} `;
   return `${sym}${Number(price).toFixed(0)}`;
-}
-
-/** Shows a course name with a capital first letter ("anatomy" becomes "Anatomy") and leaves the rest as typed. */
-function capitalizeFirst(s: string) {
-  const t = (s ?? "").trim();
-  return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
 }
 
 export function CourseCard({
