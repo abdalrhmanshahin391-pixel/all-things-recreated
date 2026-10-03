@@ -35,7 +35,7 @@ export function ChallengeBanner({ courseId, status }: { courseId: string; status
     status.state === "preview" ? (
       <span className={`${button} opacity-60 cursor-not-allowed`} title="Admins can't play, so the ranking stays fair">{copy.cta}</span>
     ) : status.state === "none" ? (
-      <Link to="/courses/$courseId/run" params={{ courseId }} search={{ mode: "study" } as any} className={button}>
+      <Link to="/courses/$courseId/challenge" params={{ courseId }} className={button}>
         {copy.cta}
       </Link>
     ) : (

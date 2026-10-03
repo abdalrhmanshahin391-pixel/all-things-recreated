@@ -20,7 +20,7 @@ import { MoveQuestionControl, type CourseSectionGroup } from "@/components/cours
 import { moveSingleCourseQuestion } from "@/lib/course-sorter.functions";
 import { ReportQuestionModal } from "@/components/ReportQuestionModal";
 import { loadCourseRunQuestionsServerFn } from "@/lib/course-enrollment.functions";
-import { ChallengeGate } from "@/components/challenge/ChallengeGate";
+import { ChallengeGate, useExcludedSubjects } from "@/components/challenge/ChallengeGate";
 import { ensureFreeEnrollment } from "@/lib/course-access";
 import { formatQuestionStem, ensureCombinedStemWithStatements } from "@/lib/question-format";
 import {
@@ -88,11 +88,12 @@ function toggleSelection(current: string[] | undefined, label: string, multiple:
   return [...next];
 }
 
-/** Challenge mode (if the course has one) is offered before any question is shown. */
+/** Challenge mode (if the course has one) decides, from the groups picked, what this session may contain. */
 function RunPage() {
   const { courseId } = Route.useParams();
+  const { subjects } = Route.useSearch();
   return (
-    <ChallengeGate courseId={courseId}>
+    <ChallengeGate courseId={courseId} subjects={subjects}>
       <RunPageInner />
     </ChallengeGate>
   );
@@ -101,6 +102,9 @@ function RunPage() {
 function RunPageInner() {
   const { courseId } = Route.useParams();
   const { mode, subjects, timed, duration, pool, t } = Route.useSearch();
+  // Challenge groups the student has not finished or ignored stay out of normal practice.
+  const excludedSubjects = useExcludedSubjects();
+  const excludedKey = excludedSubjects.join(",");
   const navigate = useNavigate();
   const { isAdmin, user, loading: authLoading } = useAuth();
   const accessKey = `${courseId}:${user?.id ?? "guest"}:${isAdmin ? "admin" : "student"}:${t ?? 0}`;
@@ -308,6 +312,10 @@ function RunPageInner() {
       } else {
         subjectIds = subjects.split(",").filter(Boolean);
       }
+      if (excludedKey) {
+        const left = new Set(excludedKey.split(","));
+        subjectIds = subjectIds.filter((id) => !left.has(id));
+      }
 
       if (!subjectIds.length) {
         if (cancelled) return;
@@ -471,7 +479,7 @@ function RunPageInner() {
       controller.abort();
       clearTimeout(timeout);
     };
-  }, [courseId, subjects, pool, user, hasAccess, accessKey, initialSeconds, mode, reloadVersion, sessionKey, t]);
+  }, [courseId, subjects, pool, user, hasAccess, accessKey, initialSeconds, mode, reloadVersion, sessionKey, t, excludedKey]);
 
   useEffect(() => {
     if (!sessionReady || !questions.length) return;

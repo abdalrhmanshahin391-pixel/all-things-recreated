@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import { ArrowLeft, CheckCircle2, Clock, Loader2, Lock, Medal, Trophy, XCircle } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { QuestionImage } from "@/components/quiz/QuestionImage";
+import { ChallengeIntro } from "@/components/challenge/ChallengeIntro";
 import { useAuth } from "@/hooks/useAuth";
 import {
   getChallengeResultsServerFn,
@@ -22,7 +23,7 @@ export const Route = createFileRoute("/courses/$courseId/challenge")({
   component: ChallengePage,
 });
 
-type Phase = "loading" | "playing" | "results" | "unavailable";
+type Phase = "loading" | "intro" | "playing" | "results" | "unavailable";
 
 function ChallengePage() {
   const { courseId } = Route.useParams();
@@ -44,6 +45,7 @@ function ChallengePage() {
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<ChallengeResults | null>(null);
   const [skipped, setSkipped] = useState(false);
+  const [intro, setIntro] = useState({ total: 0, seconds: 30 });
   const autoSubmitted = useRef<string | null>(null);
 
   const loadResults = useCallback(async () => {
@@ -88,8 +90,10 @@ function ChallengePage() {
         const s = await statusFn({ data: { courseId } });
         setState(s.state);
         setLimitMs(s.secondsPerQuestion * 1000);
+        setIntro({ total: s.total, seconds: s.secondsPerQuestion });
         if (s.state === "active") await loadNext();
         else if (s.state === "finished") await loadResults();
+        else if (s.state === "none") setPhase("intro");
         else setPhase("unavailable");
       } catch (e: any) {
         setError(e?.message || "Could not open the challenge.");
@@ -177,6 +181,18 @@ function ChallengePage() {
       <div className="grid place-items-center py-24">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>,
+    );
+  }
+
+  if (phase === "intro") {
+    return shell(
+      <ChallengeIntro
+        courseId={courseId}
+        total={intro.total}
+        secondsPerQuestion={intro.seconds}
+        onJoined={() => { setState("active"); setPhase("loading"); void loadNext(); }}
+        onDeclined={() => navigate({ to: "/courses/$courseId", params: { courseId } })}
+      />,
     );
   }
 

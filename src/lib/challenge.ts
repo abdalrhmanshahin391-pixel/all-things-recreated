@@ -33,6 +33,30 @@ export type ChallengeStatus = {
   subjectIds: string[];
 };
 
+/**
+ * Challenge groups are kept out of normal practice until the student has finished or ignored the challenge.
+ * Only a challenge that is waiting ("none") or in progress ("active") restricts anything.
+ */
+export function restrictedSubjectIds(status: ChallengeStatus | null | undefined): string[] {
+  return status && (status.state === "none" || status.state === "active") ? status.subjectIds : [];
+}
+
+export type GateDecision =
+  | { kind: "pass" } // nothing to do: the session runs normally
+  | { kind: "all"; excluded: string[] } // "all questions": the challenge groups are left out (one-time notice)
+  | { kind: "challenge" } // only challenge groups were chosen: go to the challenge instead
+  | { kind: "mixed" }; // challenge groups mixed with others: not allowed
+
+/** What to do when a student starts a session. `subjectsParam` is "all" or a comma-separated list of subject ids. */
+export function decideGate(status: ChallengeStatus | null | undefined, subjectsParam: string): GateDecision {
+  const restricted = new Set(restrictedSubjectIds(status));
+  if (!restricted.size) return { kind: "pass" };
+  if (subjectsParam === "all") return { kind: "all", excluded: [...restricted] };
+  const chosen = subjectsParam.split(",").filter(Boolean);
+  const inChallenge = chosen.filter((id) => restricted.has(id));
+  if (!inChallenge.length) return { kind: "pass" };
+  return inChallenge.length === chosen.length ? { kind: "challenge" } : { kind: "mixed" };
+}
 export type ChallengeQuestion = {
   id: string;
   stem: string;

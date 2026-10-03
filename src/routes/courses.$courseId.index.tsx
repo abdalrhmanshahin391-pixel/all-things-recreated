@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { ChallengeAdminCard } from "@/components/challenge/ChallengeAdminCard";
 import { ChallengeBanner, ChallengeTag } from "@/components/challenge/ChallengeBanner";
 import { challengeIsVisible, useChallengeStatus } from "@/components/challenge/useChallengeStatus";
+import { restrictedSubjectIds } from "@/lib/challenge";
 import {
   BookOpen,
   Timer,
@@ -125,6 +126,8 @@ function CourseDetailPage() {
     () => new Set(challengeIsVisible(challengeStatus) ? challengeStatus.subjectIds : []),
     [challengeStatus],
   );
+  // Challenge groups the student has not finished or ignored yet: kept out of normal sessions and never mixed with other groups.
+  const restricted = useMemo(() => new Set(restrictedSubjectIds(challengeStatus)), [challengeStatus]);
   const { lang } = useLang();
   const isArabic = lang === "ar";
   const [liveTourOpen, setLiveTourOpen] = useState(false);
@@ -347,10 +350,11 @@ function CourseDetailPage() {
     () =>
       subjects
         .filter((s) => selected.size === 0 || selected.has(s.id))
+        .filter((s) => selected.size > 0 || !restricted.has(s.id)) // "all questions" leaves the challenge group out for now
         .filter((s) => !isSubjectLocked(s))
         .reduce((a, s) => a + countFor(s), 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [subjects, selected, pool, flaggedBySubject, incorrectBySubject, enrolled, isAdmin, user],
+    [subjects, selected, pool, flaggedBySubject, incorrectBySubject, enrolled, isAdmin, user, restricted],
   );
 
   const totalSubjectsCount = subjects.length;
@@ -377,8 +381,34 @@ function CourseDetailPage() {
       return;
     }
     const next = new Set(selected);
-    if (next.has(s.id)) next.delete(s.id);
-    else next.add(s.id);
+    if (next.has(s.id)) {
+      next.delete(s.id);
+      setSelected(next);
+      return;
+    }
+    // The challenge group is its own thing: it is never selected together with other groups.
+    if (restricted.size) {
+      const picked = [...next];
+      if (restricted.has(s.id) && picked.some((id) => !restricted.has(id))) {
+        toast.info(
+          isArabic
+            ? "لا يمكن دمج مجموعة التحدي مع مجموعات أخرى، لذلك تم تحديدها وحدها."
+            : "The challenge group can't be combined with other groups, so it is selected on its own.",
+        );
+        setSelected(new Set([s.id]));
+        return;
+      }
+      if (!restricted.has(s.id) && picked.some((id) => restricted.has(id))) {
+        toast.info(
+          isArabic
+            ? "تمت إزالة مجموعة التحدي من اختيارك لأنها لا تُدمج مع مجموعات أخرى."
+            : "The challenge group was removed from your selection: it can't be combined with other groups.",
+        );
+        setSelected(new Set([...picked.filter((id) => !restricted.has(id)), s.id]));
+        return;
+      }
+    }
+    next.add(s.id);
     setSelected(next);
   };
 
