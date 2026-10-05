@@ -21,6 +21,7 @@ import { CommitteeDialog, Field, inputCls, primaryBtn, primaryBtnStyle } from "@
 import { PdfPreviewModal } from "@/components/committee/PdfPreviewModal";
 import { VideoModal } from "@/components/committee/VideoModal";
 import { SubjectTag } from "@/components/committee/SubjectTag";
+import { LinkedCourses } from "@/components/committee/LinkedCourses";
 import { AquaBackdrop, AquaBadge, AquaSetupNotice, OpenToggle, StateChip } from "@/components/committee/aqua/AquaParts";
 import { VersionSwitch } from "@/components/committee/aqua/VersionSwitch";
 import { useAquaOpen } from "@/components/committee/aqua/useAquaOpen";
@@ -189,7 +190,13 @@ export function AquaSubjectPage({ year, subject }: { year: string; subject: stri
           </div>
         )}
 
-        <div className="mt-8">
+        {!blocked && (
+          <div className="mt-8">
+            <LinkedCourses subjectId={subject} canManage={canManage} tone="aqua" />
+          </div>
+        )}
+
+        <div className="mt-2">
           {blocked ? (
             <div className="rounded-3xl border border-dashed border-border bg-card py-20 text-center">
               <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-muted text-muted-foreground">

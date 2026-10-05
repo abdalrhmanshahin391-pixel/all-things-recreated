@@ -15,7 +15,7 @@ export type SubjectCourse = {
   promo_price: number | null;
   note: string | null;
   sort_order: number;
-  course?: { id: string; title: string; price: number; image_url: string | null; published: boolean } | null;
+  course?: { id: string; title: string; price: number; image_url: string | null; published: boolean; kind?: string | null } | null;
 };
 
 const BRAND = "linear-gradient(135deg,#635BFF 0%,#FF5C8A 60%,#FF8A3D 100%)";
@@ -25,7 +25,7 @@ function money(v: number | null | undefined) {
   return Number(v) <= 0 ? "Free" : `$${Number(v).toFixed(2).replace(/\.00$/, "")}`;
 }
 
-export function LinkedCourses({ subjectId, canManage }: { subjectId: string; canManage: boolean }) {
+export function LinkedCourses({ subjectId, canManage, tone }: { subjectId: string; canManage: boolean; tone?: "aqua" }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<{ editing: SubjectCourse | null } | null>(null);
 
@@ -34,7 +34,7 @@ export function LinkedCourses({ subjectId, canManage }: { subjectId: string; can
     queryFn: async (): Promise<SubjectCourse[]> => {
       const { data, error } = await supabase
         .from("committee_subject_courses")
-        .select("*, course:courses(id,title,price,image_url,published)")
+        .select("*, course:courses(id,title,price,image_url,published,kind)")
         .eq("subject_id", subjectId)
         .order("sort_order");
       if (error) throw error;
@@ -87,20 +87,23 @@ export function LinkedCourses({ subjectId, canManage }: { subjectId: string; can
             return (
               <div key={l.id} className="relative group">
                 <Link
-                  to="/courses/$courseId"
+                  to={l.course?.kind === "lectures" ? "/lectures/$courseId" : "/courses/$courseId"}
                   params={{ courseId: l.course_id }}
                   className="block h-full rounded-xl border border-border bg-card p-4 hover:border-primary/50 hover:shadow-md transition-all"
                 >
                   <div className="flex items-center gap-3">
                     <div
                       className="grid place-items-center h-11 w-11 shrink-0 rounded-lg text-white"
-                      style={{ background: BRAND }}
+                      style={{ background: tone === "aqua" ? "linear-gradient(135deg, var(--primary), var(--primary-deep))" : BRAND, ...(tone === "aqua" ? { color: "var(--primary-foreground)" } : {}) }}
                     >
                       <GraduationCap size={20} strokeWidth={1.8} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-bold text-foreground truncate">
                         {l.course?.title ?? "Course"}
+                      </div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {l.course?.kind === "lectures" ? "Lecture course" : "Questions course"}
                       </div>
                       {l.note && <p className="text-xs text-muted-foreground truncate">{l.note}</p>}
                     </div>
@@ -155,6 +158,7 @@ export function LinkedCourses({ subjectId, canManage }: { subjectId: string; can
           subjectId={subjectId}
           editing={form.editing}
           nextSort={items.length + 1}
+          tone={tone}
           onClose={() => setForm(null)}
           onSaved={() => { setForm(null); invalidate(); }}
         />
@@ -167,12 +171,14 @@ function LinkCourseForm({
   subjectId,
   editing,
   nextSort,
+  tone,
   onClose,
   onSaved,
 }: {
   subjectId: string;
   editing: SubjectCourse | null;
   nextSort: number;
+  tone?: "aqua";
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -186,8 +192,8 @@ function LinkCourseForm({
   const { data: courses } = useQuery({
     queryKey: ["all-courses-for-link"],
     queryFn: async () => {
-      const { data } = await supabase.from("courses").select("id,title,price").order("title");
-      return (data ?? []) as Array<{ id: string; title: string; price: number }>;
+      const { data } = await supabase.from("courses").select("id,title,price,kind").order("title");
+      return (data ?? []) as Array<{ id: string; title: string; price: number; kind: string | null }>;
     },
     staleTime: 5 * 60_000,
   });
@@ -214,13 +220,20 @@ function LinkCourseForm({
   }
 
   return (
-    <CommitteeDialog title={editing ? "Edit course link" : "Link a course"} onClose={onClose}>
-      <Field label="Course">
+    <CommitteeDialog tone={tone} title={editing ? "Edit course link" : "Link a course"} onClose={onClose}>
+      <Field label="Course (questions or lectures)">
         <select className={inputCls} value={courseId} onChange={(e) => setCourseId(e.target.value)}>
           <option value="">Select a course…</option>
-          {(courses ?? []).map((c) => (
-            <option key={c.id} value={c.id}>{c.title}</option>
-          ))}
+          <optgroup label="Questions courses">
+            {(courses ?? []).filter((c) => c.kind !== "lectures").map((c) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </optgroup>
+          <optgroup label="Lecture courses">
+            {(courses ?? []).filter((c) => c.kind === "lectures").map((c) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </optgroup>
         </select>
       </Field>
       <Field label="Offer label (optional)">

@@ -106,6 +106,8 @@ export function AquaNodeCard({
   footer?: ReactNode;
 }) {
   const enterable = open || canManage;
+  // The committee already sees the state on the switch in the corner, so the chip is only for students.
+  const showChip = !(canManage && onToggle);
   const body = (
     <>
       {mark && (
@@ -135,10 +137,12 @@ export function AquaNodeCard({
           <ArrowRight size={18} className="mt-1 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:text-primary" />
         )}
       </div>
-      <div className={`relative mt-4 flex items-center gap-2 ${compact ? "justify-center" : "justify-between"}`}>
-        <StateChip open={open} />
-        {footer}
-      </div>
+      {(showChip || footer) && (
+        <div className={`relative mt-4 flex items-center gap-2 ${compact ? "justify-center" : "justify-between"}`}>
+          {showChip && <StateChip open={open} />}
+          {footer}
+        </div>
+      )}
     </>
   );
 
