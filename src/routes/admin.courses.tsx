@@ -16,8 +16,7 @@ import {
   EyeOff,
   Save,
   RefreshCw,
-  Loader2,
-} from "lucide-react";
+  Loader2, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { compressImage } from "@/lib/image-compress";
 import { useAuth, type Profile } from "@/hooks/useAuth";
@@ -78,6 +77,8 @@ type Course = {
   questions_count_mid: number;
   questions_count_final: number;
   published: boolean;
+  /** Present once the coming_soon migration has been applied. */
+  coming_soon?: boolean;
   created_at: string;
   kind: "questions" | "lectures";
   university_id: string | null;
@@ -1006,6 +1007,7 @@ function EditCourseModal({
   const [qFinal, setQFinal] = useState(String(course.questions_count_final));
   const [imageUrl, setImageUrl] = useState(course.image_url);
   const [published, setPublished] = useState(course.published);
+  const [comingSoon, setComingSoon] = useState(!!course.coming_soon);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [syncingPaddle, setSyncingPaddle] = useState(false);
@@ -1096,6 +1098,8 @@ function EditCourseModal({
       questions_count_final: Number(qFinal) || 0,
       image_url: imageUrl,
       published: finalPublished,
+      // Only sent when changed, so saving still works before the coming_soon migration is applied.
+      ...(comingSoon !== !!course.coming_soon ? { coming_soon: comingSoon } : {}),
     };
 
     let { error } = await supabase
@@ -1131,7 +1135,11 @@ function EditCourseModal({
 
     setSaving(false);
     if (error) {
-      setError(error.message);
+      setError(
+        error.message?.includes("coming_soon")
+          ? "The Coming soon option needs a database update first. Ask Lovable to apply the migration 20261005120000_course_coming_soon.sql, then try again."
+          : error.message,
+      );
       return;
     }
     toast.success("Course updated successfully");
@@ -1362,6 +1370,25 @@ function EditCourseModal({
               </div>
             </div>
           </div>
+
+          <label className="rounded-lg border border-white/10 bg-white/[0.02] p-3 flex items-center justify-between gap-3 cursor-pointer">
+            <div>
+              <div className="text-sm font-medium flex items-center gap-2">
+                <Clock size={16} className={comingSoon ? "text-amber-400" : "text-white/50"} /> Coming soon
+              </div>
+              <div className="text-xs text-white/50 mt-0.5">
+                {comingSoon
+                  ? "Students see the course with a Coming soon label and cannot open or buy it. Admins still can."
+                  : "Open for students. Turn on to show the course as Coming soon."}
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={comingSoon}
+              onChange={(e) => setComingSoon(e.target.checked)}
+              className="h-5 w-5 shrink-0 accent-amber-400"
+            />
+          </label>
         </div>
 
         <div className="border-t border-white/10 p-5 flex flex-wrap items-center justify-between gap-3">
