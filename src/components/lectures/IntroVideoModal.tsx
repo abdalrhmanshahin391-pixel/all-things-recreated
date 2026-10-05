@@ -1,4 +1,4 @@
-import { X, ShieldCheck, Maximize2, Minimize2 } from "lucide-react";
+import { X, ShieldCheck, Maximize2, Minimize2, Play, Pause, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -13,6 +13,13 @@ export function IntroVideoModal({
 }) {
   const { user, profile } = useAuth();
   const frameRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  // Our own control bar: the browser's thin bar is very hard to drag with a finger (iPad).
+  const [paused, setPaused] = useState(true);
+  const [muted, setMuted] = useState(false);
+  const [current, setCurrent] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const scrubbing = useRef(false);
   // Fullscreen is done on the frame that holds the watermark, never on the video itself, so the watermark stays on screen.
   const [nativeFull, setNativeFull] = useState(false);
   const [pseudoFull, setPseudoFull] = useState(false);
@@ -62,6 +69,31 @@ export function IntroVideoModal({
   }, [onClose, pseudoFull]);
 
   if (!src) return null;
+
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) void v.play().catch(() => {});
+    else v.pause();
+  };
+  const skip = (s: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.currentTime = Math.max(0, Math.min(v.duration || 0, v.currentTime + s));
+  };
+  const seekTo = (t: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.currentTime = t;
+    setCurrent(t);
+  };
+  const fmt = (s: number) => {
+    if (!Number.isFinite(s) || s < 0) return "0:00";
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${String(sec).padStart(2, "0")}`;
+  };
+  const pct = duration ? Math.min(100, (current / duration) * 100) : 0;
 
   const isYouTube = /youtube\.com|youtu\.be/.test(src);
   const isVimeo = /vimeo\.com/.test(src);
@@ -127,15 +159,24 @@ export function IntroVideoModal({
           />
         ) : (
           <video
+            ref={videoRef}
             src={src}
-            controls
             autoPlay
             playsInline
             preload="auto"
             controlsList="nodownload nofullscreen noremoteplayback"
             disablePictureInPicture
+            onClick={togglePlay}
+            onPlay={() => setPaused(false)}
+            onPause={() => setPaused(true)}
+            onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
+            onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+            onDurationChange={(e) => setDuration(e.currentTarget.duration)}
+            onTimeUpdate={(e) => {
+              if (!scrubbing.current) setCurrent(e.currentTarget.currentTime);
+            }}
             onContextMenu={(e) => e.preventDefault()}
-            className="absolute inset-0 h-full w-full"
+            className="absolute inset-0 h-full w-full cursor-pointer"
           />
         )}
 
@@ -152,13 +193,66 @@ export function IntroVideoModal({
           />
         )}
 
+        <style>{`
+          .aq-seek { -webkit-appearance: none; appearance: none; width: 100%; height: 40px; background: transparent; margin: 0; cursor: pointer; }
+          .aq-seek::-webkit-slider-runnable-track { height: 8px; border-radius: 999px; background: linear-gradient(to right, #fbbf24 var(--p), rgba(255,255,255,.35) var(--p)); }
+          .aq-seek::-webkit-slider-thumb { -webkit-appearance: none; width: 30px; height: 30px; margin-top: -11px; border-radius: 50%; background: #fff; border: 4px solid #fbbf24; box-shadow: 0 2px 8px rgba(0,0,0,.55); }
+          .aq-seek::-moz-range-track { height: 8px; border-radius: 999px; background: rgba(255,255,255,.35); }
+          .aq-seek::-moz-range-progress { height: 8px; border-radius: 999px; background: #fbbf24; }
+          .aq-seek::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: #fff; border: 4px solid #fbbf24; box-shadow: 0 2px 8px rgba(0,0,0,.55); }
+        `}</style>
+
+        {/* Clear, labelled full-screen button (the frame goes fullscreen, so the watermark stays on screen) */}
         <button
           onClick={toggleFullscreen}
-          className="absolute top-2 left-2 z-40 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white hover:bg-black/75"
+          className="absolute top-3 left-3 z-40 inline-flex h-11 items-center gap-2 rounded-full bg-amber-400 px-4 text-sm font-black text-amber-950 shadow-lg ring-2 ring-white/70 hover:bg-amber-300 active:scale-95"
           aria-label={isFull ? "Exit full screen" : "Full screen"}
         >
-          {isFull ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          {isFull ? <Minimize2 size={20} strokeWidth={2.6} /> : <Maximize2 size={20} strokeWidth={2.6} />}
+          {isFull ? "Exit full screen" : "Full screen"}
         </button>
+
+        {/* Control bar for uploaded videos: big buttons and a big seek handle that a finger can grab */}
+        {!(isYouTube || isVimeo || isDrive) && (
+          <div className="absolute inset-x-0 bottom-0 z-40 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-3 pb-3 pt-10" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="range"
+              className="aq-seek"
+              aria-label="Seek"
+              min={0}
+              max={duration || 0}
+              step={0.1}
+              value={Math.min(current, duration || 0)}
+              style={{ ["--p" as string]: `${pct}%` }}
+              onPointerDown={() => { scrubbing.current = true; }}
+              onPointerUp={() => { scrubbing.current = false; }}
+              onPointerCancel={() => { scrubbing.current = false; }}
+              onTouchStart={() => { scrubbing.current = true; }}
+              onTouchEnd={() => { scrubbing.current = false; }}
+              onChange={(e) => seekTo(Number(e.target.value))}
+            />
+            <div className="mt-1 flex items-center gap-2 text-white">
+              <button onClick={togglePlay} aria-label={paused ? "Play" : "Pause"} className="grid h-11 w-11 place-items-center rounded-full bg-white/20 hover:bg-white/30 active:scale-95">
+                {paused ? <Play size={22} fill="currentColor" /> : <Pause size={22} fill="currentColor" />}
+              </button>
+              <button onClick={() => skip(-10)} className="h-11 rounded-full bg-white/20 px-3.5 text-sm font-black hover:bg-white/30 active:scale-95" aria-label="Back 10 seconds">
+                −10s
+              </button>
+              <button onClick={() => skip(10)} className="h-11 rounded-full bg-white/20 px-3.5 text-sm font-black hover:bg-white/30 active:scale-95" aria-label="Forward 10 seconds">
+                +10s
+              </button>
+              <span className="ml-1 font-mono text-xs tabular-nums text-white/90">{fmt(current)} / {fmt(duration)}</span>
+              <span className="flex-1" />
+              <button
+                onClick={() => { const v = videoRef.current; if (v) v.muted = !v.muted; }}
+                aria-label={muted ? "Unmute" : "Mute"}
+                className="grid h-11 w-11 place-items-center rounded-full bg-white/20 hover:bg-white/30 active:scale-95"
+              >
+                {muted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* A second badge that moves between the corners */}
         <div
