@@ -93,7 +93,7 @@ export function AquaYearPage({
       : (yearRow?.display_name ?? "");
 
   return (
-    <div className="relative min-h-screen bg-background text-foreground">
+    <div className="aqua-theme relative min-h-screen bg-background text-foreground">
       <SiteHeader />
       <AquaBackdrop />
 
@@ -116,7 +116,7 @@ export function AquaYearPage({
         </div>
 
         {yearRow && (
-          <header className="relative mt-6 overflow-hidden rounded-3xl border border-border bg-card p-6 md:p-8">
+          <header className="aqua-rise relative mt-6 overflow-hidden rounded-3xl border border-primary/25 bg-card p-6 md:p-8">
             <div aria-hidden className="pointer-events-none absolute -right-10 -top-16 h-52 w-52 rounded-full bg-primary/15 blur-3xl" />
             <div className="relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
               <div className="flex min-w-0 items-center gap-4">
@@ -192,7 +192,7 @@ export function AquaYearPage({
             semesters.length === 0 ? (
               <EmptyNote text="No semesters in this year yet." />
             ) : (
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="aqua-stagger grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {semesters.map((s) => {
                   const own = subjects.filter((x) => x.semester_id === s.id);
                   const open = aqua.isOpen("semester", s.id);
@@ -224,7 +224,7 @@ export function AquaYearPage({
               {activeSemester && !activeModule && semesterModules.length > 0 && (
                 <section className="mb-10">
                   <SectionTitle label="Modules" />
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="aqua-stagger grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                     {semesterModules.map((m) => {
                       const MIcon = iconOf(m.icon_key) ?? Layers;
                       const own = semesterSubjects.filter((x) => x.module_id === m.id);
@@ -257,7 +257,7 @@ export function AquaYearPage({
               ) : (
                 <section>
                   <SectionTitle label="Subjects" />
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                  <div className="aqua-stagger grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                     {visibleSubjects.map((s) => {
                       const Icon = iconOf(s.icon_key);
                       const open = aqua.isOpen("subject", s.id);

@@ -148,8 +148,8 @@ export function AquaNodeCard({
     open
       ? "border-border hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
       : canManage
-        ? "border-dashed border-border opacity-80 hover:opacity-100 hover:border-primary/40"
-        : "cursor-not-allowed border-dashed border-border opacity-60"
+        ? "border-dashed border-border opacity-90 hover:opacity-100 hover:border-primary/40"
+        : "cursor-not-allowed border-dashed border-border opacity-80"
   }`;
 
   return (
@@ -180,7 +180,7 @@ export function AquaHero({
   children?: ReactNode;
 }) {
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-border bg-card px-6 py-10 text-center shadow-sm md:px-12 md:py-14">
+    <section className="aqua-rise relative overflow-hidden rounded-3xl border border-primary/30 bg-gradient-to-br from-card via-card to-accent/25 px-6 py-10 text-center shadow-[0_0_60px_-20px_var(--accent)] md:px-12 md:py-14">
       <div aria-hidden className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
       <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-16 h-64 w-64 rounded-full bg-accent/20 blur-3xl" />
       <div className="relative">
@@ -188,12 +188,12 @@ export function AquaHero({
         <h1
           dir="rtl"
           lang="ar"
-          className="mt-5 text-4xl font-bold leading-tight tracking-tight text-foreground md:text-6xl"
+          className="aqua-gold-text mt-5 text-4xl font-bold leading-tight tracking-tight md:text-6xl"
           style={{ fontFamily: "'Tajawal','Inter',system-ui,sans-serif", letterSpacing: 0 }}
         >
           {titleAr}
         </h1>
-        <p className="mt-2 font-sans text-lg font-bold tracking-wide text-foreground/90 sm:text-xl md:text-2xl">{titleEn}</p>
+        <p className="mt-2 font-sans text-lg font-bold tracking-[0.18em] text-foreground/90 uppercase sm:text-xl md:text-2xl">{titleEn}</p>
         <p className="mx-auto mt-3 max-w-2xl text-base text-muted-foreground md:text-lg">{subtitle}</p>
         {children && <div className="mt-6 flex flex-wrap items-center justify-center gap-3">{children}</div>}
       </div>

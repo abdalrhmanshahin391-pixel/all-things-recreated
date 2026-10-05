@@ -1692,3 +1692,89 @@ html.tab-hidden .decor-layer * {
 }
 [data-theme="academy"] .btn-chunky.btn-chunky--secondary:hover { background: var(--muted); }
 [data-theme="academy"] .btn-chunky.btn-chunky--white { box-shadow: none; }
+
+/* =============================================================================
+   AQUA version of the committee page: gold, purple and black.
+   Everything on the AQUA pages reads these tokens, so the whole look is changed here, in one place.
+   ============================================================================= */
+.aqua-theme {
+  color-scheme: dark;
+  --background: oklch(0.115 0.022 305);               /* black with a hint of purple */
+  --foreground: oklch(0.96 0.014 88);                 /* warm white */
+  --card: oklch(0.165 0.045 305);                     /* deep purple-black */
+  --card-foreground: oklch(0.96 0.014 88);
+  --popover: oklch(0.165 0.045 305);
+  --popover-foreground: oklch(0.96 0.014 88);
+  --primary: oklch(0.83 0.155 86);                    /* gold */
+  --primary-foreground: oklch(0.17 0.04 300);
+  --primary-soft: oklch(0.27 0.06 90);
+  --primary-deep: oklch(0.66 0.14 78);
+  --secondary: oklch(0.45 0.2 300);
+  --secondary-foreground: oklch(0.98 0.01 300);
+  --accent: oklch(0.55 0.25 300);                     /* purple */
+  --accent-foreground: oklch(0.98 0.01 300);
+  --muted: oklch(0.21 0.05 305);
+  --muted-foreground: oklch(0.74 0.04 300);
+  --border: oklch(0.33 0.08 300);
+  --input: oklch(0.33 0.08 300);
+  --ring: oklch(0.83 0.155 86);
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* Gold lettering with a slow shine */
+.aqua-gold-text {
+  background: linear-gradient(105deg, oklch(0.78 0.15 80) 0%, oklch(0.95 0.11 92) 35%, oklch(0.78 0.15 80) 60%, oklch(0.9 0.12 90) 100%);
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: aqua-sheen 7s linear infinite;
+}
+@keyframes aqua-sheen {
+  to { background-position: 220% center; }
+}
+
+/* Things rise into place when the AQUA version opens */
+@keyframes aqua-rise {
+  from { opacity: 0; transform: translateY(20px) scale(0.98); filter: blur(5px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+.aqua-rise,
+.aqua-stagger > * {
+  animation: aqua-rise 0.65s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.aqua-stagger > *:nth-child(1) { animation-delay: 0.08s; }
+.aqua-stagger > *:nth-child(2) { animation-delay: 0.14s; }
+.aqua-stagger > *:nth-child(3) { animation-delay: 0.2s; }
+.aqua-stagger > *:nth-child(4) { animation-delay: 0.26s; }
+.aqua-stagger > *:nth-child(5) { animation-delay: 0.32s; }
+.aqua-stagger > *:nth-child(6) { animation-delay: 0.38s; }
+.aqua-stagger > *:nth-child(7) { animation-delay: 0.44s; }
+.aqua-stagger > *:nth-child(8) { animation-delay: 0.5s; }
+.aqua-stagger > *:nth-child(n + 9) { animation-delay: 0.56s; }
+
+/* Switching between the two committee pages: the new page grows out of the switch like a ripple */
+@keyframes committee-reveal {
+  from { clip-path: circle(0px at var(--vt-x, 50%) var(--vt-y, 40%)); }
+  to { clip-path: circle(var(--vt-r, 150vmax) at var(--vt-x, 50%) var(--vt-y, 40%)); }
+}
+html[data-committee-vt]::view-transition-old(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html[data-committee-vt]::view-transition-new(root) {
+  animation: committee-reveal 0.8s cubic-bezier(0.65, 0, 0.25, 1) both;
+  mix-blend-mode: normal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aqua-rise,
+  .aqua-stagger > *,
+  .aqua-gold-text {
+    animation: none;
+  }
+  html[data-committee-vt]::view-transition-new(root) {
+    animation: none;
+  }
+}

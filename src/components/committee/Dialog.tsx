@@ -6,10 +6,13 @@ export function CommitteeDialog({
   title,
   onClose,
   children,
+  tone,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  /** "aqua": gold, purple and black, for the AQUA version of the committee page */
+  tone?: "aqua";
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -17,7 +20,7 @@ export function CommitteeDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm grid place-items-center p-4 overflow-y-auto"
+      className={`fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm grid place-items-center p-4 overflow-y-auto ${tone === "aqua" ? "aqua-theme" : ""}`}
       onClick={onClose}
     >
       <div
@@ -26,7 +29,12 @@ export function CommitteeDialog({
       >
         <div
           className="flex items-center justify-between px-5 py-4 text-white shrink-0"
-          style={{ background: "linear-gradient(135deg,#635BFF 0%,#FF5C8A 60%,#FF8A3D 100%)" }}
+          style={{
+            background:
+              tone === "aqua"
+                ? "linear-gradient(135deg, oklch(0.4 0.19 300) 0%, oklch(0.22 0.07 300) 60%, oklch(0.16 0.03 300) 100%)"
+                : "linear-gradient(135deg,#635BFF 0%,#FF5C8A 60%,#FF8A3D 100%)",
+          }}
         >
           <h3 className="font-black text-base">{title}</h3>
           <button onClick={onClose} className="hover:bg-white/20 rounded-full p-1">

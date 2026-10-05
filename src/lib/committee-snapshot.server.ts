@@ -48,6 +48,8 @@ export type SnapSubject = {
   closed_style: string | null;
   semester_key: string | null;
   module_key: string | null;
+  /** AQUA version: true when this subject is open for students (absent in older backups) */
+  aqua_open?: boolean;
   best_sources_enabled?: boolean;
   best_sources?: Array<{
     title: string;
@@ -79,6 +81,7 @@ export type SnapModule = {
   closed_note: string | null;
   closed_color: string | null;
   closed_style: string | null;
+  aqua_open?: boolean;
 };
 
 export type SnapSemester = {
@@ -90,6 +93,7 @@ export type SnapSemester = {
   closed_note: string | null;
   closed_color: string | null;
   closed_style: string | null;
+  aqua_open?: boolean;
   modules: SnapModule[];
 };
 
@@ -105,6 +109,7 @@ export type SnapYear = {
   closed_note: string | null;
   closed_color: string | null;
   closed_style: string | null;
+  aqua_open?: boolean;
   semesters: SnapSemester[];
   subjects: SnapSubject[];
 };
@@ -300,6 +305,18 @@ export async function buildCommitteeSnapshot(
     catBySubject.set(c.subject_id, arr);
   }
 
+  // AQUA version: which tiles are open. Missing table (migration not applied yet) just means nothing to save.
+  let aquaOpen: Set<string> | null = null;
+  try {
+    const { data: stateRows, error: stateErr } = await db.from("committee_aqua_state").select("node_type,node_id,is_open");
+    if (!stateErr) {
+      aquaOpen = new Set(((stateRows ?? []) as any[]).filter((r) => r.is_open).map((r) => `${r.node_type}:${r.node_id}`));
+    }
+  } catch {
+    aquaOpen = null;
+  }
+  const aquaFlag = (type: string, id: string): boolean | undefined => (aquaOpen ? aquaOpen.has(`${type}:${id}`) : undefined);
+
   const modsBySemester = new Map<string, SnapModule[]>();
   for (const m of (modules ?? []) as any[]) {
     const arr = modsBySemester.get(m.semester_id) ?? [];
@@ -312,6 +329,7 @@ export async function buildCommitteeSnapshot(
       closed_note: m.closed_note ?? null,
       closed_color: m.closed_color ?? null,
       closed_style: m.closed_style ?? null,
+      aqua_open: aquaFlag("module", m.id),
     });
     modsBySemester.set(m.semester_id, arr);
   }
@@ -328,6 +346,7 @@ export async function buildCommitteeSnapshot(
       closed_note: s.closed_note ?? null,
       closed_color: s.closed_color ?? null,
       closed_style: s.closed_style ?? null,
+      aqua_open: aquaFlag("semester", s.id),
       modules: modsBySemester.get(s.id) ?? [],
     });
     semsByYear.set(s.year_id, arr);
@@ -351,6 +370,7 @@ export async function buildCommitteeSnapshot(
       closed_style: s.closed_style ?? null,
       semester_key: s.semester_id ?? null,
       module_key: s.module_id ?? null,
+      aqua_open: aquaFlag("subject", s.id),
       best_sources_enabled: !!s.best_sources_enabled,
       best_sources: bestBySubject.get(s.id) ?? [],
       course_links: linksBySubject.get(s.id) ?? [],
@@ -422,6 +442,7 @@ export async function buildCommitteeSnapshot(
       closed_note: y.closed_note ?? null,
       closed_color: y.closed_color ?? null,
       closed_style: y.closed_style ?? null,
+      aqua_open: aquaFlag("year", y.id),
       semesters: semsByYear.get(y.id) ?? [],
       subjects: subsByYear.get(y.id) ?? [],
     })),
@@ -596,6 +617,11 @@ export async function restoreCommitteeSnapshot(
   if (opts.replace) await wipeCommittee(db, uni.id);
 
   let yearsAdded = 0, subjectsAdded = 0, categoriesAdded = 0, resourcesAdded = 0;
+  // AQUA version open/closed flags, applied once every node has its (possibly new) id
+  const aquaRows: Array<{ node_type: string; node_id: string; is_open: boolean }> = [];
+  const noteAqua = (type: string, id: string, flag: unknown) => {
+    if (typeof flag === "boolean") aquaRows.push({ node_type: type, node_id: id, is_open: flag });
+  };
 
   for (const y of p.years ?? []) {
     const yearPayload = {
@@ -627,6 +653,8 @@ export async function restoreCommitteeSnapshot(
       yearsAdded++;
     }
 
+    noteAqua("year", yearId, y.aqua_open);
+
     // Semesters and modules exist independently of subjects.
     const semIdByKey = new Map<string, string>();
     const modIdByKey = new Map<string, string>();
@@ -657,6 +685,7 @@ export async function restoreCommitteeSnapshot(
         semId = ins.id;
       }
       semIdByKey.set(sem.key, semId);
+      noteAqua("semester", semId, sem.aqua_open);
 
       for (const mod of sem.modules ?? []) {
         const modPayload = {
@@ -685,6 +714,7 @@ export async function restoreCommitteeSnapshot(
           modId = ins.id;
         }
         modIdByKey.set(mod.key, modId);
+        noteAqua("module", modId, mod.aqua_open);
       }
     }
 
@@ -729,6 +759,7 @@ export async function restoreCommitteeSnapshot(
         subjectId = ins.id;
         subjectsAdded++;
       }
+      noteAqua("subject", subjectId, s.aqua_open);
 
       if (Array.isArray(s.best_sources)) {
         await db.from("committee_best_sources").delete().eq("subject_id", subjectId);
@@ -871,6 +902,11 @@ export async function restoreCommitteeSnapshot(
     }
   }
 
+  if (aquaRows.length) {
+    const { error: aquaErr } = await db.from("committee_aqua_state").upsert(aquaRows, { onConflict: "node_type,node_id" });
+    if (aquaErr) skipped.push(`AQUA version open/closed state was not restored: ${aquaErr.message}`);
+  }
+
   if (p.settings && (p.settings.study_plan_path || p.settings.study_plan_title)) {
     await db
       .from("site_settings")
@@ -930,6 +966,25 @@ export async function wipeCommittee(db: any, universityId: string) {
   if (!yearIds.length) return;
   const { data: subjects = [] } = await db.from("committee_subjects").select("id").in("year_id", yearIds);
   const subjectIds = (subjects ?? []).map((s: any) => s.id);
+  // AQUA open/closed rows of the nodes about to disappear (ignored when the table does not exist yet)
+  try {
+    const { data: semRows = [] } = await db.from("committee_semesters").select("id").in("year_id", yearIds);
+    const semIdList = (semRows ?? []).map((s: any) => s.id);
+    const { data: modRows = [] } = semIdList.length ? await db.from("committee_modules").select("id").in("semester_id", semIdList) : { data: [] as any[] };
+    const byType: Array<[string, string[]]> = [
+      ["year", yearIds],
+      ["semester", semIdList],
+      ["module", (modRows ?? []).map((m: any) => m.id)],
+      ["subject", subjectIds],
+    ];
+    for (const [type, ids] of byType) {
+      for (let i = 0; i < ids.length; i += 100) {
+        await db.from("committee_aqua_state").delete().eq("node_type", type).in("node_id", ids.slice(i, i + 100));
+      }
+    }
+  } catch {
+    /* nothing to clean */
+  }
   if (subjectIds.length) {
     const { data: cats = [] } = await db.from("committee_categories").select("id").in("subject_id", subjectIds);
     const catIds = (cats ?? []).map((c: any) => c.id);

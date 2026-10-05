@@ -117,7 +117,7 @@ export function AquaSubjectPage({ year, subject }: { year: string; subject: stri
   }
 
   return (
-    <div className="relative min-h-screen bg-background text-foreground">
+    <div className="aqua-theme relative min-h-screen bg-background text-foreground">
       <SiteHeader />
       <AquaBackdrop />
 
@@ -134,7 +134,7 @@ export function AquaSubjectPage({ year, subject }: { year: string; subject: stri
           <VersionSwitch />
         </div>
 
-        <header className="relative mt-6 overflow-hidden rounded-3xl border border-border bg-card p-6 md:p-8">
+        <header className="aqua-rise relative mt-6 overflow-hidden rounded-3xl border border-primary/25 bg-card p-6 md:p-8">
           <div aria-hidden className="pointer-events-none absolute -right-10 -top-16 h-52 w-52 rounded-full bg-primary/15 blur-3xl" />
           <div className="relative flex flex-wrap items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-4">
@@ -212,7 +212,7 @@ export function AquaSubjectPage({ year, subject }: { year: string; subject: stri
               </p>
             </div>
           ) : (
-            <ul className="space-y-3">
+            <ul className="aqua-stagger space-y-3">
               {resources.map((r, i) => (
                 <li key={r.id} className="group flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/40 sm:flex-nowrap">
                   <KindTile kind={r.kind} />
@@ -457,7 +457,7 @@ function SummaryDialog({
   }
 
   return (
-    <CommitteeDialog title={editing ? `Edit ${editing.title}` : "Add AQUA summary"} onClose={onClose}>
+    <CommitteeDialog tone="aqua" title={editing ? `Edit ${editing.title}` : "Add AQUA summary"} onClose={onClose}>
       <Field label="Type">
         <div className="grid grid-cols-3 gap-2">
           {kinds.map(({ k, label, icon }) => (
@@ -520,7 +520,13 @@ function SummaryDialog({
       )}
       {err && <p className="text-sm text-destructive">{err}</p>}
 
-      <button type="button" onClick={save} disabled={saving} className={primaryBtn} style={primaryBtnStyle}>
+      <button
+        type="button"
+        onClick={save}
+        disabled={saving}
+        className={primaryBtn}
+        style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-deep))", color: "var(--primary-foreground)" }}
+      >
         {saving && <Loader2 size={15} className="animate-spin" />}
         {editing ? "Save changes" : "Add summary"}
       </button>

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useCommitteeRole } from "@/hooks/useCommitteeRole";
+import { touchCommitteeSnapshot } from "@/lib/committee-snapshot-touch";
 import { aquaKey, aquaStateQuery, isAquaOpen, setAquaOpen, type AquaNodeType } from "@/lib/committee-aqua";
 
 type Node = { type: AquaNodeType; id: string };
@@ -39,6 +40,7 @@ export function useAquaOpen() {
     try {
       await setAquaOpen(targets, user?.id);
       await qc.invalidateQueries({ queryKey: aquaStateQuery.queryKey });
+      touchCommitteeSnapshot();
       if (yearBlocked) toast.warning("Opened, but the year is still closed. Ask the committee head to open the year.");
       else toast.success(open ? "Opened for students" : "Closed (coming soon)");
     } catch (e) {

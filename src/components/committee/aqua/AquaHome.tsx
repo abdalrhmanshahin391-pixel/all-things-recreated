@@ -10,6 +10,7 @@ import { AQUA_MIGRATION, aquaCountsQuery, aquaTreeQuery, firstClosed } from "@/l
 import { AquaBackdrop, AquaHero, AquaNodeCard, AquaSetupNotice } from "@/components/committee/aqua/AquaParts";
 import { VersionSwitch } from "@/components/committee/aqua/VersionSwitch";
 import { useAquaOpen } from "@/components/committee/aqua/useAquaOpen";
+import { BackupButtons } from "@/components/committee/BackupButtons";
 
 const aquaYearsQuery = queryOptions({
   queryKey: ["committee-aqua-years"],
@@ -55,7 +56,7 @@ export function AquaHome() {
   }, [tree, aqua.state, counts]);
 
   return (
-    <div className="relative min-h-screen bg-background text-foreground">
+    <div className="aqua-theme relative min-h-screen bg-background text-foreground">
       <SiteHeader />
       <AquaBackdrop />
 
@@ -111,6 +112,15 @@ export function AquaHome() {
           </div>
         )}
 
+        {canManageMembers && (
+          <div className="mt-6 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/70 px-4 py-3">
+            <span className="mr-auto text-xs text-muted-foreground">
+              One backup covers both pages: the University resources and the AQUA summaries.
+            </span>
+            <BackupButtons />
+          </div>
+        )}
+
         <div className="mt-10 mb-4 flex items-end justify-between">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Choose your year</div>
@@ -125,7 +135,7 @@ export function AquaHome() {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="aqua-stagger grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {(years ?? []).map((y) => {
               const Icon = iconOf(y.icon_key);
               const stats = perYear.get(y.id);
