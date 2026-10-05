@@ -1,6 +1,7 @@
 import { capitalizeFirst } from "@/lib/text";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, BookOpen, ListChecks, Lock, Sparkles } from "lucide-react";
+import { ArrowRight, BookOpen, Clock, ListChecks, Lock, Sparkles } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import { CourseImage } from "@/components/common/CourseImage";
 import { CourseBadge, badgeIsLive } from "@/components/common/CourseBadge";
 import { useCourseOptions, isAllYearsCourse, isZeroCourse } from "@/lib/course-options";
@@ -20,6 +21,8 @@ type CourseLike = {
   compare_at_price?: number | null;
   discount_active?: boolean | null;
   discount_ends_at?: string | null;
+  /** Shown to students as "Coming soon" and not openable; admins can still open it. */
+  coming_soon?: boolean | null;
 };
 
 const SYMBOL: Record<string, string> = { USD: "USD ", EUR: "€", GBP: "£", JOD: "JD ", SAR: "SAR " };
@@ -44,6 +47,9 @@ export function CourseCard({
   unlocked?: boolean;
   showPrice?: boolean;
 }) {
+  const { isAdmin } = useAuth();
+  const soon = !!course.coming_soon;
+  const closedForMe = soon && !isAdmin;
   const isPaid = !!course.price && course.price > 0;
   const category = (course.category ?? "MAJOR").toString().toUpperCase();
   const options = useCourseOptions();
@@ -76,13 +82,32 @@ export function CourseCard({
     <Link
       to="/courses/$courseId"
       params={{ courseId: course.id }}
-      className="group relative flex flex-col bg-white rounded-2xl overflow-hidden border hover:-translate-y-1 hover:shadow-xl transition-all duration-200"
+      onClick={(e) => {
+        if (closedForMe) e.preventDefault();
+      }}
+      aria-disabled={closedForMe || undefined}
+      className={`group relative flex flex-col bg-white rounded-2xl overflow-hidden border transition-all duration-200 ${
+        closedForMe ? "cursor-not-allowed" : "hover:-translate-y-1 hover:shadow-xl"
+      }`}
       style={{
         borderColor: isPaid && !unlocked ? "#fcd34d" : "#e5e5e5",
         boxShadow: isPaid && !unlocked ? "0 6px 0 #fcd34d" : "0 6px 0 #d4d4d4",
       }}
     >
       <div className="aspect-[4/3] w-full relative bg-neutral-100 overflow-hidden">
+        {soon && (
+          <div
+            className={`absolute inset-0 z-10 grid place-items-center ${closedForMe ? "bg-slate-900/55 backdrop-blur-[1px]" : "pointer-events-none"}`}
+          >
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-black uppercase tracking-widest shadow-lg ${
+                closedForMe ? "bg-amber-400 text-amber-950" : "absolute bottom-2 left-2 bg-amber-400/95 text-amber-950 text-[10px] px-3 py-1"
+              }`}
+            >
+              <Clock size={closedForMe ? 14 : 11} strokeWidth={3} /> {closedForMe ? "Coming soon" : "Coming soon · hidden from students"}
+            </span>
+          </div>
+        )}
         <CourseImage
           value={course.image_url}
           alt={course.title}
@@ -192,9 +217,17 @@ export function CourseCard({
 
         <span
           className="mt-4 inline-flex items-center gap-1.5 text-[12px] font-black uppercase tracking-wider text-white px-5 py-2.5 rounded-full"
-          style={cta}
+          style={closedForMe ? { background: "#94a3b8", boxShadow: "0 3px 0 #64748b" } : cta}
         >
-          {label} <ArrowRight size={12} strokeWidth={3} />
+          {closedForMe ? (
+            <>
+              <Clock size={12} strokeWidth={3} /> Coming soon
+            </>
+          ) : (
+            <>
+              {label} <ArrowRight size={12} strokeWidth={3} />
+            </>
+          )}
         </span>
       </div>
     </Link>

@@ -67,12 +67,13 @@ export const enrollFreeCourseServerFn = createServerFn({ method: "POST" })
     }
 
     const { data: course, error: cErr } = await (supabaseAdmin.from("courses") as any)
-      .select("id, price, kind")
+      .select("*")
       .eq("id", data.courseId)
       .maybeSingle();
 
     if (cErr) throw cErr;
     if (!course) throw new Error("Course not found");
+    if (course.coming_soon && !isAdmin) throw new Error("This course is coming soon.");
 
     const price = Number(course.price ?? 0);
     // If course is not free and caller is not admin, cannot auto-enroll without payment
@@ -117,12 +118,13 @@ export const loadCourseRunQuestionsServerFn = createServerFn({ method: "POST" })
 
     // 1. Fetch course details
     const { data: course, error: courseErr } = await (supabaseAdmin.from("courses") as any)
-      .select("id, price, published")
+      .select("*")
       .eq("id", data.courseId)
       .maybeSingle();
 
     if (courseErr) throw courseErr;
     if (!course) throw new Error("Course not found");
+    if (course.coming_soon && !isAdmin) throw new Error("This course is coming soon.");
 
     const isFree = Number(course.price ?? 0) <= 0;
 

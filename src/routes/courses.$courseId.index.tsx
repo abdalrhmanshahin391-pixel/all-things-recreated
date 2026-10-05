@@ -23,8 +23,7 @@ import {
   Sparkles,
   Flag,
   XCircle,
-  ArrowRight,
-} from "lucide-react";
+  ArrowRight, Clock } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useServerFn } from "@tanstack/react-start";
 import { setSubjectAccess, setSubjectOrdered, type SubjectAccess } from "@/lib/subjects.functions";
@@ -93,6 +92,7 @@ type Course = {
   price: number;
   currency?: string;
   paddle_price_id?: string | null;
+  coming_soon?: boolean;
   exam_type: string;
   image_url: string | null;
   subjects_count: number;
@@ -559,6 +559,25 @@ function CourseDetailPage() {
       <div className="min-h-screen bg-background text-foreground">
         <SiteHeader variant="light" />
         <div className="pt-32 text-center text-muted-foreground">Course not found.</div>
+      </div>
+    );
+  }
+
+  if (course.coming_soon && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <SiteHeader variant="light" />
+        <div className="mx-auto max-w-md px-6 pt-32 text-center">
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-amber-400/20 text-amber-500">
+            <Clock size={30} />
+          </div>
+          <h1 className="mt-5 text-2xl font-black">{capitalizeFirst(course.title)}</h1>
+          <p className="mt-2 text-muted-foreground">Coming soon. This course will open for students shortly.</p>
+          <p dir="rtl" className="mt-1 text-muted-foreground">قريباً. سيُفتح هذا الكورس للطلاب قريباً.</p>
+          <Link to="/courses" className="mt-6 inline-block rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground">
+            Back to courses
+          </Link>
+        </div>
       </div>
     );
   }

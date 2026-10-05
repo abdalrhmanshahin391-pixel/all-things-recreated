@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { guardRedirect } from "@/lib/guard-redirect";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Search, Save, Eye, EyeOff, Home, Lock, Tag, BadgeCheck, Loader2 } from "lucide-react";
+import { Search, Save, Eye, EyeOff, Home, Lock, Tag, BadgeCheck, Loader2, Clock } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,6 +40,8 @@ type Row = {
   discount_ends_at: string | null;
   show_on_home: boolean;
   admin_only: boolean;
+  /** Only present once the coming_soon migration has been applied. */
+  coming_soon?: boolean;
 };
 
 const CURRENCIES = ["usd", "eur", "gbp", "jod", "sar"];
@@ -78,9 +80,7 @@ function CourseControlPage() {
       const [{ data: cs, error }, { data: us }] = await Promise.all([
         supabase
           .from("courses")
-          .select(
-            "id, title, year, semester, kind, currency, price, published, university_id, badge, badge_color, badge_expires_at, compare_at_price, discount_active, discount_ends_at, show_on_home, admin_only",
-          )
+          .select("*")
           .order("year", { ascending: true })
           .order("title", { ascending: true }),
         supabase.from("universities").select("id, name").order("name"),
@@ -124,6 +124,7 @@ function CourseControlPage() {
         badge_expires_at: row.badge?.trim() ? row.badge_expires_at : null,
         show_on_home: row.show_on_home,
         admin_only: row.admin_only,
+        ...(row.coming_soon === undefined ? {} : { coming_soon: row.coming_soon }),
       })
       .eq("id", row.id);
     setSaving(null);
@@ -218,6 +219,12 @@ function CourseControlPage() {
                         icon={<Lock size={14} />}
                         label={r.admin_only ? "Admin only (nobody else sees it)" : "Everyone can see it"}
                         danger
+                      />
+                      <Toggle
+                        on={!!r.coming_soon}
+                        onChange={(v) => patch(r.id, { coming_soon: v })}
+                        icon={<Clock size={14} />}
+                        label={r.coming_soon ? "Coming soon (students cannot open it)" : "Open for students"}
                       />
                     </div>
 

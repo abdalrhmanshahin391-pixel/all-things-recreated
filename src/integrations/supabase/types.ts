@@ -1722,6 +1722,7 @@ export type Database = {
           badge_color: string | null
           badge_expires_at: string | null
           category: string
+          coming_soon: boolean
           compare_at_price: number | null
           created_at: string
           created_by: string | null
@@ -1756,6 +1757,7 @@ export type Database = {
           badge_color?: string | null
           badge_expires_at?: string | null
           category?: string
+          coming_soon?: boolean
           compare_at_price?: number | null
           created_at?: string
           created_by?: string | null
@@ -1790,6 +1792,7 @@ export type Database = {
           badge_color?: string | null
           badge_expires_at?: string | null
           category?: string
+          coming_soon?: boolean
           compare_at_price?: number | null
           created_at?: string
           created_by?: string | null

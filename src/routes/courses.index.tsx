@@ -417,6 +417,7 @@ function CourseSection({
                   compare_at_price: c.compare_at_price,
                   discount_active: c.discount_active,
                   discount_ends_at: c.discount_ends_at,
+                  coming_soon: (c as { coming_soon?: boolean }).coming_soon ?? false,
                 }}
                 counts={{ subjects: c.subjects_count ?? 0, questions: total }}
                 unlocked={active}

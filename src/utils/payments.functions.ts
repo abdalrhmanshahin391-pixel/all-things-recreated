@@ -779,13 +779,14 @@ export const createCheckoutTransaction = createServerFn({ method: "POST" })
 
     // 1. Fetch course details
     const { data: course, error: cErr } = await (adminDb.from("courses") as any)
-      .select("id, title, price, currency, paddle_price_id")
+      .select("*")
       .eq("id", data.courseId)
       .maybeSingle();
 
     if (cErr || !course) {
       throw new Error("Course not found");
     }
+    if (course.coming_soon) throw new Error("This course is coming soon.");
 
     // 2. Resolve genuine Paddle Price ID (must start with pri_)
     // The amount always comes from the database (and a coupon checked on the server), never from the browser.
