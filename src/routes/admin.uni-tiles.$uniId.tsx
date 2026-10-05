@@ -215,7 +215,7 @@ function TileEditor({
   onMove: (tile: UniversityTile, dir: -1 | 1) => void;
   onRemove: (tile: UniversityTile) => void;
 }) {
-  const Icon = tileIcon(tile.icon);
+  const Icon = tileIcon(tile.icon, tile.kind);
   const inputClass =
     "mt-0.5 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground";
   const labelClass = "text-[10px] font-bold uppercase tracking-wider text-muted-foreground";

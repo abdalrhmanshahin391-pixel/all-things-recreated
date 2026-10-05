@@ -14,6 +14,9 @@ import {
   Users,
   Trophy,
   Microscope,
+  FileQuestionMark,
+  ClipboardList,
+  ListChecks,
   type LucideIcon,
 } from "lucide-react";
 
@@ -71,11 +74,16 @@ export const TILE_ICONS: Record<string, LucideIcon> = {
   Users,
   Trophy,
   Microscope,
+  FileQuestionMark,
+  ClipboardList,
+  ListChecks,
 };
 
 export const TILE_ICON_NAMES = Object.keys(TILE_ICONS);
 
-export function tileIcon(name: string): LucideIcon {
+export function tileIcon(name: string, kind?: TileKind): LucideIcon {
+  // The Questions Bank card used to carry a book; a question-mark page says what it is.
+  if (kind === "courses" && name === "BookOpen") return FileQuestionMark;
   return TILE_ICONS[name] ?? Sparkles;
 }
 
@@ -101,7 +109,7 @@ export const TILE_DEFAULTS: Record<
     title_ar: "الكورسات",
     subtitle_en: "Question banks · Year-by-year syllabus",
     subtitle_ar: "بنوك الأسئلة · منهج سنة بسنة",
-    icon: "BookOpen",
+    icon: "FileQuestionMark",
     href: "/courses",
     highlighted: true,
   },

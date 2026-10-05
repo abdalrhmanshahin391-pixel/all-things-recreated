@@ -352,7 +352,7 @@ function UniversityHubPage() {
         {/* The pillars */}
         <div className={`mx-auto max-w-7xl px-6 md:px-10 mt-8 grid grid-cols-1 gap-5 ${gridCols}`}>
           {shownTiles.map((tile) => {
-            const Icon = tileIcon(tile.icon);
+            const Icon = tileIcon(tile.icon, tile.kind);
             const auto = countFor(tile.kind);
             const badge = pickText(tile.badge_en, tile.badge_ar, lang).trim();
             const highlighted =
