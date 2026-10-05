@@ -25,6 +25,7 @@ import { CommitteeTheme } from "@/components/CommitteeTheme";
 import { ThemeDecor } from "@/components/ThemeDecor";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { SiteFooter } from "@/components/SiteFooter";
+import { useCommitteeVersion } from "@/lib/committee-version";
 import { useAuth } from "@/hooks/useAuth";
 import { needsOnboarding } from "@/lib/onboarding";
 import { Toaster } from "@/components/ui/sonner";
@@ -361,8 +362,18 @@ function GlobalFooter() {
   const hidden =
     NO_FOOTER.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
     /\/(run|exam|match|tap|checkout)(\/|$)/.test(pathname);
+  const { isAqua } = useCommitteeVersion();
   if (hidden) return null;
-  return <SiteFooter />;
+  // The AQUA version of the committee pages (home, year, subject) has its own gold, purple and black look; the
+  // footer under it follows. "contents" keeps the footer a direct child of the page layout.
+  const aquaPage = isAqua && /^\/committee(\/\d+(\/[^/]+)?)?\/?$/.test(pathname);
+  return aquaPage ? (
+    <div className="aqua-theme contents">
+      <SiteFooter />
+    </div>
+  ) : (
+    <SiteFooter />
+  );
 }
 
 function DeviceTracker() {
