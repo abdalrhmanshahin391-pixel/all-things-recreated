@@ -936,6 +936,30 @@ export type Database = {
         }
         Relationships: []
       }
+      committee_aqua_state: {
+        Row: {
+          is_open: boolean
+          node_id: string
+          node_type: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          is_open?: boolean
+          node_id: string
+          node_type: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          is_open?: boolean
+          node_id?: string
+          node_type?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       committee_best_sources: {
         Row: {
           created_at: string
