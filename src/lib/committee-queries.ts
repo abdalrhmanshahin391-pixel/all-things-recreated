@@ -51,7 +51,7 @@ export function committeeSubjectQuery(subjectId: string) {
     queryFn: async () => {
       const [{ data: subj }, { data: cats }] = await Promise.all([
         supabase.from("committee_subjects").select("*").eq("id", subjectId).maybeSingle(),
-        supabase.from("committee_categories").select("*").eq("subject_id", subjectId).order("sort_order"),
+        supabase.from("committee_categories").select("*").eq("subject_id", subjectId).neq("section", "aqua").order("sort_order"),
       ]);
       const catIds = (cats ?? []).map((c: { id: string }) => c.id);
       const { data: res } = catIds.length

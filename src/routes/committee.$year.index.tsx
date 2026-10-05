@@ -12,14 +12,37 @@ import { CommitteeDialog, Field, inputCls, primaryBtn, primaryBtnStyle } from "@
 import { SubjectTag, TAG_COLOR_KEYS, tagChipClass } from "@/components/committee/SubjectTag";
 import { ClosedWrap, ClosedBanner, ClosedFields, closedDefaults, closedPayload, CLOSED_SELECT, type ClosedInfo } from "@/components/committee/ClosedState";
 import { CommitteeAccessNote } from "@/components/committee/CommitteeAccessNote";
+import { useCommitteeVersion } from "@/lib/committee-version";
+import { VersionSwitch } from "@/components/committee/aqua/VersionSwitch";
+import { AquaYearPage } from "@/components/committee/aqua/AquaYear";
 
 export const Route = createFileRoute("/committee/$year/")({
   validateSearch: (search: Record<string, unknown>) => ({
     sem: typeof search['sem'] === "string" ? (search['sem'] as string) : undefined,
     mod: typeof search['mod'] === "string" ? (search['mod'] as string) : undefined,
   }),
-  component: YearPage,
+  component: YearEntry,
 });
+
+/** The year page: university resources, or the AQUA version, depending on the switch. */
+function YearEntry() {
+  const { isAqua } = useCommitteeVersion();
+  const { year } = useParams({ from: "/committee/$year/" });
+  const { sem, mod } = Route.useSearch();
+  const navigate = useNavigate();
+  if (isAqua) {
+    return (
+      <AquaYearPage
+        year={year}
+        sem={sem}
+        mod={mod}
+        onSemester={(id) => navigate({ to: "/committee/$year", params: { year }, search: { sem: id, mod: undefined } })}
+        onModule={(id) => navigate({ to: "/committee/$year", params: { year }, search: { sem, mod: id } })}
+      />
+    );
+  }
+  return <YearPage />;
+}
 
 type Subject = {
   id: string;
@@ -169,12 +192,12 @@ function YearPage() {
       <SiteHeader />
 
       <main className="pt-16 pb-24 px-6 md:px-10 max-w-6xl mx-auto">
-        <div className="pt-10">
+        <div className="pt-10 mb-6 flex flex-wrap items-center justify-between gap-3">
           {activeModule ? (
             <button
               type="button"
               onClick={() => openModule(undefined)}
-              className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-6"
+              className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               <ChevronLeft size={16} /> Back to {activeSemester?.name ?? "semester"}
             </button>
@@ -182,18 +205,19 @@ function YearPage() {
             <button
               type="button"
               onClick={() => openSemester(undefined)}
-              className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-6"
+              className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               <ChevronLeft size={16} /> Back to semesters
             </button>
           ) : (
             <Link
               to="/committee"
-              className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-6"
+              className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               <ChevronLeft size={16} /> Back to years
             </Link>
           )}
+          <VersionSwitch />
         </div>
 
         {data?.year && (

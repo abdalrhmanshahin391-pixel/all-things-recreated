@@ -17,6 +17,9 @@ import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { CommitteeDialog, Field, inputCls, primaryBtn, primaryBtnStyle } from "@/components/committee/Dialog";
 import { ClosedWrap, ClosedFields, closedDefaults, closedPayload, CLOSED_SELECT, type ClosedInfo } from "@/components/committee/ClosedState";
 import { exportCommitteeBackupData, signCommitteeFile, importCommitteeBackup, uploadCommitteeFile } from "@/lib/committee-backup.functions";
+import { useCommitteeVersion } from "@/lib/committee-version";
+import { VersionSwitch } from "@/components/committee/aqua/VersionSwitch";
+import { AquaHome } from "@/components/committee/aqua/AquaHome";
 
 export const Route = createFileRoute("/committee/")({
   head: () => ({
@@ -26,8 +29,14 @@ export const Route = createFileRoute("/committee/")({
     ],
   }),
   loader: ({ context }) => context.queryClient.ensureQueryData(committeeYearsQuery),
-  component: CommitteePage,
+  component: CommitteeHome,
 });
+
+/** The committee home: the university resources, or the AQUA version, depending on the switch. */
+function CommitteeHome() {
+  const { isAqua } = useCommitteeVersion();
+  return isAqua ? <AquaHome /> : <CommitteePage />;
+}
 
 type Year = {
   id: string;
@@ -126,6 +135,9 @@ function CommitteePage() {
           <p className="mt-3 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
             Pick your year to explore subjects, books and resources curated by senior students.
           </p>
+          <div className="mt-6 flex justify-center">
+            <VersionSwitch />
+          </div>
           {canManageYears && (
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
               <button

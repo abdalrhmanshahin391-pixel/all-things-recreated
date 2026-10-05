@@ -34,10 +34,20 @@ import { BestSources } from "@/components/committee/BestSources";
 import { uploadFileToDrive, removeDriveFile, type DriveUploadPhase } from "@/lib/committee-drive";
 import { touchCommitteeSnapshot } from "@/lib/committee-snapshot-touch";
 import { VideoModal } from "@/components/committee/VideoModal";
+import { useCommitteeVersion } from "@/lib/committee-version";
+import { VersionSwitch } from "@/components/committee/aqua/VersionSwitch";
+import { AquaSubjectPage } from "@/components/committee/aqua/AquaSubject";
 
 export const Route = createFileRoute("/committee/$year/$subject")({
-  component: SubjectPage,
+  component: SubjectEntry,
 });
+
+/** The subject page: university resources, or the AQUA summaries, depending on the switch. */
+function SubjectEntry() {
+  const { isAqua } = useCommitteeVersion();
+  const { year, subject } = useParams({ from: "/committee/$year/$subject" });
+  return isAqua ? <AquaSubjectPage year={year} subject={subject} /> : <SubjectPage />;
+}
 
 type Category = { id: string; subject_id: string; name: string; sort_order: number; section: "resources" | "books" };
 type Resource = {
@@ -84,7 +94,7 @@ function SubjectPage() {
     queryFn: async () => {
       const [{ data: subj }, { data: cats }] = await Promise.all([
         supabase.from("committee_subjects").select("*").eq("id", subject).maybeSingle(),
-        supabase.from("committee_categories").select("*").eq("subject_id", subject).order("sort_order"),
+        supabase.from("committee_categories").select("*").eq("subject_id", subject).neq("section", "aqua").order("sort_order"),
       ]);
       const catIds = (cats ?? []).map((c: { id: string }) => c.id);
       const { data: res } = catIds.length
@@ -272,17 +282,20 @@ function SubjectPage() {
 
       <main className="pt-16 pb-24 px-4 md:px-10">
         <div className="max-w-6xl mx-auto pt-10">
-          <Link
-            to="/committee/$year"
-            params={{ year }}
-            search={{
-              sem: (subj as { semester_id?: string | null } | null)?.semester_id ?? undefined,
-              mod: (subj as { module_id?: string | null } | null)?.module_id ?? undefined,
-            }}
-            className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-6"
-          >
-            <ChevronLeft size={16} /> {year === "0" ? "Back to Preparation Year" : `Back to Year ${year}`}
-          </Link>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <Link
+              to="/committee/$year"
+              params={{ year }}
+              search={{
+                sem: (subj as { semester_id?: string | null } | null)?.semester_id ?? undefined,
+                mod: (subj as { module_id?: string | null } | null)?.module_id ?? undefined,
+              }}
+              className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronLeft size={16} /> {year === "0" ? "Back to Preparation Year" : `Back to Year ${year}`}
+            </Link>
+            <VersionSwitch />
+          </div>
 
           {!canManage && (subj as { is_closed?: boolean } | null)?.is_closed ? (
             <div className="text-center py-20 rounded-xl bg-card border border-dashed border-border">

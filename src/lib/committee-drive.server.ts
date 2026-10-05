@@ -41,7 +41,7 @@ export async function driveFolderPathForCategory(
   if (!categoryId) return [...base, "Uploads"];
   const { data: cat } = await supabase
     .from("committee_categories")
-    .select("name, subject_id")
+    .select("name, subject_id, section")
     .eq("id", categoryId)
     .maybeSingle();
   if (!cat) return [...base, "Uploads"];
@@ -68,6 +68,7 @@ export async function driveFolderPathForCategory(
   const out = [...base, year?.display_name || `Year ${year?.year_number ?? "?"}`];
   if (semester) out.push(semester);
   out.push(subj.name);
+  if (cat.section === "aqua") out.push("AQUA Summaries");
   return out.map((s) => String(s).replace(/['\\]/g, "").trim() || "Untitled");
 }
 
