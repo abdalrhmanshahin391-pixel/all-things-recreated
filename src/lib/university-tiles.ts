@@ -17,6 +17,7 @@ import {
   FileQuestionMark,
   ClipboardList,
   ListChecks,
+  ClipboardCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -77,13 +78,14 @@ export const TILE_ICONS: Record<string, LucideIcon> = {
   FileQuestionMark,
   ClipboardList,
   ListChecks,
+  ClipboardCheck,
 };
 
 export const TILE_ICON_NAMES = Object.keys(TILE_ICONS);
 
 export function tileIcon(name: string, kind?: TileKind): LucideIcon {
-  // The Questions Bank card used to carry a book (and briefly a question-mark page); a checklist reads as a quiz bank.
-  if (kind === "courses" && (name === "BookOpen" || name === "FileQuestionMark")) return ListChecks;
+  // The Questions Bank card used to carry a book (then a question-mark page, then a checklist); a clipboard with a tick reads as an exam paper.
+  if (kind === "courses" && (name === "BookOpen" || name === "FileQuestionMark" || name === "ListChecks")) return ClipboardCheck;
   return TILE_ICONS[name] ?? Sparkles;
 }
 
@@ -109,7 +111,7 @@ export const TILE_DEFAULTS: Record<
     title_ar: "الكورسات",
     subtitle_en: "Question banks · Year-by-year syllabus",
     subtitle_ar: "بنوك الأسئلة · منهج سنة بسنة",
-    icon: "ListChecks",
+    icon: "ClipboardCheck",
     href: "/courses",
     highlighted: true,
   },
