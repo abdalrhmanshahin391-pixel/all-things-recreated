@@ -21,6 +21,7 @@ import {
   Star,
   CheckSquare,
   BadgeCheck,
+  Database,
   GraduationCap,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -37,7 +38,7 @@ import {
 import { toast } from "sonner";
 import { UserModerationDialog } from "@/components/admin/UserModerationDialog";
 import { UserEditDialog } from "@/components/admin/UserEditDialog";
-import { AdminBadge, QaBadge, TeacherBadge } from "@/components/RoleBadge";
+import { AdminBadge, QaBadge, QBankBadge, TeacherBadge } from "@/components/RoleBadge";
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
 
@@ -55,8 +56,8 @@ export const Route = createFileRoute("/admin/users")({
   component: AdminUsersPage,
 });
 
-type RoleKey = "admin" | "committee" | "committee_en" | "committee_head" | "golden" | "qa" | "teacher";
-type Filter = "all" | "admin" | "committee" | "committee_en" | "committee_head" | "golden" | "qa" | "teacher" | "none" | "unverified";
+type RoleKey = "admin" | "committee" | "committee_en" | "committee_head" | "golden" | "qa" | "qbank" | "teacher";
+type Filter = "all" | "admin" | "committee" | "committee_en" | "committee_head" | "golden" | "qa" | "qbank" | "teacher" | "none" | "unverified";
 
 const ROLE_LABEL: Record<RoleKey, string> = {
   admin: "Admin",
@@ -65,6 +66,7 @@ const ROLE_LABEL: Record<RoleKey, string> = {
   committee_head: "رئيس اللجنة",
   golden: "Golden account",
   qa: "QA",
+  qbank: "QBank",
   teacher: "Teacher",
 };
 
@@ -117,6 +119,7 @@ function AdminUsersPage() {
       if (filter === "golden" && !u.roles.includes("golden")) return false;
       if (filter === "teacher" && !u.roles.includes("teacher")) return false;
       if (filter === "qa" && !u.roles.includes("qa")) return false;
+      if (filter === "qbank" && !u.roles.includes("qbank")) return false;
       if (filter === "none" && u.roles.length > 0) return false;
       if (filter === "unverified" && u.email_confirmed_at) return false;
       if (!q) return true;
@@ -139,6 +142,7 @@ function AdminUsersPage() {
       golden: users.filter((u) => u.roles.includes("golden")).length,
       teachers: users.filter((u) => u.roles.includes("teacher")).length,
       qa: users.filter((u) => u.roles.includes("qa")).length,
+      qbank: users.filter((u) => u.roles.includes("qbank")).length,
     }),
     [users],
   );
@@ -260,6 +264,7 @@ function AdminUsersPage() {
           <Stat label="رؤساء اللجنة" value={counts.heads} />
           <Stat label="Golden accounts" value={counts.golden} />
           <Stat label="QA" value={counts.qa} />
+          <Stat label="QBank" value={counts.qbank} />
         </div>
 
         <div className="mb-6 rounded-2xl border border-border bg-card p-4 flex gap-3">
@@ -299,6 +304,7 @@ function AdminUsersPage() {
             ["golden", "Golden accounts"],
             ["teacher", "Teachers"],
             ["qa", "QA"],
+            ["qbank", "QBank"],
             ["none", "No role"],
             ["unverified", "Not verified"],
           ] as [Filter, string][]).map(([key, label]) => (
@@ -496,6 +502,13 @@ function AdminUsersPage() {
                         busy={busyRole === `${u.id}:qa`}
                         onClick={() => toggleRole(u, "qa")}
                       />
+                      <RoleChip
+                        label={ROLE_LABEL.qbank}
+                        icon={<Database size={13} />}
+                        active={u.roles.includes("qbank")}
+                        busy={busyRole === `${u.id}:qbank`}
+                        onClick={() => toggleRole(u, "qbank")}
+                      />
                       <span className="text-xs text-muted-foreground ms-auto">Phone:</span>
                       {isEditing ? (
                         <div className="flex items-center gap-1">
@@ -600,6 +613,7 @@ export function UserRoleBadge({ roles, size = "sm" }: { roles: string[]; size?: 
   if (specificRoles.includes("committee")) return <CommitteeBadge size={size} isAr />;
   if (specificRoles.includes("golden")) return <GoldenBadge size={size} />;
   if (specificRoles.includes("teacher")) return <TeacherBadge size={size} />;
+  if (specificRoles.includes("qbank")) return <QBankBadge size={size} />;
   if (specificRoles.includes("qa")) return <QaBadge size={size} />;
 
   if (specificRoles.length > 0) {

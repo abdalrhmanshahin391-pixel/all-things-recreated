@@ -1,4 +1,4 @@
-import { BadgeCheck, GraduationCap, ShieldCheck } from "lucide-react";
+import { BadgeCheck, Database, GraduationCap, ShieldCheck } from "lucide-react";
 
 /** Special badge for site administrators. */
 export function AdminBadge({
@@ -116,6 +116,41 @@ export function QaBadge({
     >
       <BadgeCheck size={size === "md" ? 13 : 11} />
       QA
+    </span>
+  );
+}
+
+/** Green badge for QBank members: the team that works in Aqua Studio (Question Forge and Past Papers). */
+export function QBankBadge({
+  size = "sm",
+  dot,
+  className = "",
+}: {
+  size?: "sm" | "md";
+  dot?: boolean;
+  className?: string;
+}) {
+  const green =
+    "border border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300";
+  if (dot) {
+    return (
+      <span
+        title="QBank"
+        aria-label="QBank"
+        className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${green} ${className}`}
+      >
+        <Database size={11} />
+      </span>
+    );
+  }
+  const pad = size === "md" ? "px-2.5 py-1 text-[11px]" : "px-2 py-0.5 text-[10px]";
+  return (
+    <span
+      title="Question Bank team"
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full font-black uppercase tracking-[0.14em] ${green} ${pad} ${className}`}
+    >
+      <Database size={size === "md" ? 13 : 11} />
+      QBank
     </span>
   );
 }

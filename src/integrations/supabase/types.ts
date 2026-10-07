@@ -6537,6 +6537,7 @@ export type Database = {
         | "golden"
         | "committee_head"
         | "qa"
+        | "qbank"
       coupon_discount_type: "percent" | "fixed"
       package_type: "individual" | "group"
       subject_access: "paid" | "free_logged_in" | "free_public"
@@ -6674,6 +6675,7 @@ export const Constants = {
         "golden",
         "committee_head",
         "qa",
+        "qbank",
       ],
       coupon_discount_type: ["percent", "fixed"],
       package_type: ["individual", "group"],
