@@ -36,6 +36,8 @@ import {
   Clock,
   RotateCcw,
   ArrowRight,
+  Lightbulb,
+  SkipForward,
 } from "lucide-react";
 
 type Mode = "study" | "session" | "exam";
@@ -115,6 +117,8 @@ function RunPageInner() {
   const [answers, setAnswers] = useState<SelectedAnswers>({});
   const [submitted, setSubmitted] = useState<Record<string, boolean>>({});
   const [flags, setFlags] = useState<Set<string>>(new Set());
+  /** Session mode: questions the student chose to leave for later (they come back until answered). */
+  const [skipped, setSkipped] = useState<string[]>([]);
   const initialSeconds = (timed && duration > 0 ? duration : 60) * 60;
   const [secondsLeft, setSecondsLeft] = useState(initialSeconds);
 
@@ -456,6 +460,7 @@ function RunPageInner() {
             }
             setAnswers(restoredAnswers);
             setSubmitted(saved.submitted ?? {});
+            setSkipped(Array.isArray(saved.skipped) ? saved.skipped.filter((id: unknown) => list.some((q) => q.id === id)) : []);
             setCurrent(Math.max(0, Math.min(Number(saved.current) || 0, list.length - 1)));
             setFinished(false);
             setReviewMode(Boolean(saved.reviewMode));
@@ -490,10 +495,10 @@ function RunPageInner() {
     }
     try {
       sessionStorage.setItem(sessionKey, JSON.stringify({
-        questionIds: questions.map((q) => q.id), answerOptionIds, submitted, current, finished, reviewMode, reviewIndex, secondsLeft,
+        questionIds: questions.map((q) => q.id), answerOptionIds, submitted, skipped, current, finished, reviewMode, reviewIndex, secondsLeft,
       }));
     } catch {}
-  }, [sessionReady, sessionKey, questions, answers, submitted, current, finished, reviewMode, reviewIndex, secondsLeft]);
+  }, [sessionReady, sessionKey, questions, answers, submitted, skipped, current, finished, reviewMode, reviewIndex, secondsLeft]);
 
   useEffect(() => {
     if (mode !== "study" || !questions.length) return;
@@ -598,6 +603,38 @@ function RunPageInner() {
     return () => clearInterval(interval);
   }, [finished, reviewMode, mode, currentQ, submitted]);
 
+  /** Questions the student skipped and has not answered yet, other than the one on screen. */
+  const skippedLeft = questions.filter((q) => skipped.includes(q.id) && !submitted[q.id] && q.id !== currentQ?.id);
+
+  /** Leave this question for later: go to the next open one (wrapping around), preferring the ones not skipped before. */
+  const skipCurrent = () => {
+    if (!currentQ) return;
+    const marked = skipped.includes(currentQ.id) ? skipped : [...skipped, currentQ.id];
+    setSkipped(marked);
+    const n = questions.length;
+    const find = (allowSkipped: boolean) => {
+      for (let step = 1; step < n; step++) {
+        const i = (current + step) % n;
+        const q = questions[i]!;
+        if (!submitted[q.id] && (allowSkipped || !marked.includes(q.id))) return i;
+      }
+      return -1;
+    };
+    const next = find(false) >= 0 ? find(false) : find(true);
+    if (next >= 0) setCurrent(next);
+    else toast.info("This is the last open question. Answer it, or finish the session.");
+  };
+
+  const goNextFrom = () => {
+    if (current < questions.length - 1) { setCurrent((c) => c + 1); return; }
+    // At the end: come back to what was skipped before finishing.
+    if (mode === "session" && skippedLeft.length) {
+      const first = questions.findIndex((q) => q.id === skippedLeft[0]!.id);
+      if (first >= 0) { setCurrent(first); return; }
+    }
+    setFinished(true);
+  };
+
   const isFlagShining =
     !!currentQ && timeSpentOnQuestion >= 45 && !isFlaggedCurrent && !submitted[currentQ.id];
 
@@ -608,6 +645,7 @@ function RunPageInner() {
     setCurrent(0);
     setAnswers({});
     setSubmitted({});
+    setSkipped([]);
     setFinished(false);
     setReviewMode(false);
     setReviewIndex(0);
@@ -1011,10 +1049,9 @@ function RunPageInner() {
                 onToggleFlag={() => toggleFlag(currentQ.id)}
                  onSelect={(opt) => setAnswers((p) => ({ ...p, [currentQ.id]: toggleSelection(p[currentQ.id], opt, currentQ.answer_mode === "multiple") }))}
                 onSubmit={() => setSubmitted((p) => ({ ...p, [currentQ.id]: true }))}
-                onNext={() => {
-                  if (current === questions.length - 1) setFinished(true);
-                  else setCurrent((c) => c + 1);
-                }}
+                onNext={goNextFrom}
+                onSkip={mode === "session" ? skipCurrent : undefined}
+                skippedLeft={mode === "session" ? skippedLeft.length : 0}
                 isLast={current === questions.length - 1}
                 onSetCorrect={(optionId) => setCorrectOption(currentQ.id, optionId)}
                 onDelete={() => deleteQuestion(currentQ.id)}
@@ -1047,9 +1084,11 @@ function RunPageInner() {
                    const right = wasSubmitted && answered && isExactAnswer(q, answers[q.id]);
                    const wrong = wasSubmitted && answered && !right;
                   const flagged = flags.has(q.id);
+                  const skippedOpen = mode === "session" && skipped.includes(q.id) && !wasSubmitted;
                   return (
                     <button
                       key={q.id}
+                      title={skippedOpen ? "Skipped: come back to it" : undefined}
                       onClick={() => mode !== "exam" && setCurrent(i)}
                       className={`relative h-9 rounded-lg text-xs font-bold border transition-colors ${
                         isCurrent
@@ -1058,6 +1097,8 @@ function RunPageInner() {
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                             : wrong
                               ? "bg-rose-50 text-rose-700 border-rose-200"
+                              : skippedOpen
+                              ? "border-dashed border-amber-400 bg-amber-50/60 text-amber-700"
                               : flagged
                                 ? "bg-amber-50 text-amber-700 border-amber-200"
                                 : answered
@@ -1154,7 +1195,7 @@ function fmtTime(s: number) {
 function QuestionCard({
   q, mode, isAdmin, selected, submitted, isFlagged, isShining = false,
   courseId, courseSections, onMoveQuestion,
-  onToggleFlag, onSelect, onSubmit, onNext, isLast, onSetCorrect, onDelete, onEdit, onResolve, onCapture,
+  onToggleFlag, onSelect, onSubmit, onNext, onSkip, skippedLeft = 0, isLast, onSetCorrect, onDelete, onEdit, onResolve, onCapture,
 }: {
   q: Question; mode: Mode; isAdmin: boolean;
   courseId?: string;
@@ -1167,6 +1208,8 @@ function QuestionCard({
   selected: string[] | undefined; submitted: boolean; isFlagged: boolean; isShining?: boolean;
   onToggleFlag: () => void; onSelect: (label: string) => void;
   onSubmit: () => void; onNext: () => void; isLast: boolean;
+  /** Session mode only: leave this question for later. */
+  onSkip?: () => void; skippedLeft?: number;
   onSetCorrect: (optionId: string) => void; onDelete: () => void;
   onEdit: () => void; onResolve: () => void;
   onCapture: (cap: CapturePayload) => void;
@@ -1175,6 +1218,10 @@ function QuestionCard({
   const [ar, setAr] = useState(false);
   const { data: tr, loading: trLoading, error: trError } = useQuestionTranslation(q.id, ar);
   const show = ar && tr ? tr : null;
+  // Session mode: the explanation stays closed until the student asks for it.
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const explanationText = (show?.explanation ?? q.explanation) as string | null;
+  const explanationOpen = mode !== "session" || !!revealed[q.id];
 
   return (
     <div className="medical-card overflow-hidden">
@@ -1312,21 +1359,45 @@ function QuestionCard({
       </div>
       </ProtectedContent>
 
-      {submitted && (show?.explanation || q.explanation) && (
+      {mode === "session" && submitted && explanationText && (
+        <div className="px-6 pb-4">
+          <button
+            type="button"
+            onClick={() => setRevealed((p) => ({ ...p, [q.id]: !p[q.id] }))}
+            aria-expanded={!!revealed[q.id]}
+            className="w-full py-3 rounded-xl border-2 border-amber-400/70 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold inline-flex items-center justify-center gap-2 transition-colors dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-950/70"
+          >
+            <Lightbulb className="w-4 h-4" /> {revealed[q.id] ? "Hide explanation" : "Show explanation"}
+          </button>
+        </div>
+      )}
+      {submitted && explanationText && explanationOpen && (
         <div dir={show?.explanation ? "rtl" : undefined}>
-          <ExplanationPanel explanation={(show?.explanation ?? q.explanation) as string} onCapture={onCapture} />
+          <ExplanationPanel explanation={explanationText} onCapture={onCapture} />
         </div>
       )}
 
       <div className="px-6 pb-6">
         {mode === "session" && !submitted ? (
-          <button
-             disabled={!selected?.length}
-            onClick={onSubmit}
-            className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-muted disabled:text-muted-foreground text-white font-bold transition-colors"
-          >
-            Submit answer
-          </button>
+          <div className="flex gap-3">
+            {onSkip && (
+              <button
+                type="button"
+                onClick={onSkip}
+                title="Leave this question for later; it comes back before the session ends"
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border-2 border-border bg-card hover:bg-muted text-foreground font-bold transition-colors"
+              >
+                <SkipForward className="w-4 h-4" /> Skip
+              </button>
+            )}
+            <button
+              disabled={!selected?.length}
+              onClick={onSubmit}
+              className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-muted disabled:text-muted-foreground text-white font-bold transition-colors"
+            >
+              Submit answer
+            </button>
+          </div>
         ) : (
           <button
             onClick={onNext}
@@ -1337,7 +1408,7 @@ function QuestionCard({
             }`}
           >
             <span className="relative z-10 inline-flex items-center gap-2">
-              {isLast ? "Finish & see results" : "Next question"}
+              {isLast ? (skippedLeft ? `Back to skipped questions (${skippedLeft})` : "Finish & see results") : "Next question"}
               <ArrowRight className="w-4 h-4" />
             </span>
           </button>
