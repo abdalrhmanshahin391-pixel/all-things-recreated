@@ -86,6 +86,7 @@ import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminVisionProBatchRouteImport } from './routes/admin.vision-pro-batch'
 import { Route as ApiCommitteeDriveUploadRouteImport } from './routes/api/committee-drive-upload'
 import { Route as ApiQuestionBankImportRouteImport } from './routes/api/question-bank-import'
+import { Route as ApiQuestionApprovalImportRouteImport } from './routes/api/question-approval-import'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
 import { Route as CommitteeIndexRouteImport } from './routes/committee.index'
@@ -548,6 +549,11 @@ const ApiCommitteeDriveUploadRoute = ApiCommitteeDriveUploadRouteImport.update({
 const ApiQuestionBankImportRoute = ApiQuestionBankImportRouteImport.update({
   id: '/api/question-bank-import',
   path: '/api/question-bank-import',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiQuestionApprovalImportRoute = ApiQuestionApprovalImportRouteImport.update({
+  id: '/api/question-approval-import',
+  path: '/api/question-approval-import',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
@@ -1015,6 +1021,7 @@ export interface FileRoutesByFullPath {
   '/admin/vision-pro-batch': typeof AdminVisionProBatchRoute
   '/api/committee-drive-upload': typeof ApiCommitteeDriveUploadRoute
   '/api/question-bank-import': typeof ApiQuestionBankImportRoute
+  '/api/question-approval-import': typeof ApiQuestionApprovalImportRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/$year': typeof CommitteeYearRouteWithChildren
@@ -1161,6 +1168,7 @@ export interface FileRoutesByTo {
   '/admin/vision-pro-batch': typeof AdminVisionProBatchRoute
   '/api/committee-drive-upload': typeof ApiCommitteeDriveUploadRoute
   '/api/question-bank-import': typeof ApiQuestionBankImportRoute
+  '/api/question-approval-import': typeof ApiQuestionApprovalImportRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/manage-team': typeof CommitteeManageTeamRoute
@@ -1311,6 +1319,7 @@ export interface FileRoutesById {
   '/admin/vision-pro-batch': typeof AdminVisionProBatchRoute
   '/api/committee-drive-upload': typeof ApiCommitteeDriveUploadRoute
   '/api/question-bank-import': typeof ApiQuestionBankImportRoute
+  '/api/question-approval-import': typeof ApiQuestionApprovalImportRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/committee/$year': typeof CommitteeYearRouteWithChildren
@@ -1467,6 +1476,7 @@ export interface FileRouteTypes {
     | '/admin/vision-pro-batch'
     | '/api/committee-drive-upload'
     | '/api/question-bank-import'
+    | '/api/question-approval-import'
     | '/auth/callback'
     | '/checkout/success'
     | '/committee/$year'
@@ -1613,6 +1623,7 @@ export interface FileRouteTypes {
     | '/admin/vision-pro-batch'
     | '/api/committee-drive-upload'
     | '/api/question-bank-import'
+    | '/api/question-approval-import'
     | '/auth/callback'
     | '/checkout/success'
     | '/committee/manage-team'
@@ -1762,6 +1773,7 @@ export interface FileRouteTypes {
     | '/admin/vision-pro-batch'
     | '/api/committee-drive-upload'
     | '/api/question-bank-import'
+    | '/api/question-approval-import'
     | '/auth/callback'
     | '/checkout/success'
     | '/committee/$year'
@@ -1917,6 +1929,7 @@ export interface RootRouteChildren {
   AdminVisionProBatchRoute: typeof AdminVisionProBatchRoute
   ApiCommitteeDriveUploadRoute: typeof ApiCommitteeDriveUploadRoute
   ApiQuestionBankImportRoute: typeof ApiQuestionBankImportRoute
+  ApiQuestionApprovalImportRoute: typeof ApiQuestionApprovalImportRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   CheckoutSuccessRoute: typeof CheckoutSuccessRoute
   EventsSlugRoute: typeof EventsSlugRoute
@@ -2497,6 +2510,13 @@ declare module '@tanstack/react-router' {
       path: '/api/question-bank-import'
       fullPath: '/api/question-bank-import'
       preLoaderRoute: typeof ApiQuestionBankImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/question-approval-import': {
+      id: '/api/question-approval-import'
+      path: '/api/question-approval-import'
+      fullPath: '/api/question-approval-import'
+      preLoaderRoute: typeof ApiQuestionApprovalImportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/callback': {
@@ -3316,6 +3336,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminVisionProBatchRoute: AdminVisionProBatchRoute,
   ApiCommitteeDriveUploadRoute: ApiCommitteeDriveUploadRoute,
   ApiQuestionBankImportRoute: ApiQuestionBankImportRoute,
+  ApiQuestionApprovalImportRoute: ApiQuestionApprovalImportRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   CheckoutSuccessRoute: CheckoutSuccessRoute,
   EventsSlugRoute: EventsSlugRoute,
