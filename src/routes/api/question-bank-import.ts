@@ -10,7 +10,7 @@ import type { QbIndex, QbMeta, QbQuestion } from "@/lib/question-bank";
  *   { groups: [{ meta: { name, year, semester, subject }, questions: [...] }],
  *     course?: { sectionId: string, subjectName?: string } }
  *
- * Admin only. Every group gets a fresh id, so an import can never overwrite an existing group.
+ * Admin or QBank only. Every group gets a fresh id, so an import can never overwrite an existing group.
  * A question's image_url may be an https link or a data URL (jpeg/png); data URLs are uploaded to the
  * question-images bucket and replaced by their storage path.
  */
@@ -110,7 +110,12 @@ export const Route = createFileRoute("/api/question-bank-import")({
           _user_id: authData.user.id,
           _role: "admin",
         });
-        if (roleError || !isAdmin) return jsonError("Forbidden: admin only", 403);
+        if (roleError) return jsonError("Forbidden", 403);
+        if (!isAdmin) {
+          // The QBank team (Aqua Studio) may send questions too. If the role is not created yet this check fails: refused.
+          const { data: isQbank } = await supabase.rpc("has_role", { _user_id: authData.user.id, _role: "qbank" as any });
+          if (!isQbank) return jsonError("Forbidden: admin or QBank only", 403);
+        }
 
         const length = Number(request.headers.get("content-length") ?? "0");
         if (Number.isFinite(length) && length > MAX_BODY_BYTES) return jsonError("That import is too large. Send it in parts.", 413);
