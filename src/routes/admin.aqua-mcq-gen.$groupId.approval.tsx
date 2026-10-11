@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowLeft, Loader2, Check, Flag, Trash2, Plus, Sparkles, Copy, ZoomIn, ZoomOut,
-  RotateCcw, AlertTriangle, History, Highlighter, Undo2, Eraser, ChevronDown,
+  RotateCcw, AlertTriangle, History, Highlighter, Undo2, Eraser, ChevronDown, ClipboardCopy, Settings2,
 } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,6 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
 import {
   amgGetGroup, amgPageUrls, amgListItems, amgUpdateItem, amgAddItem, amgDeleteItems,
   amgSetStatus, amgDuplicates, amgCompleteItems, amgListEvents,
@@ -48,9 +50,46 @@ function optionsText(c: any) {
   return Array.isArray(c?.options) ? c.options.map((o: any) => norm(o?.text ?? o)).join(" | ") : "";
 }
 
+/** What "Copy for AI" puts on the clipboard. Admins can change it; these words are replaced by the question. */
+const DEFAULT_AI_TEMPLATE = `Solve this question:
+
+{{question}}
+
+{{statements}}
+{{options}}`;
+
+function renderAiPrompt(template: string, q: { number_label: string; stem: string; statements: { n: string; text: string }[]; options: { label: string; text: string }[] }) {
+  const options = q.options.filter((o) => o.text.trim()).map((o) => `${o.label}. ${o.text.trim()}`).join("\n");
+  const statements = q.statements.filter((x) => x.text.trim()).map((x) => `${x.n}. ${x.text.trim()}`).join("\n");
+  return (template || DEFAULT_AI_TEMPLATE)
+    .replace(/\{\{\s*number\s*\}\}/gi, q.number_label.trim())
+    .replace(/\{\{\s*question\s*\}\}/gi, q.stem.trim())
+    .replace(/\{\{\s*statements\s*\}\}/gi, statements)
+    .replace(/\{\{\s*options\s*\}\}/gi, options)
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+async function writeClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch { /* iPad / http pages: fall back to a hidden text box */ }
+  const box = document.createElement("textarea");
+  box.value = text;
+  box.setAttribute("readonly", "");
+  box.style.cssText = "position:fixed;top:0;left:0;opacity:0;font-size:16px";
+  document.body.appendChild(box);
+  box.select();
+  box.setSelectionRange(0, text.length);
+  const ok = document.execCommand("copy");
+  document.body.removeChild(box);
+  if (!ok) throw new Error("Copy is blocked by this browser");
+}
+
 function ApprovalScreen() {
   const { groupId } = Route.useParams();
-  const { user, loading } = useAuth();
+  const { user, loading, isRealAdmin } = useAuth();
   const navigate = useNavigate();
   useEffect(() => { if (!loading && !user) guardRedirect(navigate); }, [loading, user, navigate]);
 
@@ -93,6 +132,41 @@ function ApprovalScreen() {
   const [openDup, setOpenDup] = useState<number | null>(null);
   const [tab, setTab] = useState("review");
   const [focusId, setFocusId] = useState<string | null>(null);
+
+  // "Copy for AI": the wording is one template for the whole site, edited by admins.
+  const [aiTemplate, setAiTemplate] = useState(DEFAULT_AI_TEMPLATE);
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateDraft, setTemplateDraft] = useState(DEFAULT_AI_TEMPLATE);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const { data } = await (supabase as any).from("site_settings").select("ai_check_template").maybeSingle();
+        const saved = String(data?.ai_check_template ?? "").trim();
+        if (saved) setAiTemplate(saved);
+      } catch { /* column not created yet: the default wording is used */ }
+    })();
+  }, [user]);
+
+  async function copyForAi() {
+    if (!draft) return;
+    try {
+      await writeClipboard(renderAiPrompt(aiTemplate, draft));
+      setCopied(true);
+      toast.success("Copied. Paste it into your AI.");
+      window.setTimeout(() => setCopied(false), 2200);
+    } catch (e: any) { toast.error(String(e?.message ?? e)); }
+  }
+
+  async function saveTemplate(value: string) {
+    const text = value.trim() || DEFAULT_AI_TEMPLATE;
+    const { error } = await (supabase as any).from("site_settings").update({ ai_check_template: text }).eq("id", true);
+    if (error) { toast.error(/ai_check_template/.test(error.message) ? "The database update for this setting is not applied yet." : error.message); return; }
+    setAiTemplate(text);
+    setTemplateOpen(false);
+    toast.success("Template saved for everyone.");
+  }
 
   function layerPoint(e: React.PointerEvent) {
     const box = layerRef.current?.getBoundingClientRect();
@@ -447,6 +521,19 @@ function ApprovalScreen() {
                         <Badge variant="outline">{draft.status}</Badge>
                       </div>
 
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button type="button" onClick={copyForAi} variant={copied ? "secondary" : "default"} className="h-11 min-w-[9.5rem] touch-manipulation">
+                          {copied ? <Check className="mr-2 h-4 w-4" /> : <ClipboardCopy className="mr-2 h-4 w-4" />}
+                          {copied ? "Copied" : "Copy for AI"}
+                        </Button>
+                        {isRealAdmin ? (
+                          <Button type="button" variant="ghost" size="sm" className="h-11 touch-manipulation" onClick={() => { setTemplateDraft(aiTemplate); setTemplateOpen(true); }}>
+                            <Settings2 className="mr-1 h-4 w-4" /> Edit template
+                          </Button>
+                        ) : null}
+                        <span className="text-xs text-muted-foreground">Copies the question and choices so you can paste them into an AI and check the answer.</span>
+                      </div>
+
                       <div className="grid grid-cols-[100px_1fr] gap-2">
                         <div className="space-y-1">
                           <Label>Number</Label>
@@ -631,6 +718,29 @@ function ApprovalScreen() {
           </TabsContent>
         </Tabs>
       </main>
+
+      <Dialog open={templateOpen} onOpenChange={setTemplateOpen}>
+        <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Copy for AI: template</DialogTitle>
+            <DialogDescription>
+              This is what QA copies. It is the same for everyone. Use these words and they are replaced by the question:
+              {" "}<code>{"{{question}}"}</code> <code>{"{{statements}}"}</code> <code>{"{{options}}"}</code> <code>{"{{number}}"}</code>
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea rows={9} className="text-base" value={templateDraft} onChange={(e) => setTemplateDraft(e.target.value)} />
+          {draft ? (
+            <div className="rounded-md border bg-muted/40 p-3 text-sm">
+              <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Preview with this question</div>
+              <pre className="whitespace-pre-wrap font-sans">{renderAiPrompt(templateDraft, draft)}</pre>
+            </div>
+          ) : null}
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button type="button" variant="ghost" className="h-11" onClick={() => setTemplateDraft(DEFAULT_AI_TEMPLATE)}>Back to the standard wording</Button>
+            <Button type="button" className="h-11" onClick={() => saveTemplate(templateDraft)}>Save for everyone</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
