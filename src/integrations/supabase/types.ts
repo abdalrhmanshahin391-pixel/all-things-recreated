@@ -4936,6 +4936,7 @@ export type Database = {
         Row: {
           about_sentence_ar: string | null
           about_sentence_en: string | null
+          ai_check_template: string | null
           brand_style: string
           committee_default_storage: string
           committee_qr_link: string | null
@@ -4978,6 +4979,7 @@ export type Database = {
         Insert: {
           about_sentence_ar?: string | null
           about_sentence_en?: string | null
+          ai_check_template?: string | null
           brand_style?: string
           committee_default_storage?: string
           committee_qr_link?: string | null
@@ -5020,6 +5022,7 @@ export type Database = {
         Update: {
           about_sentence_ar?: string | null
           about_sentence_en?: string | null
+          ai_check_template?: string | null
           brand_style?: string
           committee_default_storage?: string
           committee_qr_link?: string | null
