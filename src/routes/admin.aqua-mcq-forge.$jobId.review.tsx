@@ -50,7 +50,7 @@ import {
   amfSetItemsStatus,
   amfPurgeDuplicates,
 } from "@/lib/aqua-mcq-forge.functions";
-import { formatQuestionStem, ensureCombinedStemWithStatements } from "@/lib/question-format";
+import { formatQuestionStem, ensureCombinedStemWithStatements, HAS_FIRST_STATEMENT } from "@/lib/question-format";
 
 import { stripSourceCitation } from "@/lib/aqua-mcq-forge.explanation";
 
@@ -534,7 +534,7 @@ function AquaMcqForgeReview() {
 
                     {/* Form B Statements if applicable and not already in stem */}
                     {isCombined &&
-                      !/(?:^|\n)\s*(?:1[\.\)]|\(1\)|\bI[\.\)]|\(I\))\s+/i.test(item.stem) &&
+                      !HAS_FIRST_STATEMENT.test(item.stem) &&
                       Array.isArray(item.statements) &&
                       item.statements.length > 0 && (
                       <div className="space-y-1.5 pl-4 border-l-2 border-purple-200 py-1">

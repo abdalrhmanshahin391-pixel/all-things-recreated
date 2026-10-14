@@ -56,6 +56,12 @@ export function cleanQuestionPreamble(stem: string | null | undefined): string {
 }
 
 /**
+ * A numbered statement list already in the stem: "1. text", "1) text", "(1) text", "I. text" and also "1.text"
+ * (no space after the number, as printed on many papers). A decimal such as "1.5 mg" is not a statement.
+ */
+export const HAS_FIRST_STATEMENT = /(?:^|\n)\s*(?:1[\.\)]\s*(?=[^\s\d])|\(1\)\s+|\bI[\.\)]\s+|\(I\)\s+)/i;
+
+/**
  * Assembles a complete question stem for Combined (Form B) questions.
  * Ensures the question lead-in is followed by all numbered statements (1., 2., 3., 4.),
  * each on its own line.
@@ -69,7 +75,7 @@ export function buildCombinedStem(
     return cleanLead;
   }
   // If the lead-in already contains numbered statements (e.g. \n1. or \n1)), don't duplicate
-  if (/(?:^|\n)\s*(?:1[\.\)]|\(1\)|\bI[\.\)]|\(I\))\s+/i.test(cleanLead)) {
+  if (HAS_FIRST_STATEMENT.test(cleanLead)) {
     return cleanLead;
   }
   const formattedStatements = statements
@@ -98,7 +104,7 @@ export function ensureCombinedStemWithStatements(
   if (!stem) return "";
 
   // 1. If stem already has numbered statements 1. ... 2. ..., it is already complete
-  if (/(?:^|\n)\s*(?:1[\.\)]|\(1\)|\bI[\.\)]|\(I\))\s+/i.test(stem)) {
+  if (HAS_FIRST_STATEMENT.test(stem)) {
     return stem;
   }
 
