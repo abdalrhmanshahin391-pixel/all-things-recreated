@@ -1448,6 +1448,45 @@ export const amgResolveCourseQuestion = createServerFn({ method: "POST" })
     };
   });
 
+/** Add a new question to a section (subject) of a course. Admins, or QBank members assigned to that course. */
+export const amgAddCourseQuestion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    subjectId: z.string().uuid(),
+    stem: z.string().max(12000),
+    explanation: z.string().max(18000).nullable(),
+    imageUrl: z.string().max(1000).nullable(),
+    answerMode: z.enum(["single", "multiple"]),
+    options: z.array(z.object({ text: z.string().min(1).max(5000), isCorrect: z.boolean() })).min(2).max(10),
+  }).superRefine((value, ctx) => {
+    const count = value.options.filter((option) => option.isCorrect).length;
+    if (!count || (value.answerMode === "single" && count !== 1) || (value.answerMode === "multiple" && count < 2)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "The selected correct answers do not match the answer mode." });
+    }
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: allowed } = await (supabase as any).rpc("can_edit_subject", { _user_id: userId, _subject_id: data.subjectId });
+    if (!allowed) throw new Error("Forbidden: you cannot add questions to this course.");
+    if (!data.stem.trim() && !data.imageUrl) throw new Error("Write the question text or add a picture.");
+    const { data: last } = await supabase.from("questions").select("sort_order").eq("subject_id", data.subjectId)
+      .order("sort_order", { ascending: false }).limit(1).maybeSingle();
+    const { data: created, error: insertError } = await (supabase as any).from("questions").insert({
+      subject_id: data.subjectId, stem: formatQuestionStem(data.stem.trim()), explanation: data.explanation?.trim() || null,
+      image_url: data.imageUrl, answer_mode: data.answerMode, sort_order: Number((last as any)?.sort_order ?? 0) + 1,
+    }).select("id").single();
+    if (insertError || !created) throw new Error(insertError?.message || "The question was not added.");
+    const rows = data.options.map((option, index) => ({
+      question_id: created.id, label: "ABCDEFGHIJ"[index], text: option.text.trim(), is_correct: option.isCorrect, sort_order: index,
+    }));
+    const { error: optionError } = await supabase.from("question_options").insert(rows);
+    if (optionError) {
+      await supabase.from("questions").delete().eq("id", created.id);
+      throw new Error(optionError.message);
+    }
+    return { id: created.id as string };
+  });
+
 export const amgUpdateCourseQuestion = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({
@@ -1464,7 +1503,10 @@ export const amgUpdateCourseQuestion = createServerFn({ method: "POST" })
     }
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = await ensureAdmin(context);
+    // an admin, or a QBank member assigned to the course of this question
+    const { supabase, userId } = context;
+    const { data: allowed } = await (supabase as any).rpc("can_edit_question", { _user_id: userId, _question_id: data.questionId });
+    if (!allowed) throw new Error("Forbidden: you cannot edit the questions of this course.");
     const { data: existing, error: findError } = await supabase.from("questions").select("id").eq("id", data.questionId).maybeSingle();
     if (findError || !existing) throw new Error(findError?.message || "Question not found.");
     const { error: updateError } = await supabase.from("questions").update({

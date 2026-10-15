@@ -575,8 +575,21 @@ export const moveSingleCourseQuestion = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: isAdminUser } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
+    if (!isAdminUser) {
+      // A QBank member assigned to the course may move a question to another EXISTING section of the same course, nothing more.
+      if (data.createNewSubject || !data.targetSubjectId) throw new Error("Forbidden: you can only move a question to an existing section of your course.");
+      const { data: from } = await supabaseAdmin.from("questions")
+        .select("subjects(subject_groups(course_id))").eq("id", data.questionId).maybeSingle();
+      const { data: to } = await supabaseAdmin.from("subjects")
+        .select("subject_groups(course_id)").eq("id", data.targetSubjectId).maybeSingle();
+      const fromCourse = (from as any)?.subjects?.subject_groups?.course_id as string | undefined;
+      const toCourse = (to as any)?.subject_groups?.course_id as string | undefined;
+      if (!fromCourse || fromCourse !== toCourse) throw new Error("Forbidden: move the question inside your course.");
+      const { data: allowed } = await (context.supabase as any).rpc("can_edit_course", { _user_id: context.userId, _course_id: fromCourse });
+      if (!allowed) throw new Error("Forbidden: you cannot edit the questions of this course.");
+    }
 
     let destSubjectId = data.targetSubjectId;
     let targetSub: any = null;

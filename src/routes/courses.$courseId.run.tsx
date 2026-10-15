@@ -13,7 +13,7 @@ import { ArabicToggle } from "@/components/quiz/ArabicToggle";
 import { useQuestionTranslation } from "@/hooks/useQuestionTranslation";
 import { useServerFn } from "@tanstack/react-start";
 import { EditQuestionDialog, type EditableQuestion } from "@/components/admin/QuestionListEditor";
-import { AMG_MODELS, amgResolveCourseQuestion, amgUpdateCourseQuestion } from "@/lib/aqua-mcq-gen.functions";
+import { AMG_MODELS, amgAddCourseQuestion, amgResolveCourseQuestion, amgUpdateCourseQuestion } from "@/lib/aqua-mcq-gen.functions";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MoveQuestionControl, type CourseSectionGroup } from "@/components/course/MoveQuestionControl";
@@ -38,6 +38,7 @@ import {
   ArrowRight,
   Lightbulb,
   SkipForward,
+  Plus,
 } from "lucide-react";
 
 type Mode = "study" | "session" | "exam";
@@ -109,6 +110,18 @@ function RunPageInner() {
   const excludedKey = excludedSubjects.join(",");
   const navigate = useNavigate();
   const { isAdmin, user, loading: authLoading } = useAuth();
+  /** A QBank member an admin assigned to this course may edit its questions (Admin -> Users -> Course editing). */
+  const [isCourseEditor, setIsCourseEditor] = useState(false);
+  const canEdit = isAdmin || isCourseEditor;
+  useEffect(() => {
+    let alive = true;
+    if (!user || isAdmin) { setIsCourseEditor(false); return; }
+    (async () => {
+      const { data } = await (supabase.rpc as any)("can_edit_course", { _user_id: user.id, _course_id: courseId });
+      if (alive) setIsCourseEditor(data === true);
+    })().catch(() => { if (alive) setIsCourseEditor(false); });
+    return () => { alive = false; };
+  }, [user, isAdmin, courseId]);
   const accessKey = `${courseId}:${user?.id ?? "guest"}:${isAdmin ? "admin" : "student"}:${t ?? 0}`;
 
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -142,6 +155,9 @@ function RunPageInner() {
   const [resolving, setResolving] = useState(false);
   const resolveCourseQuestion = useServerFn(amgResolveCourseQuestion);
   const updateCourseQuestion = useServerFn(amgUpdateCourseQuestion);
+  const addCourseQuestion = useServerFn(amgAddCourseQuestion);
+  const [addSubjectId, setAddSubjectId] = useState<string | null>(null);
+  const newQuestionId = useRef<string | null>(null);
   const sessionKey = `aqua-quiz:${user?.id ?? "guest"}:${courseId}:${mode}:${subjects}:${pool}:${timed}:${duration}`;
 
   // Access gate: paid course requires admin OR an enrollment row.
@@ -159,6 +175,11 @@ function RunPageInner() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS);
     (async () => {
+      if (user) {
+        // a course editor always gets in, even when the course is paid and they are not enrolled
+        const { data: editor } = await (supabase.rpc as any)("can_edit_course", { _user_id: user.id, _course_id: courseId });
+        if (editor === true) { if (!cancelled) setAccessReady(accessKey); return; }
+      }
       const { data: c, error: courseError } = await (supabase.from as any)("courses")
         .select("price")
         .eq("id", courseId)
@@ -738,6 +759,27 @@ function RunPageInner() {
     setCurrent((c) => Math.max(0, Math.min(c, questions.length - 2)));
   }
 
+  const editStable = useCallback((question: Question) => setAdminEditing(question), []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const deleteStable = useCallback((id: string) => { void deleteQuestion(id); }, [questions.length]);
+
+  /** After a question was added: fetch it and put it right after the one on screen. */
+  async function showNewQuestion(questionId: string) {
+    const { data, error } = await (supabase.from as any)("questions")
+      .select("id,subject_id,stem,explanation,image_url,answer_mode,sort_order,question_options(id,label,text,is_correct,sort_order)")
+      .eq("id", questionId).single();
+    if (error) throw error;
+    const added: Question = {
+      id: data.id, subject_id: data.subject_id, stem: data.stem, explanation: data.explanation,
+      image_url: data.image_url ?? null, answer_mode: data.answer_mode === "multiple" ? "multiple" : "single",
+      sort_order: Number(data.sort_order) || 0,
+      options: [...(data.question_options ?? [])].sort((a: Option, b: Option) => a.sort_order - b.sort_order),
+    };
+    setQuestions((previous) => [...previous.slice(0, current + 1), added, ...previous.slice(current + 1)]);
+    setAnswers((previous) => ({ ...previous, [added.id]: mode === "study" ? added.options.filter((o) => o.is_correct).map((o) => o.label) : [] }));
+    setCurrent(Math.min(current + 1, questions.length));
+  }
+
   const loadCourseSections = useCallback(async () => {
     if (!courseId) return;
     try {
@@ -775,10 +817,10 @@ function RunPageInner() {
   }, [courseId]);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (canEdit) {
       void loadCourseSections();
     }
-  }, [isAdmin, loadCourseSections]);
+  }, [canEdit, loadCourseSections]);
 
   const handleMoveQuestion = useCallback(
     async (
@@ -938,7 +980,9 @@ function RunPageInner() {
             <ReviewCard
               q={q}
               userAnswer={answers[q.id]}
-              isAdmin={isAdmin}
+              isAdmin={canEdit}
+              onEditQuestion={editStable}
+              onDeleteQuestion={deleteStable}
               courseId={courseId}
               courseSections={courseSections}
               onMoveQuestion={handleMoveQuestion}
@@ -1023,7 +1067,9 @@ function RunPageInner() {
                       onSelect={onExamSelect}
                       isFlagged={flags.has(q.id)}
                       onToggleFlag={onFlagStable}
-                      isAdmin={isAdmin}
+                      isAdmin={canEdit}
+                      onEditQuestion={editStable}
+                      onDeleteQuestion={deleteStable}
                       courseId={courseId}
                       courseSections={courseSections}
                       onMoveQuestion={handleMoveQuestion}
@@ -1038,7 +1084,7 @@ function RunPageInner() {
             ) : (
               currentQ && (
               <QuestionCard
-                q={currentQ} mode={mode} isAdmin={isAdmin}
+                q={currentQ} mode={mode} isAdmin={canEdit} canResolve={isAdmin}
                 courseId={courseId}
                 courseSections={courseSections}
                 onMoveQuestion={handleMoveQuestion}
@@ -1143,7 +1189,32 @@ function RunPageInner() {
           onSaved={() => setPendingNote(null)}
         />
       )}
-      {isAdmin && adminEditing && (
+      {canEdit && addSubjectId && (
+        <EditQuestionDialog
+          question={{ id: "new", stem: "", explanation: null, sort_order: 0, image_url: null, answer_mode: "single", options: [] }}
+          onClose={() => setAddSubjectId(null)}
+          onPersist={async (value) => {
+            const created = await addCourseQuestion({ data: { subjectId: addSubjectId, ...value } });
+            newQuestionId.current = created.id;
+          }}
+          onSaved={() => {
+            const id = newQuestionId.current;
+            setAddSubjectId(null);
+            if (id) void showNewQuestion(id).catch(() => toast.error("The question was added. Reload the page to see it."));
+          }}
+        />
+      )}
+      {canEdit && !finished && questions.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setAddSubjectId((questions[current] ?? questions[0]).subject_id)}
+          className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-lg hover:opacity-90 touch-manipulation"
+          title="Add a new question to this section"
+        >
+          <Plus className="h-4 w-4" /> Add question
+        </button>
+      )}
+      {canEdit && adminEditing && (
         <EditQuestionDialog
           question={adminEditing as EditableQuestion}
           onClose={() => setAdminEditing(null)}
@@ -1195,9 +1266,9 @@ function fmtTime(s: number) {
 function QuestionCard({
   q, mode, isAdmin, selected, submitted, isFlagged, isShining = false,
   courseId, courseSections, onMoveQuestion,
-  onToggleFlag, onSelect, onSubmit, onNext, onSkip, skippedLeft = 0, isLast, onSetCorrect, onDelete, onEdit, onResolve, onCapture,
+  onToggleFlag, onSelect, onSubmit, onNext, onSkip, skippedLeft = 0, isLast, onSetCorrect, onDelete, onEdit, onResolve, onCapture, canResolve = false,
 }: {
-  q: Question; mode: Mode; isAdmin: boolean;
+  q: Question; mode: Mode; isAdmin: boolean; canResolve?: boolean;
   courseId?: string;
   courseSections?: CourseSectionGroup[];
   onMoveQuestion?: (
@@ -1272,7 +1343,7 @@ function QuestionCard({
               onMoveQuestion={onMoveQuestion}
             />
           )}
-          {isAdmin && isStudy && (
+          {isAdmin && (
             <button
               onClick={onDelete}
               className="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-rose-200 text-rose-700 hover:bg-rose-50 cursor-pointer"
@@ -1283,7 +1354,7 @@ function QuestionCard({
           {isAdmin && (
             <>
               <Button type="button" size="sm" variant="outline" onClick={onEdit}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>
-              <Button type="button" size="sm" variant="outline" onClick={onResolve}><Sparkles className="mr-1 h-3.5 w-3.5" />Re-solve</Button>
+              {canResolve && <Button type="button" size="sm" variant="outline" onClick={onResolve}><Sparkles className="mr-1 h-3.5 w-3.5" />Re-solve</Button>}
             </>
           )}
         </div>
@@ -1461,11 +1532,12 @@ function LazyMount({ children, estimate = 520 }: { children: React.ReactNode; es
 
 const ExamCard = memo(function ExamCard({
   q, index, selected, onSelect, isFlagged, onToggleFlag,
-  isAdmin, courseId, courseSections, onMoveQuestion,
+  isAdmin, courseId, courseSections, onMoveQuestion, onEditQuestion, onDeleteQuestion,
 }: {
   q: Question; index: number; selected: string[] | undefined;
   onSelect: (question: Question, label: string) => void; isFlagged: boolean; onToggleFlag: (questionId: string) => void;
   isAdmin?: boolean; courseId?: string; courseSections?: CourseSectionGroup[];
+  onEditQuestion?: (question: Question) => void; onDeleteQuestion?: (questionId: string) => void;
   onMoveQuestion?: (
     questionId: string,
     targetSubjectId?: string,
@@ -1510,6 +1582,20 @@ const ExamCard = memo(function ExamCard({
               courseSections={courseSections}
               onMoveQuestion={onMoveQuestion}
             />
+          </div>
+        )}
+        {isAdmin && onEditQuestion && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => onEditQuestion(q)}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>
+            {onDeleteQuestion && (
+              <button
+                type="button"
+                onClick={() => onDeleteQuestion(q.id)}
+                className="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-rose-200 text-rose-700 hover:bg-rose-50 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1559,9 +1645,13 @@ function ReviewCard({
   courseId,
   courseSections,
   onMoveQuestion,
+  onEditQuestion,
+  onDeleteQuestion,
 }: {
   q: Question;
   userAnswer: string[] | undefined;
+  onEditQuestion?: (question: Question) => void;
+  onDeleteQuestion?: (questionId: string) => void;
   isAdmin?: boolean;
   courseId?: string;
   courseSections?: CourseSectionGroup[];
@@ -1598,6 +1688,18 @@ function ReviewCard({
               courseSections={courseSections}
               onMoveQuestion={onMoveQuestion}
             />
+          )}
+          {isAdmin && onEditQuestion && (
+            <Button type="button" size="sm" variant="outline" onClick={() => onEditQuestion(q)}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>
+          )}
+          {isAdmin && onDeleteQuestion && (
+            <button
+              type="button"
+              onClick={() => onDeleteQuestion(q.id)}
+              className="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-rose-200 text-rose-700 hover:bg-rose-50 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Delete
+            </button>
           )}
           <ArabicToggle on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
         </div>

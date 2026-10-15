@@ -38,6 +38,7 @@ import {
 import { toast } from "sonner";
 import { UserModerationDialog } from "@/components/admin/UserModerationDialog";
 import { UserEditDialog } from "@/components/admin/UserEditDialog";
+import { CourseEditorsDialog } from "@/components/admin/CourseEditorsDialog";
 import { AdminBadge, QaBadge, QBankBadge, TeacherBadge } from "@/components/RoleBadge";
 import { GoldenBadge } from "@/components/GoldenBadge";
 import { CommitteeBadge } from "@/components/CommitteeBadge";
@@ -84,6 +85,7 @@ function AdminUsersPage() {
   const [phoneDraft, setPhoneDraft] = useState("");
   const [savingPhone, setSavingPhone] = useState(false);
   const [busyRole, setBusyRole] = useState<string | null>(null);
+  const [editorsFor, setEditorsFor] = useState<{ id: string; name: string } | null>(null);
   const [moderating, setModerating] = useState<AdminUserRow | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUserRow | null>(null);
   const [busyVerify, setBusyVerify] = useState<string | null>(null);
@@ -509,6 +511,16 @@ function AdminUsersPage() {
                         busy={busyRole === `${u.id}:qbank`}
                         onClick={() => toggleRole(u, "qbank")}
                       />
+                      {u.roles.includes("qbank") && (
+                        <button
+                          type="button"
+                          onClick={() => setEditorsFor({ id: u.id, name: u.full_name || u.username || u.email || "User" })}
+                          className="inline-flex min-h-8 items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-600 hover:bg-emerald-500/20"
+                          title="Choose the courses whose questions this QBank member may edit"
+                        >
+                          Course editing
+                        </button>
+                      )}
                       <span className="text-xs text-muted-foreground ms-auto">Phone:</span>
                       {isEditing ? (
                         <div className="flex items-center gap-1">
@@ -560,6 +572,8 @@ function AdminUsersPage() {
         <p className="mt-4 text-xs text-muted-foreground">
           Showing {filtered.length} of {users.length} users
         </p>
+
+        {editorsFor && <CourseEditorsDialog userId={editorsFor.id} userName={editorsFor.name} onClose={() => setEditorsFor(null)} />}
 
         {moderating && (
           <UserModerationDialog
