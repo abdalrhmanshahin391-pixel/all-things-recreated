@@ -1739,6 +1739,35 @@ export type Database = {
         }
         Relationships: []
       }
+      course_question_editors: {
+        Row: {
+          course_id: string
+          created_at: string
+          granted_by: string | null
+          user_id: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          granted_by?: string | null
+          user_id: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          granted_by?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_question_editors_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       courses: {
         Row: {
           admin_only: boolean
@@ -6363,11 +6392,23 @@ export type Database = {
         Args: { _subject_id: string }
         Returns: boolean
       }
+      can_edit_course: {
+        Args: { _course_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_edit_lecture_course: {
         Args: { _course_id: string }
         Returns: boolean
       }
+      can_edit_question: {
+        Args: { _question_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_edit_request_group: { Args: { _group_id: string }; Returns: boolean }
+      can_edit_subject: {
+        Args: { _subject_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_manage_committee: { Args: { _user_id: string }; Returns: boolean }
       can_manage_committee_members: {
         Args: { _user_id: string }
