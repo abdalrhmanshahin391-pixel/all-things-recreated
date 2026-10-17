@@ -646,6 +646,15 @@ function RunPageInner() {
     else toast.info("This is the last open question. Answer it, or finish the session.");
   };
 
+  // A new question (or review item) opens at its top, even if the student scrolled down to read the explanation.
+  const cardTopRef = useRef<HTMLDivElement | null>(null);
+  const firstScroll = useRef(true);
+  useEffect(() => {
+    if (firstScroll.current) { firstScroll.current = false; return; }
+    if (mode === "exam" && !reviewMode) return;
+    cardTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [current, reviewIndex, reviewMode, mode]);
+
   const goNextFrom = () => {
     if (current < questions.length - 1) { setCurrent((c) => c + 1); return; }
     // At the end: come back to what was skipped before finishing.
@@ -1083,6 +1092,8 @@ function RunPageInner() {
               </div>
             ) : (
               currentQ && (
+              <>
+              <div ref={cardTopRef} className="scroll-mt-24" aria-hidden />
               <QuestionCard
                 q={currentQ} mode={mode} isAdmin={canEdit} canResolve={isAdmin}
                 courseId={courseId}
@@ -1113,6 +1124,7 @@ function RunPageInner() {
                   })
                 }
               />
+              </>
               )
             )}
           </div>
@@ -1292,7 +1304,10 @@ function QuestionCard({
   // Session mode: the explanation stays closed until the student asks for it.
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const explanationText = (show?.explanation ?? q.explanation) as string | null;
-  const explanationOpen = mode !== "session" || !!revealed[q.id];
+  // Session and study mode: the explanation (and, in study mode, the right answer) stay hidden until the student asks.
+  const hiddenUntilAsked = mode === "session" || mode === "study";
+  const explanationOpen = !hiddenUntilAsked || !!revealed[q.id];
+  const answerShown = isStudy ? !!revealed[q.id] : submitted;
 
   return (
     <div className="medical-card overflow-hidden">
@@ -1376,8 +1391,8 @@ function QuestionCard({
       )}
       <div className="px-6 pb-6 space-y-3">
         {q.options.map((o) => {
-          const isSelected = selected?.includes(o.label) ?? false;
-          const showAnswers = submitted;
+          const isSelected = !isStudy && (selected?.includes(o.label) ?? false);
+          const showAnswers = answerShown;
           const isRight = showAnswers && o.is_correct;
           const isWrong = showAnswers && isSelected && !o.is_correct;
           const lockedInStudy = isStudy;
@@ -1430,7 +1445,7 @@ function QuestionCard({
       </div>
       </ProtectedContent>
 
-      {mode === "session" && submitted && explanationText && (
+      {((mode === "session" && submitted && explanationText) || isStudy) && (
         <div className="px-6 pb-4">
           <button
             type="button"
@@ -1438,11 +1453,11 @@ function QuestionCard({
             aria-expanded={!!revealed[q.id]}
             className="w-full py-3 rounded-xl border-2 border-amber-400/70 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold inline-flex items-center justify-center gap-2 transition-colors dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-950/70"
           >
-            <Lightbulb className="w-4 h-4" /> {revealed[q.id] ? "Hide explanation" : "Show explanation"}
+            <Lightbulb className="w-4 h-4" /> {revealed[q.id] ? "Hide explanation" : explanationText || !isStudy ? "Show explanation" : "Show answer"}
           </button>
         </div>
       )}
-      {submitted && explanationText && explanationOpen && (
+      {(submitted || isStudy) && explanationText && explanationOpen && (
         <div dir={show?.explanation ? "rtl" : undefined}>
           <ExplanationPanel explanation={explanationText} onCapture={onCapture} />
         </div>
