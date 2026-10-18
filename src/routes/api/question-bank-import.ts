@@ -79,43 +79,63 @@ async function storePictures(questions: QbQuestion[]): Promise<void> {
   }
 }
 
+/** Signed in as an admin or a QBank member? Returns the person's own client, or the response to send back. */
+async function authenticate(request: Request): Promise<{ response: Response } | { supabase: any; userId: string }> {
+  const authorization = request.headers.get("authorization");
+  if (!authorization?.startsWith("Bearer ")) return { response: jsonError("Unauthorized", 401) };
+
+  const backendUrl = process.env["SUPABASE_URL"];
+  const publishableKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
+  if (!backendUrl || !publishableKey) return { response: jsonError("Backend is not configured", 500) };
+
+  const supabase = createClient(backendUrl, publishableKey, {
+    auth: { persistSession: false },
+    global: {
+      headers: { Authorization: authorization },
+      fetch: (input, init) => {
+        const headers = new Headers(init?.headers);
+        if (publishableKey.startsWith("sb_") && headers.get("Authorization") === `Bearer ${publishableKey}`) {
+          headers.set("Authorization", authorization);
+        }
+        headers.set("apikey", publishableKey);
+        return fetch(input, { ...init, headers });
+      },
+    },
+  });
+  const { data: authData, error: authError } = await supabase.auth.getUser(authorization.slice(7));
+  if (authError || !authData.user) return { response: jsonError("Unauthorized", 401) };
+  const { data: isAdmin, error: roleError } = await supabase.rpc("has_role", {
+    _user_id: authData.user.id,
+    _role: "admin",
+  });
+  if (roleError) return { response: jsonError("Forbidden", 403) };
+  if (!isAdmin) {
+    // The QBank team (Aqua Studio) may send questions too. If the role is not created yet this check fails: refused.
+    const { data: isQbank } = await supabase.rpc("has_role", { _user_id: authData.user.id, _role: "qbank" as any });
+    if (!isQbank) return { response: jsonError("Forbidden: admin or QBank only", 403) };
+  }
+  return { supabase, userId: authData.user.id };
+}
+
 export const Route = createFileRoute("/api/question-bank-import")({
   server: {
     handlers: {
+      GET: async ({ request }) => {
+        // ?targets=1 : the Question Bank groups and the course subjects an update can be added to
+        const auth = await authenticate(request);
+        if ("response" in auth) return auth.response;
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const qb = await import("@/lib/question-bank.server");
+        const index = await qb.readIndex();
+        const { data: subjects } = await supabaseAdmin.from("subjects").select("id, name, group_id, sort_order").order("sort_order");
+        return Response.json({
+          groups: index.groups.map((g) => ({ id: g.id, name: g.name, year: g.year, semester: g.semester, subject: g.subject, count: g.count })),
+          subjects: (subjects ?? []).map((s: any) => ({ id: s.id, name: s.name, group_id: s.group_id })),
+        });
+      },
       POST: async ({ request }) => {
-        const authorization = request.headers.get("authorization");
-        if (!authorization?.startsWith("Bearer ")) return jsonError("Unauthorized", 401);
-
-        const backendUrl = process.env["SUPABASE_URL"];
-        const publishableKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
-        if (!backendUrl || !publishableKey) return jsonError("Backend is not configured", 500);
-
-        const supabase = createClient(backendUrl, publishableKey, {
-          auth: { persistSession: false },
-          global: {
-            headers: { Authorization: authorization },
-            fetch: (input, init) => {
-              const headers = new Headers(init?.headers);
-              if (publishableKey.startsWith("sb_") && headers.get("Authorization") === `Bearer ${publishableKey}`) {
-                headers.set("Authorization", authorization);
-              }
-              headers.set("apikey", publishableKey);
-              return fetch(input, { ...init, headers });
-            },
-          },
-        });
-        const { data: authData, error: authError } = await supabase.auth.getUser(authorization.slice(7));
-        if (authError || !authData.user) return jsonError("Unauthorized", 401);
-        const { data: isAdmin, error: roleError } = await supabase.rpc("has_role", {
-          _user_id: authData.user.id,
-          _role: "admin",
-        });
-        if (roleError) return jsonError("Forbidden", 403);
-        if (!isAdmin) {
-          // The QBank team (Aqua Studio) may send questions too. If the role is not created yet this check fails: refused.
-          const { data: isQbank } = await supabase.rpc("has_role", { _user_id: authData.user.id, _role: "qbank" as any });
-          if (!isQbank) return jsonError("Forbidden: admin or QBank only", 403);
-        }
+        const auth = await authenticate(request);
+        if ("response" in auth) return auth.response;
 
         const length = Number(request.headers.get("content-length") ?? "0");
         if (Number.isFinite(length) && length > MAX_BODY_BYTES) return jsonError("That import is too large. Send it in parts.", 413);
@@ -160,28 +180,40 @@ export const Route = createFileRoute("/api/question-bank-import")({
         try {
           const qb = await import("@/lib/question-bank.server");
           for (const group of prepared) await storePictures(group.questions);
-          const index: QbIndex = await qb.readIndex();
-          for (const group of prepared) {
-            group.meta.sort_order = index.groups.length + 1;
-            await qb.writeGroupFile(group.meta, group.questions);
-            index.groups.push(group.meta);
+          const appendGroupId = typeof body?.append?.groupId === "string" ? body.append.groupId : "";
+          let appended: { id: string; name: string; added: number; skipped: number; total: number } | null = null;
+          if (appendGroupId) {
+            // add to a group the bank already has: nothing new is created
+            appended = await qb.appendToGroup(appendGroupId, prepared.flatMap((g) => g.questions));
+          } else {
+            const index: QbIndex = await qb.readIndex();
+            for (const group of prepared) {
+              group.meta.sort_order = index.groups.length + 1;
+              await qb.writeGroupFile(group.meta, group.questions);
+              index.groups.push(group.meta);
+            }
+            await qb.writeIndex(index);
           }
-          await qb.writeIndex(index);
 
           let course: { subjectId: string; saved: number; skipped: number; failed: number } | null = null;
           const sectionId = typeof body?.course?.sectionId === "string" ? body.course.sectionId : "";
-          if (sectionId) {
+          const existingSubjectId = typeof body?.course?.subjectId === "string" ? body.course.subjectId : "";
+          if (sectionId || existingSubjectId) {
             const first = prepared[0];
             course = await qb.pourIntoCourse({
               sectionId,
               subjectName: text(body.course.subjectName, 120, first.meta.subject),
-              questions: first.questions,
+              questions: prepared.flatMap((g) => g.questions),
+              existingSubjectId: existingSubjectId || undefined,
             });
           }
           return Response.json({
             imported: prepared.length,
             questions: total,
-            groups: prepared.map((g) => ({ id: g.meta.id, name: g.meta.name, count: g.meta.count })),
+            groups: appended
+              ? [{ id: appended.id, name: appended.name, count: appended.added }]
+              : prepared.map((g) => ({ id: g.meta.id, name: g.meta.name, count: g.meta.count })),
+            appended,
             course,
           });
         } catch (error) {

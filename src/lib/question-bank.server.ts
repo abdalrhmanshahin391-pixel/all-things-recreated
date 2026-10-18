@@ -117,25 +117,40 @@ export async function pourIntoCourse(opts: {
   sectionId: string;
   subjectName: string;
   questions: QbQuestion[];
+  /** Add to this EXISTING subject instead of creating a new one (the new questions go after the ones it has). */
+  existingSubjectId?: string;
 }): Promise<{ subjectId: string; saved: number; skipped: number; failed: number }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const { count } = await supabaseAdmin
-    .from("subjects")
-    .select("id", { count: "exact", head: true })
-    .eq("group_id", opts.sectionId);
+  let subject: { id: string } | null = null;
+  let order = 1;
+  if (opts.existingSubjectId) {
+    const { data: found, error: fErr } = await supabaseAdmin
+      .from("subjects").select("id, group_id").eq("id", opts.existingSubjectId).maybeSingle();
+    if (fErr || !found) throw new Error("That subject does not exist (anymore).");
+    if (opts.sectionId && found.group_id !== opts.sectionId) throw new Error("That subject is not in the chosen section.");
+    subject = { id: found.id };
+    const { data: last } = await supabaseAdmin
+      .from("questions").select("sort_order").eq("subject_id", found.id).order("sort_order", { ascending: false }).limit(1).maybeSingle();
+    order = Number((last as any)?.sort_order ?? 0) + 1;
+  } else {
+    const { count } = await supabaseAdmin
+      .from("subjects")
+      .select("id", { count: "exact", head: true })
+      .eq("group_id", opts.sectionId);
 
-  const { data: subject, error: sErr } = await supabaseAdmin
-    .from("subjects")
-    .insert({ group_id: opts.sectionId, name: opts.subjectName, sort_order: (count ?? 0) + 1 })
-    .select("id")
-    .single();
-  if (sErr || !subject) throw new Error(sErr?.message ?? "Could not create the subject");
+    const { data: created, error: sErr } = await supabaseAdmin
+      .from("subjects")
+      .insert({ group_id: opts.sectionId, name: opts.subjectName, sort_order: (count ?? 0) + 1 })
+      .select("id")
+      .single();
+    if (sErr || !created) throw new Error(sErr?.message ?? "Could not create the subject");
+    subject = created;
+  }
 
   let saved = 0;
   let skipped = 0;
   let failed = 0;
-  let order = 1;
   for (const q of disambiguatePictureStems(opts.questions)) {
     if (!q.stem?.trim()) { failed++; continue; }
     const { data: inserted, error: qErr } = await supabaseAdmin
@@ -170,4 +185,30 @@ export async function pourIntoCourse(opts: {
     saved++;
   }
   return { subjectId: subject.id, saved, skipped, failed };
+}
+
+const stemKey = (stem: string) => String(stem ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+
+/** Adds questions to an EXISTING Question Bank group. Questions whose text is already in the group are skipped. */
+export async function appendToGroup(groupId: string, incoming: QbQuestion[]): Promise<{ id: string; name: string; added: number; skipped: number; total: number }> {
+  const index = await readIndex();
+  const meta = index.groups.find((g) => g.id === groupId);
+  if (!meta) throw new Error("That Question Bank group does not exist (anymore).");
+  const file = await readGroupFile(meta);
+  const existing = file?.questions ?? [];
+  const seen = new Set(existing.map((q) => stemKey(q.stem)));
+  const fresh: QbQuestion[] = [];
+  let skipped = 0;
+  for (const q of incoming) {
+    const key = stemKey(q.stem);
+    if (seen.has(key)) { skipped++; continue; }
+    seen.add(key);
+    fresh.push(q);
+  }
+  const all = [...existing, ...fresh].map((q, i) => ({ ...q, sort_order: i + 1 }));
+  meta.count = all.length;
+  meta.updated_at = new Date().toISOString();
+  await writeGroupFile(meta, all);
+  await writeIndex(index);
+  return { id: meta.id, name: meta.name, added: fresh.length, skipped, total: all.length };
 }
