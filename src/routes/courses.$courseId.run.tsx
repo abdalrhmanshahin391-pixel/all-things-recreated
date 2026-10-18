@@ -1304,10 +1304,10 @@ function QuestionCard({
   // Session mode: the explanation stays closed until the student asks for it.
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const explanationText = (show?.explanation ?? q.explanation) as string | null;
-  // Session and study mode: the explanation (and, in study mode, the right answer) stay hidden until the student asks.
+  // Session and study mode: the explanation stays hidden until the student asks (study mode shows the right answer straight away).
   const hiddenUntilAsked = mode === "session" || mode === "study";
   const explanationOpen = !hiddenUntilAsked || !!revealed[q.id];
-  const answerShown = isStudy ? !!revealed[q.id] : submitted;
+  const answerShown = submitted; // study mode always shows the right answer; only the explanation waits for the button
 
   return (
     <div className="medical-card overflow-hidden">
@@ -1391,7 +1391,7 @@ function QuestionCard({
       )}
       <div className="px-6 pb-6 space-y-3">
         {q.options.map((o) => {
-          const isSelected = !isStudy && (selected?.includes(o.label) ?? false);
+          const isSelected = selected?.includes(o.label) ?? false;
           const showAnswers = answerShown;
           const isRight = showAnswers && o.is_correct;
           const isWrong = showAnswers && isSelected && !o.is_correct;
@@ -1445,7 +1445,7 @@ function QuestionCard({
       </div>
       </ProtectedContent>
 
-      {((mode === "session" && submitted && explanationText) || isStudy) && (
+      {((mode === "session" && submitted) || isStudy) && explanationText && (
         <div className="px-6 pb-4">
           <button
             type="button"
@@ -1453,7 +1453,7 @@ function QuestionCard({
             aria-expanded={!!revealed[q.id]}
             className="w-full py-3 rounded-xl border-2 border-amber-400/70 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold inline-flex items-center justify-center gap-2 transition-colors dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-950/70"
           >
-            <Lightbulb className="w-4 h-4" /> {revealed[q.id] ? "Hide explanation" : explanationText || !isStudy ? "Show explanation" : "Show answer"}
+            <Lightbulb className="w-4 h-4" /> {revealed[q.id] ? "Hide explanation" : "Show explanation"}
           </button>
         </div>
       )}
