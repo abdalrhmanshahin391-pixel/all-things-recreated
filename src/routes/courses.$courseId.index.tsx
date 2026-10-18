@@ -23,10 +23,10 @@ import {
   Sparkles,
   Flag,
   XCircle,
-  ArrowRight, Clock } from "lucide-react";
+  ArrowRight, Clock, ArrowUp, ArrowDown } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useServerFn } from "@tanstack/react-start";
-import { setSubjectAccess, setSubjectOrdered, type SubjectAccess } from "@/lib/subjects.functions";
+import { reorderSubjects, setSubjectAccess, setSubjectOrdered, type SubjectAccess } from "@/lib/subjects.functions";
 import { AdminBackupControls } from "@/components/course/AdminBackupControls";
 import { CourseSessionGuide, LiveTourButtonTrigger } from "@/components/course/CourseSessionGuide";
 import { LiveCourseTour } from "@/components/course/LiveCourseTour";
@@ -136,6 +136,7 @@ function CourseDetailPage() {
   const [challengeDashOpen, setChallengeDashOpen] = useState(false);
   const updateAccess = useServerFn(setSubjectAccess);
   const updateOrdered = useServerFn(setSubjectOrdered);
+  const reorderFn = useServerFn(reorderSubjects);
 
   const [course, setCourse] = useState<Course | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -464,6 +465,27 @@ function CourseDetailPage() {
         t: Date.now(),
       },
     });
+  };
+
+  /** Admin: move a subject one place up or down inside its section. */
+  const handleMoveSubject = async (groupId: string, subjectId: string, direction: -1 | 1) => {
+    const prev = subjects;
+    const inGroup = subjects.filter((s) => s.group_id === groupId);
+    const from = inGroup.findIndex((s) => s.id === subjectId);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= inGroup.length) return;
+    const reordered = [...inGroup];
+    [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
+    const numbered = reordered.map((s, i) => ({ ...s, sort_order: i + 1 }));
+    // keep every other subject where it is; the section's subjects take their places in the new order
+    let k = 0;
+    setSubjects((cur) => cur.map((s) => (s.group_id === groupId ? numbered[k++] : s)));
+    try {
+      await reorderFn({ data: { groupId, subjectIds: numbered.map((s) => s.id) } });
+    } catch (e: any) {
+      setSubjects(prev);
+      toast.error(e?.message ?? "Could not change the order");
+    }
   };
 
   const handleToggleOrdered = async (subjectId: string, next: boolean) => {
@@ -838,6 +860,30 @@ function CourseDetailPage() {
                               <span className="text-[11px] font-bold text-muted-foreground tabular-nums w-6">
                                 {String(idx + 1).padStart(2, "0")}
                               </span>
+                              {isAdmin && (
+                                <span className="inline-flex flex-col shrink-0" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    aria-label="Move up"
+                                    title="Move this subject up"
+                                    disabled={idx === 0}
+                                    onClick={() => handleMoveSubject(group.id, s.id, -1)}
+                                    className="grid h-5 w-7 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25 touch-manipulation"
+                                  >
+                                    <ArrowUp className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label="Move down"
+                                    title="Move this subject down"
+                                    disabled={idx === items.length - 1}
+                                    onClick={() => handleMoveSubject(group.id, s.id, 1)}
+                                    className="grid h-5 w-7 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25 touch-manipulation"
+                                  >
+                                    <ArrowDown className="h-3.5 w-3.5" />
+                                  </button>
+                                </span>
+                              )}
                               {sLocked ? (
                                 <span className="w-5 h-5 rounded-md bg-muted grid place-items-center">
                                   <Lock className="w-3 h-3 text-muted-foreground" />
