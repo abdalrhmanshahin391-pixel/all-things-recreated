@@ -1232,10 +1232,20 @@ function RunPageInner() {
           onClose={() => setAdminEditing(null)}
           onPersist={async (value) => {
             await updateCourseQuestion({ data: { questionId: adminEditing.id, ...value } });
+            // Read the question back: the old picture file is deleted right after this returns, so make sure the database really
+            // points at the new picture (or none) first. If it does not, stop here and keep the old file.
+            const { data: check, error: checkError } = await (supabase.from as any)("questions").select("image_url").eq("id", adminEditing.id).maybeSingle();
+            if (checkError) throw checkError;
+            if ((check?.image_url ?? null) !== (value.imageUrl ?? null)) {
+              throw new Error("The picture was not changed in the database, so nothing was deleted. Please try again or tell an admin.");
+            }
           }}
           onSaved={() => {
-            void refreshQuestion(adminEditing.id);
+            const savedId = adminEditing.id;
             setAdminEditing(null);
+            refreshQuestion(savedId).catch(() => {
+              toast.error("Saved, but the page could not refresh this question. Reload the page to see the change.");
+            });
           }}
         />
       )}
