@@ -25,7 +25,10 @@ export function QuestionImagePicker({
       const next = await uploadQuestionImage(file, prefix);
       onChange(next);
     } catch (e: any) {
-      toast.error(e?.message ?? "Could not upload that picture.");
+      const msg = String(e?.message ?? "");
+      toast.error(/row-level security|not allowed|permission|unauthorized|403/i.test(msg)
+        ? "You are not allowed to upload pictures here. Ask an admin to check your course editing rights."
+        : msg || "Could not upload that picture.");
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";

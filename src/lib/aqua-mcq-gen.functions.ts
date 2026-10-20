@@ -1509,11 +1509,13 @@ export const amgUpdateCourseQuestion = createServerFn({ method: "POST" })
     if (!allowed) throw new Error("Forbidden: you cannot edit the questions of this course.");
     const { data: existing, error: findError } = await supabase.from("questions").select("id").eq("id", data.questionId).maybeSingle();
     if (findError || !existing) throw new Error(findError?.message || "Question not found.");
-    const { error: updateError } = await supabase.from("questions").update({
+    const { data: updatedRows, error: updateError } = await supabase.from("questions").update({
       stem: formatQuestionStem(data.stem.trim()), explanation: data.explanation?.trim() || null,
       image_url: data.imageUrl, answer_mode: data.answerMode,
-    }).eq("id", data.questionId);
+    }).eq("id", data.questionId).select("id");
     if (updateError) throw new Error(updateError.message);
+    // a blocked update raises no error, it just changes nothing: tell the person instead of showing "updated"
+    if (!updatedRows?.length) throw new Error("Nothing was saved: you may not have permission to change this question.");
     const { error: deleteError } = await supabase.from("question_options").delete().eq("question_id", data.questionId);
     if (deleteError) throw new Error(deleteError.message);
     const rows = data.options.map((option, index) => ({

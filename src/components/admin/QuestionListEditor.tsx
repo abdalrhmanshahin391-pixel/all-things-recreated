@@ -485,7 +485,7 @@ export function EditQuestionDialog({
           answerMode: multi ? "multiple" : "single",
           options: clean.map((option) => ({ text: option.text.trim(), isCorrect: !!option.is_correct })),
         });
-        if (question.image_url !== imagePath) void deleteQuestionImage(question.image_url);
+        if (question.image_url !== imagePath) void deleteQuestionImage(question.image_url).catch(() => {});
         toast.success("Question updated.");
         onSaved();
         return;
@@ -516,7 +516,7 @@ export function EditQuestionDialog({
       if (insErr) throw insErr;
 
       // Only now is it safe to remove a replaced/removed picture.
-      if (question.image_url !== imagePath) void deleteQuestionImage(question.image_url);
+      if (question.image_url !== imagePath) void deleteQuestionImage(question.image_url).catch(() => {});
       toast.success("Question updated.");
       onSaved();
     } catch (e: any) {
