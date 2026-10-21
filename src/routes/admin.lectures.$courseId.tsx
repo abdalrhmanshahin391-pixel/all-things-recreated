@@ -561,7 +561,8 @@ function AdminCourseLessonsPage() {
     if (!activeItem) return;
     setUploadingPdf(true);
     try {
-      const key = `lesson/${activeItem.id}/${crypto.randomUUID()}-${file.name}`;
+      // the course id is part of the path: that is what lets a lecture staff member (not only an admin) upload
+      const key = `${courseId}/lesson/${activeItem.id}/${crypto.randomUUID()}-${file.name}`;
       const { error: upErr } = await supabase.storage
         .from("lecture-pdfs")
         .upload(key, file, { upsert: false, contentType: file.type });
@@ -582,7 +583,8 @@ function AdminCourseLessonsPage() {
     setUploadingVideo(true);
     setVideoProgress(0);
     try {
-      const key = `lesson/${itemId}/${crypto.randomUUID()}-${file.name}`;
+      // the course id is part of the path: that is what lets a lecture staff member (not only an admin) upload
+      const key = `${courseId}/lesson/${itemId}/${crypto.randomUUID()}-${file.name}`;
       await uploadLargeFile("lecture-videos", key, file, { onProgress: setVideoProgress });
       // A big upload takes minutes: update the lesson as it is now, not as it was when the upload began.
       setActiveItem((cur) => (cur && cur.id === itemId ? { ...cur, video_storage_path: key } : cur));
