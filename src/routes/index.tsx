@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { queryOptions, useQuery } from "@tanstack/react-query";
+import { IS_MAINTENANCE_MODE } from "@/config/maintenance";
 import { SiteHeader } from "@/components/SiteHeader";
 import { DuoHero } from "@/components/home/DuoHero";
 import { DuoFeatureRow } from "@/components/home/DuoFeatureRow";
@@ -36,6 +37,7 @@ const homeSectionsQuery = queryOptions({
 export const Route = createFileRoute("/")({
   // Warm every home query on the server so the page ships with its content.
   loader: async ({ context }) => {
+    if (IS_MAINTENANCE_MODE) return;
     await Promise.all([
       context.queryClient.ensureQueryData(homeSectionsQuery),
       context.queryClient.ensureQueryData(homeCoursesQuery),

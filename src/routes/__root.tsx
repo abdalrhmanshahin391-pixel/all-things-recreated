@@ -63,8 +63,12 @@ function ErrorComponent({ error, reset }: { error: any; reset: () => void }) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
+    if (IS_MAINTENANCE_MODE) return;
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
+
+  // While the database is offline a page's data loader can fail; visitors still see the maintenance screen.
+  if (IS_MAINTENANCE_MODE) return <MaintenanceScreen />;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
