@@ -10,7 +10,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminHubEditor } from "@/components/admin/AdminHubEditor";
 import { saveAdminHubLayout } from "@/lib/admin-hub.functions";
-import { ICONS, mergeLayout, type HubLayout, type HubTile } from "@/lib/admin-hub-defaults";
+import { ICONS, mergeLayout, REMOVED_ADMIN_ROUTES, type HubLayout, type HubTile } from "@/lib/admin-hub-defaults";
 
 export const Route = createFileRoute("/admin/")({
   head: () => ({
@@ -64,7 +64,8 @@ function AdminHome() {
       raw.includes("124") ||
       raw.includes("24.1") ||
       raw.includes("final-approval") ||
-      raw.includes("mcq-generator")
+      raw.includes("mcq-generator") ||
+      [...REMOVED_ADMIN_ROUTES].some((r) => raw.includes(`"${r}"`))
     ) {
       const sanitized = mergeLayout(stored);
       void saveAdminHubLayout({ data: { layout: sanitized } });

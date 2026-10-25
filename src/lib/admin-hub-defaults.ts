@@ -128,6 +128,13 @@ export const DEFAULT_LAYOUT: HubLayout = {
 export const REMOVED_ADMIN_ROUTES = new Set([
   "/admin/mcq-generator-124-pro",
   "/admin/final-approval",
+  // Removed pages: saved layouts and favourites may still list them.
+  "/admin/aquavisionx",
+  "/admin/aqua-mcq-gen",
+  "/admin/aqua-mcq-gen/approval",
+  "/admin/patch-ipad-prox",
+  "/admin/jarvis-batch-german-ipad",
+  "/admin/question-requests",
 ]);
 
 export function isAllowedHubTile(tile: HubTile | null | undefined): boolean {
