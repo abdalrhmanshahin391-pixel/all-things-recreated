@@ -433,16 +433,11 @@ function DeviceTracker() {
     })();
 
 
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void ping();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-
+    // The check runs when the site is opened and when the user signs in, not again on tab focus:
+    // each run is a database write that keeps the database awake.
     return () => {
       cancelled = true;
       unsub?.();
-
-      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
   return null;
