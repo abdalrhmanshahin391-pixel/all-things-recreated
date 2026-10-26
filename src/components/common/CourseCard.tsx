@@ -159,8 +159,9 @@ export function CourseCard({
         </p>
 
         <h3
-          className="mt-1.5 line-clamp-2 min-h-[2.5em] text-xl font-semibold leading-tight text-foreground"
-          style={{ fontFamily: "var(--font-heading)" }}
+          className="mt-1.5 line-clamp-3 min-h-[2.5em] text-base font-semibold leading-tight text-foreground [overflow-wrap:anywhere] sm:line-clamp-2 sm:text-xl"
+          style={{ fontFamily: "var(--font-heading)", hyphens: "auto" }}
+          title={course.title}
         >
           {capitalizeFirst(course.title)}
         </h3>
