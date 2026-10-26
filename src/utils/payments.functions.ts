@@ -10,6 +10,7 @@ import {
 } from "@/lib/paddle.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireAdminCaller, requireSignedInCaller } from "@/lib/auth-guards.server";
+import { allowedPaddleEnv, checkGrant } from "@/lib/payment-grant.server";
 
 let _adminSupabase: ReturnType<typeof createClient> | null = null;
 function getAdminSupabase() {
@@ -370,7 +371,8 @@ export const verifyAndFulfillTransaction = createServerFn({ method: "POST" })
   .inputValidator((data: VerifyTransactionInput) => data)
   .handler(async ({ data, context }) => {
     const { userId, claims } = context as any;
-    const env: PaddleEnv = data.environment || "live";
+    // Access is only ever given for live payments (sandbox payments are free test payments).
+    const env: PaddleEnv = allowedPaddleEnv(data.environment);
     const txnId = (data.transactionId || "").trim();
     if (!txnId) throw new Error("Missing transaction ID");
 
@@ -384,10 +386,13 @@ export const verifyAndFulfillTransaction = createServerFn({ method: "POST" })
     }
 
     const customData = txn.custom_data || {};
-    const effectiveUserId = customData.userId || customData.user_id || userId;
-    const courseId = data.courseId || customData.courseId || customData.course_id;
-    const packageId = data.packageId || customData.packageId || customData.package_id;
-    const memberIds: string[] = Array.isArray(customData.memberIds) ? customData.memberIds : [];
+    const txnUserId = customData.userId || customData.user_id || null;
+    // What the transaction itself says it is for. The browser may repeat it, but can never name something else.
+    const courseId = customData.courseId || customData.course_id || null;
+    const packageId = customData.packageId || customData.package_id || null;
+    if ((data.courseId && courseId && data.courseId !== courseId) || (data.packageId && packageId && data.packageId !== packageId)) {
+      throw new Error("This payment does not match the requested purchase");
+    }
 
     const adminDb = getAdminSupabase();
 
@@ -404,10 +409,23 @@ export const verifyAndFulfillTransaction = createServerFn({ method: "POST" })
 
     // Security check: ensure transaction customer or customData corresponds to current user
     const txnCustomerEmail = (txn.customer?.email || "").toLowerCase();
-    const isOwner = effectiveUserId === userId || (txnCustomerEmail && txnCustomerEmail === userEmail);
+    const isOwner = txnUserId === userId || (!!txnCustomerEmail && txnCustomerEmail === userEmail);
     if (!isOwner) {
       throw new Error("Transaction does not belong to the current authenticated user");
     }
+
+    // The price that was paid must belong to the course or package being unlocked.
+    const grant = await checkGrant(
+      adminDb,
+      txn,
+      { courseId, packageId, memberIds: customData.memberIds, pickedCourseIds: customData.selectedCourseIds },
+      userId,
+    );
+    if (!grant.ok) {
+      console.warn("[verify] refused:", grant.reason, { txn: txn.id, userId });
+      throw new Error("This payment does not match the purchase");
+    }
+    const memberIds: string[] = grant.memberIds;
 
     // Cache customer ID into user_metadata for future 1-click / saved card checkout
     const customerId = txn.customer_id || txn.customer?.id;
@@ -446,9 +464,7 @@ export const verifyAndFulfillTransaction = createServerFn({ method: "POST" })
         .eq("package_id", packageId);
 
       const linked = ((links ?? []) as any[]).map((l) => l.course_id as string);
-      const picked: string[] = Array.isArray((customData as any).selectedCourseIds)
-        ? (customData as any).selectedCourseIds.filter(Boolean)
-        : [];
+      const picked: string[] = grant.pickedCourseIds;
       // "Pick any N" packages: only grant the courses the student chose (and only ones in the package).
       const courseIds = picked.length > 0 ? linked.filter((id) => picked.includes(id)) : linked;
       const { data: meta } = courseIds.length
@@ -750,7 +766,8 @@ export const createCheckoutTransaction = createServerFn({ method: "POST" })
   .inputValidator((data: CreateCheckoutInput) => data)
   .handler(async ({ data, context }) => {
     const { userId, claims } = context as any;
-    const env: PaddleEnv = data.environment || "live";
+    // A sandbox checkout is a free test payment, so real checkouts are always live.
+    const env: PaddleEnv = allowedPaddleEnv(data.environment);
     const adminDb = getAdminSupabase();
 
     // Resiliently resolve customer email and name from claims, auth admin, or payload

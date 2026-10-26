@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { verifyWebhookAuto, EventName, type PaddleEnv } from "@/lib/paddle.server";
+import { checkGrant, sandboxAllowed } from "@/lib/payment-grant.server";
 
 let _supabase: ReturnType<typeof createClient> | null = null;
 function getSupabase() {
@@ -19,7 +20,6 @@ async function handleTransactionCompleted(event: any, env: PaddleEnv) {
   const userId: string | undefined = customData.userId;
   const courseId: string | undefined = customData.courseId;
   const packageId: string | undefined = customData.packageId;
-  const memberIds: string[] = Array.isArray(customData.memberIds) ? customData.memberIds : [];
 
   if (!userId) {
     console.warn("transaction.completed missing userId", { txn: data.id, customData });
@@ -27,6 +27,20 @@ async function handleTransactionCompleted(event: any, env: PaddleEnv) {
   }
 
   const supabase = getSupabase();
+
+  // The custom data of a browser checkout is chosen by the buyer: make sure the price paid belongs to what is unlocked.
+  const grant = await checkGrant(
+    supabase,
+    data,
+    { courseId, packageId, memberIds: customData.memberIds, pickedCourseIds: customData.selectedCourseIds },
+    userId,
+  );
+  if (!grant.ok) {
+    console.warn("[webhook] refused:", grant.reason, { txn: data.id, userId });
+    return;
+  }
+  const memberIds: string[] = grant.memberIds;
+
   if (data.customerId) {
     try {
       await supabase.auth.admin.updateUserById(userId, {
@@ -59,9 +73,7 @@ async function handleTransactionCompleted(event: any, env: PaddleEnv) {
       { onConflict: "paddle_event_id" },
     );
 
-    const selectedCourseIds: string[] = Array.isArray(customData.selectedCourseIds)
-      ? customData.selectedCourseIds.filter(Boolean)
-      : [];
+    const selectedCourseIds: string[] = grant.pickedCourseIds;
 
     const { data: links, error: linkErr } = await (supabase.from("package_courses") as any)
       .select("course_id")
@@ -210,6 +222,11 @@ async function handleAdjustment(event: any, env: PaddleEnv) {
 
 async function handleWebhook(req: Request, requestedEnv?: string | null) {
   const { event, env } = await verifyWebhookAuto(req, requestedEnv);
+  // Sandbox events are free test payments: they must never unlock real access on the live site.
+  if (env === "sandbox" && !sandboxAllowed()) {
+    console.warn("Ignored a sandbox payment event", event.eventType);
+    return;
+  }
   switch (event.eventType) {
     case EventName.TransactionCompleted:
     case EventName.TransactionPaid:

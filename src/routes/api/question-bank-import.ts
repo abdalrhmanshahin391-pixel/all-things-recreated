@@ -71,7 +71,7 @@ async function storePictures(questions: QbQuestion[]): Promise<void> {
       path = `manual/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const { error } = await supabaseAdmin.storage
         .from(IMAGE_BUCKET)
-        .upload(path, bytes, { contentType: `image/${match[1]}`, cacheControl: "3600", upsert: false });
+        .upload(path, bytes, { contentType: `image/${match[1]}`, cacheControl: "31536000", upsert: false });
       if (error) throw new Error(`Could not store a question picture: ${error.message}`);
       uploaded.set(data, path);
     }

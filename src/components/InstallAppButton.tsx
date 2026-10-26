@@ -84,7 +84,7 @@ function IosSheet({ onClose }: { onClose: () => void }) {
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <img
-              src="/favicon.png"
+              src="/favicon-192.png"
               alt="AquaQBank Academy icon"
               className="h-12 w-12 rounded-xl border border-border bg-white"
             />
@@ -180,7 +180,7 @@ export function InstallAppBanner() {
       <div className="fixed inset-x-3 bottom-3 z-[150] sm:hidden">
         <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-xl">
           <img
-            src="/favicon.png"
+            src="/favicon-192.png"
             alt=""
             className="h-10 w-10 shrink-0 rounded-xl border border-border bg-white"
           />

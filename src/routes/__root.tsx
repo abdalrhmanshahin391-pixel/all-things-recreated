@@ -63,8 +63,12 @@ function ErrorComponent({ error, reset }: { error: any; reset: () => void }) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
+    if (IS_MAINTENANCE_MODE) return;
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
+
+  // While the database is offline a page's data loader can fail; visitors still see the maintenance screen.
+  if (IS_MAINTENANCE_MODE) return <MaintenanceScreen />;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -139,12 +143,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "dns-prefetch", href: "https://drive.google.com" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500..800&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Nunito:wght@400;600;700;800;900&family=Manrope:wght@400;500;600;700&family=Tajawal:wght@400;500;700;800;900&family=Reem+Kufi:wght@500;600;700&family=Aref+Ruqaa:wght@400;700&family=Cinzel+Decorative:wght@700&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500..800&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Nunito:wght@400;600;700;800;900&family=Manrope:wght@400;500;600;700&family=Tajawal:wght@400;500;700;800;900&family=Aref+Ruqaa:wght@400;700&family=Cinzel+Decorative:wght@700&display=swap",
       },
       { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
       { rel: "shortcut icon", type: "image/x-icon", href: "/favicon.ico" },
-      { rel: "icon", type: "image/png", sizes: "512x512", href: "/favicon.png" },
-      { rel: "apple-touch-icon", sizes: "512x512", href: "/apple-touch-icon.png" },
+      { rel: "icon", type: "image/png", sizes: "48x48", href: "/favicon-48.png" },
+      { rel: "icon", type: "image/png", sizes: "192x192", href: "/favicon-192.png" },
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
       { rel: "manifest", href: "/manifest.webmanifest" },
     ],
     scripts: [
@@ -429,16 +434,11 @@ function DeviceTracker() {
     })();
 
 
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void ping();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-
+    // The check runs when the site is opened and when the user signs in, not again on tab focus:
+    // each run is a database write that keeps the database awake.
     return () => {
       cancelled = true;
       unsub?.();
-
-      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
   return null;

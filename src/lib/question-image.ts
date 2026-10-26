@@ -10,7 +10,7 @@ export async function uploadQuestionImage(file: File, prefix: string = MANUAL_PR
   const path = `${prefix}${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${img.ext}`;
   const { error } = await supabase.storage
     .from(QUESTION_IMAGE_BUCKET)
-    .upload(path, img.file, { cacheControl: "3600", upsert: false, contentType: img.contentType });
+    .upload(path, img.file, { cacheControl: "31536000", upsert: false, contentType: img.contentType });
   if (error) throw error;
   return path;
 }

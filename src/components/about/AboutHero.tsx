@@ -81,7 +81,7 @@ export function AboutHero({ ar, canManage }: { ar: boolean; canManage: boolean }
           <div className="relative flex items-center justify-center">
             <div className="absolute -inset-2 rounded-3xl bg-gradient-to-tr from-amber-500/25 via-primary/30 to-amber-300/35 opacity-60 blur-md transition-opacity duration-500 group-hover:opacity-100" />
             <img
-              src="/favicon.png"
+              src="/favicon-192.png"
               alt="AquaQBank Emblem"
               className="relative h-20 w-20 rounded-2xl object-contain p-1 shadow-[0_18px_36px_-16px_rgba(11,27,54,0.7)] ring-2 ring-amber-400/30 transition-all duration-500 ease-out group-hover:-translate-y-1.5 group-hover:rotate-[-4deg] group-hover:scale-110 group-hover:ring-amber-400/70 sm:h-24 sm:w-24 sm:rounded-3xl md:h-28 md:w-28"
             />

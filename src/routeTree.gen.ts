@@ -38,8 +38,6 @@ import { Route as AdminAboutRouteImport } from './routes/admin.about'
 import { Route as AdminAdStudioRouteImport } from './routes/admin.ad-studio'
 import { Route as AdminAiKeysRouteImport } from './routes/admin.ai-keys'
 import { Route as AdminAquaMcqForgeRouteImport } from './routes/admin.aqua-mcq-forge'
-import { Route as AdminAquaMcqGenRouteImport } from './routes/admin.aqua-mcq-gen'
-import { Route as AdminAquavisionxRouteImport } from './routes/admin.aquavisionx'
 import { Route as AdminBackupsRouteImport } from './routes/admin.backups'
 import { Route as AdminCommitteeRouteImport } from './routes/admin.committee'
 import { Route as AdminCommitteeLogRouteImport } from './routes/admin.committee-log'
@@ -55,7 +53,6 @@ import { Route as AdminGeminiKeysRouteImport } from './routes/admin.gemini-keys'
 import { Route as AdminGermanRouteImport } from './routes/admin.german'
 import { Route as AdminGroupsRouteImport } from './routes/admin.groups'
 import { Route as AdminJarvisBatchRouteImport } from './routes/admin.jarvis-batch'
-import { Route as AdminJarvisBatchGermanIpadRouteImport } from './routes/admin.jarvis-batch-german-ipad'
 import { Route as AdminJarvisBatchV2RouteImport } from './routes/admin.jarvis-batch-v2'
 import { Route as AdminJarvisBatchV2IpadRouteImport } from './routes/admin.jarvis-batch-v2-ipad'
 import { Route as AdminLectureCentreRouteImport } from './routes/admin.lecture-centre'
@@ -65,13 +62,11 @@ import { Route as AdminMarketingRouteImport } from './routes/admin.marketing'
 import { Route as AdminNavigationRouteImport } from './routes/admin.navigation'
 import { Route as AdminNotificationsRouteImport } from './routes/admin.notifications'
 import { Route as AdminPackagesRouteImport } from './routes/admin.packages'
-import { Route as AdminPatchIpadProxRouteImport } from './routes/admin.patch-ipad-prox'
 import { Route as AdminPdfSlicerRouteImport } from './routes/admin.pdf-slicer'
 import { Route as AdminPeopleRouteImport } from './routes/admin.people'
 import { Route as AdminQuestionBankRouteImport } from './routes/admin.question-bank'
 import { Route as AdminQuestionGeneratorRouteImport } from './routes/admin.question-generator'
 import { Route as AdminQuestionReportsRouteImport } from './routes/admin.question-reports'
-import { Route as AdminQuestionRequestsRouteImport } from './routes/admin.question-requests'
 import { Route as AdminQuestionsRouteImport } from './routes/admin.questions'
 import { Route as AdminRolesRouteImport } from './routes/admin.roles'
 import { Route as AdminServersRouteImport } from './routes/admin.servers'
@@ -107,8 +102,6 @@ import { Route as MyCoursesRouteImport } from './routes/my.courses'
 import { Route as MyLecturesRouteImport } from './routes/my.lectures'
 import { Route as PSlugRouteImport } from './routes/p.$slug'
 import { Route as PackagesIndexRouteImport } from './routes/packages.index'
-import { Route as QuestionsIndexRouteImport } from './routes/questions.index'
-import { Route as QuestionsGroupIdRouteImport } from './routes/questions.$groupId'
 import { Route as StudyHubIndexRouteImport } from './routes/study-hub.index'
 import { Route as StudyHubExamsRouteImport } from './routes/study-hub.exams'
 import { Route as StudyHubFocusRouteImport } from './routes/study-hub.focus'
@@ -121,8 +114,6 @@ import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as AdminAquaMcqForgeIndexRouteImport } from './routes/admin.aqua-mcq-forge.index'
 import { Route as AdminAquaMcqForgeJobIdRouteImport } from './routes/admin.aqua-mcq-forge.$jobId'
-import { Route as AdminAquaMcqGenIndexRouteImport } from './routes/admin.aqua-mcq-gen.index'
-import { Route as AdminAquaMcqGenApprovalRouteImport } from './routes/admin.aqua-mcq-gen.approval'
 import { Route as AdminEventsIndexRouteImport } from './routes/admin.events.index'
 import { Route as AdminEventsEventIdRouteImport } from './routes/admin.events.$eventId'
 import { Route as AdminGermanIndexRouteImport } from './routes/admin.german.index'
@@ -155,8 +146,6 @@ import { Route as RuGuidesSlugRouteImport } from './routes/ru.guides.$slug'
 import { Route as AdminAquaMcqForgeJobIdIndexRouteImport } from './routes/admin.aqua-mcq-forge.$jobId.index'
 import { Route as AdminAquaMcqForgeJobIdImportRouteImport } from './routes/admin.aqua-mcq-forge.$jobId.import'
 import { Route as AdminAquaMcqForgeJobIdReviewRouteImport } from './routes/admin.aqua-mcq-forge.$jobId.review'
-import { Route as AdminAquaMcqGenGroupIdApprovalRouteImport } from './routes/admin.aqua-mcq-gen.$groupId.approval'
-import { Route as AdminAquaMcqGenGroupIdSolveRouteImport } from './routes/admin.aqua-mcq-gen.$groupId.solve'
 import { Route as AdminGermanCourseIdManageRouteImport } from './routes/admin.german.$courseId.manage'
 import { Route as ApiPublicPaymentsWebhookRouteImport } from './routes/api/public/payments/webhook'
 import { Route as GermanCourseIdReviewIndexRouteImport } from './routes/german.$courseId.review.index'
@@ -312,16 +301,6 @@ const AdminAquaMcqForgeRoute = AdminAquaMcqForgeRouteImport.update({
   path: '/admin/aqua-mcq-forge',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminAquaMcqGenRoute = AdminAquaMcqGenRouteImport.update({
-  id: '/admin/aqua-mcq-gen',
-  path: '/admin/aqua-mcq-gen',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminAquavisionxRoute = AdminAquavisionxRouteImport.update({
-  id: '/admin/aquavisionx',
-  path: '/admin/aquavisionx',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminBackupsRoute = AdminBackupsRouteImport.update({
   id: '/admin/backups',
   path: '/admin/backups',
@@ -397,12 +376,6 @@ const AdminJarvisBatchRoute = AdminJarvisBatchRouteImport.update({
   path: '/admin/jarvis-batch',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminJarvisBatchGermanIpadRoute =
-  AdminJarvisBatchGermanIpadRouteImport.update({
-    id: '/admin/jarvis-batch-german-ipad',
-    path: '/admin/jarvis-batch-german-ipad',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const AdminJarvisBatchV2Route = AdminJarvisBatchV2RouteImport.update({
   id: '/admin/jarvis-batch-v2',
   path: '/admin/jarvis-batch-v2',
@@ -448,11 +421,6 @@ const AdminPackagesRoute = AdminPackagesRouteImport.update({
   path: '/admin/packages',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminPatchIpadProxRoute = AdminPatchIpadProxRouteImport.update({
-  id: '/admin/patch-ipad-prox',
-  path: '/admin/patch-ipad-prox',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminPdfSlicerRoute = AdminPdfSlicerRouteImport.update({
   id: '/admin/pdf-slicer',
   path: '/admin/pdf-slicer',
@@ -476,11 +444,6 @@ const AdminQuestionGeneratorRoute = AdminQuestionGeneratorRouteImport.update({
 const AdminQuestionReportsRoute = AdminQuestionReportsRouteImport.update({
   id: '/admin/question-reports',
   path: '/admin/question-reports',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminQuestionRequestsRoute = AdminQuestionRequestsRouteImport.update({
-  id: '/admin/question-requests',
-  path: '/admin/question-requests',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminQuestionsRoute = AdminQuestionsRouteImport.update({
@@ -659,16 +622,6 @@ const PackagesIndexRoute = PackagesIndexRouteImport.update({
   path: '/packages/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const QuestionsIndexRoute = QuestionsIndexRouteImport.update({
-  id: '/questions/',
-  path: '/questions/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QuestionsGroupIdRoute = QuestionsGroupIdRouteImport.update({
-  id: '/questions/$groupId',
-  path: '/questions/$groupId',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const StudyHubIndexRoute = StudyHubIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -729,16 +682,6 @@ const AdminAquaMcqForgeJobIdRoute = AdminAquaMcqForgeJobIdRouteImport.update({
   id: '/$jobId',
   path: '/$jobId',
   getParentRoute: () => AdminAquaMcqForgeRoute,
-} as any)
-const AdminAquaMcqGenIndexRoute = AdminAquaMcqGenIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AdminAquaMcqGenRoute,
-} as any)
-const AdminAquaMcqGenApprovalRoute = AdminAquaMcqGenApprovalRouteImport.update({
-  id: '/approval',
-  path: '/approval',
-  getParentRoute: () => AdminAquaMcqGenRoute,
 } as any)
 const AdminEventsIndexRoute = AdminEventsIndexRouteImport.update({
   id: '/admin/events/',
@@ -905,18 +848,6 @@ const AdminAquaMcqForgeJobIdReviewRoute =
     path: '/review',
     getParentRoute: () => AdminAquaMcqForgeJobIdRoute,
   } as any)
-const AdminAquaMcqGenGroupIdApprovalRoute =
-  AdminAquaMcqGenGroupIdApprovalRouteImport.update({
-    id: '/$groupId/approval',
-    path: '/$groupId/approval',
-    getParentRoute: () => AdminAquaMcqGenRoute,
-  } as any)
-const AdminAquaMcqGenGroupIdSolveRoute =
-  AdminAquaMcqGenGroupIdSolveRouteImport.update({
-    id: '/$groupId/solve',
-    path: '/$groupId/solve',
-    getParentRoute: () => AdminAquaMcqGenRoute,
-  } as any)
 const AdminGermanCourseIdManageRoute =
   AdminGermanCourseIdManageRouteImport.update({
     id: '/manage',
@@ -986,8 +917,6 @@ export interface FileRoutesByFullPath {
   '/admin/ad-studio': typeof AdminAdStudioRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
   '/admin/aqua-mcq-forge': typeof AdminAquaMcqForgeRouteWithChildren
-  '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenRouteWithChildren
-  '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
   '/admin/committee': typeof AdminCommitteeRoute
   '/admin/committee-log': typeof AdminCommitteeLogRoute
@@ -1003,7 +932,6 @@ export interface FileRoutesByFullPath {
   '/admin/german': typeof AdminGermanRouteWithChildren
   '/admin/groups': typeof AdminGroupsRoute
   '/admin/jarvis-batch': typeof AdminJarvisBatchRoute
-  '/admin/jarvis-batch-german-ipad': typeof AdminJarvisBatchGermanIpadRoute
   '/admin/jarvis-batch-v2': typeof AdminJarvisBatchV2Route
   '/admin/jarvis-batch-v2-ipad': typeof AdminJarvisBatchV2IpadRoute
   '/admin/lecture-centre': typeof AdminLectureCentreRoute
@@ -1013,13 +941,11 @@ export interface FileRoutesByFullPath {
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/packages': typeof AdminPackagesRoute
-  '/admin/patch-ipad-prox': typeof AdminPatchIpadProxRoute
   '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
   '/admin/people': typeof AdminPeopleRoute
   '/admin/question-bank': typeof AdminQuestionBankRoute
   '/admin/question-generator': typeof AdminQuestionGeneratorRoute
   '/admin/question-reports': typeof AdminQuestionReportsRoute
-  '/admin/question-requests': typeof AdminQuestionRequestsRoute
   '/admin/questions': typeof AdminQuestionsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/servers': typeof AdminServersRoute
@@ -1050,7 +976,6 @@ export interface FileRoutesByFullPath {
   '/my/courses': typeof MyCoursesRoute
   '/my/lectures': typeof MyLecturesRoute
   '/p/$slug': typeof PSlugRoute
-  '/questions/$groupId': typeof QuestionsGroupIdRoute
   '/study-hub/exams': typeof StudyHubExamsRoute
   '/study-hub/focus': typeof StudyHubFocusRoute
   '/study-hub/todo': typeof StudyHubTodoRoute
@@ -1063,13 +988,11 @@ export interface FileRoutesByFullPath {
   '/guides/': typeof GuidesIndexRoute
   '/lectures/': typeof LecturesIndexRoute
   '/packages/': typeof PackagesIndexRoute
-  '/questions/': typeof QuestionsIndexRoute
   '/study-hub/': typeof StudyHubIndexRoute
   '/summaries/': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/admin/aqua-mcq-forge/$jobId': typeof AdminAquaMcqForgeJobIdRouteWithChildren
-  '/admin/aqua-mcq-gen/approval': typeof AdminAquaMcqGenApprovalRoute
   '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
   '/admin/lectures/$courseId': typeof AdminLecturesCourseIdRoute
@@ -1090,7 +1013,6 @@ export interface FileRoutesByFullPath {
   '/hy/guides/$slug': typeof HyGuidesSlugRoute
   '/ru/guides/$slug': typeof RuGuidesSlugRoute
   '/admin/aqua-mcq-forge/': typeof AdminAquaMcqForgeIndexRoute
-  '/admin/aqua-mcq-gen/': typeof AdminAquaMcqGenIndexRoute
   '/admin/events/': typeof AdminEventsIndexRoute
   '/admin/german/': typeof AdminGermanIndexRoute
   '/admin/lectures/': typeof AdminLecturesIndexRoute
@@ -1103,8 +1025,6 @@ export interface FileRoutesByFullPath {
   '/ru/guides/': typeof RuGuidesIndexRoute
   '/admin/aqua-mcq-forge/$jobId/import': typeof AdminAquaMcqForgeJobIdImportRoute
   '/admin/aqua-mcq-forge/$jobId/review': typeof AdminAquaMcqForgeJobIdReviewRoute
-  '/admin/aqua-mcq-gen/$groupId/approval': typeof AdminAquaMcqGenGroupIdApprovalRoute
-  '/admin/aqua-mcq-gen/$groupId/solve': typeof AdminAquaMcqGenGroupIdSolveRoute
   '/admin/german/$courseId/manage': typeof AdminGermanCourseIdManageRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/german/$courseId/review/run': typeof GermanCourseIdReviewRunRoute
@@ -1138,7 +1058,6 @@ export interface FileRoutesByTo {
   '/admin/about': typeof AdminAboutRoute
   '/admin/ad-studio': typeof AdminAdStudioRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
-  '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
   '/admin/committee': typeof AdminCommitteeRoute
   '/admin/committee-log': typeof AdminCommitteeLogRoute
@@ -1153,7 +1072,6 @@ export interface FileRoutesByTo {
   '/admin/gemini-keys': typeof AdminGeminiKeysRoute
   '/admin/groups': typeof AdminGroupsRoute
   '/admin/jarvis-batch': typeof AdminJarvisBatchRoute
-  '/admin/jarvis-batch-german-ipad': typeof AdminJarvisBatchGermanIpadRoute
   '/admin/jarvis-batch-v2': typeof AdminJarvisBatchV2Route
   '/admin/jarvis-batch-v2-ipad': typeof AdminJarvisBatchV2IpadRoute
   '/admin/lecture-centre': typeof AdminLectureCentreRoute
@@ -1162,13 +1080,11 @@ export interface FileRoutesByTo {
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/packages': typeof AdminPackagesRoute
-  '/admin/patch-ipad-prox': typeof AdminPatchIpadProxRoute
   '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
   '/admin/people': typeof AdminPeopleRoute
   '/admin/question-bank': typeof AdminQuestionBankRoute
   '/admin/question-generator': typeof AdminQuestionGeneratorRoute
   '/admin/question-reports': typeof AdminQuestionReportsRoute
-  '/admin/question-requests': typeof AdminQuestionRequestsRoute
   '/admin/questions': typeof AdminQuestionsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/servers': typeof AdminServersRoute
@@ -1196,7 +1112,6 @@ export interface FileRoutesByTo {
   '/my/courses': typeof MyCoursesRoute
   '/my/lectures': typeof MyLecturesRoute
   '/p/$slug': typeof PSlugRoute
-  '/questions/$groupId': typeof QuestionsGroupIdRoute
   '/study-hub/exams': typeof StudyHubExamsRoute
   '/study-hub/focus': typeof StudyHubFocusRoute
   '/study-hub/todo': typeof StudyHubTodoRoute
@@ -1209,12 +1124,10 @@ export interface FileRoutesByTo {
   '/guides': typeof GuidesIndexRoute
   '/lectures': typeof LecturesIndexRoute
   '/packages': typeof PackagesIndexRoute
-  '/questions': typeof QuestionsIndexRoute
   '/study-hub': typeof StudyHubIndexRoute
   '/summaries': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
-  '/admin/aqua-mcq-gen/approval': typeof AdminAquaMcqGenApprovalRoute
   '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
   '/admin/lectures/$courseId': typeof AdminLecturesCourseIdRoute
@@ -1234,7 +1147,6 @@ export interface FileRoutesByTo {
   '/hy/guides/$slug': typeof HyGuidesSlugRoute
   '/ru/guides/$slug': typeof RuGuidesSlugRoute
   '/admin/aqua-mcq-forge': typeof AdminAquaMcqForgeIndexRoute
-  '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenIndexRoute
   '/admin/events': typeof AdminEventsIndexRoute
   '/admin/german': typeof AdminGermanIndexRoute
   '/admin/lectures': typeof AdminLecturesIndexRoute
@@ -1247,8 +1159,6 @@ export interface FileRoutesByTo {
   '/ru/guides': typeof RuGuidesIndexRoute
   '/admin/aqua-mcq-forge/$jobId/import': typeof AdminAquaMcqForgeJobIdImportRoute
   '/admin/aqua-mcq-forge/$jobId/review': typeof AdminAquaMcqForgeJobIdReviewRoute
-  '/admin/aqua-mcq-gen/$groupId/approval': typeof AdminAquaMcqGenGroupIdApprovalRoute
-  '/admin/aqua-mcq-gen/$groupId/solve': typeof AdminAquaMcqGenGroupIdSolveRoute
   '/admin/german/$courseId/manage': typeof AdminGermanCourseIdManageRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/german/$courseId/review/run': typeof GermanCourseIdReviewRunRoute
@@ -1288,8 +1198,6 @@ export interface FileRoutesById {
   '/admin/ad-studio': typeof AdminAdStudioRoute
   '/admin/ai-keys': typeof AdminAiKeysRoute
   '/admin/aqua-mcq-forge': typeof AdminAquaMcqForgeRouteWithChildren
-  '/admin/aqua-mcq-gen': typeof AdminAquaMcqGenRouteWithChildren
-  '/admin/aquavisionx': typeof AdminAquavisionxRoute
   '/admin/backups': typeof AdminBackupsRoute
   '/admin/committee': typeof AdminCommitteeRoute
   '/admin/committee-log': typeof AdminCommitteeLogRoute
@@ -1305,7 +1213,6 @@ export interface FileRoutesById {
   '/admin/german': typeof AdminGermanRouteWithChildren
   '/admin/groups': typeof AdminGroupsRoute
   '/admin/jarvis-batch': typeof AdminJarvisBatchRoute
-  '/admin/jarvis-batch-german-ipad': typeof AdminJarvisBatchGermanIpadRoute
   '/admin/jarvis-batch-v2': typeof AdminJarvisBatchV2Route
   '/admin/jarvis-batch-v2-ipad': typeof AdminJarvisBatchV2IpadRoute
   '/admin/lecture-centre': typeof AdminLectureCentreRoute
@@ -1315,13 +1222,11 @@ export interface FileRoutesById {
   '/admin/navigation': typeof AdminNavigationRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/packages': typeof AdminPackagesRoute
-  '/admin/patch-ipad-prox': typeof AdminPatchIpadProxRoute
   '/admin/pdf-slicer': typeof AdminPdfSlicerRoute
   '/admin/people': typeof AdminPeopleRoute
   '/admin/question-bank': typeof AdminQuestionBankRoute
   '/admin/question-generator': typeof AdminQuestionGeneratorRoute
   '/admin/question-reports': typeof AdminQuestionReportsRoute
-  '/admin/question-requests': typeof AdminQuestionRequestsRoute
   '/admin/questions': typeof AdminQuestionsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/servers': typeof AdminServersRoute
@@ -1352,7 +1257,6 @@ export interface FileRoutesById {
   '/my/courses': typeof MyCoursesRoute
   '/my/lectures': typeof MyLecturesRoute
   '/p/$slug': typeof PSlugRoute
-  '/questions/$groupId': typeof QuestionsGroupIdRoute
   '/study-hub/exams': typeof StudyHubExamsRoute
   '/study-hub/focus': typeof StudyHubFocusRoute
   '/study-hub/todo': typeof StudyHubTodoRoute
@@ -1365,13 +1269,11 @@ export interface FileRoutesById {
   '/guides/': typeof GuidesIndexRoute
   '/lectures/': typeof LecturesIndexRoute
   '/packages/': typeof PackagesIndexRoute
-  '/questions/': typeof QuestionsIndexRoute
   '/study-hub/': typeof StudyHubIndexRoute
   '/summaries/': typeof SummariesIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/admin/aqua-mcq-forge/$jobId': typeof AdminAquaMcqForgeJobIdRouteWithChildren
-  '/admin/aqua-mcq-gen/approval': typeof AdminAquaMcqGenApprovalRoute
   '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/german/$courseId': typeof AdminGermanCourseIdRouteWithChildren
   '/admin/lectures/$courseId': typeof AdminLecturesCourseIdRoute
@@ -1392,7 +1294,6 @@ export interface FileRoutesById {
   '/hy/guides/$slug': typeof HyGuidesSlugRoute
   '/ru/guides/$slug': typeof RuGuidesSlugRoute
   '/admin/aqua-mcq-forge/': typeof AdminAquaMcqForgeIndexRoute
-  '/admin/aqua-mcq-gen/': typeof AdminAquaMcqGenIndexRoute
   '/admin/events/': typeof AdminEventsIndexRoute
   '/admin/german/': typeof AdminGermanIndexRoute
   '/admin/lectures/': typeof AdminLecturesIndexRoute
@@ -1405,8 +1306,6 @@ export interface FileRoutesById {
   '/ru/guides/': typeof RuGuidesIndexRoute
   '/admin/aqua-mcq-forge/$jobId/import': typeof AdminAquaMcqForgeJobIdImportRoute
   '/admin/aqua-mcq-forge/$jobId/review': typeof AdminAquaMcqForgeJobIdReviewRoute
-  '/admin/aqua-mcq-gen/$groupId/approval': typeof AdminAquaMcqGenGroupIdApprovalRoute
-  '/admin/aqua-mcq-gen/$groupId/solve': typeof AdminAquaMcqGenGroupIdSolveRoute
   '/admin/german/$courseId/manage': typeof AdminGermanCourseIdManageRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/german/$courseId/review/run': typeof GermanCourseIdReviewRunRoute
@@ -1447,8 +1346,6 @@ export interface FileRouteTypes {
     | '/admin/ad-studio'
     | '/admin/ai-keys'
     | '/admin/aqua-mcq-forge'
-    | '/admin/aqua-mcq-gen'
-    | '/admin/aquavisionx'
     | '/admin/backups'
     | '/admin/committee'
     | '/admin/committee-log'
@@ -1464,7 +1361,6 @@ export interface FileRouteTypes {
     | '/admin/german'
     | '/admin/groups'
     | '/admin/jarvis-batch'
-    | '/admin/jarvis-batch-german-ipad'
     | '/admin/jarvis-batch-v2'
     | '/admin/jarvis-batch-v2-ipad'
     | '/admin/lecture-centre'
@@ -1474,13 +1370,11 @@ export interface FileRouteTypes {
     | '/admin/navigation'
     | '/admin/notifications'
     | '/admin/packages'
-    | '/admin/patch-ipad-prox'
     | '/admin/pdf-slicer'
     | '/admin/people'
     | '/admin/question-bank'
     | '/admin/question-generator'
     | '/admin/question-reports'
-    | '/admin/question-requests'
     | '/admin/questions'
     | '/admin/roles'
     | '/admin/servers'
@@ -1511,7 +1405,6 @@ export interface FileRouteTypes {
     | '/my/courses'
     | '/my/lectures'
     | '/p/$slug'
-    | '/questions/$groupId'
     | '/study-hub/exams'
     | '/study-hub/focus'
     | '/study-hub/todo'
@@ -1524,13 +1417,11 @@ export interface FileRouteTypes {
     | '/guides/'
     | '/lectures/'
     | '/packages/'
-    | '/questions/'
     | '/study-hub/'
     | '/summaries/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/admin/aqua-mcq-forge/$jobId'
-    | '/admin/aqua-mcq-gen/approval'
     | '/admin/events/$eventId'
     | '/admin/german/$courseId'
     | '/admin/lectures/$courseId'
@@ -1551,7 +1442,6 @@ export interface FileRouteTypes {
     | '/hy/guides/$slug'
     | '/ru/guides/$slug'
     | '/admin/aqua-mcq-forge/'
-    | '/admin/aqua-mcq-gen/'
     | '/admin/events/'
     | '/admin/german/'
     | '/admin/lectures/'
@@ -1564,8 +1454,6 @@ export interface FileRouteTypes {
     | '/ru/guides/'
     | '/admin/aqua-mcq-forge/$jobId/import'
     | '/admin/aqua-mcq-forge/$jobId/review'
-    | '/admin/aqua-mcq-gen/$groupId/approval'
-    | '/admin/aqua-mcq-gen/$groupId/solve'
     | '/admin/german/$courseId/manage'
     | '/api/public/payments/webhook'
     | '/german/$courseId/review/run'
@@ -1599,7 +1487,6 @@ export interface FileRouteTypes {
     | '/admin/about'
     | '/admin/ad-studio'
     | '/admin/ai-keys'
-    | '/admin/aquavisionx'
     | '/admin/backups'
     | '/admin/committee'
     | '/admin/committee-log'
@@ -1614,7 +1501,6 @@ export interface FileRouteTypes {
     | '/admin/gemini-keys'
     | '/admin/groups'
     | '/admin/jarvis-batch'
-    | '/admin/jarvis-batch-german-ipad'
     | '/admin/jarvis-batch-v2'
     | '/admin/jarvis-batch-v2-ipad'
     | '/admin/lecture-centre'
@@ -1623,13 +1509,11 @@ export interface FileRouteTypes {
     | '/admin/navigation'
     | '/admin/notifications'
     | '/admin/packages'
-    | '/admin/patch-ipad-prox'
     | '/admin/pdf-slicer'
     | '/admin/people'
     | '/admin/question-bank'
     | '/admin/question-generator'
     | '/admin/question-reports'
-    | '/admin/question-requests'
     | '/admin/questions'
     | '/admin/roles'
     | '/admin/servers'
@@ -1657,7 +1541,6 @@ export interface FileRouteTypes {
     | '/my/courses'
     | '/my/lectures'
     | '/p/$slug'
-    | '/questions/$groupId'
     | '/study-hub/exams'
     | '/study-hub/focus'
     | '/study-hub/todo'
@@ -1670,12 +1553,10 @@ export interface FileRouteTypes {
     | '/guides'
     | '/lectures'
     | '/packages'
-    | '/questions'
     | '/study-hub'
     | '/summaries'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
-    | '/admin/aqua-mcq-gen/approval'
     | '/admin/events/$eventId'
     | '/admin/german/$courseId'
     | '/admin/lectures/$courseId'
@@ -1695,7 +1576,6 @@ export interface FileRouteTypes {
     | '/hy/guides/$slug'
     | '/ru/guides/$slug'
     | '/admin/aqua-mcq-forge'
-    | '/admin/aqua-mcq-gen'
     | '/admin/events'
     | '/admin/german'
     | '/admin/lectures'
@@ -1708,8 +1588,6 @@ export interface FileRouteTypes {
     | '/ru/guides'
     | '/admin/aqua-mcq-forge/$jobId/import'
     | '/admin/aqua-mcq-forge/$jobId/review'
-    | '/admin/aqua-mcq-gen/$groupId/approval'
-    | '/admin/aqua-mcq-gen/$groupId/solve'
     | '/admin/german/$courseId/manage'
     | '/api/public/payments/webhook'
     | '/german/$courseId/review/run'
@@ -1748,8 +1626,6 @@ export interface FileRouteTypes {
     | '/admin/ad-studio'
     | '/admin/ai-keys'
     | '/admin/aqua-mcq-forge'
-    | '/admin/aqua-mcq-gen'
-    | '/admin/aquavisionx'
     | '/admin/backups'
     | '/admin/committee'
     | '/admin/committee-log'
@@ -1765,7 +1641,6 @@ export interface FileRouteTypes {
     | '/admin/german'
     | '/admin/groups'
     | '/admin/jarvis-batch'
-    | '/admin/jarvis-batch-german-ipad'
     | '/admin/jarvis-batch-v2'
     | '/admin/jarvis-batch-v2-ipad'
     | '/admin/lecture-centre'
@@ -1775,13 +1650,11 @@ export interface FileRouteTypes {
     | '/admin/navigation'
     | '/admin/notifications'
     | '/admin/packages'
-    | '/admin/patch-ipad-prox'
     | '/admin/pdf-slicer'
     | '/admin/people'
     | '/admin/question-bank'
     | '/admin/question-generator'
     | '/admin/question-reports'
-    | '/admin/question-requests'
     | '/admin/questions'
     | '/admin/roles'
     | '/admin/servers'
@@ -1812,7 +1685,6 @@ export interface FileRouteTypes {
     | '/my/courses'
     | '/my/lectures'
     | '/p/$slug'
-    | '/questions/$groupId'
     | '/study-hub/exams'
     | '/study-hub/focus'
     | '/study-hub/todo'
@@ -1825,13 +1697,11 @@ export interface FileRouteTypes {
     | '/guides/'
     | '/lectures/'
     | '/packages/'
-    | '/questions/'
     | '/study-hub/'
     | '/summaries/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/admin/aqua-mcq-forge/$jobId'
-    | '/admin/aqua-mcq-gen/approval'
     | '/admin/events/$eventId'
     | '/admin/german/$courseId'
     | '/admin/lectures/$courseId'
@@ -1852,7 +1722,6 @@ export interface FileRouteTypes {
     | '/hy/guides/$slug'
     | '/ru/guides/$slug'
     | '/admin/aqua-mcq-forge/'
-    | '/admin/aqua-mcq-gen/'
     | '/admin/events/'
     | '/admin/german/'
     | '/admin/lectures/'
@@ -1865,8 +1734,6 @@ export interface FileRouteTypes {
     | '/ru/guides/'
     | '/admin/aqua-mcq-forge/$jobId/import'
     | '/admin/aqua-mcq-forge/$jobId/review'
-    | '/admin/aqua-mcq-gen/$groupId/approval'
-    | '/admin/aqua-mcq-gen/$groupId/solve'
     | '/admin/german/$courseId/manage'
     | '/api/public/payments/webhook'
     | '/german/$courseId/review/run'
@@ -1906,8 +1773,6 @@ export interface RootRouteChildren {
   AdminAdStudioRoute: typeof AdminAdStudioRoute
   AdminAiKeysRoute: typeof AdminAiKeysRoute
   AdminAquaMcqForgeRoute: typeof AdminAquaMcqForgeRouteWithChildren
-  AdminAquaMcqGenRoute: typeof AdminAquaMcqGenRouteWithChildren
-  AdminAquavisionxRoute: typeof AdminAquavisionxRoute
   AdminBackupsRoute: typeof AdminBackupsRoute
   AdminCommitteeRoute: typeof AdminCommitteeRoute
   AdminCommitteeLogRoute: typeof AdminCommitteeLogRoute
@@ -1923,7 +1788,6 @@ export interface RootRouteChildren {
   AdminGermanRoute: typeof AdminGermanRouteWithChildren
   AdminGroupsRoute: typeof AdminGroupsRoute
   AdminJarvisBatchRoute: typeof AdminJarvisBatchRoute
-  AdminJarvisBatchGermanIpadRoute: typeof AdminJarvisBatchGermanIpadRoute
   AdminJarvisBatchV2Route: typeof AdminJarvisBatchV2Route
   AdminJarvisBatchV2IpadRoute: typeof AdminJarvisBatchV2IpadRoute
   AdminLectureCentreRoute: typeof AdminLectureCentreRoute
@@ -1933,13 +1797,11 @@ export interface RootRouteChildren {
   AdminNavigationRoute: typeof AdminNavigationRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminPackagesRoute: typeof AdminPackagesRoute
-  AdminPatchIpadProxRoute: typeof AdminPatchIpadProxRoute
   AdminPdfSlicerRoute: typeof AdminPdfSlicerRoute
   AdminPeopleRoute: typeof AdminPeopleRoute
   AdminQuestionBankRoute: typeof AdminQuestionBankRoute
   AdminQuestionGeneratorRoute: typeof AdminQuestionGeneratorRoute
   AdminQuestionReportsRoute: typeof AdminQuestionReportsRoute
-  AdminQuestionRequestsRoute: typeof AdminQuestionRequestsRoute
   AdminQuestionsRoute: typeof AdminQuestionsRoute
   AdminRolesRoute: typeof AdminRolesRoute
   AdminServersRoute: typeof AdminServersRoute
@@ -1964,14 +1826,12 @@ export interface RootRouteChildren {
   MyCoursesRoute: typeof MyCoursesRoute
   MyLecturesRoute: typeof MyLecturesRoute
   PSlugRoute: typeof PSlugRoute
-  QuestionsGroupIdRoute: typeof QuestionsGroupIdRoute
   SummariesSummaryIdRoute: typeof SummariesSummaryIdRoute
   SummariesNewRoute: typeof SummariesNewRoute
   UUniSlugRoute: typeof UUniSlugRoute
   AdminIndexRoute: typeof AdminIndexRoute
   GuidesIndexRoute: typeof GuidesIndexRoute
   PackagesIndexRoute: typeof PackagesIndexRoute
-  QuestionsIndexRoute: typeof QuestionsIndexRoute
   SummariesIndexRoute: typeof SummariesIndexRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -2203,20 +2063,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAquaMcqForgeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/aqua-mcq-gen': {
-      id: '/admin/aqua-mcq-gen'
-      path: '/admin/aqua-mcq-gen'
-      fullPath: '/admin/aqua-mcq-gen'
-      preLoaderRoute: typeof AdminAquaMcqGenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/aquavisionx': {
-      id: '/admin/aquavisionx'
-      path: '/admin/aquavisionx'
-      fullPath: '/admin/aquavisionx'
-      preLoaderRoute: typeof AdminAquavisionxRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/backups': {
       id: '/admin/backups'
       path: '/admin/backups'
@@ -2322,13 +2168,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminJarvisBatchRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/jarvis-batch-german-ipad': {
-      id: '/admin/jarvis-batch-german-ipad'
-      path: '/admin/jarvis-batch-german-ipad'
-      fullPath: '/admin/jarvis-batch-german-ipad'
-      preLoaderRoute: typeof AdminJarvisBatchGermanIpadRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/jarvis-batch-v2': {
       id: '/admin/jarvis-batch-v2'
       path: '/admin/jarvis-batch-v2'
@@ -2392,13 +2231,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPackagesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/patch-ipad-prox': {
-      id: '/admin/patch-ipad-prox'
-      path: '/admin/patch-ipad-prox'
-      fullPath: '/admin/patch-ipad-prox'
-      preLoaderRoute: typeof AdminPatchIpadProxRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/pdf-slicer': {
       id: '/admin/pdf-slicer'
       path: '/admin/pdf-slicer'
@@ -2432,13 +2264,6 @@ declare module '@tanstack/react-router' {
       path: '/admin/question-reports'
       fullPath: '/admin/question-reports'
       preLoaderRoute: typeof AdminQuestionReportsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/question-requests': {
-      id: '/admin/question-requests'
-      path: '/admin/question-requests'
-      fullPath: '/admin/question-requests'
-      preLoaderRoute: typeof AdminQuestionRequestsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/questions': {
@@ -2686,20 +2511,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PackagesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/questions/': {
-      id: '/questions/'
-      path: '/questions'
-      fullPath: '/questions/'
-      preLoaderRoute: typeof QuestionsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/questions/$groupId': {
-      id: '/questions/$groupId'
-      path: '/questions/$groupId'
-      fullPath: '/questions/$groupId'
-      preLoaderRoute: typeof QuestionsGroupIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/study-hub/': {
       id: '/study-hub/'
       path: '/'
@@ -2783,20 +2594,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/aqua-mcq-forge/$jobId'
       preLoaderRoute: typeof AdminAquaMcqForgeJobIdRouteImport
       parentRoute: typeof AdminAquaMcqForgeRoute
-    }
-    '/admin/aqua-mcq-gen/': {
-      id: '/admin/aqua-mcq-gen/'
-      path: '/'
-      fullPath: '/admin/aqua-mcq-gen/'
-      preLoaderRoute: typeof AdminAquaMcqGenIndexRouteImport
-      parentRoute: typeof AdminAquaMcqGenRoute
-    }
-    '/admin/aqua-mcq-gen/approval': {
-      id: '/admin/aqua-mcq-gen/approval'
-      path: '/approval'
-      fullPath: '/admin/aqua-mcq-gen/approval'
-      preLoaderRoute: typeof AdminAquaMcqGenApprovalRouteImport
-      parentRoute: typeof AdminAquaMcqGenRoute
     }
     '/admin/events/': {
       id: '/admin/events/'
@@ -3022,20 +2819,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAquaMcqForgeJobIdReviewRouteImport
       parentRoute: typeof AdminAquaMcqForgeJobIdRoute
     }
-    '/admin/aqua-mcq-gen/$groupId/approval': {
-      id: '/admin/aqua-mcq-gen/$groupId/approval'
-      path: '/$groupId/approval'
-      fullPath: '/admin/aqua-mcq-gen/$groupId/approval'
-      preLoaderRoute: typeof AdminAquaMcqGenGroupIdApprovalRouteImport
-      parentRoute: typeof AdminAquaMcqGenRoute
-    }
-    '/admin/aqua-mcq-gen/$groupId/solve': {
-      id: '/admin/aqua-mcq-gen/$groupId/solve'
-      path: '/$groupId/solve'
-      fullPath: '/admin/aqua-mcq-gen/$groupId/solve'
-      preLoaderRoute: typeof AdminAquaMcqGenGroupIdSolveRouteImport
-      parentRoute: typeof AdminAquaMcqGenRoute
-    }
     '/admin/german/$courseId/manage': {
       id: '/admin/german/$courseId/manage'
       path: '/manage'
@@ -3229,24 +3012,6 @@ const AdminAquaMcqForgeRouteChildren: AdminAquaMcqForgeRouteChildren = {
 const AdminAquaMcqForgeRouteWithChildren =
   AdminAquaMcqForgeRoute._addFileChildren(AdminAquaMcqForgeRouteChildren)
 
-interface AdminAquaMcqGenRouteChildren {
-  AdminAquaMcqGenApprovalRoute: typeof AdminAquaMcqGenApprovalRoute
-  AdminAquaMcqGenIndexRoute: typeof AdminAquaMcqGenIndexRoute
-  AdminAquaMcqGenGroupIdApprovalRoute: typeof AdminAquaMcqGenGroupIdApprovalRoute
-  AdminAquaMcqGenGroupIdSolveRoute: typeof AdminAquaMcqGenGroupIdSolveRoute
-}
-
-const AdminAquaMcqGenRouteChildren: AdminAquaMcqGenRouteChildren = {
-  AdminAquaMcqGenApprovalRoute: AdminAquaMcqGenApprovalRoute,
-  AdminAquaMcqGenIndexRoute: AdminAquaMcqGenIndexRoute,
-  AdminAquaMcqGenGroupIdApprovalRoute: AdminAquaMcqGenGroupIdApprovalRoute,
-  AdminAquaMcqGenGroupIdSolveRoute: AdminAquaMcqGenGroupIdSolveRoute,
-}
-
-const AdminAquaMcqGenRouteWithChildren = AdminAquaMcqGenRoute._addFileChildren(
-  AdminAquaMcqGenRouteChildren,
-)
-
 interface AdminGermanCourseIdRouteChildren {
   AdminGermanCourseIdManageRoute: typeof AdminGermanCourseIdManageRoute
 }
@@ -3329,8 +3094,6 @@ const rootRouteChildren: RootRouteChildren = {
   AdminAdStudioRoute: AdminAdStudioRoute,
   AdminAiKeysRoute: AdminAiKeysRoute,
   AdminAquaMcqForgeRoute: AdminAquaMcqForgeRouteWithChildren,
-  AdminAquaMcqGenRoute: AdminAquaMcqGenRouteWithChildren,
-  AdminAquavisionxRoute: AdminAquavisionxRoute,
   AdminBackupsRoute: AdminBackupsRoute,
   AdminCommitteeRoute: AdminCommitteeRoute,
   AdminCommitteeLogRoute: AdminCommitteeLogRoute,
@@ -3346,7 +3109,6 @@ const rootRouteChildren: RootRouteChildren = {
   AdminGermanRoute: AdminGermanRouteWithChildren,
   AdminGroupsRoute: AdminGroupsRoute,
   AdminJarvisBatchRoute: AdminJarvisBatchRoute,
-  AdminJarvisBatchGermanIpadRoute: AdminJarvisBatchGermanIpadRoute,
   AdminJarvisBatchV2Route: AdminJarvisBatchV2Route,
   AdminJarvisBatchV2IpadRoute: AdminJarvisBatchV2IpadRoute,
   AdminLectureCentreRoute: AdminLectureCentreRoute,
@@ -3356,13 +3118,11 @@ const rootRouteChildren: RootRouteChildren = {
   AdminNavigationRoute: AdminNavigationRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
   AdminPackagesRoute: AdminPackagesRoute,
-  AdminPatchIpadProxRoute: AdminPatchIpadProxRoute,
   AdminPdfSlicerRoute: AdminPdfSlicerRoute,
   AdminPeopleRoute: AdminPeopleRoute,
   AdminQuestionBankRoute: AdminQuestionBankRoute,
   AdminQuestionGeneratorRoute: AdminQuestionGeneratorRoute,
   AdminQuestionReportsRoute: AdminQuestionReportsRoute,
-  AdminQuestionRequestsRoute: AdminQuestionRequestsRoute,
   AdminQuestionsRoute: AdminQuestionsRoute,
   AdminRolesRoute: AdminRolesRoute,
   AdminServersRoute: AdminServersRoute,
@@ -3387,14 +3147,12 @@ const rootRouteChildren: RootRouteChildren = {
   MyCoursesRoute: MyCoursesRoute,
   MyLecturesRoute: MyLecturesRoute,
   PSlugRoute: PSlugRoute,
-  QuestionsGroupIdRoute: QuestionsGroupIdRoute,
   SummariesSummaryIdRoute: SummariesSummaryIdRoute,
   SummariesNewRoute: SummariesNewRoute,
   UUniSlugRoute: UUniSlugRoute,
   AdminIndexRoute: AdminIndexRoute,
   GuidesIndexRoute: GuidesIndexRoute,
   PackagesIndexRoute: PackagesIndexRoute,
-  QuestionsIndexRoute: QuestionsIndexRoute,
   SummariesIndexRoute: SummariesIndexRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,

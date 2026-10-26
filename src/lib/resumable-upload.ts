@@ -18,7 +18,7 @@ export async function uploadLargeFile(
   const contentType = file.type || "application/octet-stream";
 
   if (file.size <= CHUNK) {
-    const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: false, contentType });
+    const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: false, contentType, cacheControl: "31536000" });
     if (error) throw new Error(error.message);
     opts.onProgress?.(100);
     return;
@@ -52,7 +52,7 @@ export async function uploadLargeFile(
         `bucketName ${b64(bucket)}`,
         `objectName ${b64(path)}`,
         `contentType ${b64(contentType)}`,
-        `cacheControl ${b64("3600")}`,
+        `cacheControl ${b64("31536000")}`,
       ].join(","),
       "x-upsert": "false",
     }),

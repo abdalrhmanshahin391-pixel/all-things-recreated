@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Tracks login events (one row per SIGNED_IN) and heartbeats a presence row
- * every 60s while the user is signed in. Mount once at the root.
+ * Tracks login events (one row per SIGNED_IN) and writes the presence row once when the user
+ * enters the site (page load or sign-in). There is no timer: a timer kept the database awake all day. Mount once at the root.
  *
  * IMPORTANT: never `await` inside the onAuthStateChange callback — doing so
  * can deadlock the Supabase auth client and stall every subsequent request
@@ -11,7 +11,6 @@ import { supabase } from "@/integrations/supabase/client";
  */
 export function usePresence() {
   useEffect(() => {
-    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     let activeUserId: string | null = null;
 
     function heartbeat(uid: string) {
@@ -24,18 +23,13 @@ export function usePresence() {
     }
 
     function start(uid: string) {
-      stop();
+      // Token refreshes and repeated events for the same user must not write again.
+      if (activeUserId === uid) return;
       activeUserId = uid;
       heartbeat(uid);
-      heartbeatTimer = setInterval(() => {
-        if (typeof document !== "undefined" && document.hidden) return;
-        heartbeat(uid);
-      }, 900_000);
     }
 
     function stop() {
-      if (heartbeatTimer) clearInterval(heartbeatTimer);
-      heartbeatTimer = null;
       activeUserId = null;
     }
 

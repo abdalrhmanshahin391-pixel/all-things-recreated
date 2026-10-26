@@ -71,7 +71,6 @@ export const DEFAULT_LAYOUT: HubLayout = {
         t("/admin/questions", "Questions", "ListPlus"),
         t("/admin/question-generator", "Questions Generator", "Sparkles"),
         t("/admin/question-bank", "Question Bank", "Library"),
-        t("/admin/question-requests", "Questions Request", "ListChecks"),
 
         t("/admin/packages", "Packages Center", "Package", "مركز الباقات"),
         t("/admin/committee", "Committee Hub", "FolderTree"),
@@ -113,12 +112,7 @@ export const DEFAULT_LAYOUT: HubLayout = {
         t("/admin/jarvis-batch-v2", "Jarvis Batch v2", "Sparkles"),
         t("/admin/jarvis-batch-v2-ipad", "Jarvis Batch v2 iPad", "Sparkles"),
         t("/admin/vision-pro-batch", "Vision Pro batch 50%", "ScanEye"),
-        t("/admin/aquavisionx", "AquaVisionX", "ScanEye"),
-        t("/admin/aqua-mcq-gen", "Aqua MCQ Gen Pro", "Sparkles"),
-        t("/admin/aqua-mcq-gen/approval", "Question approval", "CheckCheck"),
         t("/admin/aqua-mcq-forge", "Aqua MCQ Forge", "Wand2"),
-        t("/admin/patch-ipad-prox", "Patch iPad ProX", "ScanEye"),
-        t("/admin/jarvis-batch-german-ipad", "50% iPad Germany", "Languages"),
         t("/admin/gemini-keys", "Gemini Batch Keys", "Zap"),
         t("/admin/sonic", "Sonic (immediate)", "Zap"),
         t("/admin/backups", "Backups", "Archive"),
@@ -134,6 +128,13 @@ export const DEFAULT_LAYOUT: HubLayout = {
 export const REMOVED_ADMIN_ROUTES = new Set([
   "/admin/mcq-generator-124-pro",
   "/admin/final-approval",
+  // Removed pages: saved layouts and favourites may still list them.
+  "/admin/aquavisionx",
+  "/admin/aqua-mcq-gen",
+  "/admin/aqua-mcq-gen/approval",
+  "/admin/patch-ipad-prox",
+  "/admin/jarvis-batch-german-ipad",
+  "/admin/question-requests",
 ]);
 
 export function isAllowedHubTile(tile: HubTile | null | undefined): boolean {

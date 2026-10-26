@@ -2,12 +2,35 @@ import { createFileRoute } from "@tanstack/react-router";
 
 const MAX_TTS_CHARS = 240;
 
+// Every call spends paid AI credit, so one account cannot call it without limit.
+// The counters live in this server instance's memory: a rough guard, not an exact one.
+const WINDOW_MS = 60_000;
+const MAX_CALLS_PER_WINDOW = 20;
+const calls = new Map<string, number[]>();
+
+function tooMany(userId: string): boolean {
+  const now = Date.now();
+  const recent = (calls.get(userId) ?? []).filter((t) => now - t < WINDOW_MS);
+  if (recent.length >= MAX_CALLS_PER_WINDOW) {
+    calls.set(userId, recent);
+    return true;
+  }
+  recent.push(now);
+  calls.set(userId, recent);
+  if (calls.size > 5000) {
+    for (const [id, times] of calls) if (!times.some((t) => now - t < WINDOW_MS)) calls.delete(id);
+  }
+  return false;
+}
+
 export const Route = createFileRoute("/api/german/tts")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         const { getCaller } = await import("@/lib/auth-guards.server");
-        if (!(await getCaller()).userId) return new Response("Sign in required", { status: 401 });
+        const { userId } = await getCaller();
+        if (!userId) return new Response("Sign in required", { status: 401 });
+        if (tooMany(userId)) return new Response("Too many requests, try again in a minute", { status: 429 });
         let payload: { text?: string; rate?: number } = {};
         try {
           payload = await request.json();
