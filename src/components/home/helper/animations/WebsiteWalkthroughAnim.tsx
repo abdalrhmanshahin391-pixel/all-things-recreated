@@ -136,7 +136,7 @@ export function WebsiteWalkthroughAnim({ currentStep, isArabic }: Props) {
               className="relative w-full aspect-[1024/591]"
             >
               <img
-                src="/helper/step1-universities.png"
+                src="/helper/step1-universities.jpg"
                 alt="AquaQBank Home Screen"
                 className="w-full h-full block"
               />
@@ -202,7 +202,7 @@ export function WebsiteWalkthroughAnim({ currentStep, isArabic }: Props) {
               className="relative w-full aspect-[1024/584]"
             >
               <img
-                src="/helper/step2-ysmu.png"
+                src="/helper/step2-ysmu.jpg"
                 alt="Pick Your University - YSMU"
                 className="w-full h-full block"
               />
@@ -267,7 +267,7 @@ export function WebsiteWalkthroughAnim({ currentStep, isArabic }: Props) {
               className="relative w-full aspect-[1024/636]"
             >
               <img
-                src="/helper/step3-hub.png"
+                src="/helper/step3-hub.jpg"
                 alt="YSMU Hub - Courses, Lectures, Resources"
                 className="w-full h-full block"
               />

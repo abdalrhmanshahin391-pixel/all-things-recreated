@@ -49,7 +49,7 @@ export function CommitteeWalkthroughAnim({ currentStep, isArabic }: Props) {
               className="relative w-full aspect-[1024/534]"
             >
               <img
-                src="/helper/committee-years.png"
+                src="/helper/committee-years.jpg"
                 alt="Committee Home Page - Years 0 to 6"
                 className="w-full h-full block"
               />
@@ -114,7 +114,7 @@ export function CommitteeWalkthroughAnim({ currentStep, isArabic }: Props) {
               className="relative w-full aspect-[1024/675]"
             >
               <img
-                src="/helper/committee-best-sources.png"
+                src="/helper/committee-best-sources.jpg"
                 alt="Sixth Course - Best Sources of Study"
                 className="w-full h-full block"
               />

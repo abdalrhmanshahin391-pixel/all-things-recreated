@@ -10,7 +10,11 @@ export const Route = createFileRoute("/api/public/lecture-reminders")({
     handlers: {
       POST: async ({ request }) => {
         const secret = process.env["CRON_SECRET"];
-        if (!secret || request.headers.get("x-cron-secret") !== secret) {
+        const given = request.headers.get("x-cron-secret") ?? "";
+        // Compare every character so the time taken does not reveal how much of the secret was right.
+        let diff = secret ? secret.length ^ given.length : 1;
+        for (let i = 0; secret && i < secret.length; i++) diff |= secret.charCodeAt(i) ^ (given.charCodeAt(i) || 0);
+        if (!secret || diff !== 0) {
           return new Response("Unauthorized", { status: 401 });
         }
 
