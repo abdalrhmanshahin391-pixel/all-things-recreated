@@ -30,7 +30,6 @@ function ShowcaseClip({
   const ref = useRef<HTMLVideoElement>(null);
   // the stored copy is cached for a year; the file shipped with the site is the fallback
   const [src, setSrc] = useState(() => showcaseUrl(name));
-  const [ready, setReady] = useState(false);
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
@@ -45,30 +44,19 @@ function ShowcaseClip({
   useEffect(() => {
     const v = ref.current;
     if (v && v.readyState >= 2) {
-      setReady(true);
       onReady();
     }
   }, [src]);
   return (
     <>
-      {on && !ready && (
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 z-10 grid animate-pulse place-items-center bg-muted text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground"
-        >
-          Loading preview
-        </div>
-      )}
       <video
         ref={ref}
         src={src}
         onError={() => {
-          setReady(false);
           setSrc((s) => (s.startsWith("/") ? s : `/showcase/${name}.webm`));
         }}
         onLoadedData={() => {
-          setReady(true);
-          onReady();
+              onReady();
         }}
         autoPlay={on}
         muted
