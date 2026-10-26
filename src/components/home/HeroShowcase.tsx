@@ -15,10 +15,22 @@ const TABS = [
   { key: "resources", label: "Resources", Icon: FolderOpen },
 ] as const;
 
-function ShowcaseClip({ name, on }: { name: ShowcaseKey; on: boolean }) {
+function ShowcaseClip({
+  name,
+  on,
+  warm,
+  onReady,
+}: {
+  name: ShowcaseKey;
+  on: boolean;
+  /** the first clip has loaded: the others may now download in the background */
+  warm: boolean;
+  onReady: () => void;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
   // the stored copy is cached for a year; the file shipped with the site is the fallback
   const [src, setSrc] = useState(() => showcaseUrl(name));
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
@@ -29,27 +41,53 @@ function ShowcaseClip({ name, on }: { name: ShowcaseKey; on: boolean }) {
       v.pause();
     }
   }, [on]);
+  // a clip that was already in the browser cache can be ready before React attaches onLoadedData
+  useEffect(() => {
+    const v = ref.current;
+    if (v && v.readyState >= 2) {
+      setReady(true);
+      onReady();
+    }
+  }, [src]);
   return (
-    <video
-      ref={ref}
-      src={src}
-      onError={() => setSrc((s) => (s.startsWith("/") ? s : `/showcase/${name}.webm`))}
-      autoPlay={on}
-      muted
-      loop
-      playsInline
-      preload={on ? "auto" : "metadata"}
-      aria-hidden={!on}
-      className={
-        "absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-200 " +
-        (on ? "opacity-100" : "pointer-events-none opacity-0")
-      }
-    />
+    <>
+      {on && !ready && (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 z-10 grid animate-pulse place-items-center bg-muted text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground"
+        >
+          Loading preview
+        </div>
+      )}
+      <video
+        ref={ref}
+        src={src}
+        onError={() => {
+          setReady(false);
+          setSrc((s) => (s.startsWith("/") ? s : `/showcase/${name}.webm`));
+        }}
+        onLoadedData={() => {
+          setReady(true);
+          onReady();
+        }}
+        autoPlay={on}
+        muted
+        loop
+        playsInline
+        preload={on || warm ? "auto" : "metadata"}
+        aria-hidden={!on}
+        className={
+          "absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-200 " +
+          (on ? "opacity-100" : "pointer-events-none opacity-0")
+        }
+      />
+    </>
   );
 }
-
 export function HeroShowcase({ signedIn = false }: { signedIn?: boolean }) {
   const [active, setActive] = useState<(typeof TABS)[number]["key"]>("qbank");
+  // once the visible clip has loaded the other two download quietly, unless the visitor saves data
+  const [warm, setWarm] = useState(false);
 
   return (
     <section className="relative overflow-hidden bg-background pt-24 pb-14 md:pt-32 md:pb-20">
@@ -148,7 +186,7 @@ export function HeroShowcase({ signedIn = false }: { signedIn?: boolean }) {
               {/* all three clips are mounted and preloaded, so switching only plays another one */}
               <div className="relative aspect-video w-full bg-muted">
                 {TABS.map(({ key }) => (
-                  <ShowcaseClip key={key} name={key} on={key === active} />
+                  <ShowcaseClip key={key} name={key} on={key === active} warm={warm} onReady={() => key === active && setWarm(!(navigator as any).connection?.saveData)} />
                 ))}
               </div>
             </div>
