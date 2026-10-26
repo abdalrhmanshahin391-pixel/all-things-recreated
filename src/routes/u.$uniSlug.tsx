@@ -412,7 +412,73 @@ function HubSwitcher({ items }: { items: SwitchItem[] }) {
   const blocked = cur.locked && !cur.adminBypass;
 
   return (
-    <div className="grid overflow-hidden rounded-[2rem] border border-border bg-card shadow-[0_40px_80px_-50px_rgba(19,41,75,0.5)] lg:grid-cols-[minmax(0,24rem)_1fr]">
+    <>
+    {/* PHONES AND TABLETS: every section is its own card, one under the other, so nothing has to be swiped */}
+    <div className="space-y-4 lg:hidden">
+      {items.map((it) => {
+        const isBlocked = it.locked && !it.adminBypass;
+        const card = (
+          <>
+            <div aria-hidden className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full bg-[#d8a940]/20 blur-3xl" />
+            <div className="relative flex items-start justify-between gap-3">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-white/10 text-[color:var(--gold)]">{it.icon}</span>
+              <div className="text-right">
+                {it.badge ? (
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--gold)]">{it.badge}</p>
+                ) : (
+                  <>
+                    <p className="text-4xl font-semibold leading-none text-[color:var(--gold)]" style={{ fontFamily: "var(--font-heading)" }}>
+                      {it.count}
+                    </p>
+                    <p className="mt-1 text-xs text-white/65">{it.countLabel}</p>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="relative mt-4 flex flex-wrap items-center gap-2">
+              {it.free && !it.locked && (
+                <span className="rounded-full bg-[color:var(--gold)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[color:var(--gold-foreground)]">
+                  Free
+                </span>
+              )}
+              {it.hiddenFromUsers && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary">
+                  <EyeOff size={10} /> Hidden from users
+                </span>
+              )}
+            </div>
+            <h2 className="relative mt-2 text-2xl font-semibold tracking-tight text-white" style={{ fontFamily: "var(--font-heading)" }}>
+              {it.title}
+            </h2>
+            <p className="relative mt-1 text-sm leading-relaxed text-white/70">{it.subtitle}</p>
+            {isBlocked ? (
+              <span className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white/70">
+                <Lock size={14} /> {it.lockNote}
+              </span>
+            ) : (
+              <span className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-[color:var(--gold)] px-5 py-2.5 text-sm font-bold text-[color:var(--gold-foreground)]">
+                Open {it.title} <ArrowRight size={16} strokeWidth={2.2} />
+              </span>
+            )}
+          </>
+        );
+        const cardCls = `on-dark-panel relative block overflow-hidden rounded-2xl p-5 shadow-md ${
+          it.highlighted ? "ring-2 ring-[color:var(--gold)]" : ""
+        } ${isBlocked ? "opacity-80" : "transition-transform active:scale-[0.99]"}`;
+        const cardStyle = { background: "linear-gradient(155deg, #0b1b36 0%, #13294b 60%, #1a3566 100%)" };
+        return isBlocked ? (
+          <div key={it.id} className={cardCls} style={cardStyle} aria-disabled>
+            {card}
+          </div>
+        ) : (
+          <Link key={it.id} to={it.to as any} search={it.search as any} className={cardCls} style={cardStyle}>
+            {card}
+          </Link>
+        );
+      })}
+    </div>
+
+    <div className="hidden overflow-hidden rounded-[2rem] border border-border bg-card shadow-[0_40px_80px_-50px_rgba(19,41,75,0.5)] lg:grid lg:grid-cols-[minmax(0,24rem)_1fr]">
       {/* LEFT: a quiet index */}
       <div role="tablist" aria-label="Sections" className="flex overflow-x-auto bg-card lg:flex-col lg:overflow-visible">
         {items.map((it, i) => {
@@ -531,6 +597,7 @@ function HubSwitcher({ items }: { items: SwitchItem[] }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
 type LockProps = {
