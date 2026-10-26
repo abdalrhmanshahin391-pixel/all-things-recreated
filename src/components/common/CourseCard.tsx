@@ -178,11 +178,11 @@ export function CourseCard({
         )}
 
         <div className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-4">
-          <p className="flex min-w-0 items-baseline gap-1.5">
+          <p className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
             <span className="text-2xl font-semibold leading-none tabular-nums text-foreground" style={{ fontFamily: "var(--font-heading)" }}>
               {(counts?.questions ?? 0).toLocaleString()}
             </span>
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">
               {counts?.questions === 1 ? "question" : "questions"}
             </span>
           </p>
