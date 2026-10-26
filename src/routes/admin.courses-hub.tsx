@@ -1180,7 +1180,7 @@ function EditCourseModal({
     const path = `${course.id}/${Date.now()}.${img.ext}`;
     const { error: upErr } = await supabase.storage
       .from("course-images")
-      .upload(path, img.file, { upsert: true, contentType: img.contentType });
+      .upload(path, img.file, { cacheControl: "31536000", upsert: true, contentType: img.contentType });
     if (upErr) {
       setError(upErr.message);
       setUploading(false);

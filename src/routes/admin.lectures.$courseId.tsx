@@ -381,7 +381,7 @@ function AdminCourseLessonsPage() {
       const path = `intro/${course.id}/${Date.now()}.${img.ext}`;
       const { error: upErr } = await supabase.storage
         .from("course-images")
-        .upload(path, img.file, { upsert: true, contentType: img.contentType });
+        .upload(path, img.file, { cacheControl: "31536000", upsert: true, contentType: img.contentType });
       if (upErr) throw upErr;
       const { data: pubUrl } = supabase.storage.from("course-images").getPublicUrl(path);
       const finalUrl = pubUrl?.publicUrl || path;

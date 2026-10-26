@@ -77,7 +77,7 @@ function AdminGermanPage() {
         const path = `german/${crypto.randomUUID()}-${img.file.name}`;
         const { error } = await supabase.storage
           .from("course-images")
-          .upload(path, img.file, { upsert: false, contentType: img.contentType });
+          .upload(path, img.file, { cacheControl: "31536000", upsert: false, contentType: img.contentType });
         if (error) throw error;
         image_path = path;
       }

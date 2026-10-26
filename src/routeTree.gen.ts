@@ -70,6 +70,7 @@ import { Route as AdminQuestionReportsRouteImport } from './routes/admin.questio
 import { Route as AdminQuestionsRouteImport } from './routes/admin.questions'
 import { Route as AdminRolesRouteImport } from './routes/admin.roles'
 import { Route as AdminServersRouteImport } from './routes/admin.servers'
+import { Route as AdminShowcaseVideosRouteImport } from './routes/admin.showcase-videos'
 import { Route as AdminSiteSettingsRouteImport } from './routes/admin.site-settings'
 import { Route as AdminSonicRouteImport } from './routes/admin.sonic'
 import { Route as AdminStudyHubRouteImport } from './routes/admin.study-hub'
@@ -459,6 +460,11 @@ const AdminRolesRoute = AdminRolesRouteImport.update({
 const AdminServersRoute = AdminServersRouteImport.update({
   id: '/admin/servers',
   path: '/admin/servers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminShowcaseVideosRoute = AdminShowcaseVideosRouteImport.update({
+  id: '/admin/showcase-videos',
+  path: '/admin/showcase-videos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminSiteSettingsRoute = AdminSiteSettingsRouteImport.update({
@@ -949,6 +955,7 @@ export interface FileRoutesByFullPath {
   '/admin/questions': typeof AdminQuestionsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/servers': typeof AdminServersRoute
+  '/admin/showcase-videos': typeof AdminShowcaseVideosRoute
   '/admin/site-settings': typeof AdminSiteSettingsRoute
   '/admin/sonic': typeof AdminSonicRoute
   '/admin/study-hub': typeof AdminStudyHubRoute
@@ -1088,6 +1095,7 @@ export interface FileRoutesByTo {
   '/admin/questions': typeof AdminQuestionsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/servers': typeof AdminServersRoute
+  '/admin/showcase-videos': typeof AdminShowcaseVideosRoute
   '/admin/site-settings': typeof AdminSiteSettingsRoute
   '/admin/sonic': typeof AdminSonicRoute
   '/admin/study-hub': typeof AdminStudyHubRoute
@@ -1230,6 +1238,7 @@ export interface FileRoutesById {
   '/admin/questions': typeof AdminQuestionsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/servers': typeof AdminServersRoute
+  '/admin/showcase-videos': typeof AdminShowcaseVideosRoute
   '/admin/site-settings': typeof AdminSiteSettingsRoute
   '/admin/sonic': typeof AdminSonicRoute
   '/admin/study-hub': typeof AdminStudyHubRoute
@@ -1378,6 +1387,7 @@ export interface FileRouteTypes {
     | '/admin/questions'
     | '/admin/roles'
     | '/admin/servers'
+    | '/admin/showcase-videos'
     | '/admin/site-settings'
     | '/admin/sonic'
     | '/admin/study-hub'
@@ -1517,6 +1527,7 @@ export interface FileRouteTypes {
     | '/admin/questions'
     | '/admin/roles'
     | '/admin/servers'
+    | '/admin/showcase-videos'
     | '/admin/site-settings'
     | '/admin/sonic'
     | '/admin/study-hub'
@@ -1658,6 +1669,7 @@ export interface FileRouteTypes {
     | '/admin/questions'
     | '/admin/roles'
     | '/admin/servers'
+    | '/admin/showcase-videos'
     | '/admin/site-settings'
     | '/admin/sonic'
     | '/admin/study-hub'
@@ -1805,6 +1817,7 @@ export interface RootRouteChildren {
   AdminQuestionsRoute: typeof AdminQuestionsRoute
   AdminRolesRoute: typeof AdminRolesRoute
   AdminServersRoute: typeof AdminServersRoute
+  AdminShowcaseVideosRoute: typeof AdminShowcaseVideosRoute
   AdminSiteSettingsRoute: typeof AdminSiteSettingsRoute
   AdminSonicRoute: typeof AdminSonicRoute
   AdminStudyHubRoute: typeof AdminStudyHubRoute
@@ -2285,6 +2298,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/servers'
       fullPath: '/admin/servers'
       preLoaderRoute: typeof AdminServersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/showcase-videos': {
+      id: '/admin/showcase-videos'
+      path: '/admin/showcase-videos'
+      fullPath: '/admin/showcase-videos'
+      preLoaderRoute: typeof AdminShowcaseVideosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/site-settings': {
@@ -3126,6 +3146,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminQuestionsRoute: AdminQuestionsRoute,
   AdminRolesRoute: AdminRolesRoute,
   AdminServersRoute: AdminServersRoute,
+  AdminShowcaseVideosRoute: AdminShowcaseVideosRoute,
   AdminSiteSettingsRoute: AdminSiteSettingsRoute,
   AdminSonicRoute: AdminSonicRoute,
   AdminStudyHubRoute: AdminStudyHubRoute,

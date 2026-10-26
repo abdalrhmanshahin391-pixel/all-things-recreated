@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { showcaseUrl, type ShowcaseKey } from "@/lib/showcase-media";
 import { SiteWordmark } from "@/components/brand/SiteWordmark";
 import { ArrowRight, BookOpenCheck, Check, FolderOpen, GraduationCap, PlayCircle } from "lucide-react";
 
@@ -13,6 +14,39 @@ const TABS = [
   { key: "lectures", label: "Lectures", Icon: PlayCircle },
   { key: "resources", label: "Resources", Icon: FolderOpen },
 ] as const;
+
+function ShowcaseClip({ name, on }: { name: ShowcaseKey; on: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  // the stored copy is cached for a year; the file shipped with the site is the fallback
+  const [src, setSrc] = useState(() => showcaseUrl(name));
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (on) {
+      v.currentTime = 0;
+      void v.play().catch(() => {});
+    } else {
+      v.pause();
+    }
+  }, [on]);
+  return (
+    <video
+      ref={ref}
+      src={src}
+      onError={() => setSrc((s) => (s.startsWith("/") ? s : `/showcase/${name}.webm`))}
+      autoPlay={on}
+      muted
+      loop
+      playsInline
+      preload={on ? "auto" : "metadata"}
+      aria-hidden={!on}
+      className={
+        "absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-200 " +
+        (on ? "opacity-100" : "pointer-events-none opacity-0")
+      }
+    />
+  );
+}
 
 export function HeroShowcase({ signedIn = false }: { signedIn?: boolean }) {
   const [active, setActive] = useState<(typeof TABS)[number]["key"]>("qbank");
@@ -111,16 +145,12 @@ export function HeroShowcase({ signedIn = false }: { signedIn?: boolean }) {
             style={{ background: "var(--primary-deep)" }}
           >
             <div className="overflow-hidden rounded-2xl bg-card">
-              <video
-                key={active}
-                src={`/showcase/${active}.webm`}
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="auto"
-                className="block aspect-video w-full bg-muted object-cover object-top"
-              />
+              {/* all three clips are mounted and preloaded, so switching only plays another one */}
+              <div className="relative aspect-video w-full bg-muted">
+                {TABS.map(({ key }) => (
+                  <ShowcaseClip key={key} name={key} on={key === active} />
+                ))}
+              </div>
             </div>
           </div>
         </div>
