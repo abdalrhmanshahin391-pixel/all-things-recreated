@@ -2,6 +2,8 @@ import { capitalizeFirst } from "@/lib/text";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { coursePageKey, fetchCoursePage, fetchPoolCounts, poolCountsKey } from "@/lib/course-page";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ChallengeAdminCard } from "@/components/challenge/ChallengeAdminCard";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -197,107 +199,45 @@ function CourseDetailPage() {
     }
   }
 
+  // One request for the course, its groups and its subjects. A copy is kept for a few minutes, so
+  // coming back to the page (or opening it from a card that was hovered) shows it straight away.
+  const pageQuery = useQuery({
+    queryKey: coursePageKey(courseId),
+    queryFn: () => fetchCoursePage(courseId),
+    staleTime: isAdmin ? 0 : 5 * 60_000,
+  });
+  const pageData = pageQuery.data;
+
   useEffect(() => {
-    (async () => {
+    if (pageQuery.isPending) {
       setLoading(true);
-      const { data: c } = await supabase
-        .from("courses")
-        .select("*")
-        .eq("id", courseId)
-        .maybeSingle();
-      // If this is a lectures-kind course, send the user to the lectures page.
-      if (c && (c as any).kind === "lectures") {
-        navigate({ to: "/lectures/$courseId", params: { courseId: (c as any).id }, replace: true });
-        return;
-      }
-      setCourse(c as Course | null);
+      return;
+    }
+    const c = pageData?.course ?? null;
+    // If this is a lectures-kind course, send the user to the lectures page.
+    if (c && c.kind === "lectures") {
+      navigate({ to: "/lectures/$courseId", params: { courseId: c.id }, replace: true });
+      return;
+    }
+    setCourse(c as Course | null);
+    const gs = pageData?.groups ?? [];
+    setGroups(gs);
+    setOpenGroups(Object.fromEntries(gs.map((x) => [x.id, false])));
+    setSubjects(pageData?.subjects ?? []);
+    setLoading(false);
+  }, [pageData, pageQuery.isPending, courseId]);
 
-
-      const { data: g } = await (supabase.from as any)("subject_groups")
-        .select("id,name,sort_order")
-        .eq("course_id", courseId)
-        .order("sort_order");
-      const gs = (g ?? []) as Group[];
-      setGroups(gs);
-      setOpenGroups(Object.fromEntries(gs.map((x) => [x.id, false])));
-      if (gs.length) {
-        const { data: s } = await (supabase.from as any)("subjects")
-          .select("id,group_id,name,sort_order,access_level,ordered")
-          .in(
-            "group_id",
-            gs.map((x) => x.id),
-          )
-          .order("sort_order");
-        const rawSubs = (s ?? []) as any[];
-        const subjectIds = rawSubs.map((row) => row.id as string);
-        let countsBySubject = new Map<string, number>();
-        if (subjectIds.length) {
-          const { data: counts } = await (supabase as any).rpc("get_subject_question_counts", { _subject_ids: subjectIds });
-          countsBySubject = new Map<string, number>(
-            ((counts ?? []) as { subject_id: string; cnt: number }[]).map((r) => [r.subject_id, Number(r.cnt) || 0]),
-          );
-        }
-        const subs: Subject[] = rawSubs.map((row) => ({
-          id: row.id,
-          group_id: row.group_id,
-          name: row.name,
-          sort_order: row.sort_order,
-          access_level: (row.access_level ?? "paid") as SubjectAccess,
-          ordered: Boolean(row.ordered),
-          question_count: countsBySubject.get(row.id) ?? 0,
-        }));
-        setSubjects(subs);
-      } else {
-        setSubjects([]);
-      }
-      setLoading(false);
-    })();
-  }, [courseId]);
+  // The student's flagged / wrong-answer counts, worked out in the database; they never hold up the page.
+  const poolQuery = useQuery({
+    queryKey: poolCountsKey(user?.id, courseId),
+    enabled: !!user?.id && subjects.length > 0,
+    queryFn: () => fetchPoolCounts(user!.id, subjects.map((s) => s.id)),
+  });
 
   useEffect(() => {
-    (async () => {
-      if (!user?.id || subjects.length === 0) {
-        setFlaggedBySubject({});
-        setIncorrectBySubject({});
-        return;
-      }
-      const subjectIds = subjects.map((s) => s.id);
-      const { data: qRows } = await (supabase.from as any)("questions")
-        .select("id,subject_id")
-        .in("subject_id", subjectIds);
-      const qToSubject = new Map<string, string>(
-        ((qRows ?? []) as any[]).map((r) => [r.id, r.subject_id]),
-      );
-      const courseQids = Array.from(qToSubject.keys());
-      if (courseQids.length === 0) return;
-      const [{ data: flagRows }, { data: attemptRows }] = await Promise.all([
-        (supabase.from as any)("question_flags")
-          .select("question_id")
-          .eq("user_id", user.id)
-          .in("question_id", courseQids),
-        (supabase.from as any)("question_attempts")
-          .select("question_id")
-          .eq("user_id", user.id)
-          .eq("is_correct", false)
-          .in("question_id", courseQids),
-      ]);
-      const flagged: Record<string, number> = {};
-      for (const r of (flagRows ?? []) as any[]) {
-        const sid = qToSubject.get(r.question_id);
-        if (sid) flagged[sid] = (flagged[sid] ?? 0) + 1;
-      }
-      const wrongSet = new Set<string>(
-        ((attemptRows ?? []) as any[]).map((r) => r.question_id),
-      );
-      const incorrect: Record<string, number> = {};
-      for (const qid of wrongSet) {
-        const sid = qToSubject.get(qid);
-        if (sid) incorrect[sid] = (incorrect[sid] ?? 0) + 1;
-      }
-      setFlaggedBySubject(flagged);
-      setIncorrectBySubject(incorrect);
-    })();
-  }, [user?.id, subjects]);
+    setFlaggedBySubject(poolQuery.data?.flagged ?? {});
+    setIncorrectBySubject(poolQuery.data?.incorrect ?? {});
+  }, [poolQuery.data]);
 
   useEffect(() => {
     if (!user?.id) {
