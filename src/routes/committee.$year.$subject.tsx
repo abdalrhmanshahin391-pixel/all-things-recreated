@@ -367,7 +367,7 @@ function SubjectPage() {
             <div className="grid md:grid-cols-[220px_1fr] gap-8">
               {/* SIDEBAR */}
               <aside className="space-y-3 md:sticky md:top-28 md:self-start">
-                <div className="rounded-2xl bg-muted border border-border p-2 grid gap-2 shadow-sm">
+                <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5 rounded-2xl border border-border bg-muted p-2 shadow-sm">
                   {categories.length === 0 && (
                     <p className="text-xs text-muted-foreground px-3 py-4 text-center">
                       No sections yet.{canManage ? " Add one below." : ""}
@@ -379,8 +379,8 @@ function SubjectPage() {
                       <div key={c.id} className="relative group">
                         <button
                           onClick={() => setActiveCategoryId(c.id)}
-                          className={`w-full flex items-center justify-start gap-2 pl-4 pr-[5.5rem] py-3 rounded-xl text-sm font-black text-left transition-all ${
-                            active ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-card"
+                          className={`flex w-full min-w-0 items-center justify-start gap-2 rounded-xl py-3 pl-4 text-left text-sm font-semibold transition-all ${canManage ? "pr-[5.5rem]" : "pr-4"} ${
+                            active ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-card"
                           }`}
                         >
                           <span className="truncate">{c.name}</span>
@@ -422,7 +422,7 @@ function SubjectPage() {
                   <button
                     onClick={() => setCatForm({ editing: null })}
                     type="button"
-                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-primary text-primary-foreground hover:bg-primary/90"
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
                   >
                     <Plus size={14} /> Add section
                   </button>

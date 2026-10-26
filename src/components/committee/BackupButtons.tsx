@@ -173,7 +173,7 @@ export function BackupButtons() {
       <button
         onClick={handleExport}
         disabled={busy !== null}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-background text-sm font-medium hover:bg-muted disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50"
       >
         {busy === "export" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
         {busy === "export" ? `Exporting ${pct}%` : "Export backup"}
@@ -181,7 +181,7 @@ export function BackupButtons() {
       <button
         onClick={() => fileRef.current?.click()}
         disabled={busy !== null}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-background text-sm font-medium hover:bg-muted disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50"
       >
         {busy === "import" ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
         {busy === "import" ? `Importing ${pct}%` : "Import backup"}

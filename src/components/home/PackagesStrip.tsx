@@ -74,13 +74,13 @@ export function PackagesStrip() {
       <div className="mx-auto max-w-6xl px-4 md:px-8 relative">
         <div className="text-center mb-14">
           <span
-            className="inline-flex items-center gap-2 rounded-full bg-card border-2 px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] mb-4"
-            style={{ borderColor: "var(--primary-soft)", color: "var(--primary)", boxShadow: "0 3px 0 var(--primary-soft)" }}
+            className="mb-4 inline-flex items-center gap-2 rounded-full border bg-card px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em]"
+            style={{ borderColor: "color-mix(in oklab, var(--gold) 45%, transparent)", color: "var(--primary)" }}
           >
-            <Sparkles size={12} strokeWidth={3} />
+            <Sparkles size={13} strokeWidth={2} style={{ color: "var(--gold-ink)" }} />
             {t("cms.home.packages.badge", "Packages · الباقات")}
           </span>
-          <h2 className="font-display font-black text-foreground lowercase leading-[1.05]" style={{ fontSize: "clamp(1.75rem, 4vw, 2.75rem)" }}>
+          <h2 className="font-display font-extrabold tracking-tight text-foreground first-letter:uppercase leading-[1.1]" style={{ fontSize: "clamp(1.75rem, 4vw, 2.75rem)" }}>
             {t("cms.home.packages.title", "Study Packages & Bundles")}
           </h2>
           <p className="mt-4 text-base text-muted-foreground max-w-2xl mx-auto">
@@ -104,27 +104,22 @@ export function PackagesStrip() {
               <Link
                 key={p.id}
                 to="/packages"
-                className={`group relative block rounded-3xl overflow-hidden bg-card border-2 hover:-translate-y-1 transition-transform ${
-                  isBest ? "border-primary" : "border-border"
+                className={`group relative block overflow-hidden rounded-2xl border bg-card transition-all hover:-translate-y-1 hover:shadow-[0_28px_54px_-30px_rgba(15,27,61,0.5)] ${
+                  isBest ? "border-[color:var(--gold)] shadow-[0_0_0_1px_var(--gold)]" : "border-border"
                 }`}
-                style={{
-                  boxShadow: isBest
-                    ? "0 6px 0 color-mix(in oklab, var(--primary) 40%, transparent)"
-                    : "0 4px 0 var(--border)",
-                }}
               >
                 {/* Floating Badges */}
                 {p.badge_text ? (
                   <div
                     className="absolute top-0 right-0 px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-white rounded-bl-2xl shadow flex items-center gap-1 z-10"
-                    style={{ background: "#ef4444" }}
+                    style={{ background: "var(--primary)" }}
                   >
                     <Flame size={12} /> {p.badge_text}
                   </div>
                 ) : isBest ? (
                   <div
-                    className="absolute top-0 right-0 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-white rounded-bl-2xl z-10"
-                    style={{ background: "var(--primary)" }}
+                    className="absolute top-0 right-0 z-10 rounded-bl-2xl px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em]"
+                    style={{ background: "var(--gold)", color: "var(--gold-foreground)" }}
                   >
                     {t("cms.home.packages.bestDeal", "Best Deal")}
                   </div>
@@ -140,18 +135,15 @@ export function PackagesStrip() {
                 <div className="p-6 text-center flex flex-col items-center">
                   <div className="flex items-center justify-center gap-3 mb-5">
                     <span
-                      className="grid place-items-center h-14 w-14 rounded-2xl text-white"
-                      style={{
-                        background: "var(--primary)",
-                        boxShadow: "0 4px 0 color-mix(in oklab, var(--primary) 60%, black)",
-                      }}
+                      className="on-dark-panel grid h-14 w-14 place-items-center rounded-xl"
+                      style={{ background: "var(--navy)", color: "var(--gold)" }}
                     >
-                      <PackageIcon size={24} strokeWidth={2.5} />
+                      <PackageIcon size={24} strokeWidth={1.8} />
                     </span>
                     {isGroup ? (
                       <span
                         className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md"
-                        style={{ background: "#fef3c7", color: "#92400e" }}
+                        style={{ background: "color-mix(in oklab, var(--gold) 22%, white)", color: "var(--primary-deep)" }}
                       >
                         <Users size={11} strokeWidth={3} />
                         {t("cms.home.packages.group")} · {p.group_size}
@@ -167,7 +159,7 @@ export function PackagesStrip() {
                     )}
                   </div>
 
-                  <h3 className="font-display font-black text-2xl text-foreground leading-tight lowercase">
+                  <h3 className="font-display font-extrabold text-2xl text-foreground leading-tight first-letter:uppercase">
                     {p.name}
                   </h3>
 
@@ -196,7 +188,7 @@ export function PackagesStrip() {
                     </div>
                   )}
 
-                  <div className="mt-6 pt-5 border-t-2 border-dashed border-border w-full">
+                  <div className="mt-6 pt-5 border-t border-border w-full">
                     <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
                       {isGroup
                         ? t("cms.home.packages.groupPrice", { count: p.group_size })
@@ -226,11 +218,8 @@ export function PackagesStrip() {
                   </div>
 
                   <span
-                    className="mt-6 w-full inline-flex items-center justify-center gap-2 rounded-2xl py-3 text-xs font-black uppercase tracking-wider text-white"
-                    style={{
-                      background: "var(--primary)",
-                      boxShadow: "0 4px 0 color-mix(in oklab, var(--primary) 70%, black)",
-                    }}
+                    className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full py-3 text-sm font-bold"
+                    style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
                   >
                     {t("cms.home.packages.viewPackage", { defaultValue: isAr ? "عرض الباقة" : "View package" })}
                     <ArrowRight size={14} strokeWidth={3} />

@@ -139,7 +139,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "dns-prefetch", href: "https://drive.google.com" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Manrope:wght@400;500;600;700&family=Tajawal:wght@400;500;700;800;900&family=Reem+Kufi:wght@500;600;700&family=Aref+Ruqaa:wght@400;700&family=Cinzel+Decorative:wght@700&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500..800&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Nunito:wght@400;600;700;800;900&family=Manrope:wght@400;500;600;700&family=Tajawal:wght@400;500;700;800;900&family=Reem+Kufi:wght@500;600;700&family=Aref+Ruqaa:wght@400;700&family=Cinzel+Decorative:wght@700&display=swap",
       },
       { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
       { rel: "shortcut icon", type: "image/x-icon", href: "/favicon.ico" },
@@ -154,7 +154,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         // snap the skin back to the previous one.
         children: `(function(){try{if(window.__themeBooted)return;window.__themeBooted=1;var d=['ramadan','eid','fireworks','stars','golden-age','desert-night','emerald-library'];var t=${JSON.stringify(
           (loaderData?.settings?.["theme"] as string) ?? "default",
-        )};if(t&&t!=='default'){document.documentElement.setAttribute('data-theme',t);}else{document.documentElement.removeAttribute('data-theme');}document.documentElement.classList.toggle('dark',d.indexOf(t)>=0);try{localStorage.setItem('ysmu-theme',t);}catch(_){}}catch(e){}})();`,
+        )};t='warm';if(t&&t!=='default'){document.documentElement.setAttribute('data-theme',t);}else{document.documentElement.removeAttribute('data-theme');}document.documentElement.classList.toggle('dark',d.indexOf(t)>=0);try{localStorage.setItem('ysmu-theme',t);}catch(_){}}catch(e){}})();`,
       },
       {
         type: "application/ld+json",

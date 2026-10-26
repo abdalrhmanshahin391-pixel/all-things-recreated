@@ -465,12 +465,12 @@ function LectureCard({
         </span>
         <div className="absolute top-3 right-3 flex items-center gap-1.5">
           {course.semester === 1 && (
-            <span className="inline-flex items-center text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full uppercase bg-emerald-500 text-white shadow-sm">
+            <span className="inline-flex items-center text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full uppercase bg-emerald-600 text-white shadow-sm">
               SEM 1
             </span>
           )}
           {course.semester === 2 && (
-            <span className="inline-flex items-center text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full uppercase bg-blue-500 text-white shadow-sm">
+            <span className="inline-flex items-center text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full uppercase bg-blue-600 text-white shadow-sm">
               SEM 2
             </span>
           )}

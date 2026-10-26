@@ -55,6 +55,14 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
   void _props;
   const [open, setOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Floats and shrinks into a glass pill once the page has been scrolled a little.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
   const { t } = useTranslation();
   const { user, profile, isAdmin, isRealAdmin, isGolden, isTeacher, isQa, isCommittee, isCommitteeEn, isCommitteeAr, isCommitteeHead, adminMode, setAdminMode, loading: authLoading } = useAuth();
   const isContributor = useIsContributor(user?.id);
@@ -176,7 +184,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
           aria-expanded={open}
         >
           <span
-            className={`flex h-8 w-8 shrink-0 items-center justify-center text-sm font-black ${skin.avatarShape}`}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center font-display text-sm font-bold ${skin.avatarShape}`}
             style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
           >
             {initial}
@@ -351,14 +359,22 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
   }
 
   return (
-    <header className={`left-0 right-0 ${skin.header}`}>
+    <header className={`left-0 right-0 transition-[padding] duration-300 ${skin.header} ${scrolled ? "px-3 pt-2.5" : ""}`}>
+      {/* One shell holds the bar AND the phone account row, so the floating pill wraps both. */}
       <div
-        className={`mx-auto max-w-7xl px-4 md:px-8 flex items-center ${skin.inner} ${
-          skin.rail ? "" : "justify-between"
+        className={`mx-auto transition-all duration-300 ease-out ${
+          scrolled
+            ? "max-w-6xl rounded-2xl bg-background/70 shadow-[0_22px_44px_-26px_rgba(0,0,0,0.8)] ring-1 ring-[color:var(--gold)]/25 backdrop-blur-xl lg:rounded-full"
+            : "max-w-7xl"
         }`}
       >
+      <div
+        className={`mx-auto flex items-center px-4 transition-all duration-300 ease-out md:px-8 ${skin.inner} ${
+          scrolled ? "h-16" : "h-[84px]"
+        } ${skin.rail ? "" : "justify-between"}`}
+      >
         {/* Brand */}
-        <Link to="/" className={`${skin.brandWrap} min-w-0 max-w-[calc(100%-5rem)] overflow-hidden sm:max-w-none`}>
+        <Link to="/" className={`${skin.brandWrap} min-w-0 max-w-[calc(100%-5rem)] origin-left overflow-hidden transition-transform duration-300 sm:max-w-none ${scrolled ? "scale-90" : ""}`}>
           <span className="sm:hidden">
             <RaziWordmark size={Math.max(20, Math.round(skin.brandSize * 0.72))} />
           </span>
@@ -418,8 +434,8 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
       </div>
 
       {/* Phone / iPad: account row under the bar, full-width so badges show fully */}
-      <div className="lg:hidden border-t border-border">
-        <div className="mx-auto max-w-7xl px-4 md:px-8 flex min-h-12 flex-wrap items-center justify-between gap-2 py-1.5">
+      <div className="lg:hidden">
+        <div className={`mx-auto flex min-h-12 max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-1.5 md:px-8 ${scrolled ? "border-t border-border/60" : ""}`}>
           <AccountBlock compact />
           {user && (
             <Link
@@ -431,6 +447,7 @@ export function SiteHeader(_props: { variant?: "dark" | "light" } = {}) {
             </Link>
           )}
         </div>
+      </div>
       </div>
 
       {/* Mobile sheet */}

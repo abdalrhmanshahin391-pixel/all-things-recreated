@@ -31,6 +31,61 @@ const GOLD_MID = "#e0a90f";
 const GOLD_TO = "#fcd34d";
 
 
+const REDESIGN_LOCKUP = true;
+
+/** Emblem tile (it already carries the word ACADEMY) next to the name in a serif face with a gold Q. */
+function BrandLockup({
+  head,
+  accent,
+  tail,
+  size,
+  color,
+  className,
+  emblem: showEmblem = true,
+}: {
+  emblem?: boolean;
+  name: string;
+  head: string;
+  accent: string;
+  tail: string;
+  size: number;
+  color?: string;
+  className?: string;
+}) {
+  const emblem = Math.round(size * 1.55);
+  const ink = color ?? "var(--foreground)";
+  return (
+    <span className={`select-none inline-flex items-center ${className ?? ""}`} style={{ gap: size * 0.4 }}>
+      {showEmblem && (
+        <img
+          src="/favicon.png"
+          alt=""
+          width={emblem}
+          height={emblem}
+          className="shrink-0 object-contain"
+          style={{ width: emblem, height: emblem, borderRadius: "22%", boxShadow: "0 6px 14px -8px rgba(11,27,54,0.65)" }}
+        />
+      )}
+      <span className="inline-flex flex-col" style={{ gap: size * 0.16 }}>
+        <span
+          style={{
+            fontFamily: "var(--font-heading)",
+            fontSize: size,
+            fontWeight: 650,
+            lineHeight: 1,
+            letterSpacing: "-0.015em",
+            whiteSpace: "nowrap",
+            color: ink,
+          }}
+        >
+          {head}
+          <span style={{ color: color ?? "var(--gold)" }}>{accent}</span>
+          <span style={{ color: color ?? "var(--wordmark-b)" }}>{tail}</span>
+        </span>
+      </span>
+    </span>
+  );
+}
 /** Splits a name into [head, accent, tail] around the first capital "Q" (falls back gracefully). */
 function splitName(name: string) {
   const i = name.indexOf("Q", 1);
@@ -44,8 +99,14 @@ export function SiteWordmark({
   style: styleOverride,
   name: nameOverride,
   className = "",
+  lockup = true,
+  emblem = true,
 }: {
   size?: number;
+  /** false = draw the style chosen in the admin (the original wordmark) instead of the emblem lockup. */
+  lockup?: boolean;
+  /** false = the name alone, without the emblem tile. */
+  emblem?: boolean;
   /** Force a name instead of the saved one (used by the admin previews). */
   name?: string;
   /** Force a flat color (used on colored backgrounds). */
@@ -59,6 +120,11 @@ export function SiteWordmark({
   const variant = (styleOverride ?? (settings.brand_style as BrandStyle)) || "aqua-flow";
   const [head, accent, tail] = splitName(name);
   const mono = !!color;
+
+  // Redesign: one refined lockup (emblem + serif wordmark + ACADEMY rule) replaces the admin-selectable styles.
+  if (REDESIGN_LOCKUP && lockup) {
+    return <BrandLockup name={name} head={head} accent={accent} tail={tail} size={size} color={color} className={className} emblem={emblem} />;
+  }
 
   const base: React.CSSProperties = {
     fontSize: size,

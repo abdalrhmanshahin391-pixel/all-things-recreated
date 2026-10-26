@@ -1134,7 +1134,7 @@ function CourseDetailPage() {
                     </button>
                     <button
                       onClick={() => startSession("exam")}
-                      className="w-full py-2.5 rounded-xl bg-foreground text-white font-bold text-sm hover:opacity-90 transition-colors inline-flex items-center justify-center gap-2"
+                      className="w-full py-2.5 rounded-xl bg-foreground text-background font-bold text-sm hover:opacity-90 transition-colors inline-flex items-center justify-center gap-2"
                     >
                       <Timer className="w-4 h-4" /> {isArabic ? "نمط الامتحان (Exam)" : "Exam mode"}
                     </button>

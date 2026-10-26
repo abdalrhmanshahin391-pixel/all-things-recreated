@@ -6,12 +6,13 @@ export type UniversityTag = {
 };
 
 export const TAG_COLORS: Record<string, { bg: string; fg: string; border: string }> = {
-  emerald: { bg: "#dcfce7", fg: "#065f46", border: "#86efac" },
-  amber: { bg: "#fef3c7", fg: "#92400e", border: "#fcd34d" },
-  rose: { bg: "#ffe4e6", fg: "#9f1239", border: "#fda4af" },
-  indigo: { bg: "#e0e7ff", fg: "#3730a3", border: "#a5b4fc" },
-  sky: { bg: "#e0f2fe", fg: "#075985", border: "#7dd3fc" },
-  slate: { bg: "#e2e8f0", fg: "#1e293b", border: "#cbd5e1" },
+  // Redesign palette: navy, gold and warm neutrals (the names stay so saved tags keep working)
+  emerald: { bg: "#E6EBF3", fg: "#13294B", border: "#C5D0E3" },
+  amber: { bg: "#F8EBCB", fg: "#6F4E0E", border: "#E3C877" },
+  rose: { bg: "#F4E4DF", fg: "#7A2E2A", border: "#E2BFB6" },
+  indigo: { bg: "#DDE5F4", fg: "#1D3868", border: "#B5C6E6" },
+  sky: { bg: "#E3EEF6", fg: "#1F4E79", border: "#BBD4E8" },
+  slate: { bg: "#ECEAE3", fg: "#2B3445", border: "#D7D3C6" },
 };
 
 export const TAG_COLOR_NAMES = Object.keys(TAG_COLORS);

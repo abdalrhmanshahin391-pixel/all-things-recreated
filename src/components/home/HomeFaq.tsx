@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { ChevronDown } from "lucide-react";
 import { useLang } from "@/components/LanguageProvider";
 
 /**
@@ -77,21 +78,23 @@ export function HomeFaq() {
           {ar ? "الأسئلة الشائعة" : "Frequently asked questions"}
         </h2>
 
-        <dl className="mt-10 space-y-4">
+        <div className="mt-10 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
           {items.map((item) => (
-            <div
-              key={item.q}
-              className="rounded-2xl border-2 border-border bg-card p-5 md:p-6"
-            >
-              <dt className="font-display text-base md:text-lg font-black text-foreground">
+            <details key={item.q} className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-5 font-display text-base font-bold text-foreground marker:hidden md:px-6 md:text-lg [&::-webkit-details-marker]:hidden">
                 {item.q}
-              </dt>
-              <dd className="mt-2 text-sm md:text-base leading-relaxed text-muted-foreground">
+                <ChevronDown
+                  size={20}
+                  strokeWidth={2}
+                  className="shrink-0 text-[color:var(--gold-ink)] transition-transform duration-200 group-open:rotate-180"
+                />
+              </summary>
+              <p className="px-5 pb-5 text-sm leading-relaxed text-muted-foreground md:px-6 md:text-base">
                 {item.a}
-              </dd>
-            </div>
+              </p>
+            </details>
           ))}
-        </dl>
+        </div>
 
         <p className="mt-8 text-center text-sm text-muted-foreground">
           {ar ? "اقرأ أدلة الدراسة المجانية" : "Read the free study guides"}{" "}

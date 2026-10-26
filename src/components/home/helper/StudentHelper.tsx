@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { HelpCircle, Sparkles, GraduationCap } from "lucide-react";
+import { Play, Sparkles } from "lucide-react";
 import { StudentHelperModal } from "./StudentHelperModal";
 import { useLang } from "@/components/LanguageProvider";
 
@@ -20,33 +20,22 @@ export function StudentHelper() {
         <motion.button
           type="button"
           onClick={() => setModalOpen(true)}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+          whileHover={{ y: -3 }}
+          whileTap={{ scale: 0.97 }}
           aria-label={isArabic ? "دليل الطالب والموقع" : "Student Guide"}
-          className="group relative flex items-center gap-2.5 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-full bg-gradient-to-r from-primary via-cyan-600 to-primary text-primary-foreground shadow-xl shadow-primary/25 border border-white/20 transition-all cursor-pointer select-none"
+          className="on-dark-panel group relative flex cursor-pointer select-none items-center gap-3 rounded-full py-2 pe-5 ps-2 shadow-[0_20px_40px_-18px_rgba(11,27,54,0.9)] ring-1 ring-[color:var(--gold)]/50 transition-shadow hover:ring-[color:var(--gold)]"
+          style={{ background: "linear-gradient(135deg, var(--navy-deep), var(--navy))" }}
         >
-          {/* Animated Glow Ping */}
-          <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-400" />
+          <span className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[color:var(--gold)] text-[color:var(--gold-foreground)]">
+            <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-[color:var(--gold)] opacity-30 motion-reduce:hidden" />
+            <Play size={16} fill="currentColor" className="relative ms-0.5" />
           </span>
-
-          {/* Icon with spin/scale on hover */}
-          <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-            <GraduationCap size={15} className="group-hover:rotate-12 transition-transform" />
-          </div>
-
-          {/* Label */}
-          <div className="flex flex-col text-start leading-tight">
-            <span className="text-xs sm:text-sm font-black tracking-wide">
-              {isArabic ? "دليل الطالب" : "Student Guide"}
+          <span className="flex flex-col text-start leading-tight">
+            <span className="text-sm font-semibold text-white">{isArabic ? "شاهد كيف يعمل الموقع" : "Watch how it works"}</span>
+            <span className="hidden text-[11px] text-white/65 sm:inline">
+              {isArabic ? "٣ فيديوهات قصيرة" : "3 short videos"}
             </span>
-            <span className="text-[10px] text-white/80 font-semibold hidden sm:inline">
-              {isArabic ? "شرح متحرك للموقع" : "Interactive Walkthrough"}
-            </span>
-          </div>
-
-          <Sparkles size={14} className="text-amber-300 animate-pulse hidden sm:inline" />
+          </span>
         </motion.button>
       </div>
 

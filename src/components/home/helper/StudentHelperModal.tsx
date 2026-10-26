@@ -1,20 +1,6 @@
-import { useState } from "react";
-import {
-  Compass,
-  Landmark,
-  Layers,
-  Timer,
-  Sparkles,
-  ArrowRight,
-  ArrowLeft,
-  X,
-  HelpCircle,
-  Languages,
-  BookOpen,
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BookOpenCheck, FolderOpen, Languages, PlayCircle, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { HELPER_TOPICS, type HelperTopic } from "./helper-data";
-import { WalkthroughViewer } from "./WalkthroughViewer";
 import { useLang } from "@/components/LanguageProvider";
 
 interface Props {
@@ -23,143 +9,148 @@ interface Props {
   initialTopicId?: string | null;
 }
 
-export function StudentHelperModal({ open, onOpenChange, initialTopicId }: Props) {
+/** One recorded clip per section of the site (public/showcase/*.webm), all pre-loaded so switching never shows a spinner. */
+const CLIPS = [
+  {
+    key: "qbank",
+    Icon: BookOpenCheck,
+    title_en: "Question bank",
+    title_ar: "بنك الأسئلة",
+    note_en: "Pick an answer, submit it and read the explanation.",
+    note_ar: "اختر الإجابة، أرسلها، ثم اقرأ الشرح.",
+  },
+  {
+    key: "lectures",
+    Icon: PlayCircle,
+    title_en: "Lectures",
+    title_ar: "المحاضرات",
+    note_en: "Open a course and watch its introduction.",
+    note_ar: "افتح الكورس وشاهد مقدمته.",
+  },
+  {
+    key: "resources",
+    Icon: FolderOpen,
+    title_en: "Resources & Aqua summaries",
+    title_ar: "المصادر وملخصات أكوا",
+    note_en: "Browse the seven years, then jump to the Aqua summaries.",
+    note_ar: "تصفّح السنوات السبع ثم انتقل إلى ملخصات أكوا.",
+  },
+] as const;
+
+export function StudentHelperModal({ open, onOpenChange }: Props) {
   const { lang, setLang } = useLang();
-  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(initialTopicId ?? null);
-
   const isArabic = lang === "ar";
-  const selectedTopic = HELPER_TOPICS.find((t) => t.id === selectedTopicId) ?? null;
+  const [active, setActive] = useState(0);
+  const videos = useRef<(HTMLVideoElement | null)[]>([]);
 
-  function handleClose() {
-    onOpenChange(false);
-    setSelectedTopicId(null);
-  }
+  // Only the visible clip plays, always from its start.
+  useEffect(() => {
+    if (!open) return;
+    videos.current.forEach((v, i) => {
+      if (!v) return;
+      if (i === active) {
+        v.currentTime = 0;
+        void v.play().catch(() => {});
+      } else {
+        v.pause();
+      }
+    });
+  }, [active, open]);
 
-  function getIcon(icon: HelperTopic["icon"]) {
-    switch (icon) {
-      case "compass":
-        return <Compass className="text-emerald-500" size={20} />;
-      case "landmark":
-        return <Landmark className="text-purple-500" size={20} />;
-      case "layers":
-        return <Layers className="text-blue-500" size={20} />;
-      case "timer":
-        return <Timer className="text-amber-500" size={20} />;
-      case "sparkles":
-        return <Sparkles className="text-cyan-500" size={20} />;
-    }
-  }
+  const cur = CLIPS[active]!;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="w-full max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-3xl border border-border bg-card shadow-2xl z-[160]"
+        className="z-[160] w-[calc(100vw-1.5rem)] max-w-4xl grid-cols-[minmax(0,1fr)] gap-0 overflow-hidden rounded-3xl border border-border bg-card p-0 shadow-2xl [&>button]:hidden"
         dir={isArabic ? "rtl" : "ltr"}
       >
-        {/* Hidden accessible title & description for Radix Dialog */}
-        <DialogTitle className="sr-only">
-          {isArabic ? "دليل الطالب والموقع" : "AquaQBank Student Guide"}
-        </DialogTitle>
+        <DialogTitle className="sr-only">{isArabic ? "دليل الطالب" : "Student guide"}</DialogTitle>
         <DialogDescription className="sr-only">
-          {isArabic
-            ? "دليل تفاعلي متحرك للإجابة على جميع تساؤلات الطلاب وشرح كيفية استخدام المنصة."
-            : "Interactive animated guide to answer student questions and explain how to use the website."}
+          {isArabic ? "فيديوهات قصيرة تشرح كل قسم في الموقع." : "Short videos that show each section of the website."}
         </DialogDescription>
 
-        {selectedTopic ? (
-          /* Active Question Walkthrough Player */
-          <WalkthroughViewer
-            topic={selectedTopic}
-            isArabic={isArabic}
-            onBack={() => setSelectedTopicId(null)}
-            onClose={handleClose}
-            onToggleLang={() => setLang(isArabic ? "en" : "ar")}
-          />
-        ) : (
-          /* Question Selection Grid */
+        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-7">
           <div>
-            {/* Header with Title & Prominent Language Switcher */}
-            <div className="flex items-start justify-between pb-4 border-b border-border/80 gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 shadow-inner">
-                  <HelpCircle size={24} />
-                </div>
-                <div>
-                  <h2 className="text-lg sm:text-xl font-black text-foreground tracking-tight">
-                    {isArabic ? "دليل طالب الأكاديمية" : "AquaQBank Student Guide"}
-                  </h2>
-                  <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                    {isArabic
-                      ? "اختر سؤالاً من الأسئلة أدناه لمشاهدة شرح متحرك وتفاعلي يوضح لك الخطوات:"
-                      : "Click any question below to watch a step-by-step animated walkthrough:"}
-                  </p>
-                </div>
-              </div>
-
-              {/* Prominent Language Switcher Button (Always Visible at Top) */}
-              <button
-                type="button"
-                onClick={() => setLang(isArabic ? "en" : "ar")}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border-2 border-primary/50 bg-primary/10 hover:bg-primary/20 text-xs sm:text-sm font-black text-primary transition-all shadow-sm mr-8 rtl:mr-0 rtl:ml-8 shrink-0 hover:scale-105 active:scale-95 cursor-pointer"
-                title={isArabic ? "Switch to English" : "التحويل إلى العربية"}
-              >
-                <Languages size={16} className="text-primary" />
-                <span>{isArabic ? "English" : "العربية"}</span>
-              </button>
-            </div>
-
-            {/* Questions List */}
-            <div className="mt-4 space-y-2.5">
-              {HELPER_TOPICS.map((topic, index) => (
-                <button
-                  key={topic.id}
-                  onClick={() => setSelectedTopicId(topic.id)}
-                  className="w-full group text-start p-3.5 sm:p-4 rounded-2xl border border-border/80 bg-background/50 hover:bg-accent/40 hover:border-primary/40 transition-all shadow-sm flex items-center justify-between gap-3 sm:gap-4"
-                >
-                  <div className="flex items-start gap-3 sm:gap-4 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-muted/60 border border-border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                      {getIcon(topic.icon)}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-bold text-muted-foreground">
-                          #{index + 1}
-                        </span>
-                        <h4 className="font-bold text-sm sm:text-base text-foreground group-hover:text-primary transition-colors">
-                          {isArabic ? topic.title_ar : topic.title_en}
-                        </h4>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${topic.badge_color}`}
-                        >
-                          {isArabic ? topic.badge_ar : topic.badge_en}
-                        </span>
-                      </div>
-                      <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
-                        {isArabic ? topic.short_desc_ar : topic.short_desc_en}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="w-8 h-8 rounded-xl bg-muted/40 group-hover:bg-primary group-hover:text-primary-foreground flex items-center justify-center shrink-0 transition-colors text-muted-foreground">
-                    {isArabic ? <ArrowLeft size={16} /> : <ArrowRight size={16} />}
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {/* Bottom Footer Note */}
-            <div className="mt-4 pt-3 border-t border-border/80 flex items-center justify-between text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <BookOpen size={14} className="text-primary" />
-                <span>
-                  {isArabic
-                    ? "شروحات تفاعلية مخصصة لطلاب الطب"
-                    : "Interactive demonstrations tailored for medical students"}
-                </span>
-              </span>
-            </div>
+            <h2 className="text-xl font-semibold text-foreground" style={{ fontFamily: "var(--font-heading)" }}>
+              {isArabic ? "كيف يعمل الموقع" : "How AquaQBank works"}
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
+              {isArabic ? "ثلاثة فيديوهات قصيرة، واحد لكل قسم." : "Three short videos, one for each section."}
+            </p>
           </div>
-        )}
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLang(isArabic ? "en" : "ar")}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
+            >
+              <Languages size={14} /> {isArabic ? "English" : "العربية"}
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              aria-label={isArabic ? "إغلاق" : "Close"}
+              className="grid h-9 w-9 place-items-center rounded-full border border-border text-foreground transition-colors hover:bg-muted"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        <div className="grid min-w-0 lg:grid-cols-[minmax(0,1fr)_16rem]">
+          <div className="relative aspect-video w-full bg-[#0b1b36]">
+            {CLIPS.map((c, i) => (
+              <video
+                key={c.key}
+                ref={(el) => {
+                  videos.current[i] = el;
+                }}
+                src={`/showcase/${c.key}.webm`}
+                muted
+                loop
+                playsInline
+                preload="auto"
+                className="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
+                style={{ opacity: i === active ? 1 : 0 }}
+              />
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-2 p-4 lg:p-5">
+            {CLIPS.map(({ key, Icon, title_en, title_ar, note_en, note_ar }, i) => {
+              const on = i === active;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setActive(i)}
+                  className={`flex items-start gap-3 rounded-2xl px-4 py-3.5 text-start transition-all duration-300 ${
+                    on ? "bg-primary text-primary-foreground shadow-md" : "bg-muted text-foreground hover:bg-[color:var(--primary-soft)]"
+                  }`}
+                >
+                  <span
+                    className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
+                      on ? "bg-white/10 text-[color:var(--gold)]" : "bg-card text-primary"
+                    }`}
+                  >
+                    <Icon size={18} strokeWidth={1.8} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold leading-tight">{isArabic ? title_ar : title_en}</span>
+                    <span className={`mt-1 block text-xs leading-snug ${on ? "text-white/70" : "text-muted-foreground"}`}>
+                      {isArabic ? note_ar : note_en}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+            <p className="mt-auto hidden pt-3 text-[11px] leading-snug text-muted-foreground lg:block">
+              {isArabic ? "الفيديو الحالي: " : "Now playing: "}
+              <span className="font-semibold text-foreground">{isArabic ? cur.title_ar : cur.title_en}</span>
+            </p>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

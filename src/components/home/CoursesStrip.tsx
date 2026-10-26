@@ -85,10 +85,12 @@ export function CoursesStrip() {
     <section className="py-20 md:py-24 bg-background">
       <div className="mx-auto max-w-7xl px-4 md:px-8">
         <div className="text-center mb-14">
-          <p className="text-xs font-black uppercase tracking-[0.18em] mb-3" style={{ color: "var(--secondary)" }}>
+          <p className="mb-3 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--gold-ink)]">
+            <span className="h-px w-8 bg-[color:var(--gold)]" />
             {t("cms.home.courses.eyebrow")}
+            <span className="h-px w-8 bg-[color:var(--gold)]" />
           </p>
-          <h2 className="font-display font-black text-foreground lowercase leading-[1.05]" style={{ fontSize: "clamp(1.75rem, 4vw, 2.75rem)" }}>
+          <h2 className="font-display font-extrabold tracking-tight text-foreground first-letter:uppercase leading-[1.1]" style={{ fontSize: "clamp(1.75rem, 4vw, 2.75rem)" }}>
             {t("cms.home.courses.title")}
           </h2>
         </div>
@@ -98,11 +100,8 @@ export function CoursesStrip() {
             <div key={year}>
               <div className="flex items-center gap-3 mb-6">
                 <span
-                  className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded-full text-white"
-                  style={{
-                    background: "var(--primary)",
-                    boxShadow: "0 3px 0 color-mix(in oklab, var(--primary) 60%, black)",
-                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider"
+                  style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
                 >
                   {yearLabel(year, options, t("cms.home.courses.yearOther"))}
                 </span>

@@ -2,10 +2,10 @@ import { Link } from "@tanstack/react-router";
 import { Check } from "lucide-react";
 
 const BARS = [
-  { h: 32, from: "color-mix(in oklab, var(--primary) 25%, var(--background))" },
-  { h: 52, from: "color-mix(in oklab, var(--primary) 45%, var(--background))" },
-  { h: 72, from: "color-mix(in oklab, var(--primary) 70%, var(--background))" },
-  { h: 96, from: "var(--primary)" },
+  { h: 32, from: "color-mix(in oklab, var(--primary) 30%, var(--background))" },
+  { h: 52, from: "color-mix(in oklab, var(--primary) 50%, var(--background))" },
+  { h: 72, from: "color-mix(in oklab, var(--primary) 75%, var(--background))" },
+  { h: 96, from: "var(--gold)" },
 ];
 
 const LINES = [
@@ -33,10 +33,11 @@ export function QuestionCountsSection() {
         </div>
 
         <div className="order-1 lg:order-2">
-          <p className="font-display text-sm font-black uppercase tracking-[0.16em] text-muted-foreground">
+          <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--gold-ink)]">
+            <span className="h-px w-8 bg-[color:var(--gold)]" />
             Real results
           </p>
-          <h2 className="mt-3 font-display text-3xl font-black tracking-tight text-foreground md:text-4xl">
+          <h2 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">
             Every question counts.
           </h2>
           <p className="mt-4 max-w-lg leading-relaxed text-muted-foreground">
@@ -47,8 +48,8 @@ export function QuestionCountsSection() {
             {LINES.map((line) => (
               <li key={line} className="flex items-start gap-3 text-foreground">
                 <span
-                  className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[color:var(--primary-foreground)]"
-                  style={{ background: "var(--primary)" }}
+                  className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full"
+                  style={{ background: "var(--gold)", color: "var(--gold-foreground)" }}
                 >
                   <Check size={13} strokeWidth={3} />
                 </span>
@@ -56,11 +57,7 @@ export function QuestionCountsSection() {
               </li>
             ))}
           </ul>
-          <Link
-            to="/courses"
-            className="mt-8 inline-flex items-center gap-2 rounded-xl px-6 py-3 font-display text-base font-black text-[color:var(--primary-foreground)]"
-            style={{ background: "var(--primary)" }}
-          >
+          <Link to="/courses" className="btn-chunky mt-8">
             Start practising
           </Link>
         </div>

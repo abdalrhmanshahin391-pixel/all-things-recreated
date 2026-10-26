@@ -3,9 +3,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { SiteHeader } from "@/components/SiteHeader";
-import { DuoHero } from "@/components/home/DuoHero";
+import { HeroShowcase } from "@/components/home/HeroShowcase";
+import { useAuth } from "@/hooks/useAuth";
 import { DuoFeatureRow } from "@/components/home/DuoFeatureRow";
-import { CoursesStrip, homeCoursesQuery } from "@/components/home/CoursesStrip";
+import { homeCoursesQuery } from "@/components/home/CoursesStrip";
 import { PackagesStrip, homePackagesQuery } from "@/components/home/PackagesStrip";
 import { UniversityStrip } from "@/components/home/UniversityStrip";
 import { FooterCTA } from "@/components/home/FooterCTA";
@@ -21,7 +22,6 @@ import { AcademyHome } from "@/components/home/academy/AcademyHome";
 import { EthicsBands } from "@/components/about/EthicsBands";
 import { EventEntryButtons } from "@/components/events/EventButtons";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
-import { StudentHelper } from "@/components/home/helper/StudentHelper";
 import ogImage from "@/assets/aquaqbank-og-gold.jpg.asset.json";
 
 
@@ -80,6 +80,7 @@ export const Route = createFileRoute("/")({
 function Index() {
   const { t } = useTranslation();
   const { theme } = useSiteSettings();
+  const { user } = useAuth();
 
   const { data: tree } = useQuery(homeSectionsQuery);
 
@@ -91,13 +92,12 @@ function Index() {
         <AcademyHome />
         <InstallAppBanner />
         <NotificationsPrompt />
-        <StudentHelper />
       </div>
     );
   }
 
   const builtins: Record<string, ReactElement> = {
-    hero: <DuoHero />,
+    hero: <HeroShowcase signedIn={!!user} />,
     feature1: (
       <DuoFeatureRow
         eyebrow={t("cms.home.feature1.eyebrow")}
@@ -107,7 +107,6 @@ function Index() {
         accent="green"
       />
     ),
-    courses: <CoursesStrip />,
     exam_prep: <ExamPrepPanel />,
     results: <QuestionCountsSection />,
     packages: <PackagesStrip />,
@@ -128,9 +127,10 @@ function Index() {
   const ordered: SectionNode[] | null = tree && tree.length > 0 ? tree : null;
 
   return (
-    <div className="bg-background text-foreground min-h-screen">
+    <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <EventEntryButtons />
+      <div className="relative z-10">
       {ordered
         ? ordered.map((node) =>
             node.visible === false ? null : node.builtin_key ? (
@@ -153,10 +153,10 @@ function Index() {
               {b.key === "feature1" && <HomeEthics />}
             </div>
           ))}
+      </div>
 
       <InstallAppBanner />
       <NotificationsPrompt />
-      <StudentHelper />
     </div>
   );
 }

@@ -299,7 +299,7 @@ function UniversityHubPage() {
                 </div>
               )}
               <div className="min-w-0">
-                <h1 className="text-3xl md:text-5xl font-semibold tracking-tight text-foreground">{uni.name}</h1>
+                <h1 className="text-3xl font-semibold leading-[1.08] tracking-tight text-foreground md:text-5xl" style={{ fontFamily: "var(--font-heading)" }}>{uni.name}</h1>
                 <UniversityTags tags={uni.tags} lang={lang} className="mt-3" size="md" />
                 {uni.is_closed && isAdmin && (
                   <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-amber-600">
@@ -349,48 +349,190 @@ function UniversityHubPage() {
           </div>
         )}
 
-        {/* The pillars */}
-        <div className={`mx-auto max-w-7xl px-6 md:px-10 mt-8 grid grid-cols-1 gap-5 ${gridCols}`}>
-          {shownTiles.map((tile) => {
-            const Icon = tileIcon(tile.icon, tile.kind);
-            const auto = countFor(tile.kind);
-            const badge = pickText(tile.badge_en, tile.badge_ar, lang).trim();
-            const highlighted =
-              (tile.kind === "courses" && next === "courses") ||
-              (tile.kind === "lectures" && next === "lectures") ||
-              (tile.kind === "resources" && next === "committee");
-            const lockNote =
-              pickText(tile.lock_note_en ?? "", tile.lock_note_ar ?? "", lang).trim() ||
-              (lang === "ar" ? "قريبًا" : "Coming soon");
-            const shared = {
-              to: tile.href || "/",
-              search: { u: uni.slug },
-              icon: <Icon size={26} strokeWidth={2} />,
-              title: pickText(tile.title_en, tile.title_ar, lang),
-              subtitle: pickText(tile.subtitle_en, tile.subtitle_ar, lang),
-              count: auto?.count ?? 0,
-              countLabel: auto?.label ?? "",
-              badge: badge || undefined,
-              highlighted,
-              hiddenFromUsers: isAdmin && !tile.visible,
-              showFreeBadge: tile.kind === "resources",
-              locked: !!tile.locked,
-              lockNote,
-              lockColor: tile.lock_color ?? "amber",
-              adminBypass: isAdmin,
-            };
-            return tile.highlighted ? (
-              <ResourcesTile key={tile.id} {...shared} />
-            ) : (
-              <HubTile key={tile.id} {...shared} />
-            );
-          })}
-        </div>
-      </main>
+        {/* The pillars: pick one on the left, see it on the right */}
+        <div className="mx-auto mt-10 max-w-7xl px-6 md:px-10">
+          <HubSwitcher
+            items={shownTiles.map((tile) => {
+              const Icon = tileIcon(tile.icon, tile.kind);
+              const auto = countFor(tile.kind);
+              const badge = pickText(tile.badge_en, tile.badge_ar, lang).trim();
+              return {
+                id: tile.id,
+                to: tile.href || "/",
+                search: { u: uni.slug } as Record<string, string>,
+                icon: <Icon size={22} strokeWidth={1.8} />,
+                title: pickText(tile.title_en, tile.title_ar, lang),
+                subtitle: pickText(tile.subtitle_en, tile.subtitle_ar, lang),
+                count: auto?.count ?? 0,
+                countLabel: auto?.label ?? "",
+                badge: badge || undefined,
+                highlighted:
+                  (tile.kind === "courses" && next === "courses") ||
+                  (tile.kind === "lectures" && next === "lectures") ||
+                  (tile.kind === "resources" && next === "committee"),
+                hiddenFromUsers: isAdmin && !tile.visible,
+                free: tile.kind === "resources",
+                locked: !!tile.locked,
+                lockNote:
+                  pickText(tile.lock_note_en ?? "", tile.lock_note_ar ?? "", lang).trim() ||
+                  (lang === "ar" ? "قريبًا" : "Coming soon"),
+                adminBypass: isAdmin,
+              };
+            })}
+          />
+        </div>      </main>
     </div>
   );
 }
 
+type SwitchItem = {
+  id: string;
+  to: string;
+  search: Record<string, string>;
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  count: number;
+  countLabel: string;
+  badge?: string;
+  highlighted: boolean;
+  hiddenFromUsers: boolean;
+  free: boolean;
+  locked: boolean;
+  lockNote: string;
+  adminBypass: boolean;
+};
+
+/** Choose a section on the left; the right panel shows what is inside and the way in. */
+function HubSwitcher({ items }: { items: SwitchItem[] }) {
+  const start = Math.max(0, items.findIndex((i) => i.highlighted));
+  const [active, setActive] = useState(start);
+  const cur = items[Math.min(active, items.length - 1)];
+  if (!cur) return null;
+  const blocked = cur.locked && !cur.adminBypass;
+
+  return (
+    <div className="grid overflow-hidden rounded-[2rem] border border-border bg-card shadow-[0_40px_80px_-50px_rgba(19,41,75,0.5)] lg:grid-cols-[minmax(0,24rem)_1fr]">
+      {/* LEFT: a quiet index */}
+      <div role="tablist" aria-label="Sections" className="flex overflow-x-auto bg-card lg:flex-col lg:overflow-visible">
+        {items.map((it, i) => {
+          const on = i === active;
+          return (
+            <button
+              key={it.id}
+              role="tab"
+              aria-selected={on}
+              onClick={() => setActive(i)}
+              onMouseEnter={() => setActive(i)}
+              className={`group relative flex shrink-0 items-center gap-4 px-6 py-6 text-left transition-colors duration-300 lg:w-full lg:border-b lg:border-border lg:last:border-b-0 ${
+                on ? "bg-[color:var(--cream)]" : "hover:bg-[color:var(--cream)]/60"
+              }`}
+            >
+              <span
+                aria-hidden
+                className="absolute bottom-0 left-0 h-[3px] bg-[color:var(--gold)] transition-all duration-500 lg:bottom-auto lg:left-auto lg:right-0 lg:top-0 lg:h-full lg:w-[3px]"
+                style={{ width: on ? undefined : 0, height: undefined, opacity: on ? 1 : 0 }}
+              />
+              <span
+                className={`grid h-12 w-12 shrink-0 place-items-center rounded-full border transition-all duration-300 ${
+                  on ? "border-primary bg-primary text-[color:var(--gold)]" : "border-border bg-card text-primary"
+                }`}
+              >
+                {it.icon}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span
+                  className={`block text-xl font-semibold leading-tight transition-colors ${on ? "text-primary" : "text-foreground"}`}
+                  style={{ fontFamily: "var(--font-heading)" }}
+                >
+                  {it.title}
+                </span>
+                <span className="mt-1 hidden truncate text-xs text-muted-foreground lg:block">
+                  {it.badge ?? `${it.count} ${it.countLabel}`}
+                </span>
+              </span>
+              {it.locked ? (
+                <Lock size={15} className="text-muted-foreground" />
+              ) : (
+                <ArrowRight
+                  size={16}
+                  className={`hidden shrink-0 transition-all duration-300 lg:block ${on ? "translate-x-0 text-[color:var(--gold-ink)]" : "-translate-x-2 text-muted-foreground opacity-0"}`}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* RIGHT: the chosen section, on navy */}
+      <div
+        key={cur.id}
+        className="on-dark-panel relative flex min-h-[21rem] flex-col justify-between overflow-hidden p-8 sm:p-12"
+        style={{
+          background: "linear-gradient(155deg, #0b1b36 0%, #13294b 60%, #1a3566 100%)",
+          animation: "hub-swap 0.6s cubic-bezier(0.22, 0.8, 0.25, 1) both",
+        }}
+      >
+        <style>{`@keyframes hub-swap { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }`}</style>
+        <div aria-hidden className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-[#d8a940]/20 blur-3xl" />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-12 -right-8 text-white/[0.05] [&_svg]:h-72 [&_svg]:w-72 [&_svg]:stroke-[0.7]"
+        >
+          {cur.icon}
+        </div>
+
+        <div className="relative flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {cur.free && !cur.locked && (
+              <span className="rounded-full bg-[color:var(--gold)] px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[color:var(--gold-foreground)]">
+                Free
+              </span>
+            )}
+            {cur.hiddenFromUsers && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary">
+                <EyeOff size={10} /> Hidden from users
+              </span>
+            )}
+            {cur.locked && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--gold)]/60 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[color:var(--gold)]">
+                <Lock size={10} /> {cur.lockNote}
+              </span>
+            )}
+          </div>
+          <div className="text-right">
+            {cur.badge ? (
+              <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[color:var(--gold)]">{cur.badge}</p>
+            ) : (
+              <>
+                <p className="text-7xl font-semibold leading-none text-[color:var(--gold)] sm:text-8xl" style={{ fontFamily: "var(--font-heading)" }}>
+                  {cur.count}
+                </p>
+                <p className="mt-2 text-sm text-white/65">{cur.countLabel}</p>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="relative mt-12">
+          <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-5xl" style={{ fontFamily: "var(--font-heading)" }}>
+            {cur.title}
+          </h2>
+          <p className="mt-4 max-w-md text-base leading-relaxed text-white/70">{cur.subtitle}</p>
+          {blocked ? (
+            <span className="mt-8 inline-flex items-center gap-2 rounded-full bg-white/10 px-6 py-3 text-sm font-semibold text-white/70">
+              <Lock size={15} /> {cur.lockNote}
+            </span>
+          ) : (
+            <Link to={cur.to as any} search={cur.search as any} className="btn-chunky btn-chunky--lg btn-chunky--gold mt-8">
+              Open {cur.title} <ArrowRight size={18} strokeWidth={2.2} />
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 type LockProps = {
   locked?: boolean;
   lockNote?: string;
@@ -403,7 +545,7 @@ function LockBadge({ note, color, onDark }: { note: string; color?: string; onDa
   return (
     <span
       className={`pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 inline-flex items-center gap-2 rounded-full border-2 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] shadow-lg ${
-        onDark ? "bg-white text-amber-900 border-white" : lockChip(color)
+        onDark ? "bg-white text-amber-900 border-white" : "border-[color:var(--gold)]/50 bg-card text-primary"
       }`}
     >
       <Lock size={14} strokeWidth={3} /> {note}
@@ -451,7 +593,7 @@ function HubTile({
   }, [highlighted]);
 
   const blocked = !!locked && !adminBypass;
-  const cls = `group relative block rounded-xl border bg-card p-7 transition-all ${
+  const cls = `group relative block rounded-2xl border bg-card p-7 transition-all duration-300 ${
     highlighted
       ? "border-primary ring-2 ring-primary/30 shadow-md"
       : "border-border hover:border-primary/40 hover:shadow-sm"
@@ -527,61 +669,73 @@ function ResourcesTile({
     countLabel ?? `year${count === 1 ? "" : "s"} available`;
 
   const blocked = !!locked && !adminBypass;
-  const cls = `tile-gold group relative block rounded-2xl p-7 overflow-hidden transition-all ${
-    blocked ? "cursor-not-allowed select-none" : "hover:-translate-y-1"
-  } ${highlighted ? "ring-2 ring-amber-400/50 shadow-xl" : "hover:shadow-xl"} ${
-    locked ? "saturate-75" : ""
-  }`;
-  const style = {
-    background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 45%, #d97706 100%)",
-    boxShadow: highlighted ? "0 12px 32px -8px rgba(217, 119, 6, 0.5)" : "0 8px 0 #b45309",
-  } as const;
+  // An index row, not a card: hairline dividers, a big serif title, the count on the right.
+  const cls = `group relative grid grid-cols-[auto_1fr_auto] items-center gap-x-5 gap-y-1 overflow-hidden px-2 py-7 transition-colors duration-500 sm:grid-cols-[auto_1fr_auto_auto] sm:gap-x-8 sm:px-6 sm:py-9 ${
+    blocked ? "cursor-not-allowed select-none" : "hover:bg-[color:var(--cream)]"
+  } ${highlighted ? "bg-[color:var(--cream)]" : ""} ${locked ? "opacity-70" : ""}`;
+  const style = {} as const;
 
   const body = (
     <>
-      <div
+      <span
         aria-hidden
-        className="absolute -top-10 -right-10 h-40 w-40 rounded-full opacity-30"
-        style={{ background: "radial-gradient(circle, rgba(255,255,255,0.9), transparent 70%)" }}
+        className="absolute inset-x-0 bottom-0 h-[2px] origin-left scale-x-0 bg-[color:var(--gold)] transition-transform duration-700 ease-out group-hover:scale-x-100"
       />
-      {locked && <div aria-hidden className="absolute inset-0 z-10 bg-black/25" />}
-      {locked && <LockBadge note={lockNote ?? "Coming soon"} onDark />}
+      {locked && <LockBadge note={lockNote ?? "Coming soon"} />}
       {locked && adminBypass && <AdminLockHint />}
-      {hiddenFromUsers ? (
-        <span className="absolute top-3 right-3 z-20 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-white/95 text-amber-800 shadow-sm">
-          <EyeOff size={10} /> Hidden
-        </span>
-      ) : showFreeBadge && !locked ? (
-        <span className="absolute top-3 right-3 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-white/95 text-amber-800 shadow-sm">
-          <Sparkles size={10} /> Free
-        </span>
-      ) : null}
-      <div className="relative flex items-start justify-between">
-        <div className="grid place-items-center h-14 w-14 rounded-xl bg-white/95 text-amber-700 shadow-md">
-          {icon ?? <Sparkles size={26} strokeWidth={2} />}
-        </div>
-        {locked ? (
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-white/90 text-amber-800 mt-1">
-            <Lock size={16} strokeWidth={2.5} />
-          </span>
-        ) : (
-          <ArrowRight size={20} className="text-white/90 group-hover:translate-x-0.5 transition-all mt-2" />
-        )}
+
+      <div className="grid h-14 w-14 place-items-center rounded-full border border-border bg-card text-primary transition-all duration-500 group-hover:border-primary group-hover:bg-primary group-hover:text-primary-foreground sm:h-16 sm:w-16">
+        {icon ?? <Sparkles size={26} strokeWidth={1.6} />}
       </div>
-      <h2 className="relative mt-6 text-2xl font-black tracking-tight text-white drop-shadow-sm">
-        {resolvedTitle}
-      </h2>
-      <p className="relative mt-1 text-sm font-medium text-white/90">
-        {resolvedSubtitle}
-      </p>
-      {(badge || resolvedCountLabel) && (
-        <div className="relative mt-5 inline-flex items-center text-[11px] font-black uppercase tracking-widest text-amber-900 bg-white/95 rounded-full px-3 py-1 shadow-sm">
-          {badge ?? `${count} ${resolvedCountLabel}`}
+
+      <div className="min-w-0 transition-transform duration-500 ease-out group-hover:translate-x-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h2
+            className="text-2xl font-semibold tracking-tight text-foreground sm:text-4xl"
+            style={{ fontFamily: "var(--font-heading)" }}
+          >
+            {resolvedTitle}
+          </h2>
+          {showFreeBadge && !locked && !hiddenFromUsers && (
+            <span className="rounded-full bg-[color:var(--gold)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[color:var(--gold-foreground)]">
+              Free
+            </span>
+          )}
+          {hiddenFromUsers && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--primary-soft)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary">
+              <EyeOff size={10} /> Hidden
+            </span>
+          )}
         </div>
+        <p className="mt-1.5 text-sm text-muted-foreground sm:text-base">{resolvedSubtitle}</p>
+      </div>
+
+      {(badge || resolvedCountLabel) && (
+        <div className="hidden text-right sm:block">
+          {badge ? (
+            <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[color:var(--gold-ink)]">{badge}</p>
+          ) : (
+            <>
+              <p className="text-4xl font-semibold leading-none text-primary" style={{ fontFamily: "var(--font-heading)" }}>
+                {count}
+              </p>
+              <p className="mt-1.5 text-xs text-muted-foreground">{resolvedCountLabel}</p>
+            </>
+          )}
+        </div>
+      )}
+
+      {locked ? (
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-muted text-muted-foreground">
+          <Lock size={16} strokeWidth={2.2} />
+        </span>
+      ) : (
+        <span className="grid h-11 w-11 place-items-center rounded-full border border-border text-primary transition-all duration-500 group-hover:border-[color:var(--gold)] group-hover:bg-[color:var(--gold)] group-hover:text-[color:var(--gold-foreground)]">
+          <ArrowRight size={18} strokeWidth={2.2} className="transition-transform duration-500 group-hover:translate-x-0.5" />
+        </span>
       )}
     </>
   );
-
   if (blocked) {
     return (
       <div className={cls} style={style} aria-disabled title={lockNote ?? "Coming soon"}>

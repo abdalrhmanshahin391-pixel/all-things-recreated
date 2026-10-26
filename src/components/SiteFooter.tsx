@@ -56,7 +56,7 @@ export function SiteFooter() {
   ];
 
   return (
-    <footer className="mt-auto border-t-2 border-border bg-card text-card-foreground">
+    <footer className="site-footer relative z-10 mt-auto border-t border-border bg-card text-card-foreground">
       <div className="mx-auto max-w-6xl px-5 py-14">
         <div className="grid gap-10 md:grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)]">
           {/* Brand + mission */}

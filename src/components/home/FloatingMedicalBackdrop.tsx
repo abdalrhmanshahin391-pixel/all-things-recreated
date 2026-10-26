@@ -47,6 +47,8 @@ const GLYPHS: Glyph[] = [
  * icons floating gently in place. Pure CSS, no JS animation loop.
  * Hidden on small screens to avoid visual noise on mobile.
  */
+const REDESIGN_NO_GLYPHS = true;
+
 export function FloatingMedicalBackdrop({
   density = "hero",
   tone = "pastel",
@@ -55,6 +57,8 @@ export function FloatingMedicalBackdrop({
   /** "gold" keeps every glyph on the brand gold/slate palette (auth screens). */
   tone?: "pastel" | "gold";
 }) {
+  // Redesign: the Golden Age skin already carries its own artwork; the floating glyph bubbles are retired.
+  if (REDESIGN_NO_GLYPHS) return null;
   const items = density === "page" ? GLYPHS.slice(0, 8) : GLYPHS;
   const gold = tone === "gold";
   return (

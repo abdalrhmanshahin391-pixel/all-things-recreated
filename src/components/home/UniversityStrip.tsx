@@ -27,11 +27,13 @@ export function UniversityStrip() {
     <section className="py-20 md:py-28 bg-muted">
       <div className="mx-auto max-w-6xl px-4 md:px-8">
         <div className="text-center mb-12">
-          <p className="text-xs font-black uppercase tracking-[0.18em] mb-3" style={{ color: "var(--primary)" }}>
+          <p className="mb-3 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--gold-ink)]">
+            <span className="h-px w-8 bg-[color:var(--gold)]" />
             {t("cms.home.universities.eyebrow")}
+            <span className="h-px w-8 bg-[color:var(--gold)]" />
           </p>
           <h2
-            className="font-display font-black text-foreground lowercase leading-[1.05]"
+            className="font-display font-extrabold tracking-tight text-foreground first-letter:uppercase leading-[1.1]"
             style={{ fontSize: "clamp(1.75rem, 4vw, 2.75rem)" }}
           >
             {t("cms.home.universities.title")}
@@ -40,24 +42,25 @@ export function UniversityStrip() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {unis.map((u) => {
             const cardClass =
-              "group relative block bg-card rounded-3xl p-6 border-2 border-border transition-transform";
+              "group relative block bg-card rounded-2xl p-6 border border-border shadow-[0_1px_2px_rgba(15,27,61,0.04)] transition-all hover:shadow-[0_24px_48px_-28px_rgba(15,27,61,0.45)]";
             const note = lang === "ar" ? (u.closed_note_ar || u.closed_note_en) : u.closed_note_en;
             const inner = (
               <>
                 {u.home_badge && (
                   <span
-                    className="absolute top-4 right-4 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md text-white"
-                    style={{
-                      background:
-                        u.home_badge === "COMING_SOON" ? "#9ca3af" : "var(--primary)",
-                    }}
+                    className="absolute top-4 right-4 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
+                    style={
+                      u.home_badge === "COMING_SOON"
+                        ? { background: "var(--muted)", color: "var(--muted-foreground)" }
+                        : { background: "var(--gold)", color: "var(--gold-foreground)" }
+                    }
                   >
                     {BADGE_LABEL[u.home_badge]}
                   </span>
                 )}
                 <div
-                  className="h-14 w-14 rounded-2xl grid place-items-center font-display font-black text-white text-xl mb-4"
-                  style={{ background: "var(--primary)" }}
+                  className="on-dark-panel mb-4 grid h-14 w-14 place-items-center rounded-xl font-display text-lg font-extrabold tracking-wide"
+                  style={{ background: "var(--navy)", color: "var(--gold)" }}
                 >
                   {(u.short_name ?? u.name).slice(0, 2).toUpperCase()}
                 </div>
@@ -70,10 +73,11 @@ export function UniversityStrip() {
                 </p>
                 {!u.is_closed && (
                   <span
-                    className="mt-4 inline-flex items-center gap-1 text-xs font-black uppercase tracking-wider"
-                    style={{ color: "var(--secondary)" }}
+                    className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold"
+                    style={{ color: "var(--primary)" }}
                   >
-                    {t("cms.home.universities.open")} <ArrowRight size={12} />
+                    {t("cms.home.universities.open")}
+                    <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
                   </span>
                 )}
               </>
@@ -85,7 +89,6 @@ export function UniversityStrip() {
                   key={u.id}
                   aria-disabled="true"
                   className={`${cardClass} cursor-not-allowed`}
-                  style={{ boxShadow: "0 4px 0 var(--border)" }}
                 >
                   {inner}
                   <ComingSoonOverlay note={note} lang={lang} />
@@ -99,7 +102,6 @@ export function UniversityStrip() {
               to="/u/$uniSlug"
               params={{ uniSlug: u.slug }}
               className={`${cardClass} hover:-translate-y-1`}
-              style={{ boxShadow: "0 4px 0 var(--border)" }}
             >
               {inner}
             </Link>

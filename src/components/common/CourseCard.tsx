@@ -69,14 +69,13 @@ export function CourseCard({
   const wasText = offerLive ? fmtPrice(Number(course.compare_at_price), course.currency) : null;
 
   // Free / owned reads green; paid reads gold so money courses stand apart.
-  const pill = unlocked
-    ? { background: "linear-gradient(135deg, #06b6d4, #0891b2)", boxShadow: "0 2px 0 #0e7490" }
-    : isPaid
-      ? { background: "linear-gradient(135deg, #f59e0b, #d97706)", boxShadow: "0 2px 0 #b45309" }
-      : { background: "linear-gradient(135deg, #22c55e, #16a34a)", boxShadow: "0 2px 0 #15803d" };
+  // Navy for free / owned, gold for paid. Flat, no 3D ledge.
+  const pill = isPaid && !unlocked
+    ? { background: "var(--gold)", color: "var(--gold-foreground)" }
+    : { background: "var(--primary)", color: "var(--primary-foreground)" };
   const cta = owned
-    ? { background: "linear-gradient(135deg, #22c55e, #16a34a)", boxShadow: "0 3px 0 #15803d" }
-    : { background: "linear-gradient(135deg, #f59e0b, #d97706)", boxShadow: "0 3px 0 #b45309" };
+    ? { background: "var(--primary)", color: "var(--primary-foreground)" }
+    : { background: "var(--gold)", color: "var(--gold-foreground)" };
 
   return (
     <Link
@@ -86,22 +85,18 @@ export function CourseCard({
         if (closedForMe) e.preventDefault();
       }}
       aria-disabled={closedForMe || undefined}
-      className={`group relative flex flex-col bg-white rounded-2xl overflow-hidden border transition-all duration-200 ${
-        closedForMe ? "cursor-not-allowed" : "hover:-translate-y-1 hover:shadow-xl"
+      className={`group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(15,27,61,0.05)] transition-all duration-300 ${
+        closedForMe ? "cursor-not-allowed" : "hover:-translate-y-1 hover:shadow-[0_26px_50px_-28px_rgba(15,27,61,0.5)]"
       }`}
-      style={{
-        borderColor: isPaid && !unlocked ? "#fcd34d" : "#e5e5e5",
-        boxShadow: isPaid && !unlocked ? "0 6px 0 #fcd34d" : "0 6px 0 #d4d4d4",
-      }}
     >
-      <div className="aspect-[4/3] w-full relative bg-neutral-100 overflow-hidden">
+      <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted">
         {soon && (
           <div
-            className={`absolute inset-0 z-10 grid place-items-center ${closedForMe ? "bg-slate-900/55 backdrop-blur-[1px]" : "pointer-events-none"}`}
+            className={`absolute inset-0 z-10 grid place-items-center ${closedForMe ? "bg-[color:var(--navy-deep)]/60" : "pointer-events-none"}`}
           >
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-black uppercase tracking-widest shadow-lg ${
-                closedForMe ? "bg-amber-400 text-amber-950" : "absolute bottom-2 left-2 bg-amber-400/95 text-amber-950 text-[10px] px-3 py-1"
+                closedForMe ? "bg-[color:var(--gold)] text-[color:var(--gold-foreground)]" : "absolute bottom-2 left-2 bg-[color:var(--gold)] text-[color:var(--gold-foreground)] text-[10px] px-3 py-1"
               }`}
             >
               <Clock size={closedForMe ? 14 : 11} strokeWidth={3} /> {closedForMe ? "Coming soon" : "Coming soon · hidden from students"}
@@ -138,7 +133,7 @@ export function CourseCard({
         })()}
         {showPrice && (
           <span
-            className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full text-white"
+            className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider shadow-sm"
             style={pill}
           >
             {unlocked ? (
@@ -156,80 +151,50 @@ export function CourseCard({
         )}
       </div>
 
-      <div className="flex-1 flex flex-col items-center text-center px-4 md:px-5 py-4 md:py-5">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <span
-            className={`inline-flex items-center text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-              isAllYears
-                ? "bg-amber-50 text-amber-800 border-amber-300 shadow-sm"
-                : isZero
-                  ? "bg-purple-50 text-purple-800 border-purple-300 shadow-sm"
-                  : "bg-neutral-100 text-neutral-700 border-neutral-200"
-            }`}
-          >
-            {isAllYears ? "ALL YEARS" : isZero ? "ZERO COURSE" : `YEAR ${year || "—"}`}
-          </span>
-          {!isAllYears && !isZero && (course.semester === 1 || course.semester === 2) && (
-            <span
-              className={`inline-flex items-center text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-                course.semester === 1
-                  ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                  : "bg-blue-50 text-blue-800 border-blue-300"
-              }`}
-            >
-              {course.semester === 1 ? "SEM 1" : "SEM 2"}
-            </span>
-          )}
-          <span
-            className="inline-flex items-center text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full text-white"
-            style={{ background: "linear-gradient(135deg, #06b6d4, #0891b2)" }}
-          >
-            {category}
-          </span>
-        </div>
+      <div className="flex flex-1 flex-col px-5 pb-5 pt-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          {isAllYears ? "All years" : isZero ? "Zero course" : `Year ${year || "—"}`}
+          {!isAllYears && !isZero && (course.semester === 1 || course.semester === 2) ? ` · Sem ${course.semester}` : ""}
+          {category ? ` · ${category}` : ""}
+        </p>
 
-        <h3 className="font-display font-black text-lg md:text-xl text-foreground leading-tight line-clamp-2 min-h-[2.4em]">
+        <h3
+          className="mt-1.5 line-clamp-2 min-h-[2.5em] text-xl font-semibold leading-tight text-foreground"
+          style={{ fontFamily: "var(--font-heading)" }}
+        >
           {capitalizeFirst(course.title)}
         </h3>
 
         {showPrice && !unlocked && wasText && (
-          <div className="mt-2 text-[11px] font-black uppercase tracking-wider text-amber-600">
-            <s className="text-neutral-400 me-1.5">{wasText}</s>
+          <div className="mt-2 text-[11px] font-bold uppercase tracking-wider text-[color:var(--gold-ink)]">
+            <s className="me-1.5 text-muted-foreground">{wasText}</s>
             {priceText === "FREE" ? "free right now" : `now ${priceText}`}
             {course.discount_ends_at && (
-              <span className="ms-1 normal-case font-bold text-neutral-500">
+              <span className="ms-1 font-medium normal-case text-muted-foreground">
                 · ends {new Date(course.discount_ends_at).toLocaleDateString()}
               </span>
             )}
           </div>
         )}
 
-        <div className="mt-3 flex items-center justify-center gap-3 text-[12px] font-bold text-neutral-600">
-          <span className="inline-flex items-center gap-1">
-            <BookOpen size={12} strokeWidth={2.8} />
-            {counts?.subjects ?? 0} {counts?.subjects === 1 ? "subject" : "subjects"}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <ListChecks size={12} strokeWidth={2.8} />
-            {counts?.questions ?? 0} {counts?.questions === 1 ? "question" : "questions"}
+        <div className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-4">
+          <p className="flex min-w-0 items-baseline gap-1.5">
+            <span className="text-2xl font-semibold leading-none tabular-nums text-foreground" style={{ fontFamily: "var(--font-heading)" }}>
+              {(counts?.questions ?? 0).toLocaleString()}
+            </span>
+            <span className="text-xs font-medium text-muted-foreground">
+              {counts?.questions === 1 ? "question" : "questions"}
+            </span>
+          </p>
+          <span
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition-transform duration-300 group-hover:translate-x-0.5"
+            style={closedForMe ? { background: "var(--muted)", color: "var(--muted-foreground)" } : cta}
+            title={closedForMe ? "Coming soon" : label}
+          >
+            <span className="sr-only">{closedForMe ? "Coming soon" : label}</span>
+            {closedForMe ? <Clock size={16} strokeWidth={2.2} /> : <ArrowRight size={17} strokeWidth={2.4} />}
           </span>
         </div>
-
-        <span
-          className="mt-4 inline-flex items-center gap-1.5 text-[12px] font-black uppercase tracking-wider text-white px-5 py-2.5 rounded-full"
-          style={closedForMe ? { background: "#94a3b8", boxShadow: "0 3px 0 #64748b" } : cta}
-        >
-          {closedForMe ? (
-            <>
-              <Clock size={12} strokeWidth={3} /> Coming soon
-            </>
-          ) : (
-            <>
-              {label} <ArrowRight size={12} strokeWidth={3} />
-            </>
-          )}
-        </span>
-      </div>
-    </Link>
+      </div>    </Link>
   );
 }

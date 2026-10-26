@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { FloatingMedicalBackdrop } from "./FloatingMedicalBackdrop";
 import { useAuth } from "@/hooks/useAuth";
 import { useLang } from "@/components/LanguageProvider";
 import { useNavItems, canSee, navLabel, targetHref, isExternal } from "@/lib/site-structure";
@@ -21,8 +20,8 @@ export function DuoHero() {
   const unis = useHomeUniversities();
 
   return (
-    <section className="relative bg-background pt-28 pb-16 md:pt-36 md:pb-24 overflow-hidden">
-      <FloatingMedicalBackdrop />
+    <section className="relative bg-background pt-24 pb-6 md:pt-32 md:pb-8 overflow-hidden">
+
       <div className="relative mx-auto max-w-4xl px-4 md:px-8 text-center">
         <h1
           className="font-display font-black text-foreground leading-[1.05] tracking-tight"

@@ -17,14 +17,17 @@ const DARK_THEMES = new Set([
  * Applies the admin-selected seasonal theme by setting data-theme on <html>.
  * Caches the last value so the skin is correct immediately on next load.
  */
+/** Which redesign is live: "warm" (warm white + teal) or "golden-age" (ink navy + brass). Keep in sync with __root.tsx. */
+const DESIGN: "warm" | "golden-age" = "warm";
+
 export function SeasonalTheme() {
   const { theme } = useSiteSettings();
 
   useEffect(() => {
     const root = document.documentElement;
-    if (!theme || theme === "default") root.removeAttribute("data-theme");
-    else root.setAttribute("data-theme", theme);
-    root.classList.toggle("dark", DARK_THEMES.has(theme || "default"));
+    // REDESIGN branch: one look for the whole site. Seasonal skins are ignored.
+    root.setAttribute("data-theme", DESIGN);
+    root.classList.toggle("dark", DESIGN === "golden-age");
     try {
       localStorage.setItem("ysmu-theme", theme || "default");
     } catch {

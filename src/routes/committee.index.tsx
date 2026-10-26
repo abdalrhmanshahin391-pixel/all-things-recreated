@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { committeeYearQuery } from "@/lib/committee-queries";
 import { useState } from "react";
-import { ArrowRight, Plus, Pencil, Trash2, Map as MapIcon, FileText, Lock as LockIcon, LogIn, UserPlus, UsersRound, History } from "lucide-react";
+import { ArrowRight, Plus, Pencil, Trash2, Map as MapIcon, Lock as LockIcon, LogIn, UserPlus, UsersRound, History } from "lucide-react";
 import { toast } from "sonner";
 // JSZip is loaded dynamically inside export/import handlers to keep it out of the main bundle.
 import { SiteHeader } from "@/components/SiteHeader";
@@ -60,7 +60,6 @@ const committeeYearsQuery = queryOptions({
   refetchOnMount: false,
 });
 
-const BRAND = "linear-gradient(135deg,#635BFF 0%,#FF5C8A 60%,#FF8A3D 100%)";
 
 function CommitteePage() {
   const { canManage, canManageMembers, isCommittee, isCommitteeHead, isAdmin } = useCommitteeRole();
@@ -95,20 +94,20 @@ function CommitteePage() {
           )}
           {(isCommittee || isAdmin) && (
             <div className="absolute right-0 top-0 flex flex-col items-end gap-2">
-              <span className="px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-widest bg-primary text-primary-foreground">
+              <span className="admin-chip rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest">
                 {isAdmin ? "Admin" : isCommitteeHead ? "رئيس اللجنة" : "عضو في اللجنة"}
               </span>
               {canManageMembers && (
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
                     to="/committee/manage-team"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[11px] font-bold hover:border-primary/50"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
                   >
                     <UsersRound size={13} /> Manage team
                   </Link>
                   <Link
                     to="/admin/committee-log"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[11px] font-bold hover:border-primary/50"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
                   >
                     <History size={13} /> Log
                   </Link>
@@ -116,19 +115,20 @@ function CommitteePage() {
               )}
             </div>
           )}
-          <span className="inline-flex items-center gap-2 rounded-full bg-card border border-border px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+          <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--gold-ink)]">
+            <span className="h-px w-8 bg-[color:var(--gold)]" />
             Free Resources
+            <span className="h-px w-8 bg-[color:var(--gold)]" />
           </span>
           <h1
             dir="rtl"
             lang="ar"
-            className="mt-5 text-4xl md:text-6xl font-bold tracking-tight leading-tight text-foreground"
+            className="mt-5 text-4xl font-extrabold leading-tight text-foreground md:text-6xl"
             style={{ fontFamily: "'Tajawal','Inter',system-ui,sans-serif", letterSpacing: 0 }}
           >
             لجنة الطب والجراحة
           </h1>
-          <p className="mt-2 text-lg sm:text-xl md:text-2xl font-bold tracking-wide text-foreground/90 font-sans">
+          <p className="mt-3 text-xl font-semibold text-primary sm:text-2xl md:text-3xl" style={{ fontFamily: "var(--font-heading)" }}>
             Medical and Surgical Committee
           </p>
           <p className="mt-3 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
@@ -141,7 +141,7 @@ function CommitteePage() {
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
               <button
                 onClick={() => setAdding(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90"
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
               >
                 <Plus size={16} /> Add year
               </button>
@@ -152,15 +152,15 @@ function CommitteePage() {
           <div className="mt-7 flex justify-center">
             <Link
               to="/committee/team"
-              className="inline-flex flex-col items-center rounded-2xl border border-border bg-card px-6 py-3 leading-tight shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
+              className="group inline-flex flex-col items-center rounded-2xl bg-[color:var(--primary-soft)]/60 px-7 py-3 leading-tight transition-all duration-300 hover:bg-primary hover:shadow-[0_22px_40px_-22px_rgba(15,27,61,0.65)]"
             >
-              <span className="text-xs font-black uppercase tracking-[0.2em] text-primary">
+              <span className="text-xs font-black uppercase tracking-[0.2em] text-primary transition-colors group-hover:text-[color:var(--gold)]">
                 Staff Team
               </span>
               <span
                 dir="rtl"
                 lang="ar"
-                className="mt-0.5 text-base font-bold text-foreground"
+                className="mt-0.5 text-base font-bold text-foreground transition-colors group-hover:text-white"
                 style={{ fontFamily: "'Tajawal','Inter',system-ui,sans-serif" }}
               >
                 لجنة الطب والجراحة
@@ -179,9 +179,8 @@ function CommitteePage() {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {years?.map((y) => {
-              const Icon = iconOf(y.icon_key);
               return (
                 <div key={y.id} className="relative group">
                   <ClosedWrap info={y} canManage={canManage}>
@@ -189,20 +188,9 @@ function CommitteePage() {
                   <button
                     type="button"
                     onClick={() => setGateOpen(true)}
-                    className="w-full text-left flex items-center gap-4 p-5 rounded-xl bg-card border border-border hover:border-primary/40 hover:shadow-sm transition-all"
+                    className="year-tile w-full text-left"
                   >
-                    <div className="grid place-items-center h-12 w-12 rounded-lg bg-muted text-primary shrink-0">
-                      <Icon size={22} strokeWidth={1.8} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        {y.year_number === 0 ? "Preparation Year" : `Year ${y.year_number}`}
-                      </div>
-                      <div className="mt-0.5 text-lg font-semibold text-foreground truncate">
-                        {y.display_name}
-                      </div>
-                    </div>
-                    <ArrowRight size={18} className="text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
+                    <YearTileBody y={y} />
                   </button>
                   ) : (
                   <Link
@@ -211,20 +199,9 @@ function CommitteePage() {
                     search={{ sem: undefined, mod: undefined }}
                     onMouseEnter={() => qc.prefetchQuery(committeeYearQuery(y.year_number))}
                     onTouchStart={() => qc.prefetchQuery(committeeYearQuery(y.year_number))}
-                    className="flex items-center gap-4 p-5 rounded-xl bg-card border border-border hover:border-primary/40 hover:shadow-sm transition-all"
+                    className="year-tile"
                   >
-                    <div className="grid place-items-center h-12 w-12 rounded-lg bg-muted text-primary shrink-0">
-                      <Icon size={22} strokeWidth={1.8} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        {y.year_number === 0 ? "Preparation Year" : `Year ${y.year_number}`}
-                      </div>
-                      <div className="mt-0.5 text-lg font-semibold text-foreground truncate">
-                        {y.display_name}
-                      </div>
-                    </div>
-                    <ArrowRight size={18} className="text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
+                    <YearTileBody y={y} />
                   </Link>
                   )}
                   </ClosedWrap>
@@ -423,32 +400,47 @@ function StudyPlanBanner({ canManage: _canManage }: { canManage: boolean }) {
     <div className="relative mb-8">
       <Link
         to="/committee/study-plan"
-        className="block rounded-2xl border border-border bg-card p-5 sm:p-6 hover:border-primary/50 hover:shadow-md transition-all group overflow-hidden"
+        className="on-dark-panel group relative block overflow-hidden rounded-2xl p-6 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_28px_50px_-28px_rgba(11,27,54,0.8)] sm:p-7"
+        style={{ background: "linear-gradient(135deg, var(--navy-deep) 0%, var(--navy) 100%)" }}
       >
-        <div className="flex items-center gap-4">
-          <div
-            className="grid place-items-center h-14 w-14 shrink-0 rounded-xl text-white"
-            style={{ background: BRAND }}
-          >
-            <MapIcon size={26} strokeWidth={1.8} />
-          </div>
+        <div aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[color:var(--gold)] to-transparent" />
+        <div className="flex items-center gap-5">
+          <MapIcon size={30} strokeWidth={1.5} className="hidden shrink-0 text-[color:var(--gold)] sm:block" />
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Study plan
-            </div>
-            <div className="mt-0.5 text-lg sm:text-xl font-bold text-foreground truncate">
+            <div className="truncate text-xl font-semibold text-white sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
               Medicine study plan
             </div>
-            <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
+            <p className="mt-1 line-clamp-2 text-sm text-white/70">
               From Zero course to Sixth course — every subject, semester and exam type
             </p>
           </div>
-          <span className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold bg-muted text-foreground shrink-0">
-            <FileText size={15} />
+          <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[color:var(--gold)] px-5 py-2.5 text-sm font-semibold text-[color:var(--gold-foreground)] transition-transform duration-300 group-hover:translate-x-0.5">
             Open plan
+            <ArrowRight size={16} strokeWidth={2.2} />
           </span>
         </div>
       </Link>
     </div>
+  );
+}
+
+/** One year: a large serif numeral does the work of the label, so the tile reads at a glance. */
+function YearTileBody({ y }: { y: { year_number: number; display_name: string } }) {
+  const prep = y.year_number === 0;
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        className="year-tile__num"
+        style={{ fontFamily: "var(--font-heading)" }}
+      >
+        {y.year_number}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[17px] font-semibold text-foreground">{y.display_name}</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">{prep ? "Preparation year" : `Year ${y.year_number}`}</span>
+      </span>
+      <ArrowRight size={18} strokeWidth={2} className="year-tile__arrow shrink-0" />
+    </>
   );
 }

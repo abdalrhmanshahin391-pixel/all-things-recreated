@@ -152,6 +152,34 @@ export const HEADER_SKINS: Record<HeaderDesign, HeaderSkin> = {
   },
 };
 
-export function resolveHeaderSkin(id: string | null | undefined): HeaderSkin {
-  return HEADER_SKINS[(id as HeaderDesign) in HEADER_SKINS ? (id as HeaderDesign) : "institutional"];
+/** Redesign branch: one clean header — no divider line, navy/gold buttons. */
+const REDESIGN_SKIN: HeaderSkin = {
+  header: "sticky top-0 z-50",
+  inner: "gap-6 md:gap-10",
+  brandSize: 29,
+  brandWrap: "flex items-center gap-2.5 shrink-0",
+  navWrap: "hidden lg:flex min-w-0 overflow-hidden items-center gap-1",
+  navIdle:
+    "text-[15px] font-semibold rounded-full px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
+  navActive: "text-[15px] font-bold rounded-full px-4 py-2 bg-[color:var(--primary-soft)] text-primary",
+  navMobile: "text-[15px] font-semibold py-3",
+  pillIdle: "text-sm font-semibold rounded-full px-3 py-1.5 text-primary hover:bg-primary/10 transition-colors",
+  pillActive: "text-sm font-semibold rounded-full px-3 py-1.5 bg-primary/10 text-primary",
+  soonBadge: SHARED_SOON,
+  iconBtn:
+    "inline-flex items-center justify-center h-10 px-3 rounded-full border border-border text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors",
+  loginBtn:
+    "inline-flex items-center justify-center h-10 px-5 rounded-full border border-primary/30 text-sm font-semibold tracking-wide text-primary hover:bg-primary hover:text-primary-foreground transition-colors",
+  registerBtn:
+    "inline-flex items-center justify-center h-10 px-5 rounded-full bg-[color:var(--gold)] text-sm font-bold tracking-wide text-[color:var(--gold-foreground)] shadow-[0_8px_20px_-10px_rgba(201,148,30,0.9)] hover:brightness-105 hover:-translate-y-px transition-all",
+  avatarBtn:
+    "flex items-center gap-2.5 rounded-full ps-1 pe-2.5 py-1 transition-colors hover:bg-muted",
+  avatarShape: "rounded-full",
+  menuPanel: "rounded-2xl border border-border shadow-2xl",
+  mobileSheet: "lg:hidden bg-background max-h-[70vh] overflow-y-auto",
+  rail: false,
+};
+
+export function resolveHeaderSkin(_id: string | null | undefined): HeaderSkin {
+  return REDESIGN_SKIN;
 }

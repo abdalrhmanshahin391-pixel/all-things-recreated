@@ -32,10 +32,10 @@ export function CourseImage({
   if (!url || failed) {
     return (
       <div
-        className={`grid place-items-center ${className}`}
-        style={{ background: "linear-gradient(135deg, #dcfce7, #e0f2fe)" }}
+        className={`on-dark-panel grid place-items-center ${className}`}
+        style={{ background: "linear-gradient(150deg, var(--navy-deep), var(--navy))" }}
       >
-        <Stethoscope className="text-[color:var(--primary)]" size={48} strokeWidth={2.2} />
+        <Stethoscope className="text-[color:var(--gold)]" size={44} strokeWidth={1.6} />
       </div>
     );
   }

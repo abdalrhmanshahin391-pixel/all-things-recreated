@@ -24,13 +24,17 @@ export function FooterCTA() {
   })();
 
   return (
-    <section className="py-20 md:py-28" style={{ background: "var(--primary)" }}>
-      <div className="mx-auto max-w-3xl px-4 md:px-8 text-center">
+    <section
+      className="on-dark-panel relative overflow-hidden py-20 md:py-28"
+      style={{ background: "linear-gradient(160deg, var(--navy-deep) 0%, var(--navy) 100%)" }}
+    >
+      <div aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[color:var(--gold)] to-transparent" />
+      <div className="relative mx-auto max-w-3xl px-4 md:px-8 text-center">
         <div className="flex justify-center mb-6">
           <RaziWordmark size={28} color="white" />
         </div>
         <h2
-          className="font-display font-black text-white lowercase leading-[1.05]"
+          className="font-display font-extrabold tracking-tight text-white first-letter:uppercase leading-[1.1]"
           style={{ fontSize: "clamp(2rem, 5vw, 3rem)" }}
         >
           {signedIn ? t("cms.home.footer.titleUser") : t("cms.home.footer.titleGuest")}
@@ -42,11 +46,11 @@ export function FooterCTA() {
         )}
         <div className="mt-8">
           {signedIn ? (
-            <Link to="/universities" className="btn-chunky btn-chunky--lg btn-chunky--white">
+            <Link to="/universities" className="btn-chunky btn-chunky--lg btn-chunky--gold">
               {userCtaText}
             </Link>
           ) : (
-            <Link to="/register" className="btn-chunky btn-chunky--lg btn-chunky--white">
+            <Link to="/register" className="btn-chunky btn-chunky--lg btn-chunky--gold">
               {t("cms.home.footer.ctaGuest")}
             </Link>
           )}

@@ -160,7 +160,7 @@ function RegisterPage() {
         footer={
           <>
             Already verified?{" "}
-            <Link to="/login" className="text-white font-semibold hover:underline">
+            <Link to="/login" className="text-primary font-semibold hover:underline">
               Sign in
             </Link>
           </>
@@ -197,7 +197,7 @@ function RegisterPage() {
       footer={
         <>
           {t("cms.register.footerText")}{" "}
-          <Link to="/login" className="text-white font-semibold hover:underline">
+          <Link to="/login" className="text-primary font-semibold hover:underline">
             {t("cms.register.footerLink")}
           </Link>
         </>

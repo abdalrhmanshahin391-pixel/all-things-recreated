@@ -95,7 +95,30 @@ function Astrolabe({ style, color }: { style: React.CSSProperties; color: string
   );
 }
 
-function GoldenAgeDecor() {
+/** AQUA summaries backdrop: a deep star field with a gold glow, so it feels different from the lattice of the other pages. */
+export function AquaDecor() {
+  return (
+    <div className="decor-layer aqua-decor" aria-hidden="true">
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(70% 55% at 50% 0%, color-mix(in oklab, var(--primary) 16%, transparent), transparent 70%), radial-gradient(60% 50% at 85% 100%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 70%)",
+        }}
+      />
+      {STARFIELD.map((s, i) => (
+        <span
+          key={i}
+          className="decor-star"
+          style={{ left: s.left, top: s.top, width: s.size, height: s.size, animationDelay: s.delay }}
+        />
+      ))}
+      <span className="decor-shooting" style={{ top: "14vh", animationDelay: "2s" }} />
+    </div>
+  );
+}
+
+export function GoldenAgeDecor() {
   return (
     <div className="decor-layer" aria-hidden="true">
       <div

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ArrowRight, Lock, LockOpen, Sparkles } from "lucide-react";
+import { GoldenAgeDecor } from "@/components/ThemeDecor";
 
 /*
  * Building blocks of the AQUA version. Everything uses the site's theme colours (primary, card, border,
@@ -9,10 +10,10 @@ import { ArrowRight, Lock, LockOpen, Sparkles } from "lucide-react";
 /** Soft glow behind the page, tinted with the theme's primary colour. */
 export function AquaBackdrop() {
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-0 h-[26rem] overflow-hidden">
-      <div className="absolute -top-32 left-1/2 h-72 w-[46rem] -translate-x-1/2 rounded-full bg-primary/15 blur-3xl" />
-      <div className="absolute -top-10 right-0 h-56 w-56 rounded-full bg-accent/15 blur-3xl" />
-    </div>
+    <>
+      {/* Golden Age artwork: brass star lattice, slow astrolabes and drifting motes */}
+      <GoldenAgeDecor />
+    </>
   );
 }
 
@@ -146,7 +147,7 @@ export function AquaNodeCard({
     </>
   );
 
-  const cls = `group relative block w-full overflow-hidden rounded-2xl border bg-card p-5 text-left transition-all ${
+  const cls = `aqua-card group relative block w-full overflow-hidden rounded-2xl border bg-card p-5 text-left transition-all ${
     canManage && onToggle ? "pt-12" : ""
   } ${
     open
@@ -184,9 +185,8 @@ export function AquaHero({
   children?: ReactNode;
 }) {
   return (
-    <section className="aqua-rise relative overflow-hidden rounded-3xl border border-primary/30 bg-gradient-to-br from-card via-card to-accent/25 px-6 py-10 text-center shadow-[0_0_60px_-20px_var(--accent)] md:px-12 md:py-14">
-      <div aria-hidden className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
-      <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-16 h-64 w-64 rounded-full bg-accent/20 blur-3xl" />
+    <section className="aqua-rise relative overflow-hidden rounded-2xl border border-primary/35 bg-gradient-to-b from-card to-background px-6 py-10 text-center shadow-[0_30px_70px_-40px_rgb(0_0_0_/_0.8)] md:px-12 md:py-14">
+      <div aria-hidden className="aqua-hero-rule absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-primary to-transparent" />
       <div className="relative">
         <AquaBadge />
         <h1

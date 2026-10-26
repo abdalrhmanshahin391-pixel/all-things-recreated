@@ -68,44 +68,48 @@ export function AboutHero({ ar, canManage }: { ar: boolean; canManage: boolean }
       {/* Luminous ambient background aura */}
       <span
         aria-hidden
-        className="pointer-events-none absolute -top-14 start-1/2 h-72 w-72 md:h-96 md:w-96 -translate-x-1/2 rounded-full blur-3xl opacity-35"
+        className="pointer-events-none absolute -top-16 start-1/2 h-72 w-[34rem] md:h-96 md:w-[52rem] -translate-x-1/2 rounded-full blur-3xl opacity-60"
         style={{
-          background: "radial-gradient(circle, var(--primary) 0%, #e0a90f 45%, transparent 75%)",
+          background: "radial-gradient(closest-side, color-mix(in oklab, var(--gold) 22%, transparent) 0%, transparent 100%)",
         }}
       />
 
       <div className="relative mx-auto max-w-4xl flex flex-col items-center justify-center px-4">
         {/* Big AquaQBank Logo & Emblem */}
         <div className="group flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
-          {/* Gold AQ Book Emblem */}
+          {/* Gold AQ Book Emblem: lifts and glows when the mouse is over it */}
           <div className="relative flex items-center justify-center">
-            <div className="absolute -inset-2 rounded-3xl bg-gradient-to-tr from-amber-500/25 via-primary/30 to-amber-300/35 blur-md opacity-75 group-hover:opacity-100 transition-opacity" />
+            <div className="absolute -inset-2 rounded-3xl bg-gradient-to-tr from-amber-500/25 via-primary/30 to-amber-300/35 opacity-60 blur-md transition-opacity duration-500 group-hover:opacity-100" />
             <img
               src="/favicon.png"
               alt="AquaQBank Emblem"
-              className="relative h-20 w-20 sm:h-24 sm:w-24 md:h-28 md:w-28 rounded-2xl sm:rounded-3xl shadow-2xl ring-2 ring-amber-400/30 bg-card/85 backdrop-blur-md p-2 object-contain transition-transform duration-300 group-hover:scale-105"
+              className="relative h-20 w-20 rounded-2xl object-contain p-1 shadow-[0_18px_36px_-16px_rgba(11,27,54,0.7)] ring-2 ring-amber-400/30 transition-all duration-500 ease-out group-hover:-translate-y-1.5 group-hover:rotate-[-4deg] group-hover:scale-110 group-hover:ring-amber-400/70 sm:h-24 sm:w-24 sm:rounded-3xl md:h-28 md:w-28"
             />
           </div>
 
           {/* Big Wordmark */}
           <div className="flex flex-col items-center sm:items-start text-center sm:text-left select-none">
             <div className="hidden md:block">
-              <SiteWordmark size={68} />
+              <SiteWordmark size={68} lockup={false} />
             </div>
             <div className="hidden sm:block md:hidden">
-              <SiteWordmark size={54} />
+              <SiteWordmark size={54} lockup={false} />
             </div>
             <div className="sm:hidden">
-              <SiteWordmark size={42} />
+              <SiteWordmark size={42} lockup={false} />
             </div>
           </div>
         </div>
 
         {/* The Sentence Underneath */}
+        <span
+          aria-hidden
+          className="mt-8 block h-px w-28 bg-gradient-to-r from-transparent via-[color:var(--gold)] to-transparent"
+        />
         {!isEditing ? (
           <div className="mt-6 flex flex-col items-center gap-3">
             {currentSentence && (
-              <p className="max-w-2xl text-base sm:text-lg md:text-xl font-medium leading-relaxed text-muted-foreground/90 transition-colors">
+              <p className="max-w-2xl text-balance text-base font-normal leading-8 text-muted-foreground transition-colors sm:text-lg md:text-xl">
                 {currentSentence}
               </p>
             )}
