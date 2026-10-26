@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
-import { QuestionImage } from "@/components/quiz/QuestionImage";
+import { QuestionImage, prefetchQuestionImage } from "@/components/quiz/QuestionImage";
 import { ExplanationPanel, type CapturePayload } from "@/components/ExplanationPanel";
 import { SaveNoteDialog, type SaveNotePayload } from "@/components/SaveNoteDialog";
 import { useAuth } from "@/hooks/useAuth";
@@ -175,16 +175,27 @@ function RunPageInner() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS);
     (async () => {
-      if (user) {
-        // a course editor always gets in, even when the course is paid and they are not enrolled
-        const { data: editor } = await (supabase.rpc as any)("can_edit_course", { _user_id: user.id, _course_id: courseId });
-        if (editor === true) { if (!cancelled) setAccessReady(accessKey); return; }
-      }
-      const { data: c, error: courseError } = await (supabase.from as any)("courses")
-        .select("price")
-        .eq("id", courseId)
-        .maybeSingle()
-        .abortSignal(controller.signal);
+      // The editor check, the course price and the enrollment do not depend on each other: read them together.
+      const [{ data: editor }, { data: c, error: courseError }, enrollmentRes] = await Promise.all([
+        user
+          ? Promise.resolve((supabase.rpc as any)("can_edit_course", { _user_id: user.id, _course_id: courseId }))
+          : Promise.resolve({ data: null }),
+        Promise.resolve(
+          (supabase.from as any)("courses").select("price").eq("id", courseId).maybeSingle().abortSignal(controller.signal),
+        ),
+        user
+          ? Promise.resolve(
+              (supabase.from as any)("user_courses")
+                .select("id")
+                .eq("user_id", user.id)
+                .eq("course_id", courseId)
+                .maybeSingle()
+                .abortSignal(controller.signal),
+            )
+          : Promise.resolve({ data: null, error: null }),
+      ]);
+      // a course editor always gets in, even when the course is paid and they are not enrolled
+      if (user && editor === true) { if (!cancelled) setAccessReady(accessKey); return; }
       if (courseError) throw courseError;
       if (!c) throw new Error("Course not found");
       const price = Number(c?.price ?? 0);
@@ -215,12 +226,7 @@ function RunPageInner() {
       }
 
       // User is logged in for paid course:
-      const { data: enr, error: enrollmentError } = await (supabase.from as any)("user_courses")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("course_id", courseId)
-        .maybeSingle()
-        .abortSignal(controller.signal);
+      const { data: enr, error: enrollmentError } = enrollmentRes;
       if (enrollmentError) throw enrollmentError;
       if (cancelled) return;
       if (!enr) {
@@ -318,22 +324,25 @@ function RunPageInner() {
     setSecondsLeft(initialSeconds);
     setSessionReady(false);
     (async () => {
+      // The student's flags do not depend on the questions: start reading them now, not after the questions arrive.
+      const flagsPromise: Promise<any> | null = user
+        ? Promise.resolve(
+            (supabase.from as any)("question_flags").select("question_id").eq("user_id", user.id).abortSignal(controller.signal),
+          )
+        : null;
+      flagsPromise?.catch(() => {});
+
       let subjectIds: string[] = [];
+      let subjMeta: any[] | null = null;
       if (subjects === "all") {
-        const { data: g, error: groupError } = await (supabase.from as any)("subject_groups")
-          .select("id")
-          .eq("course_id", courseId)
+        // all subjects of the course, with their order settings, in one request
+        const { data: s, error: subjectError } = await (supabase.from as any)("subjects")
+          .select("id,sort_order,ordered,subject_groups!inner(course_id)")
+          .eq("subject_groups.course_id", courseId)
           .abortSignal(controller.signal);
-        if (groupError) throw groupError;
-        const gIds = (g ?? []).map((r: { id: string }) => r.id);
-        if (gIds.length) {
-          const { data: s, error: subjectError } = await (supabase.from as any)("subjects")
-            .select("id")
-            .in("group_id", gIds)
-            .abortSignal(controller.signal);
-          if (subjectError) throw subjectError;
-          subjectIds = (s ?? []).map((r: { id: string }) => r.id);
-        }
+        if (subjectError) throw subjectError;
+        subjMeta = (s ?? []) as any[];
+        subjectIds = subjMeta.map((r: { id: string }) => r.id);
       } else {
         subjectIds = subjects.split(",").filter(Boolean);
       }
@@ -349,11 +358,14 @@ function RunPageInner() {
         return;
       }
 
-      const { data: subjMeta, error: metadataError } = await (supabase.from as any)("subjects")
-        .select("id,sort_order,ordered")
-        .in("id", subjectIds)
-        .abortSignal(controller.signal);
-      if (metadataError) throw metadataError;
+      if (!subjMeta) {
+        const { data: meta, error: metadataError } = await (supabase.from as any)("subjects")
+          .select("id,sort_order,ordered")
+          .in("id", subjectIds)
+          .abortSignal(controller.signal);
+        if (metadataError) throw metadataError;
+        subjMeta = (meta ?? []) as any[];
+      }
       const subjectInfo = new Map<string, { sort: number; ordered: boolean }>(
         ((subjMeta ?? []) as any[]).map((r) => [r.id as string, { sort: Number(r.sort_order) || 0, ordered: Boolean(r.ordered) }]),
       );
@@ -416,10 +428,7 @@ function RunPageInner() {
       });
 
       if (user) {
-        const { data: flagRows, error: flagError } = await (supabase.from as any)("question_flags")
-          .select("question_id")
-          .eq("user_id", user.id)
-          .abortSignal(controller.signal);
+        const { data: flagRows, error: flagError } = await flagsPromise!;
         if (flagError) throw flagError;
         const flagSet = new Set<string>((flagRows ?? []).map((r: any) => r.question_id));
         if (!cancelled) setFlags(flagSet);
@@ -506,6 +515,14 @@ function RunPageInner() {
       clearTimeout(timeout);
     };
   }, [courseId, subjects, pool, user, hasAccess, accessKey, initialSeconds, mode, reloadVersion, sessionKey, t, excludedKey]);
+
+  // The next few questions' pictures are fetched while the student answers the current one.
+  useEffect(() => {
+    if (!sessionReady) return;
+    for (let i = current; i <= current + 3 && i < questions.length; i++) {
+      prefetchQuestionImage(questions[i].image_url);
+    }
+  }, [sessionReady, current, questions]);
 
   useEffect(() => {
     if (!sessionReady || !questions.length) return;

@@ -28,6 +28,18 @@ function signPath(path: string): Promise<string | null> {
   return pending;
 }
 
+/** Sign and download a question's picture ahead of time, so it is already there when the student reaches it. */
+export function prefetchQuestionImage(path: string | null | undefined) {
+  if (!path || typeof window === "undefined") return;
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    new Image().src = path;
+    return;
+  }
+  void signPath(path).then((url) => {
+    if (url) new Image().src = url;
+  });
+}
+
 /** Renders a question image.
  *
  * Supports two modes:
