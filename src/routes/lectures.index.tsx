@@ -1,6 +1,7 @@
 import { capitalizeFirst } from "@/lib/text";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   PlayCircle,
@@ -81,16 +82,16 @@ function offerLive(course: Course) {
   );
 }
 
+const EMPTY_COURSES: Course[] = [];
+const EMPTY_IDS = new Set<string>();
+
 function LecturesPage() {
   const { user, isAdmin, loading: authLoading } = useAuth();
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  // Kept for a few minutes, so coming back to the page shows the list straight away.
+  const coursesQ = useQuery({
+    queryKey: ["lecture-courses", isAdmin],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<Course[]> => {
       let query = supabase
         .from("courses")
         .select(
@@ -104,43 +105,28 @@ function LecturesPage() {
         query.order("created_at", { ascending: true }),
         fetchCourseSemestersMap(),
       ]);
-      if (cancelled) return;
-      if (coursesRes.error) {
-        setErrorMsg("Couldn't load lectures. Please refresh.");
-        setCourses([]);
-      } else {
-        const list = (coursesRes.data as Course[]) ?? [];
-        enrichCoursesWithSemesters(list, semMap);
-        setCourses(list);
-      }
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isAdmin]);
+      if (coursesRes.error) throw coursesRes.error;
+      const list = (coursesRes.data as Course[]) ?? [];
+      enrichCoursesWithSemesters(list, semMap);
+      return list;
+    },
+  });
+  const courses = coursesQ.data ?? EMPTY_COURSES;
+  const loading = coursesQ.isPending;
+  const errorMsg = coursesQ.isError ? "Couldn't load lectures. Please refresh." : null;
 
-  useEffect(() => {
-    let cancelled = false;
-    if (authLoading) return;
-    if (!user) {
-      setEnrolledIds(new Set());
-      return;
-    }
-    (async () => {
+  const enrolledQ = useQuery({
+    enabled: !authLoading && !!user,
+    queryKey: ["lecture-enrolled", user?.id],
+    staleTime: 60_000,
+    queryFn: async () => {
       const { data } = await (supabase.from as any)("user_lecture_courses")
         .select("course_id")
-        .eq("user_id", user.id);
-      if (cancelled) return;
-      setEnrolledIds(
-        new Set(((data ?? []) as { course_id: string }[]).map((r) => r.course_id)),
-      );
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user, authLoading]);
-
+        .eq("user_id", user!.id);
+      return new Set(((data ?? []) as { course_id: string }[]).map((r) => r.course_id));
+    },
+  });
+  const enrolledIds = useMemo(() => (user ? enrolledQ.data : undefined) ?? EMPTY_IDS, [user, enrolledQ.data]);
   const options = useCourseOptions();
   const [activeVideo, setActiveVideo] = useState<{ src: string; title: string } | null>(null);
 

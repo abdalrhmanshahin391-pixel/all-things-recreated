@@ -1,6 +1,7 @@
 import { capitalizeFirst } from "@/lib/text";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -23,7 +24,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
-import { resolveCourseImageUrl } from "@/lib/course-image";
+import { publicCourseImageUrl, resolveCourseImageUrl } from "@/lib/course-image";
 import { resolveLectureVideoUrl, resolveLecturePdfUrl } from "@/lib/lecture-video";
 import { IntroVideoModal } from "@/components/lectures/IntroVideoModal";
 import { LecturePdfModal } from "@/components/lectures/LecturePdfModal";
@@ -35,7 +36,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { syncHeadStaffServerFn } from "@/lib/lecture-management.functions";
 
 export const Route = createFileRoute("/lectures/$courseId/")({
-  loader: async ({ params }) => {
+  loader: async ({ params, context }) => {
+    // Start reading the lectures while the link is hovered / touched, without holding the page back.
+    if (typeof window !== "undefined") void context.queryClient.prefetchQuery(lectureContentOptions(params.courseId, false));
     try {
       const { data } = await supabase
         .from("courses")
@@ -119,17 +122,108 @@ type Item = {
 };
 type Quiz = { id: string; item_id: string };
 
+const EMPTY_SUBJECTS: Subject[] = [];
+const EMPTY_ITEMS: Item[] = [];
+const EMPTY_QUIZZES: Quiz[] = [];
+
+type LectureContent = { course: Course | null; subjects: Subject[]; items: Item[] };
+
+/** The course, its classes and their lessons in one round of requests. */
+function lectureContentOptions(courseId: string, isAdmin: boolean) {
+  return queryOptions({
+    queryKey: ["lecture-course", courseId, isAdmin],
+    queryFn: async (): Promise<LectureContent> => {
+      const [{ data: c }, { data: subs }] = await Promise.all([
+        supabase
+          .from("courses")
+          .select("id,title,year,price,kind,image_url,intro_image_url,published,intro_video_url,intro_video_storage_path,intro_free")
+          .eq("id", courseId)
+          .maybeSingle(),
+        // every class comes with its lessons, so they no longer wait for the class list
+        (supabase.from as any)("lecture_subjects")
+          .select("id,title,position,hidden,lecture_items(id,subject_id,kind,title,position,video_url,video_storage_path,pdf_url,pdf_storage_path,link_url,duration_seconds,is_free)")
+          .eq("course_id", courseId)
+          .order("position")
+          .order("position", { referencedTable: "lecture_items" }),
+      ]);
+      const rows = ((subs ?? []) as (Subject & { lecture_items?: Item[] })[]).filter((s) => isAdmin || !s.hidden);
+      return {
+        course: (c as Course | null) ?? null,
+        subjects: rows.map(({ lecture_items: _i, ...s }) => s as Subject),
+        items: rows.flatMap((s) => s.lecture_items ?? []),
+      };
+    },
+    staleTime: isAdmin ? 0 : 5 * 60_000,
+  });
+}
+
 function LectureCoursePage() {
   const { courseId } = Route.useParams();
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
-  const [course, setCourse] = useState<Course | null>(null);
+  const contentQ = useQuery(lectureContentOptions(courseId, isAdmin));
+  const content = contentQ.data;
+  const course = content?.course ?? null;
+  const subjects = content?.subjects ?? EMPTY_SUBJECTS;
+  const items = content?.items ?? EMPTY_ITEMS;
+
+  // Quizzes of the lessons that are quizzes (an admin gets the missing ones created).
+  const quizItemIds = useMemo(() => items.filter((i) => i.kind === "quiz").map((i) => i.id), [items]);
+  const quizQ = useQuery({
+    enabled: quizItemIds.length > 0,
+    queryKey: ["lecture-quizzes", courseId, isAdmin, quizItemIds.join(",")],
+    staleTime: isAdmin ? 0 : 5 * 60_000,
+    queryFn: async (): Promise<Quiz[]> => {
+      const { data: qz } = await (supabase.from as any)("lecture_quizzes").select("id,item_id").in("item_id", quizItemIds);
+      let list = (qz ?? []) as Quiz[];
+      if (isAdmin) {
+        const missing = quizItemIds.filter((id) => !list.some((q) => q.item_id === id));
+        if (missing.length) {
+          await (supabase.from as any)("lecture_quizzes").insert(missing.map((id) => ({ item_id: id })));
+          const { data: qz2 } = await (supabase.from as any)("lecture_quizzes").select("id,item_id").in("item_id", quizItemIds);
+          list = (qz2 ?? []) as Quiz[];
+        }
+      }
+      return list;
+    },
+  });
+  const quizzes = quizQ.data ?? EMPTY_QUIZZES;
+
+  // Whether this student owns the course. It does not depend on the lessons, so it is read at the same time.
+  const accessQ = useQuery({
+    enabled: !!user && !!course,
+    queryKey: ["lecture-access", user?.id, courseId],
+    staleTime: 60_000,
+    queryFn: async (): Promise<boolean> => {
+      if ((Number(course!.price) || 0) <= 0) {
+        await ensureFreeEnrollment(user!.id, course!.id, "lectures");
+        return true;
+      }
+      const { data: enr } = await (supabase.from as any)("user_lecture_courses")
+        .select("course_id")
+        .eq("user_id", user!.id)
+        .eq("course_id", course!.id)
+        .maybeSingle();
+      return !!enr;
+    },
+  });
+  const enrolled = accessQ.data ?? false;
+  const loading = contentQ.isPending || (!!user && !!course && accessQ.isPending);
+
+  // A course of the other kind belongs on its own page.
+  useEffect(() => {
+    if (course && course.kind !== "lectures") {
+      navigate({ to: "/courses/$courseId", params: { courseId: course.id }, replace: true });
+    }
+  }, [course?.id, course?.kind, navigate]);
+
+  // The cover: the fixed public address first, a signed one only if that fails.
+  const coverPath = course?.intro_image_url || course?.image_url || null;
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
-  const [enrolled, setEnrolled] = useState(false);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [items, setItems] = useState<Item[]>([]);
-  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
-  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    setCoverUrl(publicCourseImageUrl(coverPath));
+  }, [coverPath]);
+
   const [openSubject, setOpenSubject] = useState<string | null>(null);
   const [activeVideo, setActiveVideo] = useState<{ src: string; title: string } | null>(null);
   const [introOpen, setIntroOpen] = useState(false);
@@ -151,18 +245,20 @@ function LectureCoursePage() {
     }
     let cancelled = false;
     (async () => {
-      const { data } = await (supabase.from as any)("lecture_staff")
-        .select("course_id")
-        .eq("user_id", user.id)
-        .eq("course_id", courseId)
-        .limit(1);
+      // The staff row and the Head of Staff setting do not depend on each other: read them together.
+      const [{ data }, { data: headRow }] = await Promise.all([
+        (supabase.from as any)("lecture_staff")
+          .select("course_id")
+          .eq("user_id", user.id)
+          .eq("course_id", courseId)
+          .limit(1),
+        // Check if caller is designated Head of Staff
+        (supabase.from as any)("site_content")
+          .select("value_en")
+          .eq("key", `lecture_head_staff_${courseId}`)
+          .maybeSingle(),
+      ]);
       if (!cancelled) setIsCourseStaff(((data ?? []) as unknown[]).length > 0);
-
-      // Check if caller is designated Head of Staff
-      const { data: headRow } = await (supabase.from as any)("site_content")
-        .select("value_en")
-        .eq("key", `lecture_head_staff_${courseId}`)
-        .maybeSingle();
       const headIds = headRow?.value_en ? headRow.value_en.split(",").map((s: string) => s.trim()) : [];
       if (!cancelled) {
         setIsHeadStaff(isAdmin || headIds.includes(user.id));
@@ -182,84 +278,6 @@ function LectureCoursePage() {
     };
   }, [user, courseId, isAdmin]);
 
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const { data } = await supabase
-        .from("courses")
-        .select("id,title,year,price,kind,image_url,intro_image_url,published,intro_video_url,intro_video_storage_path,intro_free")
-        .eq("id", courseId)
-        .maybeSingle();
-      if (cancelled) return;
-      const c = data as Course | null;
-      if (c && c.kind !== "lectures") {
-        navigate({ to: "/courses/$courseId", params: { courseId: c.id }, replace: true });
-        return;
-      }
-      setCourse(c);
-      const coverPath = c?.intro_image_url || c?.image_url;
-      if (coverPath) resolveCourseImageUrl(coverPath).then((u) => !cancelled && setCoverUrl(u));
-
-
-      const { data: subs } = await (supabase.from as any)("lecture_subjects")
-        .select("id,title,position,hidden")
-        .eq("course_id", courseId)
-        .order("position");
-      const subjList = (((subs ?? []) as Subject[])).filter((s) => isAdmin || !s.hidden);
-      if (!cancelled) {
-        setSubjects(subjList);
-        // Note: Classes remain collapsed by default on initial page load as requested
-      }
-
-      if (subjList.length) {
-        const { data: its } = await (supabase.from as any)("lecture_items")
-          .select("id,subject_id,kind,title,position,video_url,video_storage_path,pdf_url,pdf_storage_path,link_url,duration_seconds,is_free")
-          .in("subject_id", subjList.map((s) => s.id))
-          .order("position");
-        if (!cancelled) setItems((its ?? []) as Item[]);
-
-        const quizItemIds = ((its ?? []) as Item[]).filter((i) => i.kind === "quiz").map((i) => i.id);
-        if (quizItemIds.length) {
-          let { data: qz } = await (supabase.from as any)("lecture_quizzes")
-            .select("id,item_id")
-            .in("item_id", quizItemIds);
-          let qzList = (qz ?? []) as Quiz[];
-          if (isAdmin) {
-            const missing = quizItemIds.filter((id) => !qzList.some((q) => q.item_id === id));
-            if (missing.length) {
-              await (supabase.from as any)("lecture_quizzes").insert(missing.map((id) => ({ item_id: id })));
-              const { data: qz2 } = await (supabase.from as any)("lecture_quizzes")
-                .select("id,item_id")
-                .in("item_id", quizItemIds);
-              qzList = (qz2 ?? []) as Quiz[];
-            }
-          }
-          if (!cancelled) setQuizzes(qzList);
-        }
-      }
-
-      if (user && c) {
-        if ((Number(c.price) || 0) <= 0) {
-          await ensureFreeEnrollment(user.id, c.id, "lectures");
-          if (!cancelled) setEnrolled(true);
-          setLoading(false);
-          return;
-        }
-        const { data: enr } = await (supabase.from as any)("user_lecture_courses")
-          .select("course_id")
-          .eq("user_id", user.id)
-          .eq("course_id", c.id)
-          .maybeSingle();
-        if (!cancelled) setEnrolled(!!enr);
-      }
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [courseId, user, navigate]);
 
   const itemsBySubject = useMemo(() => {
     const map = new Map<string, Item[]>();
@@ -362,7 +380,7 @@ function LectureCoursePage() {
             }`}
           >
             {coverUrl ? (
-              <img src={coverUrl} alt={course.title} className="absolute inset-0 h-full w-full object-cover group-hover:scale-105 transition-transform duration-500" />
+              <img src={coverUrl} alt={course.title} className="absolute inset-0 h-full w-full object-cover group-hover:scale-105 transition-transform duration-500" onError={() => !coverUrl.includes("/object/sign/") && void resolveCourseImageUrl(coverPath).then(setCoverUrl)} />
             ) : (
               <div className="absolute inset-0 bg-muted" />
             )}
