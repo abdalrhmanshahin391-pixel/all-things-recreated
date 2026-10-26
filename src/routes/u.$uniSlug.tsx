@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, MapPin, ArrowLeft, Eye, EyeOff, Sparkles, Pencil, Lock } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -25,14 +25,15 @@ export const Route = createFileRoute("/u/$uniSlug")({
     const n = s.next;
     return n === "courses" || n === "lectures" || n === "committee" ? { next: n } : {};
   },
-  loader: async ({ params }) => {
+  loader: async ({ params, context }) => {
     try {
-      const { data } = await supabase
-        .from("universities")
-        .select("name,description,city,country")
-        .eq("slug", params.uniSlug)
-        .eq("is_active", true)
-        .maybeSingle();
+      // The same university the page shows is read once here (and kept in the cache), and the tiles and counts are
+      // started right away, so the page opens with its data already on the way.
+      const data = await context.queryClient.ensureQueryData(universityQueryOptions(params.uniSlug));
+      if (data && typeof window !== "undefined") {
+        void context.queryClient.prefetchQuery(universityTilesOptions(data.id));
+        void context.queryClient.prefetchQuery(universityCountsOptions(data.id, false));
+      }
       return {
         name: (data?.name as string | undefined) ?? null,
         description: (data?.description as string | undefined) ?? null,
@@ -96,15 +97,8 @@ type University = {
   tags: unknown;
 };
 
-function UniversityHubPage() {
-  const { uniSlug } = Route.useParams();
-  const { next } = Route.useSearch();
-  const navigate = useNavigate();
-  const { isAdmin, loading: authLoading } = useAuth();
-  const qc = useQueryClient();
-  const { lang } = useLang();
-
-  const { data: uni, isLoading, isError } = useQuery({
+function universityQueryOptions(uniSlug: string) {
+  return queryOptions({
     queryKey: ["university", uniSlug],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -116,7 +110,53 @@ function UniversityHubPage() {
       if (error) throw error;
       return data as University | null;
     },
+    staleTime: 5 * 60_000,
   });
+}
+
+function universityCountsOptions(uniId: string, isAdmin: boolean) {
+  return queryOptions({
+    queryKey: ["university-counts", uniId || undefined, isAdmin],
+    queryFn: async () => {
+      const [{ count: courses }, { count: lectures }, { count: committee }] = await Promise.all([
+        supabase.from("courses").select("id", { count: "exact", head: true }).eq("university_id", uniId).eq("published", true).eq("kind", "questions").eq("admin_only", false),
+        // "Lectures" counts the lecture subjects (courses of kind "lectures"), not the topics inside them.
+        (() => {
+          let q = supabase.from("courses").select("id", { count: "exact", head: true }).eq("university_id", uniId).eq("published", true).eq("kind", "lectures");
+          if (!isAdmin) q = q.eq("admin_only", false);
+          return q;
+        })(),
+        supabase.from("committee_years").select("id", { count: "exact", head: true }).eq("university_id", uniId),
+      ]);
+      return { courses: courses ?? 0, lectures: lectures ?? 0, committee: committee ?? 0 };
+    },
+    staleTime: 2 * 60_000,
+  });
+}
+
+function universityTilesOptions(uniId: string) {
+  return queryOptions({
+    queryKey: ["university-tiles", uniId || undefined],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from as any)("university_tiles")
+        .select("*")
+        .eq("university_id", uniId)
+        .order("sort_order", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as UniversityTile[];
+    },
+    staleTime: 60_000,
+  });
+}
+function UniversityHubPage() {
+  const { uniSlug } = Route.useParams();
+  const { next } = Route.useSearch();
+  const navigate = useNavigate();
+  const { isAdmin, loading: authLoading } = useAuth();
+  const qc = useQueryClient();
+  const { lang } = useLang();
+
+  const { data: uni, isLoading, isError } = useQuery(universityQueryOptions(uniSlug));
 
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -140,39 +180,14 @@ function UniversityHubPage() {
   }, [uni]);
 
   const { data: counts } = useQuery({
+    ...universityCountsOptions(uni?.id ?? "", isAdmin),
     enabled: !!uni,
-    queryKey: ["university-counts", uni?.id, isAdmin],
-    queryFn: async () => {
-      if (!uni) return { courses: 0, lectures: 0, committee: 0 };
-      const [{ count: courses }, { count: lectures }, { count: committee }] = await Promise.all([
-        supabase.from("courses").select("id", { count: "exact", head: true }).eq("university_id", uni.id).eq("published", true).eq("kind", "questions").eq("admin_only", false),
-        // "Lectures" counts the lecture subjects (courses of kind "lectures"), not the topics inside them.
-        (() => {
-          let q = supabase.from("courses").select("id", { count: "exact", head: true }).eq("university_id", uni.id).eq("published", true).eq("kind", "lectures");
-          if (!isAdmin) q = q.eq("admin_only", false);
-          return q;
-        })(),
-        supabase.from("committee_years").select("id", { count: "exact", head: true }).eq("university_id", uni.id),
-      ]);
-      return { courses: courses ?? 0, lectures: lectures ?? 0, committee: committee ?? 0 };
-    },
   });
 
   const { data: tiles, isPending: tilesPending } = useQuery({
+    ...universityTilesOptions(uni?.id ?? ""),
     enabled: !!uni && (!uni.is_closed || isAdmin),
-    queryKey: ["university-tiles", uni?.id],
-    queryFn: async () => {
-      if (!uni) return [] as UniversityTile[];
-      const { data, error } = await (supabase.from as any)("university_tiles")
-        .select("*")
-        .eq("university_id", uni.id)
-        .order("sort_order", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as UniversityTile[];
-    },
-    staleTime: 60_000,
   });
-
   async function toggleLectures() {
     if (!uni || toggling) return;
     setToggling(true);

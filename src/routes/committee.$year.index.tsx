@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useParams, useNavigate } from "@tanstack/react-router";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { committeeSubjectQuery } from "@/lib/committee-queries";
 import { useState } from "react";
 import { ChevronLeft, Plus, Pencil, Trash2, Shield, CalendarDays, Layers } from "lucide-react";
@@ -21,8 +21,53 @@ export const Route = createFileRoute("/committee/$year/")({
     sem: typeof search['sem'] === "string" ? (search['sem'] as string) : undefined,
     mod: typeof search['mod'] === "string" ? (search['mod'] as string) : undefined,
   }),
+  // Start reading the year while the link is hovered / touched (the router preloads on intent), without holding the page back.
+  loader: ({ context, params }) => {
+    if (typeof window !== "undefined") void context.queryClient.prefetchQuery(yearQueryOptions(params.year));
+  },
   component: YearEntry,
 });
+
+/** The year with its semesters, modules and subjects. */
+function yearQueryOptions(year: string) {
+  return queryOptions({
+    queryKey: ["committee-year", year],
+    queryFn: async () => {
+      const { data: y } = await supabase
+        .from("committee_years")
+        .select(`id, display_name, year_number, icon_key, ${CLOSED_SELECT}`)
+        .eq("year_number", Number(year))
+        .maybeSingle();
+      if (!y) return { year: null, subjects: [] as Subject[], semesters: [] as Semester[], modules: [] as Module[] };
+      const [{ data: s }, { data: sem }, { data: allMods }] = await Promise.all([
+        supabase
+          .from("committee_subjects")
+          .select(`id, year_id, semester_id, module_id, name, icon_key, sort_order, tag_label, tag_color, ${CLOSED_SELECT}`)
+          .eq("year_id", y.id)
+          .order("sort_order"),
+        supabase
+          .from("committee_semesters")
+          .select(`id, year_id, name, number, sort_order, ${CLOSED_SELECT}`)
+          .eq("year_id", y.id)
+          .order("sort_order"),
+        supabase
+          .from("committee_modules")
+          .select(`id, semester_id, name, icon_key, sort_order, ${CLOSED_SELECT}`)
+          .order("sort_order"),
+      ]);
+      const semIds = (sem ?? []).map((x: { id: string }) => x.id);
+      const mods = ((allMods ?? []) as Module[]).filter((m) => semIds.includes(m.semester_id));
+      return {
+        year: y,
+        subjects: (s ?? []) as Subject[],
+        semesters: (sem ?? []) as Semester[],
+        modules: (mods ?? []) as Module[],
+      };
+    },
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+  });
+}
 
 /** The year page: university resources, or the AQUA version, depending on the switch. */
 function YearEntry() {
@@ -88,41 +133,7 @@ function YearPage() {
   const [editingMod, setEditingMod] = useState<Module | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["committee-year", year],
-    queryFn: async () => {
-      const { data: y } = await supabase
-        .from("committee_years")
-        .select(`id, display_name, year_number, icon_key, ${CLOSED_SELECT}`)
-        .eq("year_number", Number(year))
-        .maybeSingle();
-      if (!y) return { year: null, subjects: [] as Subject[], semesters: [] as Semester[], modules: [] as Module[] };
-      const [{ data: s }, { data: sem }, { data: allMods }] = await Promise.all([
-        supabase
-          .from("committee_subjects")
-          .select(`id, year_id, semester_id, module_id, name, icon_key, sort_order, tag_label, tag_color, ${CLOSED_SELECT}`)
-          .eq("year_id", y.id)
-          .order("sort_order"),
-        supabase
-          .from("committee_semesters")
-          .select(`id, year_id, name, number, sort_order, ${CLOSED_SELECT}`)
-          .eq("year_id", y.id)
-          .order("sort_order"),
-        supabase
-          .from("committee_modules")
-          .select(`id, semester_id, name, icon_key, sort_order, ${CLOSED_SELECT}`)
-          .order("sort_order"),
-      ]);
-      const semIds = (sem ?? []).map((x: { id: string }) => x.id);
-      const mods = ((allMods ?? []) as Module[]).filter((m) => semIds.includes(m.semester_id));
-      return {
-        year: y,
-        subjects: (s ?? []) as Subject[],
-        semesters: (sem ?? []) as Semester[],
-        modules: (mods ?? []) as Module[],
-      };
-    },
-    staleTime: 5 * 60_000,
-    gcTime: 30 * 60_000,
+    ...yearQueryOptions(year),
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
   });

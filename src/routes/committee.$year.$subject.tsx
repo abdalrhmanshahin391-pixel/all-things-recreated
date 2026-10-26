@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft, ChevronRight, ExternalLink, FileText, Folder, FolderOpen,
@@ -39,8 +39,38 @@ import { VersionSwitch } from "@/components/committee/aqua/VersionSwitch";
 import { AquaSubjectPage } from "@/components/committee/aqua/AquaSubject";
 
 export const Route = createFileRoute("/committee/$year/$subject")({
+  // Start reading the subject while the link is hovered / touched (the router preloads on intent), without holding the page back.
+  loader: ({ context, params }) => {
+    if (typeof window !== "undefined") void context.queryClient.prefetchQuery(subjectQueryOptions(params.subject));
+  },
   component: SubjectEntry,
 });
+
+/** The subject, its categories and all their resources: one round of requests. */
+function subjectQueryOptions(subject: string) {
+  return queryOptions({
+    queryKey: ["committee-subject", subject],
+    queryFn: async () => {
+      const [{ data: subj }, { data: cats }] = await Promise.all([
+        supabase.from("committee_subjects").select("*").eq("id", subject).maybeSingle(),
+        // each category comes with its resources, so they no longer wait for the category list
+        (supabase.from("committee_categories") as any)
+          .select("*, committee_resources(*)")
+          .eq("subject_id", subject)
+          .neq("section", "aqua")
+          .order("sort_order"),
+      ]);
+      const rows = (cats ?? []) as (Category & { committee_resources?: Resource[] })[];
+      return {
+        subject: subj,
+        categories: rows.map(({ committee_resources: _r, ...c }) => c as Category),
+        resources: rows.flatMap((c) => c.committee_resources ?? []).sort(bySort) as Resource[],
+      };
+    },
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+  });
+}
 
 /** The subject page: university resources, or the AQUA summaries, depending on the switch. */
 function SubjectEntry() {
@@ -90,24 +120,7 @@ function SubjectPage() {
   const [copyRes, setCopyRes] = useState<Resource | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["committee-subject", subject],
-    queryFn: async () => {
-      const [{ data: subj }, { data: cats }] = await Promise.all([
-        supabase.from("committee_subjects").select("*").eq("id", subject).maybeSingle(),
-        supabase.from("committee_categories").select("*").eq("subject_id", subject).neq("section", "aqua").order("sort_order"),
-      ]);
-      const catIds = (cats ?? []).map((c: { id: string }) => c.id);
-      const { data: res } = catIds.length
-        ? await supabase.from("committee_resources").select("*").in("category_id", catIds).order("sort_order")
-        : { data: [] as Resource[] };
-      return {
-        subject: subj,
-        categories: (cats ?? []) as Category[],
-        resources: (res ?? []) as Resource[],
-      };
-    },
-    staleTime: 5 * 60_000,
-    gcTime: 30 * 60_000,
+    ...subjectQueryOptions(subject),
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
   });
@@ -116,6 +129,8 @@ function SubjectPage() {
 
   /** file_path -> how many library rows use it (across the whole committee). */
   const { data: fileRefs } = useQuery({
+    // the whole library's file list is only needed by the people who manage it (delete warnings, "used in N places")
+    enabled: canManage,
     queryKey: ["committee-file-refs"],
     queryFn: async () => {
       const { data: rows } = await supabase.from("committee_resources").select("file_path, drive_file_id");
