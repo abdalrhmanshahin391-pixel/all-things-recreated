@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowRight, MapPin, ArrowLeft, Eye, EyeOff, Sparkles, Pencil, Lock } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { supabase } from "@/integrations/supabase/client";
+import { publicUniversityImageUrl, resolveUniversityImageUrl } from "@/lib/university-image";
 import { useAuth } from "@/hooks/useAuth";
 import { useLang } from "@/components/LanguageProvider";
 import { UniversityTags } from "@/components/common/UniversityTags";
@@ -123,20 +124,16 @@ function UniversityHubPage() {
 
   useEffect(() => {
     if (!uni) return;
-    setCoverUrl(null);
-    (async () => {
-      if (uni.cover_path) {
-        const { data } = await supabase.storage.from("university-logos").createSignedUrl(uni.cover_path, 3600);
-        setCoverUrl(data?.signedUrl ?? null);
-      }
-      if (uni.storage_path) {
-        const { data } = await supabase.storage.from("university-logos").createSignedUrl(uni.storage_path, 3600);
-        setLogoUrl(data?.signedUrl ?? uni.logo_url ?? null);
-      } else if (uni.logo_url) {
-        setLogoUrl(uni.logo_url);
-      }
-    })();
+    // fixed public URLs (kept by the browser for a year); signed ones only if one fails to load
+    setCoverUrl(publicUniversityImageUrl(uni.cover_path));
+    setLogoUrl(publicUniversityImageUrl(uni.storage_path) ?? uni.logo_url ?? null);
   }, [uni?.id, uni?.cover_path, uni?.storage_path, uni?.logo_url]);
+
+  async function signedFallback(which: "cover" | "logo") {
+    if (!uni) return;
+    if (which === "cover") setCoverUrl(await resolveUniversityImageUrl(uni.cover_path));
+    else setLogoUrl((await resolveUniversityImageUrl(uni.storage_path)) ?? uni.logo_url ?? null);
+  }
 
   useEffect(() => {
     if (uni) localStorage.setItem("ysmu:lastUniversitySlug", uni.slug);
@@ -282,7 +279,7 @@ function UniversityHubPage() {
         <section className="relative overflow-hidden border-b border-border">
           {coverUrl ? (
             <div className="absolute inset-0">
-              <img src={coverUrl} alt="" className="h-full w-full object-cover opacity-30" />
+              <img src={coverUrl} alt="" className="h-full w-full object-cover opacity-30" onError={() => !coverUrl.includes("/object/sign/") && signedFallback("cover")} />
               <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/40" />
             </div>
           ) : (
@@ -295,7 +292,7 @@ function UniversityHubPage() {
             <div className="mt-6 flex items-start gap-5">
               {logoUrl && (
                 <div className="h-20 w-20 md:h-24 md:w-24 rounded-xl bg-background border border-border grid place-items-center shadow-sm overflow-hidden shrink-0">
-                  <img src={logoUrl} alt={uni.name} className="h-full w-full object-cover" />
+                  <img src={logoUrl} alt={uni.name} className="h-full w-full object-cover" onError={() => !logoUrl.includes("/object/sign/") && signedFallback("logo")} />
                 </div>
               )}
               <div className="min-w-0">

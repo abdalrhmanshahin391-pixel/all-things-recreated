@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { GraduationCap } from "lucide-react";
-import { resolveUniversityImageUrl } from "@/lib/university-image";
+import { publicUniversityImageUrl, resolveUniversityImageUrl } from "@/lib/university-image";
 
 /**
  * UniversityImage — fills the parent container completely.
@@ -18,26 +18,30 @@ export function UniversityImage({
   alt: string;
   className?: string;
 }) {
-  const [coverUrl, setCoverUrl] = useState<string | null>(null);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  // the fixed public URL first (kept by the browser for a year); signed URL only if it fails
+  const [coverUrl, setCoverUrl] = useState<string | null>(() => publicUniversityImageUrl(cover));
+  const [logoUrl, setLogoUrl] = useState<string | null>(() => publicUniversityImageUrl(logo));
+  const [signed, setSigned] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
+    setCoverUrl(publicUniversityImageUrl(cover));
+    setLogoUrl(publicUniversityImageUrl(logo));
+    setSigned(false);
     setFailed(false);
-    (async () => {
-      const [c, l] = await Promise.all([
-        resolveUniversityImageUrl(cover),
-        resolveUniversityImageUrl(logo),
-      ]);
-      if (cancelled) return;
-      setCoverUrl(c);
-      setLogoUrl(l);
-    })();
-    return () => {
-      cancelled = true;
-    };
   }, [cover, logo]);
+
+  async function onError() {
+    if (signed) {
+      setFailed(true);
+      return;
+    }
+    setSigned(true);
+    const [c, l] = await Promise.all([resolveUniversityImageUrl(cover), resolveUniversityImageUrl(logo)]);
+    setCoverUrl(c);
+    setLogoUrl(l);
+    if (!c && !l) setFailed(true);
+  }
 
   const fillUrl = coverUrl ?? logoUrl;
 
@@ -48,7 +52,7 @@ export function UniversityImage({
         alt={alt}
         className={`block h-full w-full object-cover ${className}`}
         loading="lazy"
-        onError={() => setFailed(true)}
+        onError={onError}
       />
     );
   }

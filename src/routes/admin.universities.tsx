@@ -107,7 +107,7 @@ function AdminUniversities() {
     try {
       const img = await compressImage(file, { maxEdge: 1024 });
       const path = `${crypto.randomUUID()}.${img.ext}`;
-      const { error: upErr } = await supabase.storage.from("university-logos").upload(path, img.file, { contentType: img.contentType });
+      const { error: upErr } = await supabase.storage.from("university-logos").upload(path, img.file, { cacheControl: "31536000", contentType: img.contentType });
       if (upErr) throw upErr;
       const nextSort = (universities[universities.length - 1]?.sort_order ?? 0) + 1;
       const slug = newName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `u-${Date.now()}`;
@@ -284,7 +284,7 @@ function UniversityRow({
       const path = `covers/${u.id}-${Date.now()}.${img.ext}`;
       const { error: upErr } = await supabase.storage
         .from("university-logos")
-        .upload(path, img.file, { contentType: img.contentType, upsert: true });
+        .upload(path, img.file, { cacheControl: "31536000", contentType: img.contentType, upsert: true });
       if (upErr) throw upErr;
       const { error } = await supabase
         .from("universities")
@@ -486,7 +486,7 @@ function EditPanel({ u, onSaved }: { u: University; onSaved: () => void }) {
       const path = `${crypto.randomUUID()}.${img.ext}`;
       const { error: upErr } = await supabase.storage
         .from("university-logos")
-        .upload(path, img.file, { contentType: img.contentType });
+        .upload(path, img.file, { cacheControl: "31536000", contentType: img.contentType });
       if (upErr) throw upErr;
       const { error } = await supabase
         .from("universities")
