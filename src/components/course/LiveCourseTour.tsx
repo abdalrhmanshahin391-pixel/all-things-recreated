@@ -1,7 +1,6 @@
-﻿import React, { useEffect, useState, useRef } from "react";
+﻿import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Sparkles,
   ArrowRight,
   ArrowLeft,
   X,
@@ -36,6 +35,9 @@ interface TourStep {
   icon: React.ReactNode;
 }
 
+/** Dim layer behind the tour: a dark navy that reads the same in every site theme. */
+const DIM = "oklch(0.2 0.05 262 / 0.62)";
+
 export function LiveCourseTour({
   isOpen,
   onClose,
@@ -48,15 +50,20 @@ export function LiveCourseTour({
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [viewport, setViewport] = useState({ w: 1024, h: 768 });
+  const [cardHeight, setCardHeight] = useState(300);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const nextRef = useRef<HTMLButtonElement | null>(null);
 
-  // Detect mobile device
+  // Detect mobile device and keep the viewport size for positioning
   useEffect(() => {
-    function checkMobile() {
+    function onResize() {
       setIsMobile(window.innerWidth < 640);
+      setViewport({ w: window.innerWidth, h: window.innerHeight });
     }
-    checkMobile();
-    window.addEventListener("resize", checkMobile, { passive: true });
-    return () => window.removeEventListener("resize", checkMobile);
+    onResize();
+    window.addEventListener("resize", onResize, { passive: true });
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   const steps: TourStep[] = [
@@ -78,7 +85,7 @@ export function LiveCourseTour({
         ? "انقر على أي مادة لتحديدها ودراسة أسئلتها فقط.\n⚡ قاعدة هامة: في حال لم تحدد أي مادة (0 محددة)، ستتم إضافة جميع أسئلة الكورس المتاحة تلقائياً للاختبار!"
         : `يمكنك تجربة هذا القسم مجاناً بالكامل بدون اشتراك! انقر عليه لتجربة أسئلته.\n⚡ تذكّر: إذا لم تختر أي مادة، ستضاف جميع الأسئلة المتاحة تلقائياً.`,
       placement: "bottom",
-      icon: <Layers className="text-blue-400" size={18} />,
+      icon: <Layers size={18} />,
     },
     {
       id: "modes-selection",
@@ -92,7 +99,7 @@ export function LiveCourseTour({
       desc_ar:
         "• نمط المراجعة (Study): إظهار الإجابات والشرح فوراً للقراءة والمذاكرة السريعة.\n• نمط التدريب (Session): حل تفاعلي مع تصحيح فوري بعد كل سؤال.\n• نمط الامتحان (Exam): محاكاة حقيقية بدون إظهار الإجابات حتى تسليم الامتحان.",
       placement: "left",
-      icon: <BookOpen className="text-emerald-400" size={18} />,
+      icon: <BookOpen size={18} />,
     },
     {
       id: "timed-selection",
@@ -106,7 +113,7 @@ export function LiveCourseTour({
       desc_ar:
         "قم بتشغيل خيار Timed (Exam) لتحديد عداد تنازلي (من 15 دقيقة إلى ساعتين). عند انتهاء الوقت يسلم الامتحان وتظهر نتيجتك تلقائياً.",
       placement: "left",
-      icon: <Timer className="text-amber-400" size={18} />,
+      icon: <Timer size={18} />,
     },
     {
       id: "pool-selection",
@@ -120,88 +127,96 @@ export function LiveCourseTour({
       desc_ar:
         "• All: جميع أسئلة المادة.\n• Flagged: الأسئلة المعلمة بالعلم (🚩).\n• Wrong: الأسئلة التي أجبت عليها خطأ لإتقانها.\n💡 ميزة ذكية: داخل الجلسة، إذا استغرقت أكثر من 45 ثانية في سؤال سيضيء زر العلم 🚩 لتذكيرك بتعليمه!",
       placement: "left",
-      icon: <Flag className="text-purple-400" size={18} />,
+      icon: <Flag size={18} />,
     },
   ];
 
   const currentStep = steps[currentStepIndex];
 
-  // High-performance target tracking: smooth scroll + RAF debounced measuring
+  // Start again from step 1 every time the tour is opened
+  useEffect(() => {
+    if (isOpen) setCurrentStepIndex(0);
+  }, [isOpen]);
+
+  // Track the target: smooth scroll once, then re-measure on scroll / resize / size changes.
   useEffect(() => {
     if (!isOpen || !currentStep) return;
 
     let isCancelled = false;
     const el = document.querySelector(currentStep.targetSelector) as HTMLElement | null;
 
+    // No such element on this page (for example the control is hidden): show the card on its own,
+    // and never keep the frame of the previous step.
+    if (!el) {
+      setTargetRect(null);
+      return;
+    }
+
     function measure() {
-      if (isCancelled) return;
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        setTargetRect((prev) => {
-          if (
-            !prev ||
-            Math.abs(prev.top - rect.top) > 2 ||
-            Math.abs(prev.left - rect.left) > 2 ||
-            Math.abs(prev.width - rect.width) > 2 ||
-            Math.abs(prev.height - rect.height) > 2
-          ) {
-            return rect;
-          }
-          return prev;
-        });
-      } else {
-        setTargetRect(null);
-      }
+      if (isCancelled || !el) return;
+      const rect = el.getBoundingClientRect();
+      setTargetRect((prev) => {
+        if (
+          !prev ||
+          Math.abs(prev.top - rect.top) > 1 ||
+          Math.abs(prev.left - rect.left) > 1 ||
+          Math.abs(prev.width - rect.width) > 1 ||
+          Math.abs(prev.height - rect.height) > 1
+        ) {
+          return rect;
+        }
+        return prev;
+      });
     }
 
-    if (el) {
-      const mobile = window.innerWidth < 640;
-      if (mobile) {
-        // On mobile: scroll the target into the UPPER half (leaving lower half 100% free for the bottom sheet card)
-        const headerOffset = 90;
-        const elementTop = el.getBoundingClientRect().top + window.scrollY;
-        window.scrollTo({
-          top: Math.max(0, elementTop - headerOffset),
-          behavior: "smooth",
-        });
-      } else {
-        el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-      }
-
-      // Initial measure
-      measure();
-      // Re-measure when smooth scroll finishes
-      const t1 = setTimeout(measure, 150);
-      const t2 = setTimeout(measure, 350);
-
-      // Throttled RAF handler for user manual scrolling/resizing
-      let rafId: number | null = null;
-      const onScrollOrResize = () => {
-        if (rafId) return;
-        rafId = requestAnimationFrame(() => {
-          measure();
-          rafId = null;
-        });
-      };
-
-      window.addEventListener("scroll", onScrollOrResize, { passive: true });
-      window.addEventListener("resize", onScrollOrResize, { passive: true });
-
-      // Observe only target element for size changes
-      const ro = new ResizeObserver(() => measure());
-      ro.observe(el);
-
-      return () => {
-        isCancelled = true;
-        clearTimeout(t1);
-        clearTimeout(t2);
-        if (rafId) cancelAnimationFrame(rafId);
-        window.removeEventListener("scroll", onScrollOrResize);
-        window.removeEventListener("resize", onScrollOrResize);
-        ro.disconnect();
-      };
+    if (window.innerWidth < 640) {
+      // On mobile: put the target in the upper part and leave the lower part to the bottom sheet
+      const elementTop = el.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo({ top: Math.max(0, elementTop - 90), behavior: "smooth" });
+    } else {
+      el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
     }
+
+    measure();
+    // The smooth scroll keeps moving for a moment; the scroll listener below keeps the frame on the target,
+    // and these two catch the final position.
+    const t1 = setTimeout(measure, 150);
+    const t2 = setTimeout(measure, 450);
+
+    let rafId: number | null = null;
+    const onScrollOrResize = () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        measure();
+        rafId = null;
+      });
+    };
+    window.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize, { passive: true });
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(el);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(t1);
+      clearTimeout(t2);
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
+      ro.disconnect();
+    };
   }, [isOpen, currentStepIndex, currentStep?.targetSelector, lang]);
+
+  // Measure the real height of the card so it is never placed over the highlighted element
+  useLayoutEffect(() => {
+    if (!isOpen || !cardRef.current) return;
+    const el = cardRef.current;
+    const update = () => setCardHeight(el.offsetHeight || 300);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isOpen, currentStepIndex, lang]);
 
   // Handle auto-selection of free subject on Step 1 if user is not enrolled
   useEffect(() => {
@@ -209,8 +224,6 @@ export function LiveCourseTour({
       onSelectFreeSubject();
     }
   }, [isOpen, currentStepIndex, isEnrolled, onSelectFreeSubject]);
-
-  if (!isOpen || !currentStep) return null;
 
   function handleNext() {
     if (currentStepIndex < steps.length - 1) {
@@ -226,116 +239,123 @@ export function LiveCourseTour({
     }
   }
 
-  // Precise cutout dimensions with padding so target is completely UNBLURRED and clear
+  // Keyboard: Esc closes, the arrow keys move between steps (mirrored in Arabic)
+  useEffect(() => {
+    if (!isOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        const forward = (e.key === "ArrowRight") !== isArabic;
+        if (forward) handleNext();
+        else handlePrev();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  // Put the keyboard focus on the Next button when a step appears
+  useEffect(() => {
+    if (isOpen) nextRef.current?.focus({ preventScroll: true });
+  }, [isOpen, currentStepIndex]);
+
+  if (!isOpen || !currentStep) return null;
+
+  // The lit area around the target
   const pad = isMobile ? 6 : 8;
-  const cutoutTop = targetRect ? Math.max(0, targetRect.top - pad) : 0;
   const cutoutLeft = targetRect ? Math.max(0, targetRect.left - pad) : 0;
-  const cutoutWidth = targetRect ? targetRect.width + pad * 2 : 0;
-  const cutoutHeight = targetRect ? targetRect.height + pad * 2 : 0;
-  const cutoutRight = cutoutLeft + cutoutWidth;
-  const cutoutBottom = cutoutTop + cutoutHeight;
+  const cutoutTop = targetRect ? Math.max(0, targetRect.top - pad) : 0;
+  const cutoutRight = targetRect ? Math.min(viewport.w, targetRect.right + pad) : 0;
+  const cutoutBottom = targetRect ? Math.min(viewport.h, targetRect.bottom + pad) : 0;
+  const cutoutWidth = cutoutRight - cutoutLeft;
+  const cutoutHeight = cutoutBottom - cutoutTop;
 
-  // Positioning calculations
-  const cardWidth = Math.min(420, typeof window !== "undefined" ? window.innerWidth - 24 : 390);
-  const cardHeight = 320;
-  let desktopCardTop = 100;
-  let desktopCardLeft = 100;
+  // One dim layer with a hole in it (four separate layers left a thin light line between them)
+  const dimClip = targetRect
+    ? `polygon(0 0, 0 100%, ${cutoutLeft}px 100%, ${cutoutLeft}px ${cutoutTop}px, ${cutoutRight}px ${cutoutTop}px, ${cutoutRight}px ${cutoutBottom}px, ${cutoutLeft}px ${cutoutBottom}px, ${cutoutLeft}px 100%, 100% 100%, 100% 0)`
+    : undefined;
 
-  if (targetRect && typeof window !== "undefined" && !isMobile) {
-    const effectivePlacement = isArabic
+  // Card position on desktop
+  const cardWidth = Math.min(420, viewport.w - 24);
+  const margin = 16;
+  const clampTop = (v: number) => Math.max(margin, Math.min(viewport.h - cardHeight - margin, v));
+  const clampLeft = (v: number) => Math.max(margin, Math.min(viewport.w - cardWidth - margin, v));
+  let desktopCardTop = clampTop((viewport.h - cardHeight) / 2);
+  let desktopCardLeft = clampLeft((viewport.w - cardWidth) / 2);
+
+  if (targetRect && !isMobile) {
+    const wantSide: "left" | "right" | "bottom" | "top" = isArabic
       ? currentStep.placement === "left"
         ? "right"
         : currentStep.placement
       : currentStep.placement;
+    const roomLeft = cutoutLeft - margin;
+    const roomRight = viewport.w - cutoutRight - margin;
+    const roomBelow = viewport.h - cutoutBottom - margin;
+    const roomAbove = cutoutTop - margin;
 
-    if (effectivePlacement === "left") {
-      if (targetRect.left >= cardWidth + 24) {
-        desktopCardLeft = targetRect.left - cardWidth - 16;
-        desktopCardTop = Math.max(16, Math.min(window.innerHeight - cardHeight - 16, targetRect.top - 20));
-      } else {
-        desktopCardTop = Math.min(window.innerHeight - cardHeight - 16, targetRect.bottom + 16);
-        desktopCardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, targetRect.left));
-      }
-    } else if (effectivePlacement === "right") {
-      if (targetRect.right + cardWidth + 24 <= window.innerWidth) {
-        desktopCardLeft = targetRect.right + 16;
-        desktopCardTop = Math.max(16, Math.min(window.innerHeight - cardHeight - 16, targetRect.top - 20));
-      } else {
-        desktopCardTop = Math.min(window.innerHeight - cardHeight - 16, targetRect.bottom + 16);
-        desktopCardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, targetRect.left));
-      }
+    const sideTop = clampTop(targetRect.top - 20);
+    const alignedLeft = clampLeft(isArabic ? targetRect.right - cardWidth : targetRect.left);
+
+    const placeBelow = () => ({ top: cutoutBottom + margin, left: alignedLeft });
+    const placeAbove = () => ({ top: cutoutTop - cardHeight - margin, left: alignedLeft });
+    const placeLeft = () => ({ top: sideTop, left: cutoutLeft - cardWidth - margin });
+    const placeRight = () => ({ top: sideTop, left: cutoutRight + margin });
+
+    const fitsBelow = roomBelow >= cardHeight;
+    const fitsAbove = roomAbove >= cardHeight;
+    const fitsLeft = roomLeft >= cardWidth;
+    const fitsRight = roomRight >= cardWidth;
+
+    let pos: { top: number; left: number } | null = null;
+    const order: Array<"left" | "right" | "bottom" | "top"> =
+      wantSide === "left"
+        ? ["left", "right", "bottom", "top"]
+        : wantSide === "right"
+          ? ["right", "left", "bottom", "top"]
+          : wantSide === "top"
+            ? ["top", "bottom", "right", "left"]
+            : ["bottom", "top", "right", "left"];
+    for (const side of order) {
+      if (side === "left" && fitsLeft) pos = placeLeft();
+      else if (side === "right" && fitsRight) pos = placeRight();
+      else if (side === "bottom" && fitsBelow) pos = placeBelow();
+      else if (side === "top" && fitsAbove) pos = placeAbove();
+      if (pos) break;
+    }
+    if (pos) {
+      desktopCardTop = clampTop(pos.top);
+      desktopCardLeft = clampLeft(pos.left);
     } else {
-      // placement "bottom"
-      if (targetRect.bottom + cardHeight + 24 <= window.innerHeight) {
-        desktopCardTop = targetRect.bottom + 16;
-      } else {
-        desktopCardTop = Math.max(16, targetRect.top - cardHeight - 16);
-      }
-      if (isArabic) {
-        const preferredLeft = targetRect.right - cardWidth;
-        desktopCardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, preferredLeft));
-      } else {
-        desktopCardLeft = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, targetRect.left));
-      }
+      // Nowhere fits without covering the target (a very small window): use the side with more room
+      desktopCardTop = clampTop(roomBelow >= roomAbove ? cutoutBottom + margin : cutoutTop - cardHeight - margin);
+      desktopCardLeft = alignedLeft;
     }
   }
 
+  const title = isArabic ? currentStep.title_ar : currentStep.title_en;
+
   return (
     <div
-      className="fixed inset-0 z-[200] overflow-hidden pointer-events-auto"
+      className="fixed inset-0 z-[200] overflow-hidden"
       dir={isArabic ? "rtl" : "ltr"}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
     >
-      {/* 
-        ==============================================================
-        4 SURROUNDING BACKDROP-BLUR OVERLAYS
-        Everything outside the target cutout is blurred and dimmed.
-        The cutout itself has ZERO overlay so the target element is
-        100% UNBLURRED, CRYSTAL CLEAR, AND RAZOR SHARP!
-        ==============================================================
-      */}
-      {targetRect ? (
-        <>
-          {/* Top Blurred Box */}
-          <div
-            onClick={onClose}
-            style={{ top: 0, left: 0, right: 0, height: cutoutTop }}
-            className="fixed bg-slate-950/80 backdrop-blur-md z-[200] transition-all duration-200 cursor-pointer pointer-events-auto"
-          />
-          {/* Bottom Blurred Box */}
-          <div
-            onClick={onClose}
-            style={{ top: cutoutBottom, left: 0, right: 0, bottom: 0 }}
-            className="fixed bg-slate-950/80 backdrop-blur-md z-[200] transition-all duration-200 cursor-pointer pointer-events-auto"
-          />
-          {/* Left Blurred Box */}
-          <div
-            onClick={onClose}
-            style={{ top: cutoutTop, left: 0, width: cutoutLeft, height: cutoutHeight }}
-            className="fixed bg-slate-950/80 backdrop-blur-md z-[200] transition-all duration-200 cursor-pointer pointer-events-auto"
-          />
-          {/* Right Blurred Box */}
-          <div
-            onClick={onClose}
-            style={{ top: cutoutTop, left: cutoutRight, right: 0, height: cutoutHeight }}
-            className="fixed bg-slate-950/80 backdrop-blur-md z-[200] transition-all duration-200 cursor-pointer pointer-events-auto"
-          />
-        </>
-      ) : (
-        <div
-          onClick={onClose}
-          className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[200] pointer-events-auto"
-        />
-      )}
+      {/* Dim and blur everything except the target, which stays sharp and clickable-looking */}
+      <div
+        onClick={onClose}
+        style={{ background: DIM, clipPath: dimClip, WebkitClipPath: dimClip }}
+        className="absolute inset-0 cursor-pointer backdrop-blur-[3px]"
+      />
 
-      {/* 
-        ==============================================================
-        SHINING TARGET SPOTLIGHT BORDER
-        Frames the unblurred target with a bright pulsing amber halo!
-        Fast CSS transition avoids spring-physics stutter on mobile GPUs.
-        ==============================================================
-      */}
+      {/* Gold frame around the target */}
       {targetRect && (
         <div
+          aria-hidden
           style={{
             position: "fixed",
             top: cutoutTop,
@@ -344,25 +364,21 @@ export function LiveCourseTour({
             height: cutoutHeight,
             borderRadius: isMobile ? "12px" : "16px",
             transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+            border: "2px solid var(--accent)",
+            boxShadow: "0 0 0 4px color-mix(in oklab, var(--accent) 30%, transparent)",
           }}
-          className="pointer-events-none z-[202] border-2 border-amber-400 dark:border-amber-300 ring-4 ring-amber-400/40 shadow-[0_0_35px_rgba(245,158,11,0.9),inset_0_0_15px_rgba(245,158,11,0.2)] animate-pulse"
+          className="pointer-events-none z-[202]"
         />
       )}
 
-      {/* 
-        ==============================================================
-        SHINING GUIDE BOX (CAROUSEL / DIALOG)
-        On Mobile: Docks smoothly as a Bottom Sheet (never overlaps target).
-        On Desktop: Floats relative to target with intelligent RTL mirroring.
-        ==============================================================
-      */}
       <AnimatePresence mode="wait">
         <motion.div
           key={currentStep.id}
-          initial={isMobile ? { opacity: 0, y: 30 } : { opacity: 0, y: 12, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={isMobile ? { opacity: 0, y: 20 } : { opacity: 0, y: -10, scale: 0.98 }}
-          transition={{ duration: 0.2 }}
+          ref={cardRef}
+          initial={isMobile ? { opacity: 0, y: 24 } : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={isMobile ? { opacity: 0, y: 16 } : { opacity: 0, y: -6 }}
+          transition={{ duration: 0.18 }}
           style={
             isMobile
               ? {
@@ -373,48 +389,48 @@ export function LiveCourseTour({
                   margin: "0 auto",
                   maxWidth: "420px",
                   width: "calc(100% - 24px)",
+                  maxHeight: "calc(100% - 32px)",
                 }
               : {
                   position: "fixed",
                   top: desktopCardTop,
                   left: desktopCardLeft,
                   width: cardWidth,
+                  maxHeight: viewport.h - margin * 2,
                 }
           }
-          className="z-[210] rounded-3xl border-2 border-indigo-400/90 ring-2 ring-indigo-400/50 ring-offset-2 ring-offset-slate-950 bg-slate-900/98 text-white backdrop-blur-2xl shadow-[0_0_50px_rgba(99,102,241,0.7),0_0_20px_rgba(168,85,247,0.5),0_25px_50px_rgba(0,0,0,0.9)] overflow-hidden"
+          className="z-[210] flex flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl"
         >
-          {/* Top radiant rainbow light line */}
-          <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-indigo-400 to-purple-500 shadow-[0_0_15px_rgba(99,102,241,0.9)]" />
+          {/* Gold line on top of the card */}
+          <div className="h-1 w-full shrink-0 bg-accent" />
 
-          <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
-            {/* Header: Badge, Obvious Arabic Switcher, and Skip button */}
-            <div className="flex items-center justify-between gap-2 pb-2.5 sm:pb-3 border-b border-slate-700/80">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center shrink-0 shadow-inner">
+          <div className="space-y-3 overflow-y-auto p-4 sm:space-y-4 sm:p-5">
+            {/* Header: badge, language switch and skip */}
+            <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
                   {currentStep.icon}
                 </div>
-                <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/25 text-indigo-300 border border-indigo-400/40 truncate">
+                <span className="truncate rounded-full bg-muted px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground sm:text-[11px]">
                   {isArabic ? currentStep.badge_ar : currentStep.badge_en}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                {/* Obvious Glowing Arabic Language Switch Button */}
+              <div className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setLang(isArabic ? "en" : "ar")}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1 rounded-full font-black text-xs border border-amber-300 bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 shadow-[0_0_18px_rgba(251,191,36,0.7)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-accent px-3 py-1 text-xs font-bold text-accent-foreground transition-opacity hover:opacity-90"
                   title={isArabic ? "Switch to English" : "التحويل إلى العربية"}
                 >
-                  <Languages size={13} className="text-slate-950" />
+                  <Languages size={13} />
                   <span>{isArabic ? "English" : "العربية"}</span>
                 </button>
 
-                {/* Dedicated Skip Button */}
                 <button
                   type="button"
                   onClick={onClose}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-rose-400 hover:bg-rose-500/20 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   title={isArabic ? "تخطي الجولة وإنهاؤها" : "Skip and Exit Tour"}
                 >
                   <span>{isArabic ? "تخطي" : "Skip"}</span>
@@ -423,42 +439,36 @@ export function LiveCourseTour({
               </div>
             </div>
 
-            {/* Title & Description */}
-            <div className="space-y-1 sm:space-y-2">
-              <h4 className="font-extrabold text-sm sm:text-base md:text-lg text-white leading-tight drop-shadow-sm">
-                {isArabic ? currentStep.title_ar : currentStep.title_en}
-              </h4>
-              <p className="text-xs sm:text-[13px] text-slate-200 whitespace-pre-line leading-relaxed font-medium">
+            {/* Title & description */}
+            <div className="space-y-1.5">
+              <h4 className="font-display text-base font-bold leading-snug text-foreground sm:text-lg">{title}</h4>
+              <p className="whitespace-pre-line text-xs font-medium leading-relaxed text-muted-foreground sm:text-[13px]">
                 {isArabic ? currentStep.desc_ar : currentStep.desc_en}
               </p>
             </div>
 
-            {/* Footer Navigation Bar */}
-            <div className="pt-2.5 sm:pt-3 border-t border-slate-700/80 flex items-center justify-between gap-2">
-              {/* Step indicator dots */}
-              <div className="flex items-center gap-1 sm:gap-1.5">
+            {/* Footer: progress and navigation */}
+            <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
+              <div className="flex items-center gap-1.5" aria-label={`${currentStepIndex + 1} / ${steps.length}`}>
                 {steps.map((_, i) => (
                   <span
                     key={i}
-                    className={`h-1.5 sm:h-2 rounded-full transition-all ${
-                      i === currentStepIndex
-                        ? "w-4 sm:w-5 bg-gradient-to-r from-indigo-400 to-purple-400 shadow-[0_0_10px_rgba(99,102,241,0.8)]"
-                        : "w-1.5 sm:w-2 bg-slate-600"
+                    className={`h-1.5 rounded-full transition-all ${
+                      i === currentStepIndex ? "w-5 bg-accent" : "w-1.5 bg-border"
                     }`}
                   />
                 ))}
-                <span className="text-[10px] font-black text-slate-400 ml-1 rtl:ml-0 rtl:mr-1">
+                <span className="ms-1 text-[10px] font-bold tabular-nums text-muted-foreground">
                   {currentStepIndex + 1}/{steps.length}
                 </span>
               </div>
 
-              {/* Navigation Controls: Back + Next */}
               <div className="flex items-center gap-1.5">
                 {currentStepIndex > 0 && (
                   <button
                     type="button"
                     onClick={handlePrev}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 transition-all cursor-pointer hover:scale-105 active:scale-95"
+                    className="inline-flex cursor-pointer items-center gap-1 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-bold text-foreground transition-colors hover:bg-muted"
                   >
                     {isArabic ? <ArrowRight size={12} /> : <ArrowLeft size={12} />}
                     <span>{isArabic ? "السابق" : "Back"}</span>
@@ -466,9 +476,10 @@ export function LiveCourseTour({
                 )}
 
                 <button
+                  ref={nextRef}
                   type="button"
                   onClick={handleNext}
-                  className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-xs font-black transition-all shadow-[0_0_20px_rgba(99,102,241,0.7)] cursor-pointer hover:scale-105 active:scale-95"
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-primary px-4 py-1.5 text-xs font-bold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                   <span>
                     {currentStepIndex < steps.length - 1

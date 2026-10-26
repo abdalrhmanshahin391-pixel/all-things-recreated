@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { committeeYearQuery } from "@/lib/committee-queries";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Plus, Pencil, Trash2, Map as MapIcon, Lock as LockIcon, LogIn, UserPlus, UsersRound, History } from "lucide-react";
 import { toast } from "sonner";
 // JSZip is loaded dynamically inside export/import handlers to keep it out of the main bundle.
@@ -33,7 +33,12 @@ export const Route = createFileRoute("/committee/")({
 
 /** The committee home: the university resources, or the AQUA version, depending on the switch. */
 function CommitteeHome() {
-  const { isAqua } = useCommitteeVersion();
+  const { isAqua, setVersion } = useCommitteeVersion();
+  // Opening the committee page always starts on the University side. The switch still works while the page is open.
+  // This effect is declared after the one inside useCommitteeVersion, so it wins over the version remembered in the browser.
+  useEffect(() => {
+    setVersion("university");
+  }, [setVersion]);
   return isAqua ? <AquaHome /> : <CommitteePage />;
 }
 
