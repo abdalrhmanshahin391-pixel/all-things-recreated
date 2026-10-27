@@ -664,7 +664,7 @@ function CourseDetailPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
           {/* LEFT — curriculum */}
-          <section>
+          <section className="min-w-0">
             {isAdmin && (
               <div className="mb-4 rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -681,7 +681,7 @@ function CourseDetailPage() {
                       {adminSelected.size === subjects.length ? "Clear all" : "Select all"}
                     </button>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-[11px] uppercase tracking-wider text-muted-foreground mr-1">Set access:</span>
                     <button disabled={adminBusy} onClick={() => handleBulkSetAccess("free_public")} className="px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300 hover:bg-emerald-200 disabled:opacity-50">Public</button>
                     <button disabled={adminBusy} onClick={() => handleBulkSetAccess("free_logged_in")} className="px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-sky-100 text-sky-700 ring-1 ring-sky-300 hover:bg-sky-200 disabled:opacity-50">Logged-in</button>
@@ -839,7 +839,7 @@ function CourseDetailPage() {
                               <button
                                 type="button"
                                 onClick={() => toggleSubject(s)}
-                                className="flex-1 text-left min-w-0"
+                                className="flex-1 text-left min-w-[10rem]"
                               >
                                 <div className="flex min-w-0 items-center gap-2">
                                   <div className="font-semibold text-foreground truncate">{s.name}</div>
@@ -878,7 +878,7 @@ function CourseDetailPage() {
 
 
                               {isAdmin ? (
-                                <div className="flex items-center gap-2 pl-3 ml-1 border-l border-border">
+                                <div className="flex flex-wrap items-center gap-2 pl-3 ml-auto border-l border-border max-w-full">
                                   <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-600">Admin</span>
                                   <label className="inline-flex items-center gap-1 cursor-pointer" title="Tick to include in bulk access change">
                                     <input
