@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import { rehypeChem } from "@/lib/rehype-chem";
 import "katex/dist/katex.min.css";
 // mhchem adds \ce{} so chemistry (structures, ions, reaction arrows) renders properly.
 import "katex/contrib/mhchem";
@@ -365,7 +366,7 @@ function SectionBlock({ section, showDivider }: { section: Section; showDivider:
       <div className="text-zinc-800 [&_p]:my-2 [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_ol]:my-2 [&_ol]:pl-5 [&_ol]:list-decimal [&_li]:my-1 [&_strong]:font-bold [&_strong]:text-zinc-900 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-rose-100 [&_code]:text-rose-900 [&_code]:text-[13px]">
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath]}
-          rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false, trust: true }]]}
+          rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false, trust: true }], rehypeChem]}
 
           components={{
             table: ({ children }) => (

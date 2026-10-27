@@ -6,6 +6,8 @@ import remarkGfm from "remark-gfm";
 import { ArrowLeft, CheckCircle2, Clock, Loader2, Lock, Medal, Trophy, XCircle } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { QuestionImage } from "@/components/quiz/QuestionImage";
+import { ChemText } from "@/components/ChemText";
+import { rehypeChem } from "@/lib/rehype-chem";
 import { ChallengeIntro } from "@/components/challenge/ChallengeIntro";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -239,7 +241,7 @@ function ChallengePage() {
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
-          <p className="whitespace-pre-wrap font-semibold leading-relaxed">{question.stem}</p>
+          <p className="whitespace-pre-wrap font-semibold leading-relaxed"><ChemText text={question.stem} /></p>
           {question.image_url && <QuestionImage path={question.image_url} />}
           {question.answer_mode === "multiple" && (
             <p className="text-xs font-semibold text-amber-700">Select all that apply · اختر كل الإجابات الصحيحة</p>
@@ -260,7 +262,7 @@ function ChallengePage() {
                   <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border text-xs font-bold ${on ? "bg-primary text-primary-foreground border-primary" : "border-border"}`}>
                     {o.label}
                   </span>
-                  <span className="leading-relaxed">{o.text}</span>
+                  <span className="leading-relaxed"><ChemText text={o.text} /></span>
                 </button>
               );
             })}
@@ -341,7 +343,7 @@ function ChallengePage() {
                   {r.timedOut ? "Skipped or time ran out · تخطّي أو انتهى الوقت" : r.isCorrect ? "Correct · صحيح" : "Wrong · خطأ"} · {r.points} pts · {(r.elapsedMs / 1000).toFixed(1)}s
                 </span>
               </div>
-              <p className="whitespace-pre-wrap font-semibold leading-relaxed">{r.stem}</p>
+              <p className="whitespace-pre-wrap font-semibold leading-relaxed"><ChemText text={r.stem} /></p>
               {r.image_url && <QuestionImage path={r.image_url} />}
               <div className="space-y-1.5">
                 {r.options.map((o) => {
@@ -353,7 +355,7 @@ function ChallengePage() {
                         o.is_correct ? "border-emerald-500/60 bg-emerald-500/10" : mine ? "border-destructive/60 bg-destructive/10" : "border-border"
                       }`}
                     >
-                      <b>{o.label}.</b> <span>{o.text}</span>
+                      <b>{o.label}.</b> <span><ChemText text={o.text} /></span>
                       {mine && <span className="ml-auto shrink-0 text-xs font-bold">your answer · إجابتك</span>}
                     </div>
                   );
@@ -361,7 +363,7 @@ function ChallengePage() {
               </div>
               {r.explanation && (
                 <div className="rounded-xl bg-muted/40 p-4 text-sm leading-relaxed [&_h2]:text-base [&_h2]:font-bold [&_h3]:font-bold [&_p]:my-1.5 [&_table]:my-2 [&_table]:w-full [&_table]:text-xs [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1 [&_th]:text-left">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{r.explanation}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeChem]}>{r.explanation}</ReactMarkdown>
                 </div>
               )}
             </div>
