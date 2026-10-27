@@ -157,7 +157,8 @@ export function ensureCombinedStemWithStatements(
             .replace(/^\s*(?:\d+|[A-Za-z])[\.\)\-:]\s*/, "")
             .replace(/^[*_]+|[*_]+$/g, "")
             .trim();
-          if (itemText.length > 2 && !/^(?:yes|no|true|false|correct|incorrect|✓|✗)$/i.test(itemText)) {
+          // "Statement 3" alone is how a question whose statements are a picture names them: nothing to copy into the stem
+          if (itemText.length > 2 && !/^(?:yes|no|true|false|correct|incorrect|✓|✗)$/i.test(itemText) && !/^statement\s+\d+$/i.test(itemText)) {
             stmts.push({ n: String(stmts.length + 1), text: itemText });
           }
         }

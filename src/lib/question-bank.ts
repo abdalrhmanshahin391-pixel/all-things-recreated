@@ -1,6 +1,14 @@
 /** Shared, client-safe types and lists for the admin Question Bank. */
 
-export type QbOption = { label: string; text: string; is_correct: boolean; sort_order: number };
+export type QbOption = {
+  label: string;
+  /** An option that is a picture has the text [[img:storage-path]] (the Aqua Question pages draw it as the picture). */
+  text: string;
+  is_correct: boolean;
+  sort_order: number;
+  /** Only while a tool's import is being processed: the picture as a data URL, replaced by the [[img:...]] text. */
+  image_url?: string | null;
+};
 export type QbQuestion = { stem: string; explanation: string | null; answer_mode?: "single" | "multiple"; sort_order: number; options: QbOption[]; image_url?: string | null };
 export type QbMeta = {
   id: string;

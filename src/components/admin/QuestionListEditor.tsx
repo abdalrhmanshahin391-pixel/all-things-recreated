@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { QuestionImagePicker } from "@/components/admin/QuestionImagePicker";
+import { ChemText } from "@/components/ChemText";
 import { deleteQuestionImage } from "@/lib/question-image";
 import { AMG_MODELS, amgRewriteSubjectExplanations } from "@/lib/aqua-mcq-gen.functions";
 import { Button } from "@/components/ui/button";
@@ -364,7 +365,7 @@ export function QuestionListEditor({ subjectId }: { subjectId: string }) {
                         className={`text-xs flex items-start gap-2 ${o.is_correct ? "text-emerald-300" : "text-white/60"}`}
                       >
                         <span className="font-bold">{o.label}.</span>
-                        <span className="break-words">{o.text}</span>
+                        <span className="break-words"><ChemText text={o.text} /></span>
                         {o.is_correct && <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
                       </li>
                     ))}

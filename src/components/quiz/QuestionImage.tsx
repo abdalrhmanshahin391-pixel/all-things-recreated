@@ -48,7 +48,7 @@ export function prefetchQuestionImage(path: string | null | undefined) {
  * 2. Supabase storage path — uploaded question images stored in the `question-images` bucket.
  *    A signed URL is generated on demand.
  */
-export function QuestionImage({ path, className = "" }: { path: string; className?: string }) {
+export function QuestionImage({ path, className = "", alt, compact = false }: { path: string; className?: string; alt?: string; compact?: boolean }) {
   const isExternal = path.startsWith("http://") || path.startsWith("https://");
 
   // For external URLs we resolve immediately; for storage paths we sign on mount.
@@ -76,12 +76,12 @@ export function QuestionImage({ path, className = "" }: { path: string; classNam
     return <div className="text-sm text-rose-600">This question image could not be loaded.</div>;
   }
   if (!url) {
-    return <div className="h-40 w-full animate-pulse rounded-xl bg-muted" />;
+    return <div className={`animate-pulse rounded-xl bg-muted ${compact ? "h-10 w-40" : "h-40 w-full"}`} />;
   }
   return (
     <img
       src={url}
-      alt="Medical diagram — refer to this image to answer the question"
+      alt={alt ?? "Medical diagram — refer to this image to answer the question"}
       loading="lazy"
       decoding="async"
       className={`w-full rounded-xl border border-border bg-card ${className}`}
