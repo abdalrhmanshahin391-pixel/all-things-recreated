@@ -128,7 +128,10 @@ export function AquaSubjectPage({ year, subject }: { year: string; subject: stri
             to="/committee/$year"
             params={{ year }}
             search={{ sem: info?.semester_id ?? undefined, mod: info?.module_id ?? undefined }}
-            className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            // until the subject is loaded the semester and module are not known: wait, so the button lands on this subject's list and not on the semesters
+            aria-disabled={infoLoading}
+            onClick={(e) => { if (infoLoading) e.preventDefault(); }}
+            className={`inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground ${infoLoading ? "opacity-50" : ""}`}
           >
             <ChevronLeft size={16} /> Back to subjects
           </Link>

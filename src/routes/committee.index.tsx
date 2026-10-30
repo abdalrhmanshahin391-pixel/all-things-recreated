@@ -27,6 +27,10 @@ export const Route = createFileRoute("/committee/")({
       { name: "description", content: "Free study resources organized by year and subject." },
     ],
   }),
+  // `keep`: arriving from a "Back to years" button inside the committee area, where the visitor must stay in the version they were in
+  validateSearch: (search: Record<string, unknown>): { keep?: boolean } => ({
+    keep: search["keep"] === true || search["keep"] === "true" || search["keep"] === "1" ? true : undefined,
+  }),
   loader: ({ context }) => context.queryClient.ensureQueryData(committeeYearsQuery),
   component: CommitteeHome,
 });
@@ -34,11 +38,13 @@ export const Route = createFileRoute("/committee/")({
 /** The committee home: the university resources, or the AQUA version, depending on the switch. */
 function CommitteeHome() {
   const { isAqua, setVersion } = useCommitteeVersion();
-  // Opening the committee page always starts on the University side. The switch still works while the page is open.
+  const { keep } = Route.useSearch();
+  // Opening the committee page from outside always starts on the University side (the switch still works while the page is open),
+  // but coming back from a year page keeps the version the visitor was in.
   // This effect is declared after the one inside useCommitteeVersion, so it wins over the version remembered in the browser.
   useEffect(() => {
-    setVersion("university");
-  }, [setVersion]);
+    if (!keep) setVersion("university");
+  }, [setVersion, keep]);
   return isAqua ? <AquaHome /> : <CommitteePage />;
 }
 

@@ -300,7 +300,7 @@ function YearPage() {
               {(blockedBy.closed_note ?? "").trim() || "Coming soon"}
             </p>
             <p className="mt-2 text-sm text-muted-foreground">This section is currently closed.</p>
-            <Link to="/committee" className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-primary">
+            <Link to="/committee" search={{ keep: true }} className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-primary">
               <ChevronLeft size={16} /> Back to years
             </Link>
           </div>
