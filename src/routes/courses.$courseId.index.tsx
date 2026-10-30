@@ -25,7 +25,7 @@ import {
   Sparkles,
   Flag,
   XCircle,
-  ArrowRight, Clock, ArrowUp, ArrowDown } from "lucide-react";
+  ArrowRight, Clock, ArrowUp, ArrowDown, Merge } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useServerFn } from "@tanstack/react-start";
 import { reorderSubjects, setSubjectAccess, setSubjectOrdered, type SubjectAccess } from "@/lib/subjects.functions";
@@ -38,6 +38,7 @@ import { toast } from "sonner";
 import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
 import { exportSectionQuestionsForNotebookLmServerFn } from "@/lib/course-export.functions";
 import { NotebookLmExportModal } from "@/components/course/NotebookLmExportModal";
+import { MergeSubjectDialog } from "@/components/course/MergeSubjectDialog";
 
 export const Route = createFileRoute("/courses/$courseId/")({
   loader: async ({ params }) => {
@@ -154,6 +155,7 @@ function CourseDetailPage() {
   const [pool, setPool] = useState<"all" | "flagged" | "incorrect">("all");
   const [adminSelected, setAdminSelected] = useState<Set<string>>(new Set());
   const [adminBusy, setAdminBusy] = useState(false);
+  const [mergeSource, setMergeSource] = useState<Subject | null>(null);
 
   const exportForNotebookLm = useServerFn(exportSectionQuestionsForNotebookLmServerFn);
   const [notebookModalOpen, setNotebookModalOpen] = useState(false);
@@ -904,6 +906,14 @@ function CourseDetailPage() {
                                   >
                                     In order
                                   </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setMergeSource(s); }}
+                                    title="Move all the questions of this subject into another subject"
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-1 border bg-card text-muted-foreground border-border hover:border-indigo-300 transition-colors"
+                                  >
+                                    <Merge className="h-3 w-3" /> Merge
+                                  </button>
                                 </div>
                               ) : sLocked ? (
                                 <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted border border-border rounded-full px-2 py-1">
@@ -1104,6 +1114,19 @@ function CourseDetailPage() {
           }}
         />
 
+        {isAdmin && (
+          <MergeSubjectDialog
+            source={mergeSource}
+            groups={groups}
+            subjects={subjects}
+            onClose={() => setMergeSource(null)}
+            onDone={() => {
+              setAdminSelected(new Set());
+              setSelected(new Set());
+              void pageQuery.refetch();
+            }}
+          />
+        )}
         <NotebookLmExportModal
           open={notebookModalOpen}
           onOpenChange={setNotebookModalOpen}
