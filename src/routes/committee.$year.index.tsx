@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useParams, useNavigate } from "@tanstack/react-router";
+import { BackToYears } from "@/components/committee/BackToYears";
 import { keepPreviousData, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { committeeSubjectQuery } from "@/lib/committee-queries";
 import { useState } from "react";
@@ -221,12 +222,7 @@ function YearPage() {
               <ChevronLeft size={16} /> Back to semesters
             </button>
           ) : (
-            <Link
-              to="/committee"
-              className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ChevronLeft size={16} /> Back to years
-            </Link>
+            <BackToYears className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" />
           )}
           <VersionSwitch />
         </div>

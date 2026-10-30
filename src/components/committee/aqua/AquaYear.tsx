@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { BackToYears } from "@/components/committee/BackToYears";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, ChevronLeft, FileText, Layers, Shield } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -108,9 +109,7 @@ export function AquaYearPage({
               <ChevronLeft size={16} /> Back to semesters
             </button>
           ) : (
-            <Link to="/committee" className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-              <ChevronLeft size={16} /> Back to years
-            </Link>
+            <BackToYears className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground" />
           )}
           <VersionSwitch />
         </div>
