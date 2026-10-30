@@ -249,6 +249,13 @@ export async function driveReadTextFile(path: string[], name: string) {
   return { text: await res.text(), modifiedTime: existing.modifiedTime ?? null, fileId: existing.id };
 }
 
+/** The file as a stream (a big PDF is passed on without holding all of it in memory). */
+export async function driveReadStream(fileId: string): Promise<Response> {
+  const res = await driveFetch(`/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`);
+  if (!res.ok) throw new Error(`Drive download failed [${res.status}]`);
+  return res;
+}
+
 export async function driveReadFileBytes(fileId: string): Promise<Uint8Array> {
   const res = await driveFetch(`/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`);
   if (!res.ok) throw new Error(`Drive download failed [${res.status}]`);
