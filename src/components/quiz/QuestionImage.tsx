@@ -14,15 +14,23 @@ function signPath(path: string): Promise<string | null> {
   if (cached) return Promise.resolve(cached);
   let pending = inflight.get(path);
   if (!pending) {
-    pending = supabase.storage
-      .from(BUCKET)
-      .createSignedUrl(path, 60 * 60)
-      .then(({ data, error }) => {
-        if (error || !data?.signedUrl) return null;
-        cache.set(path, data.signedUrl);
-        return data.signedUrl;
-      })
-      .finally(() => inflight.delete(path));
+    // A momentary failure (a weak connection, many pictures asked at once, a session that is being renewed) must not
+    // leave the student with an error: try again twice before giving up. A failure is never remembered.
+    const attempt = async (n: number): Promise<string | null> => {
+      try {
+        const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60 * 60);
+        if (!error && data?.signedUrl) {
+          cache.set(path, data.signedUrl);
+          return data.signedUrl;
+        }
+      } catch {
+        /* treated like any other failure */
+      }
+      if (n >= 2) return null;
+      await new Promise((r) => setTimeout(r, n === 0 ? 700 : 1800));
+      return attempt(n + 1);
+    };
+    pending = attempt(0).finally(() => inflight.delete(path));
     inflight.set(path, pending);
   }
   return pending;
@@ -54,14 +62,22 @@ export function QuestionImage({ path, className = "", alt, compact = false }: { 
   // For external URLs we resolve immediately; for storage paths we sign on mount.
   const [url, setUrl] = useState<string | null>(isExternal ? path : (cache.get(path) ?? null));
   const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
 
   useEffect(() => {
     // External URLs need no signing — already resolved above.
-    if (isExternal) return;
+    if (isExternal) {
+      setUrl(path);
+      setFailed(false);
+      return;
+    }
 
+    // The same component can be reused for another question's picture: forget the previous picture and any earlier failure.
+    setFailed(false);
     let cancelled = false;
     const cached = cache.get(path);
     if (cached) { setUrl(cached); return; }
+    setUrl(null);
 
     void signPath(path).then((signed) => {
       if (cancelled) return;
@@ -70,10 +86,17 @@ export function QuestionImage({ path, className = "", alt, compact = false }: { 
     });
 
     return () => { cancelled = true; };
-  }, [path, isExternal]);
+  }, [path, isExternal, tries]);
 
   if (failed) {
-    return <div className="text-sm text-rose-600">This question image could not be loaded.</div>;
+    return (
+      <div className="text-sm text-rose-600">
+        This question image could not be loaded.{" "}
+        <button type="button" onClick={() => setTries((n) => n + 1)} className="font-semibold underline">
+          Try again
+        </button>
+      </div>
+    );
   }
   if (!url) {
     return <div className={`animate-pulse rounded-xl bg-muted ${compact ? "h-10 w-40" : "h-40 w-full"}`} />;
