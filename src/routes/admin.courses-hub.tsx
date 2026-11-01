@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { compressImage } from "@/lib/image-compress";
 import { useAuth, type Profile } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
-import { resolveCourseImageUrl } from "@/lib/course-image";
+import { publicCourseImageUrl, resolveCourseImageUrl } from "@/lib/course-image";
 import {
   useCourseOptions,
   isAllYearsCourse,
@@ -91,18 +91,27 @@ function fromLocalInput(v: string) {
 }
 
 function CourseThumb({ value, className }: { value: string | null; className?: string }) {
-  const [url, setUrl] = useState<string | null>(null);
+  // The bucket is public: use the fixed public URL (no request to storage). Only if the picture fails to load do we ask for a signed one,
+  // so opening this page with many courses no longer makes one storage query per course.
+  const [url, setUrl] = useState<string | null>(() => publicCourseImageUrl(value));
+  const [signed, setSigned] = useState(false);
   useEffect(() => {
-    let cancelled = false;
-    resolveCourseImageUrl(value).then((u) => {
-      if (!cancelled) setUrl(u);
-    });
-    return () => {
-      cancelled = true;
-    };
+    setUrl(publicCourseImageUrl(value));
+    setSigned(false);
   }, [value]);
   if (!url) return null;
-  return <img src={url} alt="" className={className} />;
+  return (
+    <img
+      src={url}
+      alt=""
+      className={className}
+      onError={() => {
+        if (signed) return;
+        setSigned(true);
+        void resolveCourseImageUrl(value).then((u) => u && setUrl(u));
+      }}
+    />
+  );
 }
 
 function CoursesHubPage() {
