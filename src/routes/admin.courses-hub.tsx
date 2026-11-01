@@ -30,7 +30,6 @@ import { BADGE_PRESETS } from "@/components/common/CourseBadge";
 import {
   syncPaddleCoursePrice,
   syncAllCoursesToPaddle,
-  autoReconcileCoursesToPaddle,
 } from "@/utils/payments.functions";
 
 export const Route = createFileRoute("/admin/courses-hub")({
@@ -165,21 +164,8 @@ function CoursesHubPage() {
     else if (!loading && user && !isAdmin) guardRedirect(navigate);
   }, [loading, user, isAdmin, navigate]);
 
-  // Zero-click background auto-reconciliation: automatically provisions active Paddle products & prices
-  useEffect(() => {
-    if (!loading && user && isAdmin) {
-      autoReconcileCoursesToPaddle({ data: { environment: "live" } })
-        .then((res) => {
-          if (res?.reconciled && res.reconciled > 0) {
-            toast.success(`Automatically synced ${res.reconciled} courses with Paddle!`);
-            refresh();
-          }
-        })
-        .catch((err) => {
-          console.warn("Background Paddle sync auto-check:", err);
-        });
-    }
-  }, [loading, user, isAdmin]);
+  // The Paddle sync used to start by itself every time this page opened (several Paddle requests per paid course, one after the other),
+  // which froze the page for minutes. It now runs only from the "Sync all" button.
 
   async function refresh() {
     setFetching(true);
@@ -257,14 +243,18 @@ function CoursesHubPage() {
 
     if (parsedPrice > 0 && !effectivePaddlePriceId) {
       try {
-        const syncRes = await syncPaddleCoursePrice({
-          data: {
-            title: title.trim(),
-            price: parsedPrice,
-            environment: "live",
-          },
-        });
-        if (syncRes.paddlePriceId) {
+        // Adding a course must never wait on Paddle for long: give it 12 seconds, then save the course and sync later from "Sync all".
+        const syncRes: any = await Promise.race([
+          syncPaddleCoursePrice({
+            data: {
+              title: title.trim(),
+              price: parsedPrice,
+              environment: "live",
+            },
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Paddle sync timed out")), 12000)),
+        ]);
+        if (syncRes?.paddlePriceId) {
           effectivePaddlePriceId = syncRes.paddlePriceId;
         }
       } catch (syncErr) {
