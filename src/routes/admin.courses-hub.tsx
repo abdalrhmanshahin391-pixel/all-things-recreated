@@ -1,3 +1,4 @@
+import { PaymentsCheck } from "@/components/admin/PaymentsCheck";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -459,6 +460,8 @@ function CoursesHubPage() {
             </button>
           ))}
         </div>
+
+        <PaymentsCheck />
 
         {error && (
           <div className="mb-6 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300 flex items-start justify-between gap-3">

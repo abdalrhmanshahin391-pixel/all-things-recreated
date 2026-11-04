@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { verifyWebhookAuto, EventName, type PaddleEnv } from "@/lib/paddle.server";
 import { checkGrant, sandboxAllowed } from "@/lib/payment-grant.server";
+import { describeTransaction, grantCourseAccess, recordPayment } from "@/lib/payment-fulfil.server";
 
 let _supabase: ReturnType<typeof createClient> | null = null;
 function getSupabase() {
@@ -17,16 +18,30 @@ function getSupabase() {
 async function handleTransactionCompleted(event: any, env: PaddleEnv) {
   const data = event.data;
   const customData = data.customData || {};
-  const userId: string | undefined = customData.userId;
-  const courseId: string | undefined = customData.courseId;
-  const packageId: string | undefined = customData.packageId;
+  const supabase = getSupabase();
+
+  // Normally our own checkout names the buyer and the course. A payment without them is not dropped: the buyer is found by the
+  // email Paddle holds and the course by the price that was paid.
+  const info = await describeTransaction(supabase, data, env);
+  const userId: string | undefined = info.userId ?? undefined;
+  const courseId: string | undefined = info.courseId ?? undefined;
+  const packageId: string | undefined = info.packageId ?? undefined;
 
   if (!userId) {
-    console.warn("transaction.completed missing userId", { txn: data.id, customData });
+    console.warn("transaction.completed: no user could be found", { txn: data.id, note: info.note });
+    await recordPayment(supabase, {
+      paddle_event_id: event.eventId,
+      paddle_transaction_id: data.id,
+      user_id: null,
+      course_id: courseId ?? null,
+      amount_cents: info.amountCents,
+      currency: info.currency,
+      environment: env,
+      status: "needs_review",
+      raw: { reason: info.note || "no user", event },
+    });
     return;
   }
-
-  const supabase = getSupabase();
 
   // The custom data of a browser checkout is chosen by the buyer: make sure the price paid belongs to what is unlocked.
   const grant = await checkGrant(
@@ -37,6 +52,18 @@ async function handleTransactionCompleted(event: any, env: PaddleEnv) {
   );
   if (!grant.ok) {
     console.warn("[webhook] refused:", grant.reason, { txn: data.id, userId });
+    // Keep it visible: the admin "Check payments" tool lists it and can give the access after a look.
+    await recordPayment(supabase, {
+      paddle_event_id: event.eventId,
+      paddle_transaction_id: data.id,
+      user_id: userId,
+      course_id: courseId ?? null,
+      amount_cents: info.amountCents,
+      currency: info.currency,
+      environment: env,
+      status: "needs_review",
+      raw: { reason: grant.reason, event },
+    });
     return;
   }
   const memberIds: string[] = grant.memberIds;
@@ -171,14 +198,9 @@ async function handleTransactionCompleted(event: any, env: PaddleEnv) {
   const kind = (courseRow as any)?.kind ?? "questions";
   const accessTable = kind === "lectures" ? "user_lecture_courses" : "user_courses";
 
-  const { error } = await (supabase.from(accessTable) as any).upsert(
-    { user_id: userId, course_id: courseId },
-    { onConflict: "user_id,course_id", ignoreDuplicates: true },
-  );
-  if (error) {
-    console.error("Failed to grant course access", error);
-    throw error;
-  }
+  // Throws (so Paddle sends the event again) when the access could not be saved or is not there afterwards.
+  void accessTable;
+  await grantCourseAccess(supabase, userId, courseId);
 }
 
 

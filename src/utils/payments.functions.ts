@@ -11,6 +11,13 @@ import {
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireAdminCaller, requireSignedInCaller } from "@/lib/auth-guards.server";
 import { allowedPaddleEnv, checkGrant } from "@/lib/payment-grant.server";
+import {
+  describeTransaction,
+  fulfilmentDb,
+  grantCourseAccess,
+  hasCourseAccess,
+  recordPayment,
+} from "@/lib/payment-fulfil.server";
 
 let _adminSupabase: ReturnType<typeof createClient> | null = null;
 function getAdminSupabase() {
@@ -479,17 +486,20 @@ export const verifyAndFulfillTransaction = createServerFn({ method: "POST" })
           (kind.get(cid) === "lectures" ? lRows : qRows).push({ user_id: uid, course_id: cid });
         }
       }
+      const writeDb = await fulfilmentDb();
       if (qRows.length > 0) {
-        await (adminDb.from("user_courses") as any).upsert(qRows, {
+        const { error } = await (writeDb.from("user_courses") as any).upsert(qRows, {
           onConflict: "user_id,course_id",
           ignoreDuplicates: true,
         });
+        if (error) throw new Error(`Could not save the access (${error.message})`);
       }
       if (lRows.length > 0) {
-        await (adminDb.from("user_lecture_courses") as any).upsert(lRows, {
+        const { error } = await (writeDb.from("user_lecture_courses") as any).upsert(lRows, {
           onConflict: "user_id,course_id",
           ignoreDuplicates: true,
         });
+        if (error) throw new Error(`Could not save the access (${error.message})`);
       }
 
       return { ok: true, granted: true, type: "package", packageId };
@@ -513,18 +523,8 @@ export const verifyAndFulfillTransaction = createServerFn({ method: "POST" })
       );
 
       // Check course kind (lectures vs questions)
-      const { data: courseRow } = await (adminDb.from("courses") as any)
-        .select("kind")
-        .eq("id", courseId)
-        .maybeSingle();
-
-      const kind = (courseRow as any)?.kind ?? "questions";
-      const accessTable = kind === "lectures" ? "user_lecture_courses" : "user_courses";
-
-      await (adminDb.from(accessTable) as any).upsert(
-        { user_id: userId, course_id: courseId },
-        { onConflict: "user_id,course_id", ignoreDuplicates: true },
-      );
+      // Written with the service-role client and checked afterwards: a payment is never reported as unlocked when nothing was saved.
+      const { kind } = await grantCourseAccess(await fulfilmentDb(), userId, courseId);
 
       return { ok: true, granted: true, type: "course", courseId, kind };
     }
@@ -871,3 +871,106 @@ export const createCheckoutTransaction = createServerFn({ method: "POST" })
   });
 
 
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/* Admin: payments that were taken but may not have opened the course                                                   */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+export interface RecentPaymentRow {
+  transactionId: string;
+  billedAt: string | null;
+  amountCents: number | null;
+  currency: string | null;
+  email: string;
+  userId: string | null;
+  courseId: string | null;
+  courseTitle: string;
+  packageId: string | null;
+  hasAccess: boolean;
+  note: string;
+}
+
+/**
+ * Lists the paid Paddle transactions of the last days and says, for each, whether the buyer really has the course.
+ * Anything with hasAccess=false is a payment that was taken without the course opening.
+ */
+export const findRecentPayments = createServerFn({ method: "POST" })
+  .inputValidator((data?: { days?: number }) => data || {})
+  .handler(async ({ data }): Promise<{ ok: true; rows: RecentPaymentRow[]; checked: number }> => {
+    await requireAdminCaller();
+    const db = await fulfilmentDb();
+    const env: PaddleEnv = "live";
+    const days = Math.min(60, Math.max(1, Number(data?.days) || 7));
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+
+    const txns: any[] = [];
+    let path: string | null =
+      `/transactions?status=completed,paid&billed_at[GTE]=${encodeURIComponent(since)}&order_by=billed_at[DESC]&per_page=30&include=customer`;
+    for (let page = 0; path && page < 10; page++) {
+      const res: Response = await gatewayFetch(env, path);
+      if (!res.ok) throw new Error(`Paddle did not answer (${res.status})`);
+      const json: any = await res.json();
+      txns.push(...(json.data ?? []));
+      const next: string | undefined = json?.meta?.pagination?.next;
+      path = next && json?.meta?.pagination?.has_more ? next.replace(/^https?:\/\/[^/]+/, "") : null;
+    }
+
+    const rows: RecentPaymentRow[] = [];
+    for (const txn of txns) {
+      const info = await describeTransaction(db, txn, env);
+      let hasAccess = false;
+      let note = info.note;
+      if (info.packageId) {
+        const { data: pp } = await db.from("package_purchases").select("id").eq("paddle_transaction_id", info.transactionId).limit(1);
+        hasAccess = (pp ?? []).length > 0;
+        if (!hasAccess) note = note || "package payment with no purchase record";
+      } else if (info.userId && info.courseId) {
+        hasAccess = await hasCourseAccess(db, info.userId, info.courseId);
+      } else {
+        note = note || "the buyer or the course could not be found";
+      }
+      rows.push({
+        transactionId: info.transactionId,
+        billedAt: info.billedAt,
+        amountCents: info.amountCents,
+        currency: info.currency,
+        email: info.email,
+        userId: info.userId,
+        courseId: info.courseId,
+        courseTitle: info.courseTitle,
+        packageId: info.packageId,
+        hasAccess,
+        note,
+      });
+    }
+    return { ok: true, rows, checked: txns.length };
+  });
+
+/** Admin: opens the course for the buyer of a paid transaction (after looking at it in the payments list). */
+export const grantPaymentAccess = createServerFn({ method: "POST" })
+  .inputValidator((data: { transactionId: string }) => data)
+  .handler(async ({ data }) => {
+    await requireAdminCaller();
+    const db = await fulfilmentDb();
+    const env: PaddleEnv = "live";
+    const txn = await getPaddleTransaction(env, data.transactionId);
+    if (!txn) throw new Error("Transaction not found in Paddle");
+    const status = String(txn.status ?? "").toLowerCase();
+    if (status !== "completed" && status !== "paid") throw new Error(`This payment is ${status}, not paid`);
+    const info = await describeTransaction(db, txn, env);
+    if (info.packageId) throw new Error("This is a package payment: open it from the package purchases instead.");
+    if (!info.userId) throw new Error(`The buyer could not be found (${info.note || "no email"})`);
+    if (!info.courseId) throw new Error(`The course could not be found (${info.note || "no price match"})`);
+    await grantCourseAccess(db, info.userId, info.courseId);
+    await recordPayment(db, {
+      paddle_transaction_id: info.transactionId,
+      user_id: info.userId,
+      course_id: info.courseId,
+      amount_cents: info.amountCents,
+      currency: info.currency,
+      environment: env,
+      status: "completed",
+      raw: txn,
+    });
+    return { ok: true, userId: info.userId, courseId: info.courseId, courseTitle: info.courseTitle };
+  });
