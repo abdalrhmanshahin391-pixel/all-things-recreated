@@ -380,7 +380,7 @@ function CourseDetailPage() {
       : subjects.filter((s) => !isSubjectLocked(s));
 
     if (!chosenSubjects.length) {
-      toast.error(isArabic ? "يرجى اختيار مادة متاحة أولاً" : "Please select at least one available subject first");
+      toast.error(isArabic ? "يرجى اختيار مادة متاحة أولاً" : "Please select at least one available topic first");
       return;
     }
 
@@ -394,7 +394,12 @@ function CourseDetailPage() {
       return;
     }
 
-    const subjectIds = selected.size ? Array.from(selected).join(",") : "all";
+    // On a paid course nothing ticked means only the topics that are open to this person, never "all"
+    const subjectIds = selected.size
+      ? Array.from(selected).join(",")
+      : showPaywall
+        ? chosenSubjects.map((s) => s.id).join(",")
+        : "all";
     navigate({
       to: "/courses/$courseId/run",
       params: { courseId },
@@ -459,7 +464,7 @@ function CourseDetailPage() {
   const handleBulkSetAccess = async (level: SubjectAccess) => {
     const ids = Array.from(adminSelected);
     if (ids.length === 0) {
-      toast.error("Select at least one subject first");
+      toast.error("Select at least one topic first");
       return;
     }
     setAdminBusy(true);
@@ -471,7 +476,7 @@ function CourseDetailPage() {
       await Promise.all(
         ids.map((id) => updateAccess({ data: { subjectId: id, accessLevel: level } })),
       );
-      toast.success(`Updated ${ids.length} subject${ids.length > 1 ? "s" : ""} → ${level.replace("_", " ")}`);
+      toast.success(`Updated ${ids.length} topic${ids.length > 1 ? "s" : ""} → ${level.replace("_", " ")}`);
       setAdminSelected(new Set());
     } catch (e: any) {
       setSubjects(prev);
@@ -553,6 +558,9 @@ function CourseDetailPage() {
 
   const showPaywall = !enrolled && !isAdmin && !isFree && (course.paddle_price_id || (course.price ?? 0) > 0);
   const locked = showPaywall;
+  // Topics the admin made free stay open on a paid course: the list is not veiled and practising them never asks for payment.
+  const freeTopicCount = subjects.filter((s) => !isSubjectLocked(s)).length;
+  const hasFreeTopics = locked && freeTopicCount > 0;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -592,13 +600,13 @@ function CourseDetailPage() {
           </h1>
 
           <p className="mt-2 text-muted-foreground max-w-xl">
-            Curated exam-ready bank — covering all subjects, mid & final question pools, with
+            Curated exam-ready bank — covering all topics, mid & final question pools, with
             step-by-step explanations.
           </p>
 
           {/* Stat chips */}
           <div className="mt-6 flex flex-wrap gap-2">
-            <StatPill icon={<BookOpen className="w-3.5 h-3.5" />} label="Subjects" value={String(totalSubjectsCount || course.subjects_count || 0)} />
+            <StatPill icon={<BookOpen className="w-3.5 h-3.5" />} label="Topics" value={String(totalSubjectsCount || course.subjects_count || 0)} />
             <StatPill icon={<FileText className="w-3.5 h-3.5" />} label="Questions" value={String(totalQuestionsCount || (course.questions_count_mid + course.questions_count_final))} />
             <StatPill icon={<Timer className="w-3.5 h-3.5" />} label="Mid" value={String(course.questions_count_mid)} />
             <StatPill icon={<Sparkles className="w-3.5 h-3.5" />} label="Final" value={String(course.questions_count_final)} />
@@ -620,7 +628,9 @@ function CourseDetailPage() {
                     You're not subscribed to this course yet
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    Preview the curriculum below. Unlock full question banks and study mode in one click.
+                    {hasFreeTopics
+                      ? "Some topics are free to practise. Locked topics and the rest of the question bank open when you unlock the course."
+                      : "Preview the curriculum below. Unlock full question banks and study mode in one click."}
                   </div>
                 </div>
               </div>
@@ -684,9 +694,9 @@ function CourseDetailPage() {
                     </button>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground mr-1">Set access:</span>
-                    <button disabled={adminBusy} onClick={() => handleBulkSetAccess("free_public")} className="px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300 hover:bg-emerald-200 disabled:opacity-50">Public</button>
-                    <button disabled={adminBusy} onClick={() => handleBulkSetAccess("free_logged_in")} className="px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-sky-100 text-sky-700 ring-1 ring-sky-300 hover:bg-sky-200 disabled:opacity-50">Logged-in</button>
+                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground mr-1">Set topics:</span>
+                    <button disabled={adminBusy} onClick={() => handleBulkSetAccess("free_public")} className="px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300 hover:bg-emerald-200 disabled:opacity-50">Free</button>
+                    <button disabled={adminBusy} onClick={() => handleBulkSetAccess("free_logged_in")} className="px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-sky-100 text-sky-700 ring-1 ring-sky-300 hover:bg-sky-200 disabled:opacity-50">Free + login</button>
                     <button disabled={adminBusy} onClick={() => handleBulkSetAccess("paid")} className="px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700 ring-1 ring-indigo-300 hover:bg-indigo-200 disabled:opacity-50">Paid</button>
                   </div>
                 </div>
@@ -705,8 +715,8 @@ function CourseDetailPage() {
 
             <div className="flex items-end justify-between mb-4">
               <div>
-                <h2 className="text-2xl font-semibold text-foreground" style={{ fontFamily: "var(--font-heading)" }}>Subjects</h2>
-                <p className="mt-1 text-sm text-muted-foreground">{selected.size === 0 ? "Nothing ticked: every open subject is included." : `${selected.size} selected`}</p>
+                <h2 className="text-2xl font-semibold text-foreground" style={{ fontFamily: "var(--font-heading)" }}>Topics</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{selected.size === 0 ? "Nothing ticked: every open topic is included." : `${selected.size} selected`}</p>
               </div>
               {groupedSubjects.length > 0 && (
                 <div className="flex items-center gap-2 text-xs">
@@ -729,10 +739,10 @@ function CourseDetailPage() {
               )}
             </div>
 
-            <div className={`relative space-y-3 ${locked ? "lock-veil" : ""}`}>
+            <div className={`relative space-y-3 ${locked && !hasFreeTopics ? "lock-veil" : ""}`}>
               {groupedSubjects.length === 0 && (
                 <div className="medical-card p-8 text-center text-muted-foreground text-sm">
-                  No subjects yet for this course.
+                  No topics yet for this course.
                 </div>
               )}
               {groupedSubjects.map(({ group, items }, gi) => {
@@ -754,7 +764,7 @@ function CourseDetailPage() {
                         <div className="text-left min-w-0">
                           <div className="truncate text-base font-semibold text-foreground md:text-lg" style={{ fontFamily: "var(--font-heading)" }}>{group.name}</div>
                           <div className="text-xs text-muted-foreground">
-                            {selectedCount} of {items.length} subjects selected
+                            {selectedCount} of {items.length} topics selected
                           </div>
                         </div>
                       </div>
@@ -772,7 +782,7 @@ function CourseDetailPage() {
                           <span>NotebookLM</span>
                         </button>}
                         <span className="hidden text-xs font-medium text-muted-foreground sm:inline-flex">
-                          {items.length} {items.length === 1 ? "subject" : "subjects"}
+                          {items.length} {items.length === 1 ? "topic" : "topics"}
                         </span>
                         {open
                           ? <ChevronDown className="w-4 h-4 text-muted-foreground" />
@@ -783,7 +793,7 @@ function CourseDetailPage() {
                     {open && (
                       <div className="mt-2 space-y-1.5">
                         {items.length === 0 && (
-                          <div className="px-6 py-3 text-xs text-muted-foreground italic">No subjects in this group.</div>
+                          <div className="px-6 py-3 text-xs text-muted-foreground italic">No topics in this section.</div>
                         )}
                         {items.map((s, idx) => {
                           const sLocked = isSubjectLocked(s);
@@ -806,7 +816,7 @@ function CourseDetailPage() {
                                   <button
                                     type="button"
                                     aria-label="Move up"
-                                    title="Move this subject up"
+                                    title="Move this topic up"
                                     disabled={idx === 0}
                                     onClick={() => handleMoveSubject(group.id, s.id, -1)}
                                     className="grid h-5 w-7 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25 touch-manipulation"
@@ -816,7 +826,7 @@ function CourseDetailPage() {
                                   <button
                                     type="button"
                                     aria-label="Move down"
-                                    title="Move this subject down"
+                                    title="Move this topic down"
                                     disabled={idx === items.length - 1}
                                     onClick={() => handleMoveSubject(group.id, s.id, 1)}
                                     className="grid h-5 w-7 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25 touch-manipulation"
@@ -871,7 +881,7 @@ function CourseDetailPage() {
                                   search={{ source: "flags", courseId, subjectId: s.id }}
                                   onClick={(e) => e.stopPropagation()}
                                   className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 px-2 py-1 rounded-full bg-rose-50 hover:bg-rose-100 shrink-0"
-                                  title="Make a summary from your red-flagged questions in this subject"
+                                  title="Make a summary from your red-flagged questions in this topic"
                                 >
                                   <Sparkles className="w-3 h-3" /> Flag summary
                                 </Link>
@@ -908,7 +918,7 @@ function CourseDetailPage() {
                                   <button
                                     type="button"
                                     onClick={(e) => { e.stopPropagation(); setMergeSource(s); }}
-                                    title="Move all the questions of this subject into another subject"
+                                    title="Move all the questions of this topic into another topic"
                                     className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-1 border bg-card text-muted-foreground border-border hover:border-indigo-300 transition-colors"
                                   >
                                     <Merge className="h-3 w-3" /> Merge
@@ -947,7 +957,7 @@ function CourseDetailPage() {
                 </div>
               </div>
 
-              {locked && !liveTourOpen && (selected.size === 0 || anySelectedLocked) ? (
+              {locked && !liveTourOpen && (anySelectedLocked && (selected.size > 0 || !hasFreeTopics)) ? (
                 <div className="p-6 text-center">
                   <div className="mx-auto w-12 h-12 aurora-ring mb-4">
                     <div className="relative z-10 w-12 h-12 rounded-full bg-card border border-indigo-200 grid place-items-center mx-auto">
@@ -959,7 +969,7 @@ function CourseDetailPage() {
                     Pick study, session, or exam mode after unlocking the course.
                   </p>
                   <div className="mt-3 text-xs text-muted-foreground font-semibold">
-                    {totalSubjectsCount} subjects · {totalQuestionsCount} questions
+                    {totalSubjectsCount} topics · {totalQuestionsCount} questions
                   </div>
                   <button
                     onClick={() => navigate({ to: "/courses/$courseId/checkout", params: { courseId } })}
@@ -979,6 +989,23 @@ function CourseDetailPage() {
                 </div>
               ) : (
                 <>
+                  {showPaywall && (
+                    <div className="px-5 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => navigate({ to: "/courses/$courseId/checkout", params: { courseId } })}
+                        className="magnetic-cta w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl text-white font-bold text-sm"
+                      >
+                        <span className="relative z-10 inline-flex items-center gap-2">
+                          {isArabic ? "اشترِ الكورس كاملاً" : "Buy full course"} · ${Number(course.price ?? 0).toFixed(0)}
+                          <ArrowRight className="w-4 h-4" />
+                        </span>
+                      </button>
+                      <p className="mt-2 text-center text-xs text-muted-foreground">
+                        {isArabic ? "المواضيع المقفلة تحتاج شراء الكورس." : "Locked topics need the full course."}
+                      </p>
+                    </div>
+                  )}
                   {/* Selection summary */}
                   {(() => {
                     const totalCourseQ = (course.questions_count_mid ?? 0) + (course.questions_count_final ?? 0);
@@ -997,7 +1024,7 @@ function CourseDetailPage() {
                         <p className="mt-2 text-xs text-muted-foreground">
                           {midShare.toLocaleString()} {isArabic ? "Ù†ØµÙÙŠ" : "midterm"} · {finalShare.toLocaleString()} {isArabic ? "Ù†Ù‡Ø§Ø¦ÙŠ" : "final"}
                           {" · "}
-                          {selected.size === 0 ? (isArabic ? "ÙƒÙ„ Ø§Ù„Ù…ÙˆØ§Ø¯ Ø§Ù„Ù…ØªØ§Ø­Ø©" : "all open subjects") : `${selected.size} / ${totalSubjectsCount} ${isArabic ? "Ù…ÙˆØ§Ø¯" : "subjects"}`}
+                          {selected.size === 0 ? (isArabic ? "ÙƒÙ„ Ø§Ù„Ù…ÙˆØ§Ø¯ Ø§Ù„Ù…ØªØ§Ø­Ø©" : "all open topics") : `${selected.size} / ${totalSubjectsCount} ${isArabic ? "Ù…ÙˆØ§Ø¯" : "topics"}`}
                           {" · "}
                           {timed ? `${durationMin} min` : `~${estMin} min`}
                         </p>
@@ -1161,8 +1188,8 @@ function StatPill({ icon, label, value }: { icon: React.ReactNode; label: string
 
 function AccessStatePill({ value }: { value: SubjectAccess }) {
   const map: Record<SubjectAccess, { label: string; cls: string; dot: string }> = {
-    free_public: { label: "Public", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
-    free_logged_in: { label: "Logged-in", cls: "bg-sky-50 text-sky-700 border-sky-200", dot: "bg-sky-500" },
+    free_public: { label: "Free", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
+    free_logged_in: { label: "Free + login", cls: "bg-sky-50 text-sky-700 border-sky-200", dot: "bg-sky-500" },
     paid: { label: "Paid", cls: "bg-indigo-50 text-indigo-700 border-indigo-200", dot: "bg-indigo-500" },
   };
   const v = map[value];
@@ -1182,8 +1209,8 @@ function AccessToggle({
   onChange: (v: SubjectAccess) => void;
 }) {
   const opts: { key: SubjectAccess; label: string; cls: string }[] = [
-    { key: "free_public", label: "Public", cls: "bg-emerald-100 text-emerald-700 ring-emerald-300" },
-    { key: "free_logged_in", label: "Logged-in", cls: "bg-sky-100 text-sky-700 ring-sky-300" },
+    { key: "free_public", label: "Free", cls: "bg-emerald-100 text-emerald-700 ring-emerald-300" },
+    { key: "free_logged_in", label: "Free + login", cls: "bg-sky-100 text-sky-700 ring-sky-300" },
     { key: "paid", label: "Paid", cls: "bg-indigo-100 text-indigo-700 ring-indigo-300" },
   ];
   return (

@@ -974,9 +974,9 @@ function RunPageInner() {
             <Sparkles className="w-10 h-10 mx-auto text-primary mb-3" />
             <h1 className="text-xl font-bold">Nothing to study here yet</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              {pool === "flagged" ? "You have no flagged questions in these subjects yet."
-                : pool === "incorrect" ? "No previously incorrect questions in these subjects."
-                  : "No questions in the selected subjects yet."}
+              {pool === "flagged" ? "You have no flagged questions in these topics yet."
+                : pool === "incorrect" ? "No previously incorrect questions in these topics."
+                  : "No questions in the selected topics yet."}
             </p>
             <Link to="/courses/$courseId" params={{ courseId }}
               className="q-btn q-btn--primary mt-6">

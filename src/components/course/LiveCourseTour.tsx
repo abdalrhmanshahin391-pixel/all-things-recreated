@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
@@ -71,12 +71,12 @@ export function LiveCourseTour({
       id: "subject-selection",
       targetSelector: '[data-tour="tour-subject"]',
       title_en: isEnrolled
-        ? "Step 1: Choose Subjects or Test All"
+        ? "Step 1: Choose Topics or Test All"
         : `Step 1: Free Topic — ${freeSubjectName || "Available for You"}`,
       title_ar: isEnrolled
         ? "الخطوة الأولى: اختيار المواد أو اختبار الكل"
         : `الخطوة الأولى: قسم مجاني — ${freeSubjectName || "متاح لك مجاناً"}`,
-      badge_en: isEnrolled ? "Subject Selection" : "Free Preview",
+      badge_en: isEnrolled ? "Topic Selection" : "Free Preview",
       badge_ar: isEnrolled ? "اختيار المواد" : "قسم مجاني",
       desc_en: isEnrolled
         ? "Click any topic to practice only its questions.\n⚡ Key Rule: If you don't select any topic (0 selected), ALL accessible questions in this course are automatically included in your test!"
@@ -123,7 +123,7 @@ export function LiveCourseTour({
       badge_en: "Smart Pool",
       badge_ar: "مراجعة ذكية",
       desc_en:
-        "• All: All subject questions.\n• Flagged: Only your bookmarked questions.\n• Wrong: Only questions you missed previously.\n💡 In-quiz bonus: If you spend over 45s on a question, the 🚩 Flag button will shine to remind you to bookmark it!",
+        "• All: All topic questions.\n• Flagged: Only your bookmarked questions.\n• Wrong: Only questions you missed previously.\n💡 In-quiz bonus: If you spend over 45s on a question, the 🚩 Flag button will shine to remind you to bookmark it!",
       desc_ar:
         "• All: جميع أسئلة المادة.\n• Flagged: الأسئلة المعلمة بالعلم (🚩).\n• Wrong: الأسئلة التي أجبت عليها خطأ لإتقانها.\n💡 ميزة ذكية: داخل الجلسة، إذا استغرقت أكثر من 45 ثانية في سؤال سيضيء زر العلم 🚩 لتذكيرك بتعليمه!",
       placement: "left",

@@ -1,4 +1,4 @@
-﻿import { Sparkles, HelpCircle, Languages } from "lucide-react";
+import { Sparkles, HelpCircle, Languages } from "lucide-react";
 import { useLang } from "@/components/LanguageProvider";
 
 interface CourseSessionGuideProps {
@@ -42,7 +42,7 @@ export function CourseSessionGuide({
             <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
               {isArabic
                 ? "اختر المواد التي تريد دراستها، أو اتركها لإضافة جميع الأسئلة تلقائياً. تعرّف على أنماط الاختبار والمؤقت."
-                : "Select subjects to practice, or leave unselected to test everything. Learn about modes and timer."}
+                : "Select topics to practice, or leave unselected to test everything. Learn about modes and timer."}
             </p>
           </div>
         </div>
