@@ -26,6 +26,31 @@ export function IntroVideoModal({
   const isFull = nativeFull || pseudoFull;
   // The watermark hops to a new spot now and then so it cannot be cropped out of a recording.
   const [spot, setSpot] = useState(0);
+  // Spinner while the video starts or buffers (nothing shows on screen until the first frames arrive).
+  const [loading, setLoading] = useState(true);
+  // Fullscreen: the buttons and the cursor fade away when the mouse stays still, and come back on the next move or touch.
+  const [uiVisible, setUiVisible] = useState(true);
+  const idleTimer = useRef<number | undefined>(undefined);
+
+  const wakeUi = () => {
+    setUiVisible(true);
+    window.clearTimeout(idleTimer.current);
+    idleTimer.current = window.setTimeout(() => {
+      if (!scrubbing.current) setUiVisible(false);
+    }, 2500);
+  };
+
+  useEffect(() => {
+    window.clearTimeout(idleTimer.current);
+    if (isFull) wakeUi();
+    else setUiVisible(true);
+    return () => window.clearTimeout(idleTimer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFull]);
+
+  useEffect(() => {
+    setLoading(true);
+  }, [src]);
 
   useEffect(() => {
     const t = window.setInterval(() => setSpot((s) => (s + 1) % 4), 15000);
@@ -94,6 +119,9 @@ export function IntroVideoModal({
     return `${m}:${String(sec).padStart(2, "0")}`;
   };
   const pct = duration ? Math.min(100, (current / duration) * 100) : 0;
+  const uploaded = !/youtube\.com|youtu\.be|vimeo\.com|drive\.google\.com|docs\.google\.com\/file/.test(src);
+  // Only an uploaded video lets us see the mouse (an embedded player swallows the mouse events), so only there the buttons hide.
+  const hideUi = isFull && !uiVisible && uploaded;
 
   const isYouTube = /youtube\.com|youtu\.be/.test(src);
   const isVimeo = /vimeo\.com/.test(src);
@@ -147,7 +175,9 @@ export function IntroVideoModal({
             ? "fixed inset-0 z-[120] h-full w-full overflow-hidden bg-black"
             : "relative w-full max-w-6xl aspect-video rounded-xl overflow-hidden border border-border shadow-[var(--shadow-card)] bg-black"
         }
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); if (isFull) wakeUi(); }}
+        onMouseMove={isFull ? wakeUi : undefined}
+        onTouchStart={isFull ? wakeUi : undefined}
         onContextMenu={(e) => e.preventDefault()}
       >
         {isYouTube || isVimeo || isDrive ? (
@@ -155,6 +185,7 @@ export function IntroVideoModal({
             src={embedSrc}
             allow="autoplay; encrypted-media"
             className="absolute inset-0 h-full w-full border-0"
+            onLoad={() => setLoading(false)}
             title={title ?? "Video"}
           />
         ) : (
@@ -168,6 +199,11 @@ export function IntroVideoModal({
             disablePictureInPicture
             onClick={togglePlay}
             onPlay={() => setPaused(false)}
+            onLoadedData={() => setLoading(false)}
+            onCanPlay={() => setLoading(false)}
+            onPlaying={() => setLoading(false)}
+            onWaiting={() => setLoading(true)}
+            onError={() => setLoading(false)}
             onPause={() => setPaused(true)}
             onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
             onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
@@ -176,8 +212,18 @@ export function IntroVideoModal({
               if (!scrubbing.current) setCurrent(e.currentTarget.currentTime);
             }}
             onContextMenu={(e) => e.preventDefault()}
-            className="absolute inset-0 h-full w-full cursor-pointer"
+            className={`absolute inset-0 h-full w-full ${hideUi ? "cursor-none" : "cursor-pointer"}`}
           />
+        )}
+
+        {/* Loading screen: shown from the click until the video can play, and again while it buffers */}
+        {loading && (
+          <div className="absolute inset-0 z-30 grid place-items-center bg-black/80 text-white pointer-events-none" role="status" aria-live="polite">
+            <div className="flex flex-col items-center gap-3">
+              <span className="h-12 w-12 animate-spin rounded-full border-4 border-white/25 border-t-amber-400" />
+              <span className="text-sm font-semibold tracking-wide">Loading video…</span>
+            </div>
+          </div>
         )}
 
         {/* Protection shield over Drive's top-right "Pop-out / Open in new window" button */}
@@ -205,7 +251,7 @@ export function IntroVideoModal({
         {/* Clear, labelled full-screen button (the frame goes fullscreen, so the watermark stays on screen) */}
         <button
           onClick={toggleFullscreen}
-          className="absolute top-3 left-3 z-40 inline-flex h-11 items-center gap-2 rounded-full bg-amber-400 px-4 text-sm font-black text-amber-950 shadow-lg ring-2 ring-white/70 hover:bg-amber-300 active:scale-95"
+          className={`absolute top-3 left-3 z-40 inline-flex h-11 items-center gap-2 rounded-full bg-amber-400 px-4 text-sm font-black text-amber-950 shadow-lg ring-2 ring-white/70 hover:bg-amber-300 active:scale-95 transition-opacity duration-300 ${hideUi ? "opacity-0 pointer-events-none" : ""}`}
           aria-label={isFull ? "Exit full screen" : "Full screen"}
         >
           {isFull ? <Minimize2 size={20} strokeWidth={2.6} /> : <Maximize2 size={20} strokeWidth={2.6} />}
@@ -214,7 +260,7 @@ export function IntroVideoModal({
 
         {/* Control bar for uploaded videos: big buttons and a big seek handle that a finger can grab */}
         {!(isYouTube || isVimeo || isDrive) && (
-          <div className="absolute inset-x-0 bottom-0 z-40 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-3 pb-3 pt-10" onClick={(e) => e.stopPropagation()}>
+          <div className={`absolute inset-x-0 bottom-0 z-40 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-3 pb-3 pt-10 transition-opacity duration-300 ${hideUi ? "opacity-0 pointer-events-none" : ""}`} onClick={(e) => e.stopPropagation()}>
             <input
               type="range"
               className="aq-seek"
