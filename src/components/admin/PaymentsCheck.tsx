@@ -42,22 +42,22 @@ export function PaymentsCheck() {
   const missing = rows?.filter((r) => !r.hasAccess) ?? [];
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 mb-6">
+    <div className="rounded-2xl border border-border bg-white p-4 mb-6 text-slate-900">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-3 text-left">
-        <span className="inline-flex items-center gap-2 text-sm font-bold text-foreground">
+        <span className="inline-flex items-center gap-2 text-sm font-bold text-slate-900">
           <ReceiptText className="w-4 h-4" /> Check payments (paid but the course did not open)
         </span>
-        <span className="text-xs text-muted-foreground">{open ? "Hide" : "Open"}</span>
+        <span className="text-xs text-slate-500">{open ? "Hide" : "Open"}</span>
       </button>
 
       {open && (
         <div className="mt-4 space-y-3">
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <label className="text-muted-foreground">Last</label>
+            <label className="text-slate-600">Last</label>
             <select
               value={days}
               onChange={(e) => setDays(Number(e.target.value))}
-              className="rounded-lg border border-border bg-background px-2 py-1.5 text-sm"
+              className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900"
             >
               {[1, 3, 7, 14, 30, 60].map((d) => (
                 <option key={d} value={d}>
@@ -84,7 +84,7 @@ export function PaymentsCheck() {
               </div>
               <div className="overflow-x-auto rounded-xl border border-border">
                 <table className="w-full min-w-[640px] text-left text-xs">
-                  <thead className="bg-muted/60 text-muted-foreground">
+                  <thead className="bg-slate-100 text-slate-600">
                     <tr>
                       <th className="px-3 py-2">Date</th>
                       <th className="px-3 py-2">Buyer</th>
@@ -95,7 +95,7 @@ export function PaymentsCheck() {
                   </thead>
                   <tbody>
                     {rows.map((r) => (
-                      <tr key={r.transactionId} className="border-t border-border">
+                      <tr key={r.transactionId} className="border-t border-slate-200 text-slate-900">
                         <td className="px-3 py-2 whitespace-nowrap">{r.billedAt ? new Date(r.billedAt).toLocaleString() : ""}</td>
                         <td className="px-3 py-2">{r.email || "—"}</td>
                         <td className="px-3 py-2">{r.packageId ? "Package" : r.courseTitle || "—"}</td>
@@ -122,7 +122,7 @@ export function PaymentsCheck() {
                                   {granting === r.transactionId ? "Opening…" : "Open the course"}
                                 </button>
                               )}
-                              {r.note && <span className="text-muted-foreground">{r.note}</span>}
+                              {r.note && <span className="text-slate-500">{r.note}</span>}
                             </span>
                           )}
                         </td>
