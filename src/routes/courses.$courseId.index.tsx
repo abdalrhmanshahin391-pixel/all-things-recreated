@@ -763,23 +763,23 @@ function CourseDetailPage() {
 
             <div className="flex items-end justify-between mb-4">
               <div>
-                <div className="text-[11px] uppercase tracking-widest font-bold text-indigo-600">Curriculum</div>
-                <h2 className="text-xl font-bold text-foreground">Subjects · {selected.size} selected</h2>
+                <h2 className="text-2xl font-semibold text-foreground" style={{ fontFamily: "var(--font-heading)" }}>Subjects</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{selected.size === 0 ? "Nothing ticked: every open subject is included." : `${selected.size} selected`}</p>
               </div>
               {groupedSubjects.length > 0 && (
                 <div className="flex items-center gap-2 text-xs">
                   <button
                     type="button"
                     onClick={() => setOpenGroups(Object.fromEntries(groups.map((g) => [g.id, true])))}
-                    className="text-muted-foreground hover:text-indigo-600 hover:underline font-semibold transition-colors"
+                    className="rounded-full border border-border px-3 py-1.5 font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     Expand all
                   </button>
-                  <span className="text-muted-foreground/40">•</span>
+                  
                   <button
                     type="button"
                     onClick={() => setOpenGroups(Object.fromEntries(groups.map((g) => [g.id, false])))}
-                    className="text-muted-foreground hover:text-indigo-600 hover:underline font-semibold transition-colors"
+                    className="rounded-full border border-border px-3 py-1.5 font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     Collapse all
                   </button>
@@ -802,16 +802,15 @@ function CourseDetailPage() {
                     <button
                       type="button"
                       onClick={() => setOpenGroups((p) => ({ ...p, [group.id]: !p[group.id] }))}
-                      className="w-full flex items-center justify-between gap-3 px-4 py-2.5 bg-card border border-border rounded-xl hover:border-indigo-300 transition-colors"
+                      className="group flex w-full items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-[var(--shadow-card)] transition-all duration-200 hover:border-primary/35"
                       aria-expanded={open}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <span className="w-1 h-8 rounded-full bg-primary" />
-                        <div className="w-9 h-9 rounded-lg bg-indigo-50 grid place-items-center shrink-0">
-                          <GroupIcon className="w-4 h-4 text-indigo-600" />
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[color:var(--primary-soft)] text-primary">
+                          <GroupIcon className="h-5 w-5" strokeWidth={1.8} />
                         </div>
                         <div className="text-left min-w-0">
-                          <div className="font-bold text-foreground text-sm md:text-base truncate">{group.name}</div>
+                          <div className="truncate text-base font-semibold text-foreground md:text-lg" style={{ fontFamily: "var(--font-heading)" }}>{group.name}</div>
                           <div className="text-xs text-muted-foreground">
                             {selectedCount} of {items.length} subjects selected
                           </div>
@@ -825,12 +824,12 @@ function CourseDetailPage() {
                             e.stopPropagation();
                             handleOpenNotebookLm(group);
                           }}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300 transition-colors shrink-0 shadow-sm"
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                         >
-                          <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                          <Sparkles className="h-3.5 w-3.5" />
                           <span>NotebookLM</span>
                         </button>}
-                        <span className="hidden sm:inline-flex text-[11px] font-bold uppercase tracking-wider text-muted-foreground bg-muted rounded-full px-2.5 py-1">
+                        <span className="hidden text-xs font-medium text-muted-foreground sm:inline-flex">
                           {items.length} {items.length === 1 ? "subject" : "subjects"}
                         </span>
                         {open
@@ -988,14 +987,11 @@ function CourseDetailPage() {
           {/* RIGHT — session panel */}
           <aside className="lg:sticky lg:top-24 self-start">
             {isAdmin && <ChallengeAdminCard courseId={courseId} />}
-            <div className="medical-card overflow-hidden">
-              <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-indigo-600" />
-                  <span className="font-bold text-foreground">
-                    {isArabic ? "بدء جلسة أو امتحان" : "Start a session"}
-                  </span>
-                </div>
+            <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-[var(--shadow-card)]">
+              <div className="flex items-center justify-between gap-2 px-5 pt-5">
+                <span className="text-xl font-semibold text-foreground" style={{ fontFamily: "var(--font-heading)" }}>
+                  {isArabic ? "ابدأ التدريب" : "Start practising"}
+                </span>
                 <div className="flex items-center gap-1.5">
                   <LiveTourButtonTrigger onClick={handleStartLiveTour} isArabic={isArabic} />
                 </div>
@@ -1041,42 +1037,40 @@ function CourseDetailPage() {
                     const finalShare = Math.max(0, totalQuestions - midShare);
                     const estMin = Math.max(1, Math.round(totalQuestions * 0.9));
                     return (
-                      <div className="px-5 py-3 border-b border-border bg-muted">
-                        <div className="flex items-center gap-1.5 mb-2">
-                          {[
-                            { label: "Q", value: totalQuestions },
-                            { label: "Mid", value: midShare },
-                            { label: "Final", value: finalShare },
-                          ].map((c) => (
-                            <span key={c.label} className="flex-1 inline-flex items-center justify-center gap-1.5 bg-card border border-border rounded-lg px-2 py-1.5">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{c.label}</span>
-                              <span className="text-sm font-extrabold text-foreground tabular-nums">{c.value}</span>
-                            </span>
-                          ))}
+                      <div className="px-5 pb-4 pt-5">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-5xl font-semibold leading-none tabular-nums text-primary" style={{ fontFamily: "var(--font-heading)" }}>
+                            {totalQuestions.toLocaleString()}
+                          </span>
+                          <span className="text-sm font-medium text-muted-foreground">{isArabic ? "Ø³Ø¤Ø§Ù„" : "questions"}</span>
                         </div>
-                        <div className="space-y-1">
-                          <Row label="Subjects" value={selected.size === 0 ? "All accessible" : `${selected.size} of ${totalSubjectsCount}`} />
-                          <Row label={timed ? "Timer" : "Est. time"} value={timed ? `${durationMin} min` : `~${estMin} min`} />
-                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {midShare.toLocaleString()} {isArabic ? "Ù†ØµÙÙŠ" : "midterm"} · {finalShare.toLocaleString()} {isArabic ? "Ù†Ù‡Ø§Ø¦ÙŠ" : "final"}
+                          {" · "}
+                          {selected.size === 0 ? (isArabic ? "ÙƒÙ„ Ø§Ù„Ù…ÙˆØ§Ø¯ Ø§Ù„Ù…ØªØ§Ø­Ø©" : "all open subjects") : `${selected.size} / ${totalSubjectsCount} ${isArabic ? "Ù…ÙˆØ§Ø¯" : "subjects"}`}
+                          {" · "}
+                          {timed ? `${durationMin} min` : `~${estMin} min`}
+                        </p>
                       </div>
                     );
                   })()}
 
-                  <div className="px-5 py-3 space-y-3 text-sm">
+                  <div className="space-y-4 border-t border-border px-5 py-4 text-sm">
                     <div data-tour="tour-timed" className="space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Timer className="w-4 h-4 text-indigo-600" />
-                          <span className="font-semibold text-muted-foreground">
-                            {isArabic ? "امتحان بوقت محدد" : "Timed (Exam)"}
+                          <Timer className="h-4 w-4 text-primary" />
+                          <span className="font-semibold text-foreground">
+                            {isArabic ? "Ø§Ù…ØªØ­Ø§Ù† Ø¨ÙˆÙ‚Øª Ù…Ø­Ø¯Ø¯" : "Timed exam"}
                           </span>
                         </div>
                         <button
                           onClick={() => setTimed((v) => !v)}
-                          className={`relative w-11 h-6 rounded-full transition-colors ${timed ? "bg-indigo-600" : "bg-muted"}`}
+                          className={`relative h-6 w-11 rounded-full transition-colors ${timed ? "bg-primary" : "bg-border"}`}
                           aria-label="Toggle timed mode"
+                          aria-pressed={timed}
                         >
-                          <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-card shadow transition-transform ${timed ? "translate-x-5" : ""}`} />
+                          <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-card shadow transition-transform ${timed ? "translate-x-5" : ""}`} />
                         </button>
                       </div>
                       {timed && (
@@ -1085,10 +1079,10 @@ function CourseDetailPage() {
                             <button
                               key={m}
                               onClick={() => setDurationMin(m)}
-                              className={`px-3 py-1 rounded-md text-xs font-bold border transition-colors ${
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
                                 durationMin === m
-                                  ? "bg-indigo-600 text-white border-indigo-600"
-                                  : "border-border text-muted-foreground hover:border-indigo-300"
+                                  ? "border-primary bg-primary text-primary-foreground"
+                                  : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
                               }`}
                             >
                               {m < 60 ? `${m}m` : `${m / 60}h${m % 60 ? ` ${m % 60}m` : ""}`}
@@ -1099,8 +1093,8 @@ function CourseDetailPage() {
                     </div>
 
                     <div data-tour="tour-pool">
-                      <div className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
-                        {isArabic ? "مجموعة الأسئلة" : "Question pool"}
+                      <div className="mb-1.5 text-xs font-semibold text-muted-foreground">
+                        {isArabic ? "Ù…Ø¬Ù…ÙˆØ¹Ø© Ø§Ù„Ø£Ø³Ø¦Ù„Ø©" : "Questions"}
                       </div>
                       <div className="segmented w-full">
                         {(["all", "flagged", "incorrect"] as const).map((p) => (
@@ -1110,39 +1104,44 @@ function CourseDetailPage() {
                             data-active={pool === p}
                             className="flex-1"
                           >
-                            {p === "all" ? (isArabic ? "الكل" : "All") : p === "flagged" ? (isArabic ? "المعلمة" : "Flagged") : (isArabic ? "الأخطاء" : "Wrong")}
+                            {p === "all" ? (isArabic ? "Ø§Ù„ÙƒÙ„" : "All") : p === "flagged" ? (isArabic ? "Ø§Ù„Ù…Ø¹Ù„Ù…Ø©" : "Flagged") : (isArabic ? "Ø§Ù„Ø£Ø®Ø·Ø§Ø¡" : "Wrong")}
                           </button>
                         ))}
                       </div>
                     </div>
                   </div>
 
-                  <div data-tour="tour-modes" className="px-5 pb-5 space-y-2">
-                    <button
-                      onClick={() => startSession("study")}
-                      className="w-full py-2.5 rounded-xl border border-indigo-200 text-indigo-700 font-bold text-sm hover:bg-indigo-50 transition-colors inline-flex items-center justify-center gap-2"
-                    >
-                      <BookOpen className="w-4 h-4" /> {isArabic ? "نمط المراجعة (Study)" : "Study mode"}
-                    </button>
-                    <button
-                      onClick={() => startSession("session")}
-                      className="magnetic-cta w-full py-3 rounded-xl text-white font-bold text-sm inline-flex items-center justify-center gap-2"
-                    >
-                      <span className="relative z-10 inline-flex items-center gap-2">
-                        <Sparkles className="w-4 h-4" /> {isArabic ? "نمط التدريب (Session)" : "Session mode"}
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => startSession("exam")}
-                      className="w-full py-2.5 rounded-xl bg-foreground text-background font-bold text-sm hover:opacity-90 transition-colors inline-flex items-center justify-center gap-2"
-                    >
-                      <Timer className="w-4 h-4" /> {isArabic ? "نمط الامتحان (Exam)" : "Exam mode"}
-                    </button>
+                  <div data-tour="tour-modes" className="space-y-2 border-t border-border bg-[color:var(--cream)] px-4 py-4">
+                    <div className="px-1 text-xs font-semibold text-muted-foreground">{isArabic ? "Ø§Ø®ØªØ± Ø§Ù„Ø·Ø±ÙŠÙ‚Ø©" : "Choose how to practise"}</div>
+                    {([
+                      { m: "study" as const, Icon: BookOpen, t: isArabic ? "Ù†Ù…Ø· Ø§Ù„Ù…Ø±Ø§Ø¬Ø¹Ø©" : "Study", d: isArabic ? "Ø§Ù„Ø¥Ø¬Ø§Ø¨Ø§Øª ØªØ¸Ù‡Ø± ÙˆØ£Ù†Øª ØªÙ‚Ø±Ø£" : "Answers shown as you read", featured: false },
+                      { m: "session" as const, Icon: Sparkles, t: isArabic ? "Ù†Ù…Ø· Ø§Ù„ØªØ¯Ø±ÙŠØ¨" : "Session", d: isArabic ? "Ø£Ø¬Ø¨ØŒ Ø«Ù… Ø§Ù‚Ø±Ø£ Ø§Ù„Ø´Ø±Ø­" : "Answer, then read the explanation", featured: true },
+                      { m: "exam" as const, Icon: Timer, t: isArabic ? "Ù†Ù…Ø· Ø§Ù„Ø§Ù…ØªØ­Ø§Ù†" : "Exam", d: isArabic ? "ÙƒÙ„ Ø§Ù„Ø£Ø³Ø¦Ù„Ø© Ø«Ù… Ø§Ù„ØªØ³Ù„ÙŠÙ…" : "Answer everything, then submit", featured: false },
+                    ]).map(({ m, Icon, t, d, featured }) => (
+                      <button
+                        key={m}
+                        onClick={() => startSession(m)}
+                        className={`group flex w-full items-center gap-3 rounded-2xl border px-3.5 py-3 text-start transition-all duration-200 hover:-translate-y-0.5 ${
+                          featured
+                            ? "border-primary bg-primary text-primary-foreground shadow-[0_16px_28px_-18px_rgba(19,41,75,0.8)]"
+                            : "border-border bg-card text-foreground hover:border-primary/40 hover:shadow-[0_12px_24px_-18px_rgba(19,41,75,0.5)]"
+                        }`}
+                      >
+                        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${featured ? "bg-white/10 text-[color:var(--gold)]" : "bg-[color:var(--primary-soft)] text-primary"}`}>
+                          <Icon className="h-5 w-5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold leading-tight">{t}</span>
+                          <span className={`mt-0.5 block text-xs ${featured ? "text-white/70" : "text-muted-foreground"}`}>{d}</span>
+                        </span>
+                        <ArrowRight className={`h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 ${featured ? "text-[color:var(--gold)]" : "text-muted-foreground"}`} />
+                      </button>
+                    ))}
                     <button
                       onClick={() => { setSelected(new Set()); setTimed(false); }}
-                      className="w-full py-2 rounded-xl border border-border text-muted-foreground hover:bg-muted text-xs font-semibold inline-flex items-center justify-center gap-2"
+                      className="mx-auto mt-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
                     >
-                      <RotateCcw className="w-3.5 h-3.5" /> {isArabic ? "إعادة ضبط" : "Reset"}
+                      <RotateCcw className="h-3.5 w-3.5" /> {isArabic ? "Ø¥Ø¹Ø§Ø¯Ø© Ø¶Ø¨Ø·" : "Reset selection"}
                     </button>
                   </div>
                 </>

@@ -11,17 +11,13 @@ function extractPath(value: string): string {
 
 /**
  * Resolve a stored course image_url value (either a stored path or a legacy
- * public URL) into a usable URL. The bucket is private, so we always return
- * a freshly signed URL.
+ * public URL) into a usable URL. The bucket is public, so this is a plain URL
+ * built on the spot: no signing request per image.
  */
 export async function resolveCourseImageUrl(value: string | null): Promise<string | null> {
   if (!value) return null;
-  // Already an http(s) URL that isn't a Supabase storage URL — use as-is.
+  // Already an http(s) URL that isn't a Supabase storage URL: use as-is.
   if (/^https?:\/\//i.test(value) && !value.includes(`/${BUCKET}/`)) return value;
   const path = extractPath(value);
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrl(path, 60 * 60);
-  if (error || !data) return null;
-  return data.signedUrl;
+  return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }

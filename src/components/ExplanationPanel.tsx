@@ -290,9 +290,9 @@ export function ExplanationPanel({ explanation, onCapture }: Props) {
   }
 
   return (
-    <div className="mx-6 mb-6 rounded-2xl border border-rose-900/15 bg-[hsl(30_40%_98%)] text-zinc-900 overflow-hidden shadow-sm">
-      <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-rose-900/10 bg-rose-50/60">
-        <div className="font-bold text-sm text-rose-900">Explanation</div>
+    <div className="mx-5 mb-6 overflow-hidden rounded-2xl border border-border bg-[color:var(--cream)] text-foreground md:mx-9">
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-card/70 px-5 py-3">
+        <div className="text-base font-semibold text-primary" style={{ fontFamily: "var(--font-heading)" }}>Explanation</div>
         <button
           onClick={toggleCapture}
           type="button"
@@ -300,7 +300,7 @@ export function ExplanationPanel({ explanation, onCapture }: Props) {
           className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-sm font-bold shadow-sm transition-all ${
             captureMode
               ? "bg-card text-rose-900 ring-2 ring-rose-300 hover:bg-rose-50"
-              : "bg-gradient-to-r from-orange-500 to-rose-600 text-white hover:from-orange-400 hover:to-rose-500"
+              : "bg-primary text-primary-foreground hover:from-orange-400 hover:to-rose-500"
           }`}
         >
           {captureMode ? <X className="w-4 h-4" /> : <Scissors className="w-4 h-4" />}
@@ -340,7 +340,7 @@ export function ExplanationPanel({ explanation, onCapture }: Props) {
           onPointerDown={(e) => e.preventDefault()}
           type="button"
           style={{ position: "fixed", left: floatPos.x, top: floatPos.y, zIndex: 80 }}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-gradient-to-r from-orange-500 to-rose-600 text-white text-sm font-bold shadow-xl ring-2 ring-white animate-in fade-in zoom-in-95"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-bold shadow-xl ring-2 ring-white animate-in fade-in zoom-in-95"
         >
           <StickyNote className="w-4 h-4" />
           Capture
@@ -354,7 +354,7 @@ function SectionBlock({ section, showDivider }: { section: Section; showDivider:
   const h = headingStyles[section.kind];
   return (
     <div>
-      {showDivider && <div className="border-t border-rose-900/10 mb-5" aria-hidden />}
+      {showDivider && <div className="border-t border-border mb-5" aria-hidden />}
       <div className="flex items-center gap-2 mb-2.5">
         {h.icon}
         <h3 className={`font-extrabold text-[15px] md:text-[16px] tracking-tight ${h.color}`}>
@@ -362,7 +362,7 @@ function SectionBlock({ section, showDivider }: { section: Section; showDivider:
         </h3>
       </div>
 
-      <div className="text-zinc-800 [&_p]:my-2 [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_ol]:my-2 [&_ol]:pl-5 [&_ol]:list-decimal [&_li]:my-1 [&_strong]:font-bold [&_strong]:text-zinc-900 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-rose-100 [&_code]:text-rose-900 [&_code]:text-[13px]">
+      <div className="text-foreground/90 [&_p]:my-2 [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_ol]:my-2 [&_ol]:pl-5 [&_ol]:list-decimal [&_li]:my-1 [&_strong]:font-bold [&_strong]:text-foreground [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:bg-muted [&_code]:text-foreground [&_code]:text-[13px]">
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath]}
           rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false, trust: true }]]}
@@ -371,7 +371,7 @@ function SectionBlock({ section, showDivider }: { section: Section; showDivider:
             table: ({ children }) => (
               <div
                 className="overflow-x-auto my-3 rounded-xl shadow-sm"
-                style={{ background: "#ffffff", border: "1px solid #e4e4e7" }}
+                style={{ background: "#ffffff", border: "1px solid #e4dfd2" }}
               >
                 <table
                   className="w-full border-collapse"
@@ -382,14 +382,14 @@ function SectionBlock({ section, showDivider }: { section: Section; showDivider:
               </div>
             ),
             thead: ({ children }) => (
-              <thead style={{ background: "#0a0a0a" }}>{children}</thead>
+              <thead style={{ background: "#13294B" }}>{children}</thead>
             ),
             th: ({ children }) => (
               <th
                 className="text-left"
                 style={{
                   color: "#ffffff",
-                  background: "#0a0a0a",
+                  background: "#13294B",
                   padding: "12px 14px",
                   fontSize: 12,
                   fontWeight: 700,
@@ -401,7 +401,7 @@ function SectionBlock({ section, showDivider }: { section: Section; showDivider:
               </th>
             ),
             tr: ({ children }) => (
-              <tr style={{ background: "#ffffff", borderTop: "1px solid #e4e4e7" }}>{children}</tr>
+              <tr style={{ background: "#ffffff", borderTop: "1px solid #ece8dc" }}>{children}</tr>
             ),
             td: ({ children }) => {
               const raw = Array.isArray(children)
@@ -413,8 +413,8 @@ function SectionBlock({ section, showDivider }: { section: Section; showDivider:
               const isWrong = /✗|✘|×/.test(raw) && !isCorrect;
               let color = "#0a0a0a";
               let weight: number | undefined;
-              if (isCorrect) { color = "#047857"; weight = 700; }
-              else if (isWrong) { color = "#a1a1aa"; }
+              if (isCorrect) { color = "#1f7a54"; weight = 700; }
+              else if (isWrong) { color = "#9aa0ab"; }
               return (
                 <td
                   style={{

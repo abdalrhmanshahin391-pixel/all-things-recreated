@@ -126,11 +126,11 @@ function UniversityHubPage() {
     setCoverUrl(null);
     (async () => {
       if (uni.cover_path) {
-        const { data } = await supabase.storage.from("university-logos").createSignedUrl(uni.cover_path, 3600);
+        const data = { signedUrl: supabase.storage.from("university-logos").getPublicUrl(uni.cover_path).data.publicUrl };
         setCoverUrl(data?.signedUrl ?? null);
       }
       if (uni.storage_path) {
-        const { data } = await supabase.storage.from("university-logos").createSignedUrl(uni.storage_path, 3600);
+        const data = { signedUrl: supabase.storage.from("university-logos").getPublicUrl(uni.storage_path).data.publicUrl };
         setLogoUrl(data?.signedUrl ?? uni.logo_url ?? null);
       } else if (uni.logo_url) {
         setLogoUrl(uni.logo_url);

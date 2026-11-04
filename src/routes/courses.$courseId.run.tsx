@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -39,6 +39,10 @@ import {
   Lightbulb,
   SkipForward,
   Plus,
+  ChevronDown,
+  ChevronLeft,
+  LayoutGrid,
+  X,
 } from "lucide-react";
 
 type Mode = "study" | "session" | "exam";
@@ -651,9 +655,23 @@ function RunPageInner() {
   const firstScroll = useRef(true);
   useEffect(() => {
     if (firstScroll.current) { firstScroll.current = false; return; }
-    if (mode === "exam" && !reviewMode) return;
     cardTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [current, reviewIndex, reviewMode, mode]);
+
+  // Map sheet and the number strip in the bottom dock
+  const [mapOpen, setMapOpen] = useState(false);
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const box = stripRef.current;
+    const el = box?.querySelector<HTMLElement>('[data-current="true"]');
+    if (box && el) box.scrollTo({ left: el.offsetLeft - box.clientWidth / 2 + el.clientWidth / 2, behavior: "smooth" });
+  }, [current, questions.length]);
+  useEffect(() => {
+    if (!mapOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMapOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mapOpen]);
 
   const goNextFrom = () => {
     if (current < questions.length - 1) { setCurrent((c) => c + 1); return; }
@@ -865,11 +883,11 @@ function RunPageInner() {
       <div className="min-h-screen bg-background text-foreground">
         <SiteHeader variant="light" />
         <main className="mx-auto max-w-xl px-6 pt-32 text-center">
-          <div className="medical-card p-10" role="alert">
+          <div className="q-card p-10" role="alert">
             <h1 className="text-xl font-bold">We could not open this session</h1>
             <p className="mt-2 text-sm text-muted-foreground">{loadError}</p>
             <button type="button" onClick={() => setReloadVersion((version) => version + 1)}
-              className="mt-6 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500">
+              className="q-btn q-btn--primary mt-6">
               Try again
             </button>
             <Link to="/courses/$courseId" params={{ courseId }} className="ml-4 text-sm underline">
@@ -886,11 +904,11 @@ function RunPageInner() {
       <div className="min-h-screen bg-background text-foreground">
         <SiteHeader variant="light" />
         <main className="mx-auto max-w-xl px-6 pt-32 text-center">
-          <div className="medical-card p-10">
+          <div className="q-card p-10">
             <h1 className="text-xl font-bold">Sign in to start your session</h1>
             <p className="mt-2 text-sm text-muted-foreground">Your answers and progress are saved to your account.</p>
             <Link to="/login" search={{ next: `/courses/${courseId}/run?mode=${mode}&subjects=${encodeURIComponent(subjects)}&timed=${timed}&duration=${duration}&pool=${pool}` } as any}
-              className="mt-6 inline-flex px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500">
+              className="q-btn q-btn--primary mt-6">
               Sign in
             </Link>
           </div>
@@ -904,11 +922,11 @@ function RunPageInner() {
       <div className="min-h-screen bg-background text-foreground">
         <SiteHeader variant="light" />
         <main className="mx-auto max-w-xl px-6 pt-32 text-center">
-          <div className="medical-card p-10">
+          <div className="q-card p-10">
             <h1 className="text-xl font-bold">You don't have access to this course yet</h1>
             <p className="mt-2 text-sm text-muted-foreground">Unlock it to start solving questions.</p>
             <Link to="/courses/$courseId" params={{ courseId }}
-              className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500">
+              className="q-btn q-btn--primary mt-6">
               Back to course <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
@@ -934,8 +952,8 @@ function RunPageInner() {
       <div className="min-h-screen bg-background text-foreground">
         <SiteHeader variant="light" />
         <main className="mx-auto max-w-xl px-6 pt-32 text-center">
-          <div className="medical-card p-10">
-            <Sparkles className="w-10 h-10 mx-auto text-indigo-500 mb-3" />
+          <div className="q-card p-10">
+            <Sparkles className="w-10 h-10 mx-auto text-primary mb-3" />
             <h1 className="text-xl font-bold">Nothing to study here yet</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               {pool === "flagged" ? "You have no flagged questions in these subjects yet."
@@ -943,7 +961,7 @@ function RunPageInner() {
                   : "No questions in the selected subjects yet."}
             </p>
             <Link to="/courses/$courseId" params={{ courseId }}
-              className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500">
+              className="q-btn q-btn--primary mt-6">
               Back to course <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
@@ -977,7 +995,7 @@ function RunPageInner() {
         <SiteHeader variant="light" />
         <main className="mx-auto max-w-4xl px-4 md:px-8 pt-24 pb-16">
           <div className="flex items-center justify-between mb-6">
-            <div className="inline-flex items-center gap-2 text-xs uppercase tracking-widest font-bold text-rose-600 bg-rose-50 border border-rose-200 px-3 py-1 rounded-full">
+            <div className="q-chip">
               <Pencil className="w-3 h-3" /> Reviewing wrong answers
             </div>
             <div className="text-sm text-muted-foreground font-semibold">
@@ -999,16 +1017,16 @@ function RunPageInner() {
           </ProtectedContent>
           <div className="mt-6 flex items-center justify-between gap-3">
             <button onClick={() => setReviewIndex((i) => Math.max(0, i - 1))} disabled={reviewIndex === 0}
-              className="px-5 py-2.5 rounded-xl border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 font-semibold text-sm">
+              className="q-btn q-btn--ghost disabled:opacity-40">
               ‹ Previous
             </button>
             <button onClick={goToCourse}
-              className="px-5 py-2.5 rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50 font-semibold text-sm">
+              className="q-btn q-btn--ghost">
               Done
             </button>
             <button onClick={() => setReviewIndex((i) => Math.min(wrongQuestions.length - 1, i + 1))}
               disabled={reviewIndex === wrongQuestions.length - 1}
-              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm disabled:opacity-40">
+              className="q-btn q-btn--primary">
               Next ›
             </button>
           </div>
@@ -1019,179 +1037,198 @@ function RunPageInner() {
 
   const timeLow = timed && secondsLeft <= initialSeconds * 0.1;
 
+  const answeredTotal = questions.filter((q) => answers[q.id]?.length).length;
+  const flaggedTotal = questions.filter((q) => flags.has(q.id)).length;
+  const pct = questions.length ? Math.round(((mode === "exam" ? answeredTotal : current + 1) / questions.length) * 100) : 0;
+  const cellState = (q: Question, i: number) => {
+    const answered = !!answers[q.id]?.length;
+    const wasSubmitted = !!submitted[q.id] || mode === "study";
+    const right = wasSubmitted && answered && isExactAnswer(q, answers[q.id]);
+    const wrong = wasSubmitted && answered && !right;
+    const skippedOpen = mode === "session" && skipped.includes(q.id) && !wasSubmitted;
+    if (i === current) return "current";
+    if (mode === "study") return "idle";
+    if (mode === "session") return right ? "right" : wrong ? "wrong" : skippedOpen ? "skipped" : answered ? "answered" : "idle";
+    return answered ? "answered" : "idle";
+  };
+  const isLastQ = current === questions.length - 1;
+  const sessionOpen = mode === "session" && !!currentQ && !submitted[currentQ.id];
+  const modeName = mode === "study" ? "Study mode" : mode === "session" ? "Session mode" : "Exam mode";
+  const openFinish = () => (mode === "exam" ? setMapOpen(true) : setFinished(true));
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <SiteHeader variant="light" />
-      <main className="mx-auto max-w-7xl px-4 md:px-8 pt-24 pb-16">
-        {/* Top bar */}
-        <div className="medical-card px-5 py-4 mb-6 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-3 py-1">
-              <Sparkles className="w-3 h-3" />
-              {mode === "study" ? "Study mode" : mode === "session" ? "Session mode" : "Exam mode"}
-            </span>
-            {pool !== "all" && (
-              <span className="text-xs font-semibold text-rose-600">
-                · {pool === "flagged" ? "Flagged only" : "Incorrect only"}
-              </span>
-            )}
+    <div className="f-page">
+      <header className="f-top">
+        <button onClick={goToCourse} className="f-iconbtn" aria-label="End and exit" title="End & exit"><X className="h-4 w-4" /></button>
+        <div className="min-w-0">
+          <div className="f-top__title">
+            {modeName}
+            {pool !== "all" && <span className="text-[color:var(--gold-ink)]"> Â· {pool === "flagged" ? "Flagged only" : "Incorrect only"}</span>}
           </div>
-
-          {mode !== "exam" && (
-            <div className="flex-1 max-w-md mx-4 hidden md:block">
-              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary transition-all duration-500"
-                  style={{ width: `${Math.round(((current + 1) / questions.length) * 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center gap-3">
-            {mode === "exam" && timed === 1 && (
-              <div className={`px-3 py-1.5 rounded-md font-mono text-sm flex items-center gap-2 border ${
-                timeLow ? "bg-rose-50 border-rose-200 text-rose-700" : "bg-indigo-50 border-indigo-200 text-indigo-700"
-              }`}>
-                <Clock className="w-4 h-4" /> {fmtTime(secondsLeft)}
-              </div>
-            )}
-            <div className="text-sm text-muted-foreground font-semibold tabular-nums">
-              Q{current + 1} <span className="text-muted-foreground">/ {questions.length}</span>
-            </div>
+          <div className="f-top__sub">
+            {mode === "exam" ? `${answeredTotal} of ${questions.length} answered` : `Question ${current + 1} of ${questions.length}`}
           </div>
         </div>
+        <div className="ml-auto flex items-center gap-2">
+          {mode === "exam" && timed === 1 && (
+            <span className="f-timer" data-low={timeLow ? "true" : "false"}><Clock className="h-4 w-4" /> {fmtTime(secondsLeft)}</span>
+          )}
+          <button onClick={() => setMapOpen(true)} className="f-pill" aria-haspopup="dialog">
+            <LayoutGrid className="h-4 w-4" /> <span className="hidden sm:inline">Map</span>
+          </button>
+          <button onClick={openFinish} className="f-pill f-pill--solid">Finish</button>
+        </div>
+        <div className="f-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${pct}%` }} /></div>
+      </header>
 
-        <ProtectionNotice className="mb-6" />
+      <main className="f-wrap">
+        <ProtectionNotice className="mb-8" />
+        {currentQ && (
+          <>
+            <div ref={cardTopRef} className="scroll-mt-24" aria-hidden />
+            <QuestionCard
+              q={currentQ} mode={mode} isAdmin={canEdit} canResolve={isAdmin}
+              courseId={courseId}
+              courseSections={courseSections}
+              onMoveQuestion={handleMoveQuestion}
+              selected={answers[currentQ.id]}
+              submitted={submitted[currentQ.id] || mode === "study"}
+              isFlagged={flags.has(currentQ.id)}
+              isShining={isFlagShining}
+              onToggleFlag={() => toggleFlag(currentQ.id)}
+              onSelect={(opt) => setAnswers((p) => ({ ...p, [currentQ.id]: toggleSelection(p[currentQ.id], opt, currentQ.answer_mode === "multiple") }))}
+              onSubmit={() => setSubmitted((p) => ({ ...p, [currentQ.id]: true }))}
+              onNext={goNextFrom}
+              onSkip={mode === "session" ? skipCurrent : undefined}
+              skippedLeft={mode === "session" ? skippedLeft.length : 0}
+              isLast={isLastQ}
+              onSetCorrect={(optionId) => setCorrectOption(currentQ.id, optionId)}
+              onDelete={() => deleteQuestion(currentQ.id)}
+              onEdit={() => setAdminEditing(currentQ)}
+              onResolve={() => setResolveQuestion(currentQ)}
+              onCapture={(cap: CapturePayload) =>
+                setPendingNote({
+                  courseId,
+                  subjectId: currentQ.subject_id,
+                  questionId: currentQ.id,
+                  snippetHtml: cap.snippetHtml,
+                  snippetText: cap.snippetText,
+                })
+              }
+            />
+          </>
+        )}
+      </main>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
-          <div>
-            {mode === "exam" ? (
-              <div className="space-y-6">
-                {questions.map((q, i) => (
-                  <LazyMount key={q.id}>
-                    <ExamCard
-                      q={q} index={i}
-                      selected={answers[q.id]}
-                      onSelect={onExamSelect}
-                      isFlagged={flags.has(q.id)}
-                      onToggleFlag={onFlagStable}
-                      isAdmin={canEdit}
-                      onEditQuestion={editStable}
-                      onDeleteQuestion={deleteStable}
-                      courseId={courseId}
-                      courseSections={courseSections}
-                      onMoveQuestion={handleMoveQuestion}
-                    />
-                  </LazyMount>
-                ))}
-                <button onClick={() => setFinished(true)}
-                  className="magnetic-cta w-full py-3.5 rounded-xl text-white font-bold">
-                  Submit exam ({questions.filter((q) => answers[q.id]?.length).length}/{questions.length} answered)
+      <nav className="f-dock" aria-label="Question navigation">
+        <div className="f-dock__in">
+          <button className="f-iconbtn" onClick={() => setCurrent((c) => Math.max(0, c - 1))} disabled={current === 0} aria-label="Previous question">
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div className="f-dock__mid">
+            <span className="f-count-sm"><b>{current + 1}</b> / {questions.length}</span>
+            <div className="f-strip" ref={stripRef}>
+              {questions.map((q, i) => (
+                <button
+                  key={q.id}
+                  data-state={cellState(q, i)}
+                  data-flag={flags.has(q.id) ? "true" : "false"}
+                  data-current={i === current ? "true" : "false"}
+                  aria-label={`Question ${i + 1}${flags.has(q.id) ? ", flagged" : ""}`}
+                  aria-current={i === current ? "true" : undefined}
+                  onClick={() => setCurrent(i)}
+                  className="f-dot"
+                >
+                  {i + 1}
                 </button>
-              </div>
-            ) : (
-              currentQ && (
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {sessionOpen && currentQ ? (
               <>
-              <div ref={cardTopRef} className="scroll-mt-24" aria-hidden />
-              <QuestionCard
-                q={currentQ} mode={mode} isAdmin={canEdit} canResolve={isAdmin}
-                courseId={courseId}
-                courseSections={courseSections}
-                onMoveQuestion={handleMoveQuestion}
-                selected={answers[currentQ.id]}
-                submitted={submitted[currentQ.id] || mode === "study"}
-                isFlagged={flags.has(currentQ.id)}
-                isShining={isFlagShining}
-                onToggleFlag={() => toggleFlag(currentQ.id)}
-                 onSelect={(opt) => setAnswers((p) => ({ ...p, [currentQ.id]: toggleSelection(p[currentQ.id], opt, currentQ.answer_mode === "multiple") }))}
-                onSubmit={() => setSubmitted((p) => ({ ...p, [currentQ.id]: true }))}
-                onNext={goNextFrom}
-                onSkip={mode === "session" ? skipCurrent : undefined}
-                skippedLeft={mode === "session" ? skippedLeft.length : 0}
-                isLast={current === questions.length - 1}
-                onSetCorrect={(optionId) => setCorrectOption(currentQ.id, optionId)}
-                onDelete={() => deleteQuestion(currentQ.id)}
-                onEdit={() => setAdminEditing(currentQ)}
-                onResolve={() => setResolveQuestion(currentQ)}
-                onCapture={(cap: CapturePayload) =>
-                  setPendingNote({
-                    courseId,
-                    subjectId: currentQ.subject_id,
-                    questionId: currentQ.id,
-                    snippetHtml: cap.snippetHtml,
-                    snippetText: cap.snippetText,
-                  })
-                }
-              />
+                <button type="button" onClick={skipCurrent} className="f-btn f-btn--ghost" title="Leave this question for later; it comes back before the session ends">
+                  <SkipForward className="h-4 w-4" /> <span className="hidden sm:inline">Skip</span>
+                </button>
+                <button
+                  disabled={!answers[currentQ.id]?.length}
+                  onClick={() => setSubmitted((p) => ({ ...p, [currentQ.id]: true }))}
+                  className="f-btn f-btn--primary"
+                >
+                  Submit
+                </button>
               </>
-              )
+            ) : (
+              <button
+                onClick={mode === "exam" ? (isLastQ ? () => setMapOpen(true) : () => setCurrent((c) => c + 1)) : goNextFrom}
+                className={`f-btn ${isLastQ ? "f-btn--gold" : "f-btn--primary"}`}
+              >
+                {isLastQ
+                  ? mode === "exam"
+                    ? "Review & finish"
+                    : skippedLeft.length && mode === "session"
+                      ? `Skipped (${skippedLeft.length})`
+                      : "Finish"
+                  : "Next"}
+                <ArrowRight className="h-4 w-4" />
+              </button>
             )}
           </div>
+        </div>
+      </nav>
 
-          <aside className="lg:sticky lg:top-24 self-start">
-            <div className="medical-card overflow-hidden">
-              <div className="px-4 py-3 border-b border-border font-bold text-sm text-foreground">
-                Question map
+      {mapOpen && (
+        <>
+          <div className="f-veil" onClick={() => setMapOpen(false)} />
+          <aside className="f-sheet" role="dialog" aria-modal="true" aria-label="Question map">
+            <div className="f-sheet__head">
+              <div>
+                <h2 className="text-xl font-semibold" style={{ fontFamily: "var(--font-heading)" }}>Question map</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">{modeName}</p>
               </div>
-              <div className="p-3 grid grid-cols-5 gap-2">
-                {questions.map((q, i) => {
-                   const answered = !!answers[q.id]?.length;
-                  const isCurrent = i === current && mode !== "exam";
-                  const wasSubmitted = !!submitted[q.id] || mode === "study";
-                   const right = wasSubmitted && answered && isExactAnswer(q, answers[q.id]);
-                   const wrong = wasSubmitted && answered && !right;
-                  const flagged = flags.has(q.id);
-                  const skippedOpen = mode === "session" && skipped.includes(q.id) && !wasSubmitted;
-                  return (
-                    <button
-                      key={q.id}
-                      title={skippedOpen ? "Skipped: come back to it" : undefined}
-                      onClick={() => mode !== "exam" && setCurrent(i)}
-                      className={`relative h-9 rounded-lg text-xs font-bold border transition-colors ${
-                        isCurrent
-                          ? "bg-indigo-600 text-white border-indigo-600"
-                          : right
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : wrong
-                              ? "bg-rose-50 text-rose-700 border-rose-200"
-                              : skippedOpen
-                              ? "border-dashed border-amber-400 bg-amber-50/60 text-amber-700"
-                              : flagged
-                                ? "bg-amber-50 text-amber-700 border-amber-200"
-                                : answered
-                                  ? "bg-muted text-foreground border-border"
-                                  : "border-border text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
-                      {i + 1}
-                      {flagged && (
-                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border border-card" />
-                      )}
-                    </button>
-                  );
-                })}
+              <button onClick={() => setMapOpen(false)} className="f-iconbtn" aria-label="Close"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="f-sheet__body">
+              <div className="f-sum">
+                <div><b>{answeredTotal}</b><span>Answered</span></div>
+                <div><b>{questions.length - answeredTotal}</b><span>{mode === "study" ? "Left" : "Unanswered"}</span></div>
+                <div><b>{flaggedTotal}</b><span>Flagged</span></div>
               </div>
-              <div className="p-3 border-t border-border space-y-2">
-                <button
-                  onClick={() => setFinished(true)}
-                  className="magnetic-cta w-full py-2.5 rounded-xl text-white font-bold text-sm"
-                >
-                  <span className="relative z-10">
-                    Finish {mode === "study" ? "Study" : mode === "session" ? "Session" : "Exam"}
-                  </span>
-                </button>
-                <button
-                  onClick={goToCourse}
-                  className="w-full py-2.5 rounded-xl border border-border text-muted-foreground hover:bg-muted font-semibold text-sm"
-                >
-                  End & exit
-                </button>
+              <div className="f-grid">
+                {questions.map((q, i) => (
+                  <button
+                    key={q.id}
+                    data-state={cellState(q, i)}
+                    data-flag={flags.has(q.id) ? "true" : "false"}
+                    aria-label={`Question ${i + 1}${flags.has(q.id) ? ", flagged" : ""}`}
+                    onClick={() => { setCurrent(i); setMapOpen(false); }}
+                    className="f-dot"
+                  >
+                    {i + 1}
+                  </button>
+                ))}
               </div>
+              <div className="f-legend">
+                <span><i style={{ background: "var(--primary)" }} />Current</span>
+                <span><i style={{ background: "var(--primary-soft)", border: "1px solid var(--primary)" }} />Answered</span>
+                {mode === "session" && <span><i style={{ background: "var(--ok)" }} />Correct</span>}
+                {mode === "session" && <span><i style={{ background: "var(--bad)" }} />Wrong</span>}
+                {mode === "session" && <span><i style={{ border: "1.5px dashed var(--gold)" }} />Skipped</span>}
+                <span><i style={{ background: "var(--gold)" }} />Flagged</span>
+              </div>
+            </div>
+            <div className="f-sheet__foot">
+              {mode === "exam" && questions.length - answeredTotal > 0 && (
+                <p className="f-warn">{questions.length - answeredTotal} question{questions.length - answeredTotal === 1 ? " is" : "s are"} still unanswered.</p>
+              )}
+              <button onClick={() => { setMapOpen(false); setFinished(true); }} className="f-btn f-btn--primary f-btn--block">
+                Finish {mode === "study" ? "study" : mode === "session" ? "session" : "exam"}
+              </button>
+              <button onClick={() => setMapOpen(false)} className="f-btn f-btn--ghost f-btn--block">Keep going</button>
             </div>
           </aside>
-        </div>
-      </main>
+        </>
+      )}
       {user && (
         <SaveNoteDialog
           open={!!pendingNote}
@@ -1220,7 +1257,7 @@ function RunPageInner() {
         <button
           type="button"
           onClick={() => setAddSubjectId((questions[current] ?? questions[0]).subject_id)}
-          className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-lg hover:opacity-90 touch-manipulation"
+          className="fixed bottom-24 right-5 z-40 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-lg hover:opacity-90 touch-manipulation"
           title="Add a new question to this section"
         >
           <Plus className="h-4 w-4" /> Add question
@@ -1320,86 +1357,52 @@ function QuestionCard({
   const answerShown = submitted; // study mode always shows the right answer; only the explanation waits for the button
 
   return (
-    <div className="medical-card overflow-hidden">
-      <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-3">
-        <div className="relative inline-flex items-center gap-2">
-          <button
-            onClick={onToggleFlag}
-            className={`text-xs inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border transition-all duration-300 ${
-              isFlagged
-                ? "border-amber-200 bg-amber-50 text-amber-700 font-bold"
-                : isShining
-                  ? "border-amber-400 bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 ring-2 ring-amber-400 ring-offset-1 animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.6)] font-bold scale-105"
-                  : "border-border text-muted-foreground hover:text-foreground hover:border-border"
-            }`}
-          >
-            <Flag
-              className={`w-3.5 h-3.5 transition-transform ${
-                isFlagged
-                  ? "fill-amber-400 text-amber-600"
-                  : isShining
-                    ? "text-amber-600 fill-amber-300 animate-bounce"
-                    : ""
-              }`}
-            />
-            {isFlagged ? "Flagged" : "Flag question"}
-          </button>
-          {isShining && !isFlagged && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 dark:text-amber-200 bg-amber-100/95 dark:bg-amber-950/90 border border-amber-300 dark:border-amber-700 px-2 py-0.5 rounded-full animate-pulse shadow-sm whitespace-nowrap">
-              <Sparkles className="w-3 h-3 text-amber-500" />
-              {show ? "سؤال يستغرق وقتاً؟ اضغط 🚩 لتعليمه" : "Taking long? Flag 🚩 to revisit"}
-            </span>
-          )}
-          <ReportQuestionModal
+    <article className="f-q">
+      <div className="f-q__tools">
+        <button onClick={onToggleFlag} className={`q-chip ${isFlagged ? "q-chip--flag" : isShining ? "q-chip--shine" : ""}`}>
+          <Flag className={`h-3.5 w-3.5 ${isFlagged ? "fill-current" : ""}`} />
+          {isFlagged ? "Flagged" : "Flag question"}
+        </button>
+        {isShining && !isFlagged && (
+          <span className="q-hint">{show ? "Ø³Ø¤Ø§Ù„ ÙŠØ³ØªØºØ±Ù‚ ÙˆÙ‚ØªØ§Ù‹ØŸ Ø§Ø¶ØºØ· ðŸš© Ù„ØªØ¹Ù„ÙŠÙ…Ù‡" : "Taking long? Flag it to revisit"}</span>
+        )}
+        <ReportQuestionModal
+          questionId={q.id}
+          questionStem={q.stem}
+          source="course"
+          sourceContext={courseId}
+        />
+        <ArabicToggle on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
+        {isAdmin && courseId && courseSections && onMoveQuestion && (
+          <MoveQuestionControl
             questionId={q.id}
-            questionStem={q.stem}
-            source="course"
-            sourceContext={courseId}
+            currentSubjectId={q.subject_id}
+            courseId={courseId}
+            courseSections={courseSections}
+            onMoveQuestion={onMoveQuestion}
           />
-        </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          <ArabicToggle on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
-          {isAdmin && courseId && courseSections && onMoveQuestion && (
-            <MoveQuestionControl
-              questionId={q.id}
-              currentSubjectId={q.subject_id}
-              courseId={courseId}
-              courseSections={courseSections}
-              onMoveQuestion={onMoveQuestion}
-            />
-          )}
-          {isAdmin && (
-            <button
-              onClick={onDelete}
-              className="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-rose-200 text-rose-700 hover:bg-rose-50 cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Delete question
-            </button>
-          )}
-          {isAdmin && (
-            <>
-              <Button type="button" size="sm" variant="outline" onClick={onEdit}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>
-              {canResolve && <Button type="button" size="sm" variant="outline" onClick={onResolve}><Sparkles className="mr-1 h-3.5 w-3.5" />Re-solve</Button>}
-            </>
-          )}
-        </div>
+        )}
+        {isAdmin && (
+          <button onClick={onDelete} className="q-chip hover:!text-[color:var(--bad)]">
+            <Trash2 className="h-3.5 w-3.5" /> Delete question
+          </button>
+        )}
+        {isAdmin && (
+          <>
+            <Button type="button" size="sm" variant="outline" onClick={onEdit}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>
+            {canResolve && <Button type="button" size="sm" variant="outline" onClick={onResolve}><Sparkles className="mr-1 h-3.5 w-3.5" />Re-solve</Button>}
+          </>
+        )}
       </div>
       <ProtectedContent context="quiz" scope="card" consentScope={courseId ? `course:${courseId}` : "global"}>
-      {q.image_url && <div className="px-6 pt-6"><QuestionImage path={q.image_url} /></div>}
+      {q.image_url && <div className="f-img"><QuestionImage path={q.image_url} /></div>}
       {(q.stem?.trim() || !q.image_url) && (
-        <div
-          dir={show ? "rtl" : undefined}
-          className="px-6 py-6 text-lg leading-relaxed text-foreground font-medium whitespace-pre-line"
-        >
+        <div dir={show ? "rtl" : undefined} className="f-stem">
           {ensureCombinedStemWithStatements(show ? show.stem : q.stem, (show?.explanation ?? q.explanation) as string, q.options)}
         </div>
       )}
-      {q.answer_mode === "multiple" && (
-        <div className="mx-6 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
-          More than one answer — select all that apply.
-        </div>
-      )}
-      <div className="px-6 pb-6 space-y-3">
+      {q.answer_mode === "multiple" && <p className="f-note">More than one answer: select all that apply.</p>}
+      <div className="f-opts">
         {q.options.map((o) => {
           const isSelected = selected?.includes(o.label) ?? false;
           const showAnswers = answerShown;
@@ -1411,42 +1414,24 @@ function QuestionCard({
               <button
                 disabled={(submitted && mode !== "study") || lockedInStudy}
                 onClick={() => !lockedInStudy && onSelect(o.label)}
-                className={`flex-1 text-left flex items-center gap-4 px-4 py-3.5 rounded-xl border transition-all ${
-                  isRight
-                    ? "border-emerald-300 bg-emerald-50"
-                    : isWrong
-                      ? "border-rose-300 bg-rose-50"
-                      : isSelected
-                        ? "border-indigo-400 bg-indigo-50"
-                        : "border-border bg-card hover:border-indigo-300 hover:-translate-y-0.5"
-                } ${lockedInStudy && !isRight ? "opacity-70 cursor-default" : ""}`}
+                data-state={isRight ? "right" : isWrong ? "wrong" : isSelected ? "selected" : "idle"}
+                data-dim={lockedInStudy && !isRight ? "true" : undefined}
+                className="f-opt flex-1"
               >
-                <span
-                  className={`w-9 h-9 rounded-full grid place-items-center text-sm font-bold border shrink-0 ${
-                    isRight
-                      ? "bg-emerald-500 text-white border-emerald-500"
-                      : isWrong
-                        ? "bg-rose-500 text-white border-rose-500"
-                        : isSelected
-                          ? "bg-indigo-600 text-white border-indigo-600"
-                          : "bg-muted text-muted-foreground border-border"
-                  }`}
-                >
-                  {o.label}
-                </span>
-                <span dir={show ? "rtl" : undefined} className="flex-1 text-foreground">
+                <span className="f-letter">{o.label}</span>
+                <span dir={show ? "rtl" : undefined} className="f-opt__text">
                   {(show ? (show.options[o.id] ?? o.text) : o.text) || ""}
                 </span>
-                {isRight && <CheckCircle2 className="w-5 h-5 text-emerald-600" />}
-                {isWrong && <XCircle className="w-5 h-5 text-rose-600" />}
+                {isRight && <CheckCircle2 className="h-5 w-5 shrink-0 text-[color:var(--ok)]" />}
+                {isWrong && <XCircle className="h-5 w-5 shrink-0 text-[color:var(--bad)]" />}
               </button>
-               {isAdmin && isStudy && (q.answer_mode === "multiple" || !o.is_correct) && (
+              {isAdmin && isStudy && (q.answer_mode === "multiple" || !o.is_correct) && (
                 <button
                   onClick={() => onSetCorrect(o.id)}
-                   title={o.is_correct ? "Remove from correct answers" : "Mark as a correct answer"}
-                  className="px-3 rounded-xl border border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-xs font-bold inline-flex items-center gap-1"
+                  title={o.is_correct ? "Remove from correct answers" : "Mark as a correct answer"}
+                  className="q-chip"
                 >
-                   <Save className="w-3.5 h-3.5" /> {o.is_correct ? "Unset" : "Set correct"}
+                  <Save className="h-3.5 w-3.5" /> {o.is_correct ? "Unset" : "Set correct"}
                 </button>
               )}
             </div>
@@ -1456,212 +1441,25 @@ function QuestionCard({
       </ProtectedContent>
 
       {((mode === "session" && submitted) || isStudy) && explanationText && (
-        <div className="px-6 pb-4">
-          <button
-            type="button"
-            onClick={() => setRevealed((p) => ({ ...p, [q.id]: !p[q.id] }))}
-            aria-expanded={!!revealed[q.id]}
-            className="w-full py-3 rounded-xl border-2 border-amber-400/70 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold inline-flex items-center justify-center gap-2 transition-colors dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-950/70"
-          >
-            <Lightbulb className="w-4 h-4" /> {revealed[q.id] ? "Hide explanation" : "Show explanation"}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setRevealed((p) => ({ ...p, [q.id]: !p[q.id] }))}
+          aria-expanded={!!revealed[q.id]}
+          className="f-explain"
+        >
+          <Lightbulb className="h-4 w-4" />
+          {revealed[q.id] ? "Hide explanation" : "Show explanation"}
+          <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${revealed[q.id] ? "rotate-180" : ""}`} />
+        </button>
       )}
       {(submitted || isStudy) && explanationText && explanationOpen && (
-        <div dir={show?.explanation ? "rtl" : undefined}>
+        <div dir={show?.explanation ? "rtl" : undefined} className="-mx-1 mt-4">
           <ExplanationPanel explanation={explanationText} onCapture={onCapture} />
         </div>
       )}
-
-      <div className="px-6 pb-6">
-        {mode === "session" && !submitted ? (
-          <div className="flex gap-3">
-            {onSkip && (
-              <button
-                type="button"
-                onClick={onSkip}
-                title="Leave this question for later; it comes back before the session ends"
-                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border-2 border-border bg-card hover:bg-muted text-foreground font-bold transition-colors"
-              >
-                <SkipForward className="w-4 h-4" /> Skip
-              </button>
-            )}
-            <button
-              disabled={!selected?.length}
-              onClick={onSubmit}
-              className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-muted disabled:text-muted-foreground text-white font-bold transition-colors"
-            >
-              Submit answer
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={onNext}
-            className={`w-full py-3 rounded-xl font-bold inline-flex items-center justify-center gap-2 ${
-              isLast
-                ? "magnetic-cta text-white"
-                : "bg-indigo-600 hover:bg-indigo-500 text-white"
-            }`}
-          >
-            <span className="relative z-10 inline-flex items-center gap-2">
-              {isLast ? (skippedLeft ? `Back to skipped questions (${skippedLeft})` : "Finish & see results") : "Next question"}
-              <ArrowRight className="w-4 h-4" />
-            </span>
-          </button>
-        )}
-      </div>
-    </div>
+    </article>
   );
 }
-
-/**
- * Keeps only the question cards that are near the screen mounted. A long exam paper (this one has dozens of
- * pictures) would otherwise keep every card, its protection layers and its picture alive at once. Cards that
- * scroll far away are replaced by a spacer of the same height, so the page does not jump. Answers and flags
- * live in the page state, so nothing is lost when a card unmounts.
- */
-function LazyMount({ children, estimate = 520 }: { children: React.ReactNode; estimate?: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-  const [height, setHeight] = useState(estimate);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (typeof IntersectionObserver === "undefined") {
-      setVisible(true);
-      return;
-    }
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setVisible(true);
-          } else {
-            const measured = el.getBoundingClientRect().height;
-            if (measured > 50) setHeight(measured); // remember the real height for the spacer
-            setVisible(false);
-          }
-        }
-      },
-      { rootMargin: "1500px 0px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-  return (
-    <div ref={ref} style={visible ? undefined : { minHeight: height }}>
-      {visible ? children : null}
-    </div>
-  );
-}
-
-const ExamCard = memo(function ExamCard({
-  q, index, selected, onSelect, isFlagged, onToggleFlag,
-  isAdmin, courseId, courseSections, onMoveQuestion, onEditQuestion, onDeleteQuestion,
-}: {
-  q: Question; index: number; selected: string[] | undefined;
-  onSelect: (question: Question, label: string) => void; isFlagged: boolean; onToggleFlag: (questionId: string) => void;
-  isAdmin?: boolean; courseId?: string; courseSections?: CourseSectionGroup[];
-  onEditQuestion?: (question: Question) => void; onDeleteQuestion?: (questionId: string) => void;
-  onMoveQuestion?: (
-    questionId: string,
-    targetSubjectId?: string,
-    createNewSubject?: { courseId: string; name: string; groupId?: string; newGroupName?: string },
-  ) => Promise<void>;
-}) {
-  const [ar, setAr] = useState(false);
-  const { data: tr, loading: trLoading, error: trError } = useQuestionTranslation(q.id, ar);
-  const show = ar && tr ? tr : null;
-  return (
-    <div className="medical-card grid grid-cols-1 md:grid-cols-[180px_1fr] overflow-hidden">
-      <div className="px-5 py-5 border-b md:border-b-0 md:border-r border-border bg-muted">
-        <div className="font-bold text-foreground">Question {index + 1}</div>
-         <div className="text-xs text-muted-foreground mt-1">{selected?.length ? "Answered" : "Not yet answered"}</div>
-        <button
-          onClick={() => onToggleFlag(q.id)}
-          className={`mt-3 text-xs inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${
-            isFlagged
-              ? "border-amber-200 bg-amber-50 text-amber-700"
-              : "border-border text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Flag className={`w-3.5 h-3.5 ${isFlagged ? "fill-amber-400" : ""}`} />
-          {isFlagged ? "Flagged" : "Flag question"}
-        </button>
-        <div className="mt-2">
-          <ReportQuestionModal
-            questionId={q.id}
-            questionStem={q.stem}
-            source="course"
-            sourceContext={courseId}
-            className="w-full justify-center"
-          />
-        </div>
-        <ArabicToggle className="mt-3" on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
-        {isAdmin && courseId && courseSections && onMoveQuestion && (
-          <div className="mt-3">
-            <MoveQuestionControl
-              questionId={q.id}
-              currentSubjectId={q.subject_id}
-              courseId={courseId}
-              courseSections={courseSections}
-              onMoveQuestion={onMoveQuestion}
-            />
-          </div>
-        )}
-        {isAdmin && onEditQuestion && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => onEditQuestion(q)}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>
-            {onDeleteQuestion && (
-              <button
-                type="button"
-                onClick={() => onDeleteQuestion(q.id)}
-                className="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-rose-200 text-rose-700 hover:bg-rose-50 cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Delete
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-      <ProtectedContent context="exam" scope="card" consentScope={courseId ? `course:${courseId}` : "global"}>
-      <div className="px-5 py-5">
-        {q.image_url && <div className="mb-4"><QuestionImage path={q.image_url} /></div>}
-        {(q.stem?.trim() || !q.image_url) && (
-          <div dir={show ? "rtl" : undefined} className="text-base leading-relaxed mb-4 text-foreground whitespace-pre-line">
-            {ensureCombinedStemWithStatements(show ? show.stem : q.stem, (show?.explanation ?? q.explanation) as string, q.options)}
-          </div>
-        )}
-         <div className="text-xs italic text-muted-foreground mb-3">
-           {q.answer_mode === "multiple" ? "More than one answer — select all that apply:" : "Select one:"}
-         </div>
-        <div className="space-y-2">
-          {q.options.map((o) => (
-            <label
-              key={o.id}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer border transition-colors ${
-                 selected?.includes(o.label)
-                  ? "border-indigo-400 bg-indigo-50"
-                  : "border-border hover:bg-muted"
-              }`}
-            >
-              <input
-                 type={q.answer_mode === "multiple" ? "checkbox" : "radio"} name={q.id} checked={selected?.includes(o.label) ?? false}
-                onChange={() => onSelect(q, o.label)}
-                className="accent-indigo-600"
-              />
-              <span className="font-semibold text-sm w-5 text-muted-foreground">{o.label.toLowerCase()}.</span>
-              <span dir={show ? "rtl" : undefined} className="text-sm text-foreground">
-                {(show ? (show.options[o.id] ?? o.text) : o.text) || ""}
-              </span>
-            </label>
-          ))}
-        </div>
-      </div>
-      </ProtectedContent>
-    </div>
-  );
-});
 
 function ReviewCard({
   q,
@@ -1690,12 +1488,11 @@ function ReviewCard({
   const { data: tr, loading: trLoading, error: trError } = useQuestionTranslation(q.id, ar);
   const show = ar && tr ? tr : null;
   return (
-    <div className="medical-card overflow-hidden">
-      <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-2">
+    <div className="q-card">
+      <div className="q-card__head">
         <div className="flex items-center gap-3">
-          <span className="inline-flex items-center gap-2">
-            <Pencil className="w-4 h-4 text-rose-500" />
-            <span className="text-xs uppercase tracking-widest font-bold text-rose-600">Wrong answer</span>
+          <span className="q-chip" style={{ cursor: "default", color: "var(--bad)", borderColor: "color-mix(in oklab, var(--bad) 40%, transparent)" }}>
+            <XCircle className="h-3.5 w-3.5" /> Wrong answer
           </span>
           <ReportQuestionModal
             questionId={q.id}
@@ -1718,60 +1515,37 @@ function ReviewCard({
             <Button type="button" size="sm" variant="outline" onClick={() => onEditQuestion(q)}><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>
           )}
           {isAdmin && onDeleteQuestion && (
-            <button
-              type="button"
-              onClick={() => onDeleteQuestion(q.id)}
-              className="text-xs inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-rose-200 text-rose-700 hover:bg-rose-50 cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Delete
+            <button type="button" onClick={() => onDeleteQuestion(q.id)} className="q-chip hover:!text-[color:var(--bad)]">
+              <Trash2 className="h-3.5 w-3.5" /> Delete
             </button>
           )}
           <ArabicToggle on={ar} onToggle={() => setAr((v) => !v)} loading={trLoading} error={trError} />
         </div>
       </div>
-      {q.image_url && <div className="px-6 pt-6"><QuestionImage path={q.image_url} /></div>}
+      {q.image_url && <div className="f-img px-5 pt-6 md:px-9"><QuestionImage path={q.image_url} /></div>}
       {(q.stem?.trim() || !q.image_url) && (
-        <div dir={show ? "rtl" : undefined} className="px-6 py-6 text-base leading-relaxed text-foreground whitespace-pre-line">
+        <div dir={show ? "rtl" : undefined} className="q-stem">
           {ensureCombinedStemWithStatements(show ? show.stem : q.stem, (show?.explanation ?? q.explanation) as string, q.options)}
         </div>
       )}
-      <div className="px-6 pb-6 space-y-3">
+      <div className="q-list">
         {q.options.map((o) => {
-           const isUser = userAnswer?.includes(o.label) ?? false;
+          const isUser = userAnswer?.includes(o.label) ?? false;
           const isRight = o.is_correct;
           return (
-            <div
-              key={o.id}
-              className={`flex items-center gap-4 px-4 py-3.5 rounded-xl border ${
-                isRight
-                  ? "border-emerald-300 bg-emerald-50"
-                  : isUser
-                    ? "border-rose-300 bg-rose-50"
-                    : "border-border bg-card"
-              }`}
-            >
-              <span
-                className={`w-8 h-8 rounded-full grid place-items-center text-xs font-bold border shrink-0 ${
-                  isRight
-                    ? "bg-emerald-500 text-white border-emerald-500"
-                    : isUser
-                      ? "bg-rose-500 text-white border-rose-500"
-                      : "bg-muted text-muted-foreground border-border"
-                }`}
-              >
-                {o.label}
-              </span>
-              <span dir={show ? "rtl" : undefined} className="flex-1 text-foreground">
+            <div key={o.id} data-state={isRight ? "right" : isUser ? "wrong" : "idle"} className="q-opt" style={{ cursor: "default" }}>
+              <span className="q-key">{o.label}</span>
+              <span dir={show ? "rtl" : undefined} className="q-opt__text">
                 {(show ? (show.options[o.id] ?? o.text) : o.text) || ""}
               </span>
               {isRight && (
-                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
-                  <CheckCircle2 className="w-4 h-4" /> Correct
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-[color:var(--ok)]">
+                  <CheckCircle2 className="h-4 w-4" /> Correct
                 </span>
               )}
               {isUser && !isRight && (
-                <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-700">
-                  <XCircle className="w-4 h-4" /> Your answer
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-[color:var(--bad)]">
+                  <XCircle className="h-4 w-4" /> Your answer
                 </span>
               )}
             </div>
@@ -1787,6 +1561,7 @@ function ReviewCard({
   );
 }
 
+
 function ResultsScreen({
   stats, mode, onReview, onRestart, onBack, hasWrong,
 }: {
@@ -1795,59 +1570,45 @@ function ResultsScreen({
 }) {
   const pass = stats.score >= 60;
   return (
-    <div className="min-h-screen aurora-bg-soft text-foreground relative overflow-hidden">
+    <div className="min-h-screen bg-background text-foreground">
       <SiteHeader variant="light" />
-      <main className="relative mx-auto max-w-4xl px-6 pt-28 pb-20">
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-indigo-200 bg-card text-indigo-700 text-xs font-bold uppercase tracking-widest">
-            <Sparkles className="w-3.5 h-3.5" />
-            {mode === "exam" ? "Exam Complete" : mode === "session" ? "Session Complete" : "Study Complete"}
-          </div>
-          <h1 className="mt-6 text-5xl md:text-6xl font-black tracking-tight">
-            {pass ? (
-              <>Great <span className="text-foreground">work!</span></>
-            ) : (
-              <>Keep <span className="text-foreground">going!</span></>
-            )}
+      <main className="relative mx-auto max-w-3xl px-6 pt-28 pb-20">
+        <div className="text-center">
+          <p className="text-sm font-semibold text-muted-foreground">
+            {mode === "exam" ? "Exam complete" : mode === "session" ? "Session complete" : "Study complete"}
+          </p>
+          <h1 className="mt-2 text-5xl font-semibold tracking-tight md:text-6xl" style={{ fontFamily: "var(--font-heading)" }}>
+            {pass ? "Great work." : "Keep going."}
           </h1>
-          <p className="mt-3 text-muted-foreground">Here's how you did.</p>
+          <p className="mt-3 text-muted-foreground">
+            {pass ? "You passed. Review what you missed to lock it in." : "Review the questions you missed and try again."}
+          </p>
         </div>
 
-        <div className="flex justify-center mb-10">
+        <div className="my-10 flex justify-center">
           <ScoreRing value={stats.score} pass={pass} />
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-10">
-          <StatTile icon={<Target className="w-4 h-4" />} label="Total" value={stats.total} tone="neutral" />
-          <StatTile icon={<CheckCircle2 className="w-4 h-4" />} label="Correct" value={stats.correct} tone="good" />
-          <StatTile icon={<XCircle className="w-4 h-4" />} label="Wrong" value={stats.wrong} tone="bad" />
-          <StatTile icon={<Clock className="w-4 h-4" />} label="Unanswered" value={stats.unanswered} tone="warn" />
+        <div className="mb-10 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <StatTile label="Total" value={stats.total} tone="neutral" />
+          <StatTile label="Correct" value={stats.correct} tone="good" />
+          <StatTile label="Wrong" value={stats.wrong} tone="bad" />
+          <StatTile label="Unanswered" value={stats.unanswered} tone="warn" />
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
           {onRestart && (
-            <button
-              onClick={onRestart}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-border bg-card text-foreground hover:bg-muted font-bold"
-            >
-              <RotateCcw className="w-4 h-4" /> Restart
+            <button onClick={onRestart} className="q-btn q-btn--ghost">
+              <RotateCcw className="h-4 w-4" /> Restart
             </button>
           )}
           {hasWrong && (
-            <button
-              onClick={onReview}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-border bg-card text-muted-foreground hover:border-indigo-300 hover:text-indigo-700 font-bold"
-            >
-              <RotateCcw className="w-4 h-4" /> Review wrong answers
+            <button onClick={onReview} className="q-btn q-btn--ghost">
+              <RotateCcw className="h-4 w-4" /> Review wrong answers
             </button>
           )}
-          <button
-            onClick={onBack}
-            className="magnetic-cta inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white font-bold"
-          >
-            <span className="relative z-10 inline-flex items-center gap-2">
-              <Trophy className="w-4 h-4" /> Back to subjects
-            </span>
+          <button onClick={onBack} className="q-btn q-btn--primary">
+            <Trophy className="h-4 w-4" /> Back to subjects
           </button>
         </div>
       </main>
@@ -1860,31 +1621,27 @@ function ScoreRing({ value, pass }: { value: number; pass: boolean }) {
   const c = 2 * Math.PI * r;
   const offset = c - (value / 100) * c;
   return (
-    <div className="relative w-48 h-48">
-      <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90">
-        <circle cx="100" cy="100" r={r} className="stroke-border" strokeWidth="14" fill="none" />
+    <div className="relative h-52 w-52">
+      <svg viewBox="0 0 200 200" className="h-full w-full -rotate-90">
+        <circle cx="100" cy="100" r={r} stroke="var(--muted)" strokeWidth="12" fill="none" />
         <circle
           cx="100" cy="100" r={r}
-          stroke={pass ? "url(#ringGood)" : "url(#ringBad)"}
-          strokeWidth="14" fill="none" strokeLinecap="round"
+          stroke={pass ? "url(#ringGood)" : "var(--bad)"}
+          strokeWidth="12" fill="none" strokeLinecap="round"
           strokeDasharray={c} strokeDashoffset={offset}
           style={{ transition: "stroke-dashoffset 1s ease" }}
         />
         <defs>
           <linearGradient id="ringGood" x1="0" x2="1">
-            <stop offset="0" stopColor="#10b981" />
-            <stop offset="1" stopColor="#06b6d4" />
-          </linearGradient>
-          <linearGradient id="ringBad" x1="0" x2="1">
-            <stop offset="0" stopColor="#FF5C8A" />
-            <stop offset="1" stopColor="#FF8A3D" />
+            <stop offset="0" stopColor="var(--primary)" />
+            <stop offset="1" stopColor="var(--gold)" />
           </linearGradient>
         </defs>
       </svg>
       <div className="absolute inset-0 grid place-items-center">
         <div className="text-center">
-          <div className="text-5xl font-black tracking-tight text-foreground">{value}%</div>
-          <div className="text-xs uppercase tracking-widest text-muted-foreground mt-1 font-bold">Score</div>
+          <div className="text-6xl font-semibold tracking-tight text-foreground tabular-nums" style={{ fontFamily: "var(--font-heading)" }}>{value}%</div>
+          <div className="mt-1 text-xs font-semibold text-muted-foreground">Score</div>
         </div>
       </div>
     </div>
@@ -1892,25 +1649,19 @@ function ScoreRing({ value, pass }: { value: number; pass: boolean }) {
 }
 
 function StatTile({
-  icon, label, value, tone,
+  label, value, tone,
 }: {
-  icon: React.ReactNode; label: string; value: number;
+  label: string; value: number;
   tone: "good" | "bad" | "warn" | "neutral";
 }) {
-  const colors =
-    tone === "good"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-      : tone === "bad"
-        ? "border-rose-200 bg-rose-50 text-rose-700"
-        : tone === "warn"
-          ? "border-amber-200 bg-amber-50 text-amber-700"
-          : "border-border bg-card text-muted-foreground";
+  const dot =
+    tone === "good" ? "var(--ok)" : tone === "bad" ? "var(--bad)" : tone === "warn" ? "var(--gold)" : "var(--primary)";
   return (
-    <div className={`rounded-2xl border p-4 ${colors}`}>
-      <div className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold opacity-90">
-        {icon} {label}
+    <div className="q-stat">
+      <div className="q-stat__label">
+        <span className="q-stat__dot" style={{ background: dot }} /> {label}
       </div>
-      <div className="mt-2 text-3xl font-black text-foreground">{value}</div>
+      <div className="q-stat__value">{value}</div>
     </div>
   );
 }
