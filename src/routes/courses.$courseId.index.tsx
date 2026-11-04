@@ -600,7 +600,7 @@ function CourseDetailPage() {
           </h1>
 
           <p className="mt-2 text-muted-foreground max-w-xl">
-            Curated exam-ready bank — covering all topics, mid & final question pools, with
+            Curated exam-ready bank — covering all topics, with
             step-by-step explanations.
           </p>
 
@@ -608,8 +608,6 @@ function CourseDetailPage() {
           <div className="mt-6 flex flex-wrap gap-2">
             <StatPill icon={<BookOpen className="w-3.5 h-3.5" />} label="Topics" value={String(totalSubjectsCount || course.subjects_count || 0)} />
             <StatPill icon={<FileText className="w-3.5 h-3.5" />} label="Questions" value={String(totalQuestionsCount || (course.questions_count_mid + course.questions_count_final))} />
-            <StatPill icon={<Timer className="w-3.5 h-3.5" />} label="Mid" value={String(course.questions_count_mid)} />
-            <StatPill icon={<Sparkles className="w-3.5 h-3.5" />} label="Final" value={String(course.questions_count_final)} />
           </div>
         </section>
 
@@ -1008,10 +1006,6 @@ function CourseDetailPage() {
                   )}
                   {/* Selection summary */}
                   {(() => {
-                    const totalCourseQ = (course.questions_count_mid ?? 0) + (course.questions_count_final ?? 0);
-                    const midRatio = totalCourseQ > 0 ? (course.questions_count_mid ?? 0) / totalCourseQ : 0.5;
-                    const midShare = Math.round(totalQuestions * midRatio);
-                    const finalShare = Math.max(0, totalQuestions - midShare);
                     const estMin = Math.max(1, Math.round(totalQuestions * 0.9));
                     return (
                       <div className="px-5 pb-4 pt-5">
@@ -1022,8 +1016,6 @@ function CourseDetailPage() {
                           <span className="text-sm font-medium text-muted-foreground">{isArabic ? "Ø³Ø¤Ø§Ù„" : "questions"}</span>
                         </div>
                         <p className="mt-2 text-xs text-muted-foreground">
-                          {midShare.toLocaleString()} {isArabic ? "Ù†ØµÙÙŠ" : "midterm"} · {finalShare.toLocaleString()} {isArabic ? "Ù†Ù‡Ø§Ø¦ÙŠ" : "final"}
-                          {" · "}
                           {selected.size === 0 ? (isArabic ? "ÙƒÙ„ Ø§Ù„Ù…ÙˆØ§Ø¯ Ø§Ù„Ù…ØªØ§Ø­Ø©" : "all open topics") : `${selected.size} / ${totalSubjectsCount} ${isArabic ? "Ù…ÙˆØ§Ø¯" : "topics"}`}
                           {" · "}
                           {timed ? `${durationMin} min` : `~${estMin} min`}

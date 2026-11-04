@@ -294,6 +294,20 @@ export function ExplanationPanel({ explanation, onCapture }: Props) {
     <div className="mx-5 mb-6 overflow-hidden rounded-2xl border border-border bg-[color:var(--cream)] text-foreground md:mx-9">
       <div className="flex items-center justify-between gap-3 border-b border-border bg-card/70 px-5 py-3">
         <div className="text-base font-semibold text-primary" style={{ fontFamily: "var(--font-heading)" }}>Explanation</div>
+        <div className="flex items-center gap-2">
+        {captureMode && (
+          <button
+            onClick={handleCapture}
+            onPointerDown={(e) => e.preventDefault()}
+            disabled={!floatPos}
+            type="button"
+            title={floatPos ? "Save the highlighted text as a note" : "Highlight some text first"}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-primary text-primary-foreground text-sm font-bold shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <StickyNote className="w-4 h-4" />
+            Capture
+          </button>
+        )}
         <button
           onClick={toggleCapture}
           type="button"
@@ -307,6 +321,7 @@ export function ExplanationPanel({ explanation, onCapture }: Props) {
           {captureMode ? <X className="w-4 h-4" /> : <Scissors className="w-4 h-4" />}
           {captureMode ? "Cancel" : "Create Note"}
         </button>
+        </div>
       </div>
 
       <div
@@ -323,7 +338,7 @@ export function ExplanationPanel({ explanation, onCapture }: Props) {
         {captureMode && (
           <div className="mb-4 text-xs text-rose-800 bg-rose-100/70 border border-rose-200 rounded-lg px-3 py-2">
             Drag to highlight any text — including the summary table — then tap
-            <strong> Capture</strong>.
+            <strong> Capture</strong> next to Cancel.
           </div>
         )}
 
@@ -335,18 +350,6 @@ export function ExplanationPanel({ explanation, onCapture }: Props) {
         </div>
       </div>
 
-      {captureMode && floatPos && (
-        <button
-          onClick={handleCapture}
-          onPointerDown={(e) => e.preventDefault()}
-          type="button"
-          style={{ position: "fixed", left: floatPos.x, top: floatPos.y, zIndex: 80 }}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-bold shadow-xl ring-2 ring-white animate-in fade-in zoom-in-95"
-        >
-          <StickyNote className="w-4 h-4" />
-          Capture
-        </button>
-      )}
     </div>
   );
 }
