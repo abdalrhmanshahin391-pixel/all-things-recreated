@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { committeeYearQuery } from "@/lib/committee-queries";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Plus, Pencil, Trash2, Map as MapIcon, Lock as LockIcon, LogIn, UserPlus, UsersRound, History } from "lucide-react";
 import { toast } from "sonner";
 // JSZip is loaded dynamically inside export/import handlers to keep it out of the main bundle.
@@ -27,13 +27,24 @@ export const Route = createFileRoute("/committee/")({
       { name: "description", content: "Free study resources organized by year and subject." },
     ],
   }),
+  // `keep`: arriving from a "Back to years" button inside the committee area, where the visitor must stay in the version they were in
+  validateSearch: (search: Record<string, unknown>): { keep?: boolean } => ({
+    keep: search["keep"] === true || search["keep"] === "true" || search["keep"] === "1" ? true : undefined,
+  }),
   loader: ({ context }) => context.queryClient.ensureQueryData(committeeYearsQuery),
   component: CommitteeHome,
 });
 
 /** The committee home: the university resources, or the AQUA version, depending on the switch. */
 function CommitteeHome() {
-  const { isAqua } = useCommitteeVersion();
+  const { isAqua, setVersion } = useCommitteeVersion();
+  const { keep } = Route.useSearch();
+  // Opening the committee page from outside always starts on the University side (the switch still works while the page is open),
+  // but coming back from a year page keeps the version the visitor was in.
+  // This effect is declared after the one inside useCommitteeVersion, so it wins over the version remembered in the browser.
+  useEffect(() => {
+    if (!keep) setVersion("university");
+  }, [setVersion, keep]);
   return isAqua ? <AquaHome /> : <CommitteePage />;
 }
 

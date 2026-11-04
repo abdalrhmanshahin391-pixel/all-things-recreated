@@ -14,18 +14,38 @@ function signPath(path: string): Promise<string | null> {
   if (cached) return Promise.resolve(cached);
   let pending = inflight.get(path);
   if (!pending) {
-    pending = supabase.storage
-      .from(BUCKET)
-      .createSignedUrl(path, 60 * 60)
-      .then(({ data, error }) => {
-        if (error || !data?.signedUrl) return null;
-        cache.set(path, data.signedUrl);
-        return data.signedUrl;
-      })
-      .finally(() => inflight.delete(path));
+    // A momentary failure (a weak connection, many pictures asked at once, a session that is being renewed) must not
+    // leave the student with an error: try again twice before giving up. A failure is never remembered.
+    const attempt = async (n: number): Promise<string | null> => {
+      try {
+        const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60 * 60);
+        if (!error && data?.signedUrl) {
+          cache.set(path, data.signedUrl);
+          return data.signedUrl;
+        }
+      } catch {
+        /* treated like any other failure */
+      }
+      if (n >= 2) return null;
+      await new Promise((r) => setTimeout(r, n === 0 ? 700 : 1800));
+      return attempt(n + 1);
+    };
+    pending = attempt(0).finally(() => inflight.delete(path));
     inflight.set(path, pending);
   }
   return pending;
+}
+
+/** Sign and download a question's picture ahead of time, so it is already there when the student reaches it. */
+export function prefetchQuestionImage(path: string | null | undefined) {
+  if (!path || typeof window === "undefined") return;
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    new Image().src = path;
+    return;
+  }
+  void signPath(path).then((url) => {
+    if (url) new Image().src = url;
+  });
 }
 
 /** Renders a question image.
@@ -36,20 +56,28 @@ function signPath(path: string): Promise<string | null> {
  * 2. Supabase storage path — uploaded question images stored in the `question-images` bucket.
  *    A signed URL is generated on demand.
  */
-export function QuestionImage({ path, className = "" }: { path: string; className?: string }) {
+export function QuestionImage({ path, className = "", alt, compact = false }: { path: string; className?: string; alt?: string; compact?: boolean }) {
   const isExternal = path.startsWith("http://") || path.startsWith("https://");
 
   // For external URLs we resolve immediately; for storage paths we sign on mount.
   const [url, setUrl] = useState<string | null>(isExternal ? path : (cache.get(path) ?? null));
   const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
 
   useEffect(() => {
     // External URLs need no signing — already resolved above.
-    if (isExternal) return;
+    if (isExternal) {
+      setUrl(path);
+      setFailed(false);
+      return;
+    }
 
+    // The same component can be reused for another question's picture: forget the previous picture and any earlier failure.
+    setFailed(false);
     let cancelled = false;
     const cached = cache.get(path);
     if (cached) { setUrl(cached); return; }
+    setUrl(null);
 
     void signPath(path).then((signed) => {
       if (cancelled) return;
@@ -58,18 +86,25 @@ export function QuestionImage({ path, className = "" }: { path: string; classNam
     });
 
     return () => { cancelled = true; };
-  }, [path, isExternal]);
+  }, [path, isExternal, tries]);
 
   if (failed) {
-    return <div className="text-sm text-rose-600">This question image could not be loaded.</div>;
+    return (
+      <div className="text-sm text-rose-600">
+        This question image could not be loaded.{" "}
+        <button type="button" onClick={() => setTries((n) => n + 1)} className="font-semibold underline">
+          Try again
+        </button>
+      </div>
+    );
   }
   if (!url) {
-    return <div className="h-40 w-full animate-pulse rounded-xl bg-muted" />;
+    return <div className={`animate-pulse rounded-xl bg-muted ${compact ? "h-10 w-40" : "h-40 w-full"}`} />;
   }
   return (
     <img
       src={url}
-      alt="Medical diagram — refer to this image to answer the question"
+      alt={alt ?? "Medical diagram — refer to this image to answer the question"}
       loading="lazy"
       decoding="async"
       className={`w-full rounded-xl border border-border bg-card ${className}`}

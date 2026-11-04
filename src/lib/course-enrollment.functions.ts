@@ -116,28 +116,38 @@ export const loadCourseRunQuestionsServerFn = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ ok: boolean; questions: QuestionData[] }> => {
     const { userId, isAdmin, supabaseAdmin } = await resolveCallerUser();
 
-    // 1. Fetch course details
-    const { data: course, error: courseErr } = await (supabaseAdmin.from("courses") as any)
-      .select("*")
-      .eq("id", data.courseId)
-      .maybeSingle();
+    let subjectIds = data.subjectIds.filter(Boolean);
 
+    // 1-3. The course, the requested subjects (with their groups) and the caller's enrollment do not
+    // depend on each other, so they are read at the same time.
+    const [courseRes, subRes, enrRes] = await Promise.all([
+      (supabaseAdmin.from("courses") as any).select("*").eq("id", data.courseId).maybeSingle(),
+      subjectIds.length
+        ? (supabaseAdmin.from("subjects") as any)
+            .select("id, access_level, group_id, subject_groups!inner(course_id)")
+            .in("id", subjectIds)
+        : Promise.resolve({ data: [], error: null }),
+      userId
+        ? (supabaseAdmin.from("user_courses") as any)
+            .select("id")
+            .eq("user_id", userId)
+            .eq("course_id", data.courseId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+
+    const { data: course, error: courseErr } = courseRes;
     if (courseErr) throw courseErr;
     if (!course) throw new Error("Course not found");
     if (course.coming_soon && !isAdmin) throw new Error("This course is coming soon.");
 
     const isFree = Number(course.price ?? 0) <= 0;
 
-    // 2. Fetch all requested subjects and their groups
-    let subjectIds = data.subjectIds.filter(Boolean);
     if (subjectIds.length === 0) {
       return { ok: true, questions: [] };
     }
 
-    const { data: subRows, error: subErr } = await (supabaseAdmin.from("subjects") as any)
-      .select("id, access_level, group_id, subject_groups!inner(course_id)")
-      .in("id", subjectIds);
-
+    const { data: subRows, error: subErr } = subRes;
     if (subErr) throw subErr;
 
     // Filter to subjects that actually belong to this course
@@ -152,11 +162,7 @@ export const loadCourseRunQuestionsServerFn = createServerFn({ method: "POST" })
     // 3. Check enrollment if user is logged in
     let isEnrolled = false;
     if (userId) {
-      const { data: enr } = await (supabaseAdmin.from("user_courses") as any)
-        .select("id")
-        .eq("user_id", userId)
-        .eq("course_id", data.courseId)
-        .maybeSingle();
+      const enr = enrRes.data;
 
       if (enr) {
         isEnrolled = true;

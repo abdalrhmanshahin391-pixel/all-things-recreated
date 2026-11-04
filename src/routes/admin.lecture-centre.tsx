@@ -428,7 +428,7 @@ function CourseSettings({
       const key = `lecture-intro/${course.id}-${crypto.randomUUID()}-${imageFile.name}`;
       const { error } = await supabase.storage
         .from("course-images")
-        .upload(key, imageFile, { upsert: false, contentType: imageFile.type });
+        .upload(key, imageFile, { cacheControl: "31536000", upsert: false, contentType: imageFile.type });
       if (error) {
         setBusy(false);
         setErr(error.message);

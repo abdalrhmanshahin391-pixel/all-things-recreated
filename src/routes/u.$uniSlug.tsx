@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, MapPin, ArrowLeft, Eye, EyeOff, Sparkles, Pencil, Lock } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { supabase } from "@/integrations/supabase/client";
+import { publicUniversityImageUrl, resolveUniversityImageUrl } from "@/lib/university-image";
 import { useAuth } from "@/hooks/useAuth";
 import { useLang } from "@/components/LanguageProvider";
 import { UniversityTags } from "@/components/common/UniversityTags";
@@ -24,14 +25,15 @@ export const Route = createFileRoute("/u/$uniSlug")({
     const n = s.next;
     return n === "courses" || n === "lectures" || n === "committee" ? { next: n } : {};
   },
-  loader: async ({ params }) => {
+  loader: async ({ params, context }) => {
     try {
-      const { data } = await supabase
-        .from("universities")
-        .select("name,description,city,country")
-        .eq("slug", params.uniSlug)
-        .eq("is_active", true)
-        .maybeSingle();
+      // The same university the page shows is read once here (and kept in the cache), and the tiles and counts are
+      // started right away, so the page opens with its data already on the way.
+      const data = await context.queryClient.ensureQueryData(universityQueryOptions(params.uniSlug));
+      if (data && typeof window !== "undefined") {
+        void context.queryClient.prefetchQuery(universityTilesOptions(data.id));
+        void context.queryClient.prefetchQuery(universityCountsOptions(data.id, false));
+      }
       return {
         name: (data?.name as string | undefined) ?? null,
         description: (data?.description as string | undefined) ?? null,
@@ -95,15 +97,8 @@ type University = {
   tags: unknown;
 };
 
-function UniversityHubPage() {
-  const { uniSlug } = Route.useParams();
-  const { next } = Route.useSearch();
-  const navigate = useNavigate();
-  const { isAdmin, loading: authLoading } = useAuth();
-  const qc = useQueryClient();
-  const { lang } = useLang();
-
-  const { data: uni, isLoading, isError } = useQuery({
+function universityQueryOptions(uniSlug: string) {
+  return queryOptions({
     queryKey: ["university", uniSlug],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -115,7 +110,53 @@ function UniversityHubPage() {
       if (error) throw error;
       return data as University | null;
     },
+    staleTime: 5 * 60_000,
   });
+}
+
+function universityCountsOptions(uniId: string, isAdmin: boolean) {
+  return queryOptions({
+    queryKey: ["university-counts", uniId || undefined, isAdmin],
+    queryFn: async () => {
+      const [{ count: courses }, { count: lectures }, { count: committee }] = await Promise.all([
+        supabase.from("courses").select("id", { count: "exact", head: true }).eq("university_id", uniId).eq("published", true).eq("kind", "questions").eq("admin_only", false),
+        // "Lectures" counts the lecture subjects (courses of kind "lectures"), not the topics inside them.
+        (() => {
+          let q = supabase.from("courses").select("id", { count: "exact", head: true }).eq("university_id", uniId).eq("published", true).eq("kind", "lectures");
+          if (!isAdmin) q = q.eq("admin_only", false);
+          return q;
+        })(),
+        supabase.from("committee_years").select("id", { count: "exact", head: true }).eq("university_id", uniId),
+      ]);
+      return { courses: courses ?? 0, lectures: lectures ?? 0, committee: committee ?? 0 };
+    },
+    staleTime: 2 * 60_000,
+  });
+}
+
+function universityTilesOptions(uniId: string) {
+  return queryOptions({
+    queryKey: ["university-tiles", uniId || undefined],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from as any)("university_tiles")
+        .select("*")
+        .eq("university_id", uniId)
+        .order("sort_order", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as UniversityTile[];
+    },
+    staleTime: 60_000,
+  });
+}
+function UniversityHubPage() {
+  const { uniSlug } = Route.useParams();
+  const { next } = Route.useSearch();
+  const navigate = useNavigate();
+  const { isAdmin, loading: authLoading } = useAuth();
+  const qc = useQueryClient();
+  const { lang } = useLang();
+
+  const { data: uni, isLoading, isError } = useQuery(universityQueryOptions(uniSlug));
 
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -123,59 +164,30 @@ function UniversityHubPage() {
 
   useEffect(() => {
     if (!uni) return;
-    setCoverUrl(null);
-    (async () => {
-      if (uni.cover_path) {
-        const data = { signedUrl: supabase.storage.from("university-logos").getPublicUrl(uni.cover_path).data.publicUrl };
-        setCoverUrl(data?.signedUrl ?? null);
-      }
-      if (uni.storage_path) {
-        const data = { signedUrl: supabase.storage.from("university-logos").getPublicUrl(uni.storage_path).data.publicUrl };
-        setLogoUrl(data?.signedUrl ?? uni.logo_url ?? null);
-      } else if (uni.logo_url) {
-        setLogoUrl(uni.logo_url);
-      }
-    })();
+    // fixed public URLs (kept by the browser for a year); signed ones only if one fails to load
+    setCoverUrl(publicUniversityImageUrl(uni.cover_path));
+    setLogoUrl(publicUniversityImageUrl(uni.storage_path) ?? uni.logo_url ?? null);
   }, [uni?.id, uni?.cover_path, uni?.storage_path, uni?.logo_url]);
+
+  async function signedFallback(which: "cover" | "logo") {
+    if (!uni) return;
+    if (which === "cover") setCoverUrl(await resolveUniversityImageUrl(uni.cover_path));
+    else setLogoUrl((await resolveUniversityImageUrl(uni.storage_path)) ?? uni.logo_url ?? null);
+  }
 
   useEffect(() => {
     if (uni) localStorage.setItem("ysmu:lastUniversitySlug", uni.slug);
   }, [uni]);
 
   const { data: counts } = useQuery({
+    ...universityCountsOptions(uni?.id ?? "", isAdmin),
     enabled: !!uni,
-    queryKey: ["university-counts", uni?.id, isAdmin],
-    queryFn: async () => {
-      if (!uni) return { courses: 0, lectures: 0, committee: 0 };
-      const [{ count: courses }, { count: lectures }, { count: committee }] = await Promise.all([
-        supabase.from("courses").select("id", { count: "exact", head: true }).eq("university_id", uni.id).eq("published", true).eq("kind", "questions").eq("admin_only", false),
-        // "Lectures" counts the lecture subjects (courses of kind "lectures"), not the topics inside them.
-        (() => {
-          let q = supabase.from("courses").select("id", { count: "exact", head: true }).eq("university_id", uni.id).eq("published", true).eq("kind", "lectures");
-          if (!isAdmin) q = q.eq("admin_only", false);
-          return q;
-        })(),
-        supabase.from("committee_years").select("id", { count: "exact", head: true }).eq("university_id", uni.id),
-      ]);
-      return { courses: courses ?? 0, lectures: lectures ?? 0, committee: committee ?? 0 };
-    },
   });
 
   const { data: tiles, isPending: tilesPending } = useQuery({
+    ...universityTilesOptions(uni?.id ?? ""),
     enabled: !!uni && (!uni.is_closed || isAdmin),
-    queryKey: ["university-tiles", uni?.id],
-    queryFn: async () => {
-      if (!uni) return [] as UniversityTile[];
-      const { data, error } = await (supabase.from as any)("university_tiles")
-        .select("*")
-        .eq("university_id", uni.id)
-        .order("sort_order", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as UniversityTile[];
-    },
-    staleTime: 60_000,
   });
-
   async function toggleLectures() {
     if (!uni || toggling) return;
     setToggling(true);
@@ -282,7 +294,7 @@ function UniversityHubPage() {
         <section className="relative overflow-hidden border-b border-border">
           {coverUrl ? (
             <div className="absolute inset-0">
-              <img src={coverUrl} alt="" className="h-full w-full object-cover opacity-30" />
+              <img src={coverUrl} alt="" className="h-full w-full object-cover opacity-30" onError={() => !coverUrl.includes("/object/sign/") && signedFallback("cover")} />
               <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/40" />
             </div>
           ) : (
@@ -295,7 +307,7 @@ function UniversityHubPage() {
             <div className="mt-6 flex items-start gap-5">
               {logoUrl && (
                 <div className="h-20 w-20 md:h-24 md:w-24 rounded-xl bg-background border border-border grid place-items-center shadow-sm overflow-hidden shrink-0">
-                  <img src={logoUrl} alt={uni.name} className="h-full w-full object-cover" />
+                  <img src={logoUrl} alt={uni.name} className="h-full w-full object-cover" onError={() => !logoUrl.includes("/object/sign/") && signedFallback("logo")} />
                 </div>
               )}
               <div className="min-w-0">
@@ -412,7 +424,73 @@ function HubSwitcher({ items }: { items: SwitchItem[] }) {
   const blocked = cur.locked && !cur.adminBypass;
 
   return (
-    <div className="grid overflow-hidden rounded-[2rem] border border-border bg-card shadow-[0_40px_80px_-50px_rgba(19,41,75,0.5)] lg:grid-cols-[minmax(0,24rem)_1fr]">
+    <>
+    {/* PHONES AND TABLETS: every section is its own card, one under the other, so nothing has to be swiped */}
+    <div className="space-y-4 lg:hidden">
+      {items.map((it) => {
+        const isBlocked = it.locked && !it.adminBypass;
+        const card = (
+          <>
+            <div aria-hidden className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full bg-[#d8a940]/20 blur-3xl" />
+            <div className="relative flex items-start justify-between gap-3">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-white/10 text-[color:var(--gold)]">{it.icon}</span>
+              <div className="text-right">
+                {it.badge ? (
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--gold)]">{it.badge}</p>
+                ) : (
+                  <>
+                    <p className="text-4xl font-semibold leading-none text-[color:var(--gold)]" style={{ fontFamily: "var(--font-heading)" }}>
+                      {it.count}
+                    </p>
+                    <p className="mt-1 text-xs text-white/65">{it.countLabel}</p>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="relative mt-4 flex flex-wrap items-center gap-2">
+              {it.free && !it.locked && (
+                <span className="rounded-full bg-[color:var(--gold)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[color:var(--gold-foreground)]">
+                  Free
+                </span>
+              )}
+              {it.hiddenFromUsers && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary">
+                  <EyeOff size={10} /> Hidden from users
+                </span>
+              )}
+            </div>
+            <h2 className="relative mt-2 text-2xl font-semibold tracking-tight text-white" style={{ fontFamily: "var(--font-heading)" }}>
+              {it.title}
+            </h2>
+            <p className="relative mt-1 text-sm leading-relaxed text-white/70">{it.subtitle}</p>
+            {isBlocked ? (
+              <span className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white/70">
+                <Lock size={14} /> {it.lockNote}
+              </span>
+            ) : (
+              <span className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-[color:var(--gold)] px-5 py-2.5 text-sm font-bold text-[color:var(--gold-foreground)]">
+                Open {it.title} <ArrowRight size={16} strokeWidth={2.2} />
+              </span>
+            )}
+          </>
+        );
+        const cardCls = `on-dark-panel relative block overflow-hidden rounded-2xl p-5 shadow-md ${
+          it.highlighted ? "ring-2 ring-[color:var(--gold)]" : ""
+        } ${isBlocked ? "opacity-80" : "transition-transform active:scale-[0.99]"}`;
+        const cardStyle = { background: "linear-gradient(155deg, #0b1b36 0%, #13294b 60%, #1a3566 100%)" };
+        return isBlocked ? (
+          <div key={it.id} className={cardCls} style={cardStyle} aria-disabled>
+            {card}
+          </div>
+        ) : (
+          <Link key={it.id} to={it.to as any} search={it.search as any} className={cardCls} style={cardStyle}>
+            {card}
+          </Link>
+        );
+      })}
+    </div>
+
+    <div className="hidden overflow-hidden rounded-[2rem] border border-border bg-card shadow-[0_40px_80px_-50px_rgba(19,41,75,0.5)] lg:grid lg:grid-cols-[minmax(0,24rem)_1fr]">
       {/* LEFT: a quiet index */}
       <div role="tablist" aria-label="Sections" className="flex overflow-x-auto bg-card lg:flex-col lg:overflow-visible">
         {items.map((it, i) => {
@@ -531,6 +609,7 @@ function HubSwitcher({ items }: { items: SwitchItem[] }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
 type LockProps = {

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Stethoscope } from "lucide-react";
-import { resolveCourseImageUrl } from "@/lib/course-image";
+import { publicCourseImageUrl, resolveCourseImageUrl } from "@/lib/course-image";
 
 /**
- * CourseImage — signs the (private) course-image bucket URL on mount and
- * falls back to a medical-themed placeholder if missing/expired.
+ * CourseImage — uses the fixed public URL of the picture (kept by the browser for a year) and
+ * falls back to a signed URL, then to a medical-themed placeholder, if it cannot be loaded.
  */
 export function CourseImage({
   value,
@@ -15,19 +15,24 @@ export function CourseImage({
   alt: string;
   className?: string;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(() => publicCourseImageUrl(value));
+  const [triedSigned, setTriedSigned] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
+    setUrl(publicCourseImageUrl(value));
+    setTriedSigned(false);
     setFailed(false);
-    resolveCourseImageUrl(value).then((u) => {
-      if (!cancelled) setUrl(u);
-    });
-    return () => {
-      cancelled = true;
-    };
   }, [value]);
+
+  function onError() {
+    if (triedSigned) {
+      setFailed(true);
+      return;
+    }
+    setTriedSigned(true);
+    resolveCourseImageUrl(value).then((u) => (u ? setUrl(u) : setFailed(true)));
+  }
 
   if (!url || failed) {
     return (
@@ -40,13 +45,5 @@ export function CourseImage({
     );
   }
 
-  return (
-    <img
-      src={url}
-      alt={alt}
-      className={className}
-      loading="lazy"
-      onError={() => setFailed(true)}
-    />
-  );
+  return <img src={url} alt={alt} className={className} loading="lazy" onError={onError} />;
 }

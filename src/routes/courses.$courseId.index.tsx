@@ -2,6 +2,8 @@ import { capitalizeFirst } from "@/lib/text";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { coursePageKey, fetchCoursePage, fetchPoolCounts, poolCountsKey } from "@/lib/course-page";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ChallengeAdminCard } from "@/components/challenge/ChallengeAdminCard";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -23,7 +25,7 @@ import {
   Sparkles,
   Flag,
   XCircle,
-  ArrowRight, Clock, ArrowUp, ArrowDown } from "lucide-react";
+  ArrowRight, Clock, ArrowUp, ArrowDown, Merge } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useServerFn } from "@tanstack/react-start";
 import { reorderSubjects, setSubjectAccess, setSubjectOrdered, type SubjectAccess } from "@/lib/subjects.functions";
@@ -36,6 +38,7 @@ import { toast } from "sonner";
 import { ProtectionNotice } from "@/components/protect/ProtectionNotice";
 import { exportSectionQuestionsForNotebookLmServerFn } from "@/lib/course-export.functions";
 import { NotebookLmExportModal } from "@/components/course/NotebookLmExportModal";
+import { MergeSubjectDialog } from "@/components/course/MergeSubjectDialog";
 
 export const Route = createFileRoute("/courses/$courseId/")({
   loader: async ({ params }) => {
@@ -152,6 +155,7 @@ function CourseDetailPage() {
   const [pool, setPool] = useState<"all" | "flagged" | "incorrect">("all");
   const [adminSelected, setAdminSelected] = useState<Set<string>>(new Set());
   const [adminBusy, setAdminBusy] = useState(false);
+  const [mergeSource, setMergeSource] = useState<Subject | null>(null);
 
   const exportForNotebookLm = useServerFn(exportSectionQuestionsForNotebookLmServerFn);
   const [notebookModalOpen, setNotebookModalOpen] = useState(false);
@@ -197,107 +201,45 @@ function CourseDetailPage() {
     }
   }
 
+  // One request for the course, its groups and its subjects. A copy is kept for a few minutes, so
+  // coming back to the page (or opening it from a card that was hovered) shows it straight away.
+  const pageQuery = useQuery({
+    queryKey: coursePageKey(courseId),
+    queryFn: () => fetchCoursePage(courseId),
+    staleTime: isAdmin ? 0 : 5 * 60_000,
+  });
+  const pageData = pageQuery.data;
+
   useEffect(() => {
-    (async () => {
+    if (pageQuery.isPending) {
       setLoading(true);
-      const { data: c } = await supabase
-        .from("courses")
-        .select("*")
-        .eq("id", courseId)
-        .maybeSingle();
-      // If this is a lectures-kind course, send the user to the lectures page.
-      if (c && (c as any).kind === "lectures") {
-        navigate({ to: "/lectures/$courseId", params: { courseId: (c as any).id }, replace: true });
-        return;
-      }
-      setCourse(c as Course | null);
+      return;
+    }
+    const c = pageData?.course ?? null;
+    // If this is a lectures-kind course, send the user to the lectures page.
+    if (c && c.kind === "lectures") {
+      navigate({ to: "/lectures/$courseId", params: { courseId: c.id }, replace: true });
+      return;
+    }
+    setCourse(c as Course | null);
+    const gs = pageData?.groups ?? [];
+    setGroups(gs);
+    setOpenGroups(Object.fromEntries(gs.map((x) => [x.id, false])));
+    setSubjects(pageData?.subjects ?? []);
+    setLoading(false);
+  }, [pageData, pageQuery.isPending, courseId]);
 
-
-      const { data: g } = await (supabase.from as any)("subject_groups")
-        .select("id,name,sort_order")
-        .eq("course_id", courseId)
-        .order("sort_order");
-      const gs = (g ?? []) as Group[];
-      setGroups(gs);
-      setOpenGroups(Object.fromEntries(gs.map((x) => [x.id, false])));
-      if (gs.length) {
-        const { data: s } = await (supabase.from as any)("subjects")
-          .select("id,group_id,name,sort_order,access_level,ordered")
-          .in(
-            "group_id",
-            gs.map((x) => x.id),
-          )
-          .order("sort_order");
-        const rawSubs = (s ?? []) as any[];
-        const subjectIds = rawSubs.map((row) => row.id as string);
-        let countsBySubject = new Map<string, number>();
-        if (subjectIds.length) {
-          const { data: counts } = await (supabase as any).rpc("get_subject_question_counts", { _subject_ids: subjectIds });
-          countsBySubject = new Map<string, number>(
-            ((counts ?? []) as { subject_id: string; cnt: number }[]).map((r) => [r.subject_id, Number(r.cnt) || 0]),
-          );
-        }
-        const subs: Subject[] = rawSubs.map((row) => ({
-          id: row.id,
-          group_id: row.group_id,
-          name: row.name,
-          sort_order: row.sort_order,
-          access_level: (row.access_level ?? "paid") as SubjectAccess,
-          ordered: Boolean(row.ordered),
-          question_count: countsBySubject.get(row.id) ?? 0,
-        }));
-        setSubjects(subs);
-      } else {
-        setSubjects([]);
-      }
-      setLoading(false);
-    })();
-  }, [courseId]);
+  // The student's flagged / wrong-answer counts, worked out in the database; they never hold up the page.
+  const poolQuery = useQuery({
+    queryKey: poolCountsKey(user?.id, courseId),
+    enabled: !!user?.id && subjects.length > 0,
+    queryFn: () => fetchPoolCounts(user!.id, subjects.map((s) => s.id)),
+  });
 
   useEffect(() => {
-    (async () => {
-      if (!user?.id || subjects.length === 0) {
-        setFlaggedBySubject({});
-        setIncorrectBySubject({});
-        return;
-      }
-      const subjectIds = subjects.map((s) => s.id);
-      const { data: qRows } = await (supabase.from as any)("questions")
-        .select("id,subject_id")
-        .in("subject_id", subjectIds);
-      const qToSubject = new Map<string, string>(
-        ((qRows ?? []) as any[]).map((r) => [r.id, r.subject_id]),
-      );
-      const courseQids = Array.from(qToSubject.keys());
-      if (courseQids.length === 0) return;
-      const [{ data: flagRows }, { data: attemptRows }] = await Promise.all([
-        (supabase.from as any)("question_flags")
-          .select("question_id")
-          .eq("user_id", user.id)
-          .in("question_id", courseQids),
-        (supabase.from as any)("question_attempts")
-          .select("question_id")
-          .eq("user_id", user.id)
-          .eq("is_correct", false)
-          .in("question_id", courseQids),
-      ]);
-      const flagged: Record<string, number> = {};
-      for (const r of (flagRows ?? []) as any[]) {
-        const sid = qToSubject.get(r.question_id);
-        if (sid) flagged[sid] = (flagged[sid] ?? 0) + 1;
-      }
-      const wrongSet = new Set<string>(
-        ((attemptRows ?? []) as any[]).map((r) => r.question_id),
-      );
-      const incorrect: Record<string, number> = {};
-      for (const qid of wrongSet) {
-        const sid = qToSubject.get(qid);
-        if (sid) incorrect[sid] = (incorrect[sid] ?? 0) + 1;
-      }
-      setFlaggedBySubject(flagged);
-      setIncorrectBySubject(incorrect);
-    })();
-  }, [user?.id, subjects]);
+    setFlaggedBySubject(poolQuery.data?.flagged ?? {});
+    setIncorrectBySubject(poolQuery.data?.incorrect ?? {});
+  }, [poolQuery.data]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -724,7 +666,7 @@ function CourseDetailPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
           {/* LEFT — curriculum */}
-          <section>
+          <section className="min-w-0">
             {isAdmin && (
               <div className="mb-4 rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -741,7 +683,7 @@ function CourseDetailPage() {
                       {adminSelected.size === subjects.length ? "Clear all" : "Select all"}
                     </button>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-[11px] uppercase tracking-wider text-muted-foreground mr-1">Set access:</span>
                     <button disabled={adminBusy} onClick={() => handleBulkSetAccess("free_public")} className="px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300 hover:bg-emerald-200 disabled:opacity-50">Public</button>
                     <button disabled={adminBusy} onClick={() => handleBulkSetAccess("free_logged_in")} className="px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-sky-100 text-sky-700 ring-1 ring-sky-300 hover:bg-sky-200 disabled:opacity-50">Logged-in</button>
@@ -898,7 +840,7 @@ function CourseDetailPage() {
                               <button
                                 type="button"
                                 onClick={() => toggleSubject(s)}
-                                className="flex-1 text-left min-w-0"
+                                className="flex-1 text-left min-w-[10rem]"
                               >
                                 <div className="flex min-w-0 items-center gap-2">
                                   <div className="font-semibold text-foreground truncate">{s.name}</div>
@@ -937,7 +879,7 @@ function CourseDetailPage() {
 
 
                               {isAdmin ? (
-                                <div className="flex items-center gap-2 pl-3 ml-1 border-l border-border">
+                                <div className="flex flex-wrap items-center gap-2 pl-3 ml-auto border-l border-border max-w-full">
                                   <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-600">Admin</span>
                                   <label className="inline-flex items-center gap-1 cursor-pointer" title="Tick to include in bulk access change">
                                     <input
@@ -962,6 +904,14 @@ function CourseDetailPage() {
                                     }`}
                                   >
                                     In order
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setMergeSource(s); }}
+                                    title="Move all the questions of this subject into another subject"
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-1 border bg-card text-muted-foreground border-border hover:border-indigo-300 transition-colors"
+                                  >
+                                    <Merge className="h-3 w-3" /> Merge
                                   </button>
                                 </div>
                               ) : sLocked ? (
@@ -1163,6 +1113,19 @@ function CourseDetailPage() {
           }}
         />
 
+        {isAdmin && (
+          <MergeSubjectDialog
+            source={mergeSource}
+            groups={groups}
+            subjects={subjects}
+            onClose={() => setMergeSource(null)}
+            onDone={() => {
+              setAdminSelected(new Set());
+              setSelected(new Set());
+              void pageQuery.refetch();
+            }}
+          />
+        )}
         <NotebookLmExportModal
           open={notebookModalOpen}
           onOpenChange={setNotebookModalOpen}

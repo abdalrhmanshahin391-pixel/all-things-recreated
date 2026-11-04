@@ -1,5 +1,6 @@
 import { useLang } from "@/components/LanguageProvider";
-import bedsideAsset from "@/assets/golden-age-bedside.jpg.asset.json";
+// The bedside painting without the stock-photo watermark that was printed in its corner.
+import bedsideImage from "@/assets/golden-age-bedside-clean.jpg";
 import wardAsset from "@/assets/golden-age-ward.jpg.asset.json";
 
 type Bi = { en: string; ar: string };
@@ -17,7 +18,7 @@ export const BANDS: {
   imageFirst: boolean;
 }[] = [
   {
-    src: bedsideAsset.url,
+    src: bedsideImage,
     alt: {
       en: "A Golden Age physician examining a patient at his bedside while a student carries his book",
       ar: "طبيب من العصر الذهبي يفحص مريضًا عند سريره بينما يحمل تلميذه كتابه",
@@ -81,24 +82,16 @@ function toneStyle(n: number) {
 /** Big picture on one side, the idea written beside it. */
 export function Band({ band, lang }: { band: (typeof BANDS)[number]; lang: string }) {
   const media = (
-    <figure className="relative">
-      <div
-        aria-hidden
-        className="absolute -inset-3 rounded-[2rem] opacity-60 blur-xl"
-        style={{ background: `color-mix(in oklab, ${tone(band.tone)} 30%, transparent)` }}
-      />
-      <div
-        className="relative overflow-hidden rounded-[1.75rem] border-2"
-        style={{ borderColor: `color-mix(in oklab, ${tone(band.tone)} 45%, var(--border))` }}
-      >
+    <figure>
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
         <img
           src={band.src}
           alt={T(lang, band.alt)}
           loading="lazy"
-          className="w-full h-full object-cover aspect-[4/3]"
+          className="block w-full h-full object-cover aspect-[4/3]"
         />
       </div>
-      <figcaption className="relative mt-3 text-center text-xs font-bold uppercase tracking-widest text-muted-foreground">
+      <figcaption className="mt-3 text-center text-xs font-bold uppercase tracking-widest text-muted-foreground">
         {T(lang, band.caption)}
       </figcaption>
     </figure>

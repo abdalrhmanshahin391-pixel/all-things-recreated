@@ -1,6 +1,8 @@
 import { capitalizeFirst } from "@/lib/text";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, BookOpen, Clock, ListChecks, Lock, Sparkles } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { prefetchCoursePage } from "@/lib/course-page";
 import { useAuth } from "@/hooks/useAuth";
 import { CourseImage } from "@/components/common/CourseImage";
 import { CourseBadge, badgeIsLive } from "@/components/common/CourseBadge";
@@ -48,6 +50,7 @@ export function CourseCard({
   showPrice?: boolean;
 }) {
   const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
   const soon = !!course.coming_soon;
   const closedForMe = soon && !isAdmin;
   const isPaid = !!course.price && course.price > 0;
@@ -84,6 +87,9 @@ export function CourseCard({
       onClick={(e) => {
         if (closedForMe) e.preventDefault();
       }}
+      // start loading the course page's data as soon as the card is hovered or touched
+      onPointerEnter={() => !closedForMe && prefetchCoursePage(queryClient, course.id)}
+      onTouchStart={() => !closedForMe && prefetchCoursePage(queryClient, course.id)}
       aria-disabled={closedForMe || undefined}
       className={`group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(15,27,61,0.05)] transition-all duration-300 ${
         closedForMe ? "cursor-not-allowed" : "hover:-translate-y-1 hover:shadow-[0_26px_50px_-28px_rgba(15,27,61,0.5)]"
@@ -159,8 +165,9 @@ export function CourseCard({
         </p>
 
         <h3
-          className="mt-1.5 line-clamp-2 min-h-[2.5em] text-xl font-semibold leading-tight text-foreground"
-          style={{ fontFamily: "var(--font-heading)" }}
+          className="mt-1.5 line-clamp-3 min-h-[2.5em] text-base font-semibold leading-tight text-foreground [overflow-wrap:anywhere] sm:line-clamp-2 sm:text-xl"
+          style={{ fontFamily: "var(--font-heading)", hyphens: "auto" }}
+          title={course.title}
         >
           {capitalizeFirst(course.title)}
         </h3>
@@ -178,11 +185,11 @@ export function CourseCard({
         )}
 
         <div className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-4">
-          <p className="flex min-w-0 items-baseline gap-1.5">
+          <p className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
             <span className="text-2xl font-semibold leading-none tabular-nums text-foreground" style={{ fontFamily: "var(--font-heading)" }}>
               {(counts?.questions ?? 0).toLocaleString()}
             </span>
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">
               {counts?.questions === 1 ? "question" : "questions"}
             </span>
           </p>

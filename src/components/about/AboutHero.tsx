@@ -23,6 +23,7 @@ export function AboutHero({ ar, canManage }: { ar: boolean; canManage: boolean }
 
   const [localSettings, setLocalSettings] = useState<AboutHeroSettings | null>(null);
   const settings: AboutHeroSettings = localSettings || serverSettings || DEFAULT_ABOUT_SETTINGS;
+  const loaded = Boolean(localSettings || serverSettings);
 
   const [isEditing, setIsEditing] = useState(false);
   const [formEn, setFormEn] = useState(settings.sentenceEn);
@@ -109,7 +110,12 @@ export function AboutHero({ ar, canManage }: { ar: boolean; canManage: boolean }
         {!isEditing ? (
           <div className="mt-6 flex flex-col items-center gap-3">
             {currentSentence && (
-              <p className="max-w-2xl text-balance text-base font-normal leading-8 text-muted-foreground transition-colors sm:text-lg md:text-xl">
+              // Until the saved sentence arrives we only hold its place (invisible): showing the built-in default for a moment
+              // and then swapping it for the saved one was the flash of old text.
+              <p
+                aria-hidden={!loaded}
+                className={`max-w-2xl text-balance text-base font-normal leading-8 text-muted-foreground transition-opacity duration-200 sm:text-lg md:text-xl ${loaded ? "opacity-100" : "opacity-0"}`}
+              >
                 {currentSentence}
               </p>
             )}

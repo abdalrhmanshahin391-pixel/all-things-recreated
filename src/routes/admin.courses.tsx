@@ -21,7 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { compressImage } from "@/lib/image-compress";
 import { useAuth, type Profile } from "@/hooks/useAuth";
 import { SiteHeader } from "@/components/SiteHeader";
-import { resolveCourseImageUrl } from "@/lib/course-image";
+import { publicCourseImageUrl, resolveCourseImageUrl } from "@/lib/course-image";
 import {
   useCourseOptions,
   isAllYearsCourse,
@@ -34,7 +34,6 @@ import { CourseOptionsManager } from "@/components/admin/CourseOptionsManager";
 import {
   syncPaddleCoursePrice,
   syncAllCoursesToPaddle,
-  autoReconcileCoursesToPaddle,
 } from "@/utils/payments.functions";
 import { toast } from "sonner";
 import {
@@ -44,18 +43,27 @@ import {
 } from "@/lib/course-semester-store";
 
 function CourseThumb({ value, className }: { value: string | null; className?: string }) {
-  const [url, setUrl] = useState<string | null>(null);
+  // The bucket is public: use the fixed public URL (no request to storage). Only if the picture fails to load do we ask for a signed one,
+  // so opening this page with many courses no longer makes one storage query per course.
+  const [url, setUrl] = useState<string | null>(() => publicCourseImageUrl(value));
+  const [signed, setSigned] = useState(false);
   useEffect(() => {
-    let cancelled = false;
-    resolveCourseImageUrl(value).then((u) => {
-      if (!cancelled) setUrl(u);
-    });
-    return () => {
-      cancelled = true;
-    };
+    setUrl(publicCourseImageUrl(value));
+    setSigned(false);
   }, [value]);
   if (!url) return null;
-  return <img src={url} alt="" className={className} />;
+  return (
+    <img
+      src={url}
+      alt=""
+      className={className}
+      onError={() => {
+        if (signed) return;
+        setSigned(true);
+        void resolveCourseImageUrl(value).then((u) => u && setUrl(u));
+      }}
+    />
+  );
 }
 
 export const Route = createFileRoute("/admin/courses")({
@@ -146,21 +154,8 @@ function AdminCoursesPage() {
     else if (!loading && user && !isAdmin) guardRedirect(navigate);
   }, [loading, user, isAdmin, navigate]);
 
-  // Zero-click background auto-reconciliation: automatically provisions active Paddle products & prices
-  useEffect(() => {
-    if (!loading && user && isAdmin) {
-      autoReconcileCoursesToPaddle({ data: { environment: "live" } })
-        .then((res) => {
-          if (res?.reconciled && res.reconciled > 0) {
-            toast.success(`Automatically synced ${res.reconciled} courses with Paddle!`);
-            refresh();
-          }
-        })
-        .catch((err) => {
-          console.warn("Background Paddle sync auto-check:", err);
-        });
-    }
-  }, [loading, user, isAdmin]);
+  // The Paddle sync used to start by itself every time this page opened: it called Paddle (several requests per course, one after the other)
+  // for every paid course without a Paddle price, which froze the page for minutes. It now runs only from the "Sync all" button.
 
   async function refresh() {
     const [c, u, e, un, semMap] = await Promise.all([
@@ -277,14 +272,18 @@ function AdminCoursesPage() {
 
     if (payload.price > 0 && !payload.paddle_price_id) {
       try {
-        const syncRes = await syncPaddleCoursePrice({
-          data: {
-            title: payload.title,
-            price: payload.price,
-            environment: "live",
-          },
-        });
-        if (syncRes.paddlePriceId) {
+        // Adding a course must never wait on Paddle for long: give it 12 seconds, then save the course and sync later from "Sync all".
+        const syncRes: any = await Promise.race([
+          syncPaddleCoursePrice({
+            data: {
+              title: payload.title,
+              price: payload.price,
+              environment: "live",
+            },
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Paddle sync timed out")), 12000)),
+        ]);
+        if (syncRes?.paddlePriceId) {
           payload.paddle_price_id = syncRes.paddlePriceId;
         }
       } catch (syncErr) {
@@ -1047,7 +1046,7 @@ function EditCourseModal({
     const path = `${course.id}/${Date.now()}.${img.ext}`;
     const { error: upErr } = await supabase.storage
       .from("course-images")
-      .upload(path, img.file, { upsert: true, contentType: img.contentType });
+      .upload(path, img.file, { cacheControl: "31536000", upsert: true, contentType: img.contentType });
     if (upErr) {
       setError(upErr.message);
       setUploading(false);

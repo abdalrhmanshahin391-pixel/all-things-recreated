@@ -12,7 +12,8 @@ import type { QbIndex, QbMeta, QbQuestion } from "@/lib/question-bank";
  *
  * Admin or QBank only. Every group gets a fresh id, so an import can never overwrite an existing group.
  * A question's image_url may be an https link or a data URL (jpeg/png); data URLs are uploaded to the
- * question-images bucket and replaced by their storage path.
+ * question-images bucket and replaced by their storage path. An option may carry an image_url too (a formula
+ * cut out of the paper): it is uploaded the same way and the option's text becomes [[img:storage-path]].
  */
 
 const MAX_BODY_BYTES = 45 * 1024 * 1024;
@@ -21,6 +22,9 @@ const MAX_QUESTIONS = 1000;
 function jsonError(message: string, status: number) {
   return Response.json({ error: message }, { status });
 }
+
+const pictureOk = (image: unknown): image is string =>
+  typeof image === "string" && (/^https:\/\//.test(image) || (/^data:image\/(jpeg|png);base64,/.test(image) && image.length < 4_000_000));
 
 const text = (value: unknown, max: number, fallback = "") => String(value ?? fallback).replace(/\s+/g, " ").trim().slice(0, max);
 
@@ -33,11 +37,12 @@ function cleanQuestion(raw: any, index: number): QbQuestion | null {
       text: String(o?.text ?? "").trim().slice(0, 2000),
       is_correct: Boolean(o?.is_correct),
       sort_order: i + 1,
+      image_url: pictureOk(o?.image_url) ? o.image_url : null,
     }))
-    .filter((o) => o.text);
+    .filter((o) => o.text || o.image_url);
   if (!stem || options.length < 2 || !options.some((o) => o.is_correct)) return null;
   const image = typeof raw?.image_url === "string" ? raw.image_url : "";
-  const imageOk = /^https:\/\//.test(image) || (/^data:image\/(jpeg|png);base64,/.test(image) && image.length < 4_000_000);
+  const imageOk = pictureOk(image);
   return {
     stem,
     explanation: raw?.explanation ? String(raw.explanation).slice(0, 18000) : null,
@@ -58,24 +63,36 @@ const IMAGE_BUCKET = "question-images";
 async function storePictures(questions: QbQuestion[]): Promise<void> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const uploaded = new Map<string, string>();
+  /** Uploads one data URL (once, however many times it is used) and returns its storage path, or null if it cannot be stored. */
+  const store = async (data: string): Promise<string | null> => {
+    let path = uploaded.get(data);
+    if (path) return path;
+    const match = /^data:image\/(jpeg|png);base64,(.+)$/.exec(data);
+    if (!match) return null;
+    const ext = match[1] === "png" ? "png" : "jpg";
+    const binary = atob(match[2]);
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    path = `manual/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await supabaseAdmin.storage
+      .from(IMAGE_BUCKET)
+      .upload(path, bytes, { contentType: `image/${match[1]}`, cacheControl: "31536000", upsert: false });
+    if (error) throw new Error(`Could not store a question picture: ${error.message}`);
+    uploaded.set(data, path);
+    return path;
+  };
   for (const q of questions) {
     const data = q.image_url;
-    if (!data || !data.startsWith("data:")) continue;
-    let path = uploaded.get(data);
-    if (!path) {
-      const match = /^data:image\/(jpeg|png);base64,(.+)$/.exec(data);
-      if (!match) { q.image_url = null; continue; }
-      const ext = match[1] === "png" ? "png" : "jpg";
-      const binary = atob(match[2]);
-      const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-      path = `manual/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { error } = await supabaseAdmin.storage
-        .from(IMAGE_BUCKET)
-        .upload(path, bytes, { contentType: `image/${match[1]}`, cacheControl: "31536000", upsert: false });
-      if (error) throw new Error(`Could not store a question picture: ${error.message}`);
-      uploaded.set(data, path);
+    if (data && data.startsWith("data:")) q.image_url = await store(data);
+    for (const o of q.options) {
+      const picture = o.image_url;
+      delete o.image_url;
+      if (!picture) continue;
+      const path = picture.startsWith("data:") ? await store(picture) : null;
+      // a picture option is its marker; one that could not be stored keeps whatever text it had (the question is rejected if there is none)
+      if (path) o.text = `[[img:${path}]]`;
+      else if (/^https:\/\//.test(picture)) o.text = `[[img:${picture}]]`;
     }
-    q.image_url = path;
+    if (q.options.some((o) => !o.text)) throw new Error("A picture of an answer option could not be stored.");
   }
 }
 
